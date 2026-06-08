@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camp Ads Agent · Prototype</title>
+<style>
+  :root{
+    --green:#1F7A3D; --green-d:#145C2C; --green-l:#E8F3EC; --green-l2:#F4F8F5;
+    --amber:#9A6700; --amber-l:#FFF6E5; --red:#B00020; --red-l:#FCEAEC;
+    --blue:#185FA5; --blue-l:#E6F1FB; --violet:#5b3aa6; --violet-l:#EEEBFA;
+    --ink:#16241b; --muted:#5b6b60; --line:#dbe5de; --white:#fff;
+    --r:14px; --rs:10px; --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --shadow:0 1px 3px rgba(20,60,40,.07),0 8px 28px rgba(20,60,40,.07);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);color:var(--ink);background:#eef3f0;line-height:1.55;-webkit-font-smoothing:antialiased}
+  button{font-family:inherit;cursor:pointer}
+  .app{max-width:1080px;margin:18px auto;background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow);min-height:92vh;display:flex;flex-direction:column}
+  .bar{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.96)}
+  .logo{font-weight:800;color:var(--green-d);letter-spacing:-.3px}
+  .logo span{color:var(--amber)}
+  .bar .spacer{margin-left:auto}
+  .ghost{border:1px solid var(--line);background:#fff;color:var(--green-d);font-weight:700;font-size:13px;padding:7px 12px;border-radius:999px}
+  .ghost:hover{background:var(--green-l2)}
+  .ghost[disabled]{opacity:.4;cursor:not-allowed}
+  .stepper{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .stp{display:flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;background:#f1f5f2;border:1px solid var(--line);font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+  .stp .n{width:18px;height:18px;border-radius:50%;background:#cdd8d0;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+  .stp.done{color:var(--green-d);background:var(--green-l);border-color:#bfe0c9}
+  .stp.done .n{background:var(--green)}
+  .stp.cur{color:#fff;background:var(--green);border-color:var(--green)}
+  .stp.cur .n{background:#fff;color:var(--green)}
+  .stp.hero .n{box-shadow:0 0 0 2px #DCCCFF}
+  .stp.locked{opacity:.55;cursor:not-allowed}
+  .screen{display:none;flex:1;min-height:0}
+  .screen.on{display:flex}
+  .pane{flex:1;display:flex;flex-direction:column;min-width:0}
+  .pane.left{border-right:1px solid var(--line)}
+  .pane.right{background:var(--green-l2);max-width:430px}
+  .ph{padding:10px 18px;border-bottom:1px solid var(--line);font-weight:700;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;background:#fff}
+  .right .ph{background:var(--green-l2)}
+  .viewtoggle{margin-left:auto;display:flex;gap:3px;background:#f1f5f2;border:1px solid var(--line);border-radius:999px;padding:3px}
+  .viewtoggle button{border:none;background:transparent;font-size:12px;font-weight:700;color:var(--muted);padding:5px 12px;border-radius:999px}
+  .viewtoggle button.active{background:var(--green);color:#fff}
+  .viewbox{flex:1;display:flex;flex-direction:column;min-height:0}
+  .stepbody{flex:1;overflow-y:auto;padding:24px 26px}
+  .stepnum{font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--green)}
+  .steptitle{font-size:22px;letter-spacing:-.4px;margin:4px 0 18px;display:flex;align-items:center;gap:10px}
+  .hb{font-size:10.5px;font-weight:800;letter-spacing:.5px;padding:3px 9px;border-radius:999px;background:var(--violet-l);color:var(--violet);text-transform:uppercase}
+  .guide{display:flex;gap:12px;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:18px;box-shadow:var(--shadow)}
+  .guide .av{flex:0 0 30px;height:30px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+  .guide .gtext{font-size:14.5px}
+  .tool{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;font-weight:700;color:var(--green-d);background:var(--green-l);border:1px solid #cbe4d2;padding:2px 8px;border-radius:999px}
+  .tool.gemma{color:var(--violet);background:var(--violet-l);border-color:#d8cdf2}
+  .label{font-size:12px;font-weight:700;color:var(--amber);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+  .inote{font-size:13px;color:var(--muted);background:var(--green-l2);border:1px solid var(--line);border-radius:var(--rs);padding:11px 13px}
+  textarea,input[type=text]{width:100%;border:1px solid var(--line);border-radius:var(--rs);padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical}
+  textarea:focus,input:focus{outline:none;border-color:var(--green)}
+  .drop{border:2px dashed #c4d6cb;border-radius:var(--rs);padding:22px;text-align:center;color:var(--muted);font-size:13px;background:var(--green-l2)}
+  .drop b{color:var(--green-d)}
+  .doneconfirm{background:var(--green-l);border-left:3px solid var(--green);border-radius:0 8px 8px 0;padding:12px 14px;font-size:14px;color:var(--green-d);font-weight:600}
+  .status,.statusbub{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);background:#fff;border:1px solid var(--line);padding:9px 13px;border-radius:var(--rs);margin-top:12px}
+  .statusbub{align-self:flex-start;margin-top:0;border-radius:13px}
+  .spin{width:14px;height:14px;border:2px solid #d7e2db;border-top-color:var(--green);border-radius:50%;animation:s .7s linear infinite;flex:0 0 auto}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .navbar{border-top:1px solid var(--line);padding:13px 18px;background:#fff}
+  .row{display:flex;gap:10px;align-items:center}
+  .btn{background:var(--green);color:#fff;border:none;font-weight:700;font-size:14px;padding:10px 18px;border-radius:var(--rs)}
+  .btn:hover{background:var(--green-d)}
+  .btn.sec{background:#fff;color:var(--green-d);border:1px solid var(--line)}
+  .hint{font-size:12px;color:var(--muted)}
+  .thread{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px}
+  .msg{display:flex;gap:10px;max-width:90%}
+  .msg .av{flex:0 0 30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff}
+  .msg.bot .av{background:var(--green)} .msg.me .av{background:var(--blue)}
+  .msg.me{align-self:flex-end;flex-direction:row-reverse}
+  .bub{padding:10px 13px;border-radius:13px;font-size:14px}
+  .msg.bot .bub{background:#fff;border:1px solid var(--line);border-top-left-radius:4px}
+  .msg.me .bub{background:var(--blue);color:#fff;border-top-right-radius:4px}
+  .chatcomposer{border-top:1px solid var(--line);padding:12px 16px;background:#fff}
+  .quick{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+  .qchip{border:1px solid #bfe0c9;background:var(--green-l);color:var(--green-d);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600}
+  .qchip:hover{background:#d9eede}
+  .inrow{display:flex;gap:8px}
+  .inrow input{flex:1}
+  .res{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--rs);padding:14px}
+  .card h4{font-size:13px;color:var(--green-d);margin-bottom:10px}
+  .kv{font-size:13px;display:grid;grid-template-columns:96px 1fr;gap:5px 10px}
+  .kv b{color:var(--muted);font-weight:600}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;display:inline-block}
+  .pill.aw{background:var(--blue-l);color:var(--blue)} .pill.good{background:var(--green-l);color:var(--green-d)}
+  .pill.bad{background:var(--red-l);color:var(--red)} .pill.watch{background:var(--amber-l);color:var(--amber)}
+  .alert{border-left:3px solid var(--red);background:var(--red-l);padding:9px 12px;border-radius:0 8px 8px 0;font-size:13px;margin-top:10px}
+  .alert .t{font-weight:700;color:var(--red);margin-bottom:2px}
+  .empty{color:var(--muted);font-size:13px;text-align:center;margin-top:30px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  table.mini{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.mini th{background:var(--green);color:#fff;text-align:left;padding:6px 8px;font-size:11.5px}
+  table.mini td{padding:6px 8px;border-top:1px solid var(--line)}
+  .msgbox{background:#f7faf8;border:1px solid var(--line);border-radius:8px;padding:11px;font-size:13px;white-space:pre-wrap}
+  .home{flex:1;overflow-y:auto;padding:30px 26px}
+  .home h1{font-size:24px;letter-spacing:-.5px;margin-bottom:4px}
+  .home .sub{color:var(--muted);font-size:14px;margin-bottom:22px;max-width:640px}
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+  .mode{border:1px solid var(--line);border-radius:var(--r);padding:18px;background:#fff;transition:.15s}
+  .mode:hover{border-color:var(--green);box-shadow:var(--shadow)}
+  .mode .tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:3px 9px;border-radius:999px;margin-bottom:10px}
+  .mode.a .tag{background:var(--blue-l);color:var(--blue)} .mode.b .tag{background:var(--green-l);color:var(--green-d)}
+  .mode h3{font-size:17px;margin-bottom:6px}
+  .mode p{font-size:13px;color:var(--muted);margin-bottom:14px;min-height:54px}
+  .mats{background:var(--amber-l);border:1px solid #f0e2bf;border-radius:var(--r);padding:16px 18px}
+  .mats h4{font-size:13px;color:var(--amber);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+  .mats ul{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px}
+  .mats li{font-size:13px;padding-left:18px;position:relative}
+  .mats li::before{content:"";position:absolute;left:0;top:8px;width:7px;height:7px;border-radius:2px;background:var(--amber)}
+  .wf{flex:1;overflow-y:auto;padding:24px 26px;max-width:760px;margin:0 auto;width:100%}
+  .wf h2{font-size:20px;margin-bottom:4px}
+  .wf .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+  .runlist{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+  .run{display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--line);border-radius:var(--rs);background:#fff}
+  .run .ic{flex:0 0 24px;height:24px;border-radius:50%;background:#e3ebe6;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--muted)}
+  .run.run-on{border-color:var(--green);background:var(--green-l2)}
+  .run.run-done .ic{background:var(--green);color:#fff}
+  .run .tx{flex:1}
+  .run .tx .nm{font-weight:700;font-size:14px}
+  .run .tx .tl{font-size:11.5px;color:var(--green-d);font-weight:600}
+  .run .st{font-size:12px;font-weight:700;color:var(--muted)}
+  .run.run-done .st{color:var(--green-d)}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;transition:.25s;pointer-events:none;z-index:50;display:flex;align-items:center;gap:9px}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast .dot{width:8px;height:8px;border-radius:50%;background:#5fd07a}
+  @media(max-width:820px){.pane.right{display:none}.modes{grid-template-columns:1fr}.mats ul{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="bar">
+    <div class="logo">Camp <span>Ads</span> Agent</div>
+    <div id="stepperWrap" style="display:none"><div class="stepper" id="stepper"></div></div>
+    <div class="spacer"></div>
+    <button class="ghost" id="backBtn" onclick="goBack()" disabled>← Quay lại</button>
+    <button class="ghost" onclick="go('home')">Trang chủ</button>
+  </div>
+  <section class="screen on" id="s-home">
+    <div class="home">
+      <h1>Tự động hóa vòng đời chiến dịch Adtima</h1>
+      <p class="sub">Chọn cách bạn muốn làm việc với agent. Cả hai đều chạy trên dữ liệu giả lập (mock), không gọi hệ thống thật.</p>
+      <div class="modes">
+        <div class="mode a">
+          <span class="tag">Flow A · Setup camp</span>
+          <h3>Hỏi đáp / theo bước</h3>
+          <p>Agent dẫn bạn dựng chiến dịch. Xem theo tiến trình từng bước, hoặc chat tự nhiên — chuyển qua lại bất kỳ lúc nào.</p>
+          <div class="row"><button class="btn" onclick="startChat('wizard')">Theo tiến trình →</button><button class="btn sec" onclick="startChat('chat')">Chat tự nhiên →</button></div>
+        </div>
+        <div class="mode b">
+          <span class="tag">Flow B · Waterfall</span>
+          <h3>Dán brief đầy đủ (End-to-end)</h3>
+          <p>Đã có brief đủ data input? Dán một lần, agent chạy tự động cả 6 bước và trả gói kết quả hoàn chỉnh.</p>
+          <button class="btn" onclick="go('wf')">Chạy end-to-end →</button>
+        </div>
+      </div>
+      <div class="mats">
+        <h4>Material / input bạn cần chuẩn bị</h4>
+        <ul>
+          <li>Brief khách: brand, mục tiêu, funnel (awareness / conversion)</li>
+          <li>Target audience: tuổi, giới, location, interests</li>
+          <li>Ngân sách &amp; flight (thời lượng chạy)</li>
+          <li>File báo cáo 500 camps (CSV) để phân tích</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  <section class="screen" id="s-chat">
+    <div class="pane left">
+      <div class="ph">
+        <span id="curLabel" style="color:var(--green-d)"></span>
+        <span class="viewtoggle">
+          <button id="tabWiz" onclick="setView('wizard')">Theo tiến trình</button>
+          <button id="tabChat" onclick="setView('chat')">Chat tự nhiên</button>
+        </span>
+      </div>
+      <div class="viewbox" id="wizardView">
+        <div class="stepbody" id="stepbody"></div>
+        <div class="navbar" id="navbar"></div>
+      </div>
+      <div class="viewbox" id="chatView" style="display:none">
+        <div class="thread" id="thread"></div>
+        <div class="chatcomposer" id="chatcomposer"></div>
+      </div>
+    </div>
+    <div class="pane right">
+      <div class="ph">Kết quả bước hiện tại</div>
+      <div class="res" id="res"><div class="empty">Hoàn tất bước để xem kết quả ở đây.</div></div>
+    </div>
+  </section>
+  <section class="screen" id="s-wf">
+    <div class="wf">
+      <h2>Chạy end-to-end từ brief đầy đủ</h2>
+      <p class="sub">Dán brief có đủ data input. Agent validate rồi chạy tự động 6 bước, output của bước trước là input của bước sau.</p>
+      <textarea id="wfBrief" rows="6"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="wfRun" onclick="runWaterfall()">▶ Chạy end-to-end</button>
+        <span class="hint" id="wfHint">Đã nạp sẵn brief mock của Brand A (Awareness).</span>
+      </div>
+      <div class="runlist" id="runlist"></div>
+      <div id="wfBundle"></div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"><span class="dot"></span><span id="toastTx"></span></div>
+<script>
+const MOCK_BRIEF = `Brand A (phong cách MasterCard) - ngành Tài chính/Du lịch.
+Mục tiêu: tăng nhận biết tới nhóm 18+ quan tâm du lịch khu vực SEA.
+Target: 18+, all gender, NAT (ưu tiên HCM/HN/ĐN); interests: Travel, Air travel, Hotels, Credit cards.
+Ngân sách: 425 triệu, chạy 4 tuần. Format: banner + video.`;
+
+const STEPS = [
+  { id:"brief", title:"Nhận brief", hero:false, q:"Dùng brief mẫu Brand A",
+    ask:"Em bóc tách brief khách thành cấu trúc chuẩn (brand, funnel, target, KPI). Hãy dán brief vào.",
+    tool:"call_llm · brief_parse", model:"qwen",
+    inputType:"textarea", prefill:MOCK_BRIEF, btn:"Bóc tách brief",
+    status:"Đang bóc tách brief thành JSON...", done:"Đã hiểu brief! Đây là funnel Awareness, các trường đã được chuẩn hóa.",
+    result:`<div class="card"><h4>① Brief đã bóc tách <span class="pill aw">awareness</span></h4>
+      <div class="kv"><b>Brand</b><span>Brand A · Tài chính - Du lịch</span>
+      <b>Objective</b><span>Tăng nhận biết nhóm du lịch SEA</span>
+      <b>Target</b><span>18+, all gender, NAT</span>
+      <b>Interests</b><span>Travel, Air travel, Hotels, Credit cards</span>
+      <b>Budget</b><span>425.000.000đ · 4 tuần</span>
+      <b>KPI</b><span>Reach, CPM, VTR</span></div></div>` },
+  { id:"creative", title:"Gợi ý creative", hero:false, q:"Tạo gợi ý creative",
+    ask:"Em gợi ý các hướng creative cho banner dựa trên brief. Bấm để tạo 3 angle.",
+    tool:"call_llm · creative", model:"qwen", inputType:"button", btn:"Tạo gợi ý creative",
+    status:"Đang sinh angle headline...", done:"Đây là 3 angle gợi ý — chọn hướng ưng ý rồi qua bước kế.",
+    result:`<div class="card"><h4>② 3 angle creative</h4>
+      <div class="kv" style="grid-template-columns:1fr;gap:8px"><span><b style="color:var(--ink)">Tự tin vi vu SEA</b> — "Một thẻ, cả Đông Nam Á trong tầm tay"</span>
+      <span><b style="color:var(--ink)">Sẵn sàng cho chuyến đi</b> — "Đặt vé, đặt phòng, không lo tỷ giá"</span>
+      <span><b style="color:var(--ink)">Đặc quyền du lịch</b> — "Ưu đãi khắp SG · BKK · KL"</span></div></div>` },
+  { id:"segment", title:"Audience Segment", hero:true, q:"Xác nhận target & tạo segment",
+    ask:"Em map target sang tệp DMP, ước lượng size và báo tệp còn thiếu. Xác nhận target để chạy.",
+    tool:"dmp_match.py + segment_explain", model:"gemma", inputType:"confirm", btn:"Xác nhận target & tạo segment",
+    status:"Đang đối chiếu interest với taxonomy DMP (~300 tệp)...", done:"Đã tạo segment. Lưu ý: DMP thiếu tệp 'pre-travel signal SEA' — em đề xuất proxy bằng 'Air travel + Hotels'.",
+    result:`<div class="card"><h4>③ Audience Segment (DMP)</h4>
+      <div class="kv"><b>Matched</b><span>Travel, Air travel, Hotels, Credit cards</span>
+      <b>Size ước lượng</b><span>2.1M - 2.6M</span></div>
+      <div class="alert"><div class="t">⚠ Tệp DMP còn thiếu</div>"pre-travel signal theo khu vực SEA" — đề xuất proxy: Air travel + Hotels + đã từng tương tác nội dung du lịch.</div></div>` },
+  { id:"setup", title:"Setup camp", hero:false, q:"Duyệt ngân sách & tạo plan",
+    ask:"Em lập setup plan (zone, bid, lịch, chia ngân sách) theo KPI awareness. Duyệt ngân sách để chốt.",
+    tool:"kpi_table + budget.py + setup_plan", model:"gemma", inputType:"confirm", btn:"Duyệt ngân sách & tạo plan",
+    status:"Đang sinh setup plan + chia ngân sách...", done:"Setup plan đã sẵn sàng — tối ưu CPM, chia ngân sách 3 zone.",
+    result:`<div class="card"><h4>④ Setup plan</h4>
+      <table class="mini"><tr><th>Zone</th><th>Bid (CPM)</th><th>Ngân sách</th></tr>
+      <tr><td>Tin tức (home)</td><td>55.000đ</td><td>45%</td></tr>
+      <tr><td>Giải trí</td><td>48.000đ</td><td>35%</td></tr>
+      <tr><td>Du lịch/Thể thao</td><td>52.000đ</td><td>20%</td></tr></table>
+      <div class="kv" style="margin-top:8px"><b>Lịch</b><span>4 tuần, dàn đều, frequency 3-5</span></div></div>` },
+  { id:"report", title:"Phân tích report", hero:true, q:"Upload báo cáo 500 camps (mock)",
+    ask:"Em phân tích báo cáo 500 camps. Hãy upload file CSV để em xếp hạng tốt/xấu theo CTR/CPC/CR.",
+    tool:"thresholds.py + report_explain", model:"gemma", inputType:"file", btn:"Phân tích 500 camps",
+    status:"Đang chấm điểm 500 camps theo CTR/CPC/CR...", done:"Xong! 312 camp tốt, 96 cần theo dõi, 92 cần xử lý ngay.",
+    result:`<div class="card"><h4>⑤ Kết quả phân tích 500 camps</h4>
+      <div class="chips"><span class="pill good">312 good</span><span class="pill watch">96 watch</span><span class="pill bad">92 bad</span></div>
+      <table class="mini"><tr><th>Camp</th><th>Verdict</th><th>Lý do</th></tr>
+      <tr><td>C0421</td><td><span class="pill bad">bad</span></td><td>CPC 4.200đ vượt ngưỡng, CR 0.2%</td></tr>
+      <tr><td>C0188</td><td><span class="pill bad">bad</span></td><td>CTR 0.3% quá thấp</td></tr>
+      <tr><td>C0337</td><td><span class="pill watch">watch</span></td><td>CR giảm dần 3 ngày</td></tr></table></div>` },
+  { id:"alert", title:"Cảnh báo AO", hero:true, q:"Soạn cảnh báo AO",
+    ask:"Bước cuối: em soạn message cảnh báo gửi team AO cho các camp cần xử lý. Bấm để tạo.",
+    tool:"call_llm · ao_alert", model:"qwen", inputType:"button", btn:"Soạn cảnh báo AO",
+    status:"Đang soạn message cảnh báo...", done:"Đây là message sẵn để gửi AO — bấm Copy là dùng ngay. Hoàn tất quy trình!",
+    result:`<div class="card"><h4>⑥ Cảnh báo AO</h4>
+      <div class="msgbox">🔴 [Camp Ads Alert] 92 camp cần xử lý gấp
+• C0421 — tắt/đổi creative (CPC cao, CR thấp)
+• C0188 — kiểm tra targeting (CTR 0.3%)
+• C0337 — theo dõi, CR đang giảm
+👉 Đề xuất: rà 92 camp 'bad', ưu tiên 12 camp tiêu ngân sách lớn nhất.</div>
+      <button class="btn sec" style="margin-top:10px" onclick="toast('Đã copy message')">Copy message</button></div>` },
+];
+
+let cur=0, status=STEPS.map(()=> 'pending'), lastDone=-1, viewMode='wizard', busy=false;
+let chatLog=[];
+const N=STEPS.length;
+function firstPending(){ return status.findIndex(s=>s!=='done'); }
+
+function go(scr){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById('s-'+scr).classList.add('on');
+  const w=scr==='chat';
+  document.getElementById('stepperWrap').style.display=w?'block':'none';
+  document.getElementById('backBtn').disabled=!(w&&viewMode==='wizard'&&cur>0);
+}
+function startChat(mode){
+  cur=0; status=STEPS.map(()=> 'pending'); lastDone=-1; busy=false; chatLog=[]; viewMode=mode;
+  if(mode==='chat') pushBot('Chào anh/chị! Em là Camp Ads Agent. Mình bắt đầu dựng chiến dịch nhé — '+STEPS[0].ask);
+  go('chat'); render();
+}
+function setView(v){
+  viewMode=v;
+  if(v==='chat'&&chatLog.length===0){ const i=Math.max(firstPending(),0); pushBot('Chào anh/chị! Mình tiếp tục nhé — '+STEPS[i].ask); }
+  render();
+}
+function goBack(){ if(viewMode==='wizard'&&cur>0){ cur--; render(); } }
+function nextStep(){ if(cur<N-1){ cur++; render(); } }
+function gotoStep(i){ cur=i; viewMode='wizard'; render(); }
+
+function highlight(){ return viewMode==='wizard' ? cur : (firstPending()===-1? N-1 : firstPending()); }
+function renderStepper(){
+  const el=document.getElementById('stepper'); el.innerHTML=''; const hi=highlight();
+  STEPS.forEach((s,i)=>{
+    const reach = status[i]==='done' || i===hi || (i>0&&status[i-1]==='done');
+    const d=document.createElement('div');
+    d.className='stp'+(status[i]==='done'?' done':'')+(i===hi?' cur':'')+(s.hero?' hero':'')+(reach?'':' locked');
+    d.innerHTML=`<span class="n">${status[i]==='done'?'✓':(i+1)}</span>${s.title}`;
+    if(reach) d.onclick=()=>gotoStep(i);
+    el.appendChild(d);
+  });
+}
+function renderResult(){
+  const idx = viewMode==='wizard' ? (status[cur]==='done'?cur:-1) : lastDone;
+  document.getElementById('res').innerHTML = idx>=0 ? STEPS[idx].result : '<div class="empty">Hoàn tất bước này để xem kết quả.</div>';
+}
+function render(){
+  document.getElementById('wizardView').style.display=viewMode==='wizard'?'flex':'none';
+  document.getElementById('chatView').style.display=viewMode==='chat'?'flex':'none';
+  document.getElementById('tabWiz').classList.toggle('active',viewMode==='wizard');
+  document.getElementById('tabChat').classList.toggle('active',viewMode==='chat');
+  const labI = viewMode==='wizard'?cur:(firstPending()===-1?N-1:firstPending());
+  document.getElementById('curLabel').textContent='Bước '+(labI+1)+'/6: '+STEPS[labI].title;
+  document.getElementById('backBtn').disabled=!(viewMode==='wizard'&&cur>0);
+  renderStepper(); renderResult();
+  if(viewMode==='wizard') renderWizard(); else renderChat();
+}
+function renderWizard(){
+  const s=STEPS[cur], done=status[cur]==='done';
+  let inp='';
+  if(!done){
+    if(s.inputType==='textarea') inp='<div class="label">Input cần đưa vào</div><textarea rows="4">'+(s.prefill||'')+'</textarea>';
+    else if(s.inputType==='file') inp='<div class="label">Upload material</div><div class="drop"><b>Kéo thả</b> hoặc chọn <b>camps_report.csv</b> (mock 500 dòng)<br><span style="font-size:11px">Material cần: file báo cáo 500 camps</span></div>';
+    else inp='<div class="label">Hành động</div><div class="inote">'+(s.id==='segment'?'Material cần: target audience đã xác nhận.':s.id==='setup'?'Material cần: duyệt ngân sách.':'Bấm nút bên dưới để agent thực hiện bước này.')+'</div>';
+  }
+  const hero=s.hero?'<span class="hb">Hero · AI sâu</span>':'';
+  document.getElementById('stepbody').innerHTML=
+    '<div class="stepnum">Bước '+(cur+1)+' / 6</div>'+
+    '<h2 class="steptitle">'+s.title+' '+hero+'</h2>'+
+    '<div class="guide"><div class="av">AI</div><div class="gtext">'+(done?s.done:s.ask)+
+      '<div class="tool '+(s.model==='gemma'?'gemma':'')+'">⚙ '+s.tool+' · '+(s.model==='gemma'?'Gemma-4-31b':'Qwen3.6-27b')+'</div></div></div>'+
+    (done?'<div class="doneconfirm">✓ Bước "'+s.title+'" đã hoàn tất — xem kết quả ở panel bên phải.</div>':'<div>'+inp+'</div><div id="statusline"></div>');
+  const last=cur===N-1;
+  const primary = !done ? '<button class="btn" onclick="submitStep()">'+s.btn+'</button>'
+    : (last?'<button class="btn" onclick="go(\'home\')">Hoàn tất ✓</button>':'<button class="btn" onclick="nextStep()">Bước tiếp →</button>');
+  document.getElementById('navbar').innerHTML='<div class="row"><span class="hint">'+(done?'✓ Đã xong bước này':'Tool sẽ chạy: '+s.tool)+'</span><span style="margin-left:auto"></span>'+(cur>0?'<button class="btn sec" onclick="goBack()">← Bước trước</button>':'')+primary+'</div>';
+}
+function submitStep(){
+  if(busy) return; const i=cur, s=STEPS[i]; busy=true;
+  pushMe(s.q);
+  const sl=document.getElementById('statusline');
+  if(sl) sl.innerHTML='<div class="status"><span class="spin"></span> '+s.status+' <span style="color:var(--green-d);font-weight:700">['+s.tool+']</span></div>';
+  document.getElementById('navbar').innerHTML='<div class="row"><span class="hint">Agent đang xử lý…</span></div>';
+  document.getElementById('backBtn').disabled=true;
+  setTimeout(function(){ status[i]='done'; lastDone=i; pushBot(s.done,s.tool,s.model); busy=false; render(); toast('✓ '+s.title+' hoàn tất'); },1100);
+}
+function pushMe(t){ chatLog.push({who:'me',html:t}); }
+function pushBot(t,tool,model){ chatLog.push({who:'bot',html:t,tool:tool,model:model}); }
+function renderChat(){
+  const t=document.getElementById('thread'); t.innerHTML='';
+  chatLog.forEach(function(m){
+    if(m.who==='status'){ const d=document.createElement('div'); d.className='statusbub'; d.innerHTML='<span class="spin"></span> '+m.html+' <span style="color:var(--green-d);font-weight:700">['+m.tool+']</span>'; t.appendChild(d); return; }
+    const w=document.createElement('div'); w.className='msg '+(m.who==='me'?'me':'bot');
+    const tool=m.tool?'<div class="tool '+(m.model==='gemma'?'gemma':'')+'">⚙ '+m.tool+' · '+(m.model==='gemma'?'Gemma-4-31b':'Qwen3.6-27b')+'</div>':'';
+    w.innerHTML='<div class="av">'+(m.who==='me'?'Q':'AI')+'</div><div class="bub">'+m.html+tool+'</div>';
+    t.appendChild(w);
+  });
+  t.scrollTop=t.scrollHeight;
+  const pend=firstPending();
+  let chips = (pend!==-1 && !busy) ? '<button class="qchip" onclick="quick()">'+STEPS[pend].q+'</button>' : '';
+  document.getElementById('chatcomposer').innerHTML='<div class="quick">'+chips+'</div><div class="inrow"><input type="text" id="chatInput" placeholder="Nhập tin nhắn cho agent..."><button class="btn" onclick="sendFromInput()">Gửi</button></div>';
+  const ci=document.getElementById('chatInput'); if(ci) ci.addEventListener('keydown',function(e){ if(e.key==='Enter') sendFromInput(); });
+}
+function quick(){ const p=firstPending(); if(p!==-1) sendChat(STEPS[p].q); }
+function sendFromInput(){ const ci=document.getElementById('chatInput'); if(ci) sendChat(ci.value); }
+function sendChat(text){
+  text=(text||'').trim(); if(!text||busy) return;
+  pushMe(text);
+  const i=firstPending();
+  if(i===-1){ pushBot('Đã xong cả 6 bước rồi. Bấm vào stepper phía trên để xem lại bước bất kỳ nhé.'); renderChat(); return; }
+  const s=STEPS[i]; busy=true; cur=i;
+  chatLog.push({who:'status',html:s.status,tool:s.tool}); renderChat();
+  setTimeout(function(){
+    chatLog=chatLog.filter(function(m){return m.who!=='status';});
+    status[i]='done'; lastDone=i; pushBot(s.done,s.tool,s.model);
+    const n=firstPending();
+    if(n!==-1){ pushBot('Tiếp theo — '+STEPS[n].ask); cur=n; } else { pushBot('Tuyệt! Đã xong toàn bộ 6 bước. Gói kết quả đã sẵn ở panel bên phải.'); cur=i; }
+    busy=false; render(); toast('✓ '+s.title+' hoàn tất');
+  },1100);
+}
+function buildRunlist(){
+  const el=document.getElementById('runlist'); el.innerHTML='';
+  STEPS.forEach(function(s,i){ const d=document.createElement('div'); d.className='run'; d.id='run'+i;
+    d.innerHTML='<div class="ic">'+(i+1)+'</div><div class="tx"><div class="nm">'+s.title+'</div><div class="tl">'+s.tool+' · '+(s.model==='gemma'?'Gemma':'Qwen')+'</div></div><div class="st">chờ</div>'; el.appendChild(d); });
+}
+function runWaterfall(){
+  document.getElementById('wfBundle').innerHTML=''; document.getElementById('wfRun').setAttribute('disabled',''); buildRunlist();
+  let i=0;
+  function step(){
+    if(i>0){ const p=document.getElementById('run'+(i-1)); p.className='run run-done'; p.querySelector('.st').textContent='✓ xong'; }
+    if(i>=N){
+      document.getElementById('wfRun').removeAttribute('disabled');
+      document.getElementById('wfBundle').innerHTML='<div class="card" style="margin-top:16px;border-color:#bfe0c9;background:var(--green-l2)"><h4>✓ AgentOutput — gói kết quả</h4><div class="kv"><b>Segment</b><span>2.1M-2.6M · 1 gap (proxy đã đề xuất)</span><b>Setup plan</b><span>3 zone, tối ưu CPM</span><b>Report</b><span>312 good / 96 watch / 92 bad</span><b>AO alert</b><span>Đã soạn, sẵn gửi</span></div></div>';
+      toast('✓ Hoàn tất end-to-end · 6/6 bước'); return;
+    }
+    const r=document.getElementById('run'+i); r.className='run run-on'; r.querySelector('.st').textContent='đang chạy…'; i++; setTimeout(step,850);
+  }
+  toast('Đủ data input ✓ — bắt đầu chạy'); setTimeout(step,500);
+}
+let tmr;
+function toast(tx){ const t=document.getElementById('toast'); document.getElementById('toastTx').textContent=tx; t.classList.add('show'); clearTimeout(tmr); tmr=setTimeout(function(){t.classList.remove('show');},1600); }
+document.getElementById('wfBrief').value=MOCK_BRIEF; buildRunlist();
+</script>
+</body>
+</html>

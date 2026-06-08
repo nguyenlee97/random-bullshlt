@@ -1,0 +1,99 @@
+/**
+ * Custom Style Overrides for Replicated ZingMP3 Ad Zone
+ */
+
+#zmp3_Top {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 0 !important;
+}
+
+.zingmp3-banner {
+    position: relative;
+    max-width: 970px;
+    width: 100%;
+    aspect-ratio: 970 / 250;
+    height: auto;
+    background: #2f2739; /* matches ZingMP3 dark theme background */
+    border: 1px dashed #493e58;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.zingmp3-banner.ad-loaded {
+    border-style: solid;
+    border-color: transparent;
+}
+
+/* Close Button */
+.zingmp3-banner .ad-close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #ffffff;
+    border: none;
+    border-radius: 50%;
+    font-size: 16px;
+    line-height: 20px;
+    text-align: center;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+}
+
+.zingmp3-banner .ad-close-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+/* Ad Badge */
+.zingmp3-banner .ad-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 9;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Loading Spinner */
+.zingmp3-banner .ad-spinner {
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border-left-color: #7200a1; /* ZingMP3 signature purple color */
+    animation: ad-spin 1s linear infinite;
+}
+
+@keyframes ad-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+    .zingmp3-banner {
+        max-width: 100%;
+        margin: 0 15px;
+    }
+}

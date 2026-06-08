@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camp Ads Agent · Chiến lược Claw-a-thon 2026</title>
+<style>
+  :root{
+    --green:#1F7A3D; --green-d:#145C2C; --green-l:#E8F3EC; --green-l2:#F4F8F5;
+    --amber:#9A6700; --amber-l:#FFF6E5;
+    --red:#B00020; --red-l:#FCEAEC;
+    --ink:#16241b; --muted:#5b6b60; --line:#d8e3db; --white:#fff;
+    --radius:14px; --radius-s:10px;
+    --shadow:0 1px 3px rgba(20,60,40,.06),0 6px 24px rgba(20,60,40,.06);
+    --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;scroll-padding-top:88px}
+  body{font-family:var(--font);color:var(--ink);background:#f3f7f4;line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--green);text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+
+  /* header */
+  header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .htop{display:flex;align-items:center;gap:16px;padding:14px 0}
+  .logo{font-weight:800;font-size:18px;color:var(--green-d);letter-spacing:-.3px;white-space:nowrap}
+  .logo span{color:var(--amber)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .chip{font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:999px;background:var(--green-l);color:var(--green-d);border:1px solid #cfe5d6;white-space:nowrap}
+  nav.tabs{display:flex;gap:4px;overflow-x:auto;padding-bottom:10px;scrollbar-width:thin}
+  nav.tabs a{font-size:13.5px;font-weight:600;color:var(--muted);padding:7px 13px;border-radius:999px;white-space:nowrap;transition:.15s}
+  nav.tabs a:hover{background:var(--green-l2);color:var(--green-d)}
+  nav.tabs a.active{background:var(--green);color:#fff}
+  .prog{height:4px;background:var(--green-l);border-radius:9px;overflow:hidden;margin-bottom:4px}
+  .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),#3fae66);transition:width .4s}
+  .progtxt{font-size:11.5px;color:var(--muted);padding-bottom:8px}
+
+  section{padding:38px 0 8px;scroll-margin-top:90px}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--green);margin-bottom:6px}
+  h2{font-size:25px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px;color:var(--ink)}
+  h3{font-size:17px;font-weight:700;margin:18px 0 8px;color:var(--green-d)}
+  .lead{color:var(--muted);font-size:15.5px;max-width:760px;margin-bottom:18px}
+  p{margin-bottom:10px}
+  .b{font-weight:700}
+  .g{color:var(--green-d);font-weight:700}
+
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow)}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+
+  .banner{border-radius:var(--radius);padding:22px 24px;background:linear-gradient(135deg,#103d22,#1F7A3D);color:#eafff0;box-shadow:var(--shadow)}
+  .banner .k{font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#a8e8bf;margin-bottom:8px}
+  .banner h2{color:#fff;font-size:22px;line-height:1.35;margin-bottom:12px}
+  .banner p{color:#d4f3de;margin-bottom:0}
+  .banner .crit{display:inline-block;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);padding:3px 10px;border-radius:8px;font-weight:700;color:#fff;font-size:13.5px}
+
+  .callout{border-left:4px solid var(--amber);background:var(--amber-l);border-radius:0 var(--radius-s) var(--radius-s) 0;padding:14px 18px;margin:14px 0}
+  .callout .t{font-weight:700;color:var(--amber);margin-bottom:4px}
+  .callout.green{border-color:var(--green);background:var(--green-l)}
+  .callout.green .t{color:var(--green-d)}
+  .callout.red{border-color:var(--red);background:var(--red-l)}
+  .callout.red .t{color:var(--red)}
+
+  /* metric */
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .metric{background:#fff;border:1px solid var(--line);border-radius:var(--radius-s);padding:14px 16px}
+  .metric .n{font-size:26px;font-weight:800;color:var(--green-d);letter-spacing:-.5px}
+  .metric .l{font-size:12.5px;color:var(--muted);font-weight:600}
+
+  /* timeline */
+  .tl{position:relative;margin-top:8px;padding-left:8px}
+  .tl::before{content:"";position:absolute;left:31px;top:8px;bottom:18px;width:2px;background:var(--line)}
+  .day{position:relative;display:flex;gap:18px;margin-bottom:14px}
+  .dot{flex:0 0 48px;height:48px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;z-index:1;box-shadow:0 0 0 4px #f3f7f4}
+  .dot.amber{background:var(--amber)} .dot.red{background:var(--red)} .dot.dark{background:var(--green-d)}
+  .daycard{flex:1;background:#fff;border:1px solid var(--line);border-radius:var(--radius-s);padding:13px 16px;box-shadow:var(--shadow)}
+  .daycard .dh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .daycard .dd{font-size:12px;color:var(--muted);font-weight:600}
+  .daycard .goal{font-weight:700;font-size:15px}
+  .daycard ul{margin:6px 0 0 2px;list-style:none}
+  .daycard li{position:relative;padding-left:16px;font-size:14px;color:#33453a;margin-bottom:3px}
+  .daycard li::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:50%;background:var(--green)}
+
+  /* pipeline */
+  .pipe{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:6px}
+  .step{background:#fff;border:1px solid var(--line);border-radius:var(--radius-s);padding:14px;position:relative;box-shadow:var(--shadow)}
+  .step.hero{border:2px solid var(--green);background:var(--green-l2)}
+  .step .num{font-size:12px;font-weight:800;color:var(--muted)}
+  .step.hero .num{color:var(--green)}
+  .step .st{font-weight:700;font-size:15px;margin:3px 0 6px}
+  .step .sd{font-size:13px;color:var(--muted);margin-bottom:10px}
+  .heat{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:var(--muted)}
+  .bars{display:flex;gap:3px}
+  .bars b{width:14px;height:6px;border-radius:3px;background:#dde7e0}
+  .bars b.on{background:var(--green)}
+  .badge{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.5px;padding:2px 8px;border-radius:999px;background:var(--green);color:#fff;text-transform:uppercase}
+  .badge.track{background:#eef3f0;color:var(--green-d);border:1px solid #cfe5d6}
+
+  /* table */
+  table{width:100%;border-collapse:collapse;font-size:14px;background:#fff;border-radius:var(--radius-s);overflow:hidden;box-shadow:var(--shadow)}
+  th{background:var(--green);color:#fff;text-align:left;padding:10px 13px;font-size:13px;font-weight:700}
+  td{padding:10px 13px;border-top:1px solid var(--line);vertical-align:top}
+  tr:nth-child(even) td{background:var(--green-l2)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;background:#eef3f0;padding:1px 6px;border-radius:5px;color:var(--green-d)}
+
+  /* roles */
+  .role{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);border-top:4px solid var(--green)}
+  .role h4{font-size:16px;font-weight:800;color:var(--green-d)}
+  .role .who{font-size:12.5px;color:var(--amber);font-weight:700;margin-bottom:8px}
+  .role p{font-size:13.5px;color:#33453a;margin-bottom:8px}
+  .role .out{font-size:12px;color:var(--muted);border-top:1px dashed var(--line);padding-top:8px}
+
+  /* checklist */
+  .check{list-style:none}
+  .check li{display:flex;align-items:flex-start;gap:11px;padding:9px 12px;border:1px solid var(--line);border-radius:var(--radius-s);margin-bottom:8px;background:#fff;cursor:pointer;transition:.12s}
+  .check li:hover{border-color:#bcd6c4;background:var(--green-l2)}
+  .check input{appearance:none;width:20px;height:20px;border:2px solid #b9cabf;border-radius:6px;flex:0 0 auto;margin-top:1px;cursor:pointer;position:relative;transition:.12s}
+  .check input:checked{background:var(--green);border-color:var(--green)}
+  .check input:checked::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg)}
+  .check li.done span{text-decoration:line-through;color:var(--muted)}
+  .check span{font-size:14px}
+
+  .pill{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px}
+  .pill.hi{background:var(--red-l);color:var(--red)} .pill.mid{background:var(--amber-l);color:var(--amber)} .pill.lo{background:var(--green-l);color:var(--green-d)}
+
+  /* brief sheet */
+  .bhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .ftag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.5px;padding:3px 10px;border-radius:999px;text-transform:uppercase}
+  .ftag.aw{background:#E6F1FB;color:#0C447C} .ftag.cv{background:#F4F8F5;color:var(--green-d);border:1px solid #cfe5d6}
+  .bf{font-size:13.5px;border-collapse:collapse;width:100%}
+  .bf td{padding:7px 0;border-top:1px solid var(--line);vertical-align:top;box-shadow:none;background:none!important}
+  .bf td:first-child{font-weight:700;color:var(--green-d);width:148px;padding-right:12px}
+  .bf .gap{color:var(--red);font-weight:600}
+  .schema{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;background:#0f2417;color:#cdeed8;border-radius:var(--radius-s);padding:16px 18px;overflow-x:auto;line-height:1.5;white-space:pre}
+  .schema .k{color:#8fdda8} .schema .c{color:#7fae90;font-style:italic}
+  footer{margin:40px 0 30px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);text-align:center}
+  .note{font-size:12.5px;color:var(--muted);font-style:italic}
+  @media(max-width:640px){.htop{flex-wrap:wrap}.chips{margin-left:0;width:100%}h2{font-size:21px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="htop">
+      <div class="logo">Camp <span>Ads</span> Agent · Chiến lược Claw-a-thon 2026</div>
+      <div class="chips">
+        <span class="chip" style="background:var(--green-d);color:#fff;border-color:var(--green-d)">Đội Pawgrammers</span>
+        <span class="chip">Giải 80.000.000đ</span>
+        <span class="chip">7 ngày build</span>
+        <span class="chip">Vote 100%</span>
+        <span class="chip">Team ≤ 3</span>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <a href="#overview" class="active">Tổng quan</a>
+      <a href="#prep">GĐ0 · Chuẩn bị</a>
+      <a href="#build">GĐ1 · Build 7 ngày</a>
+      <a href="#product">Sản phẩm</a>
+      <a href="#briefs">Brief mẫu</a>
+      <a href="#team">Phân vai</a>
+      <a href="#tech">Kiến trúc</a>
+      <a href="#vote">GĐ2 · Voting</a>
+      <a href="#risk">Rủi ro</a>
+      <a href="#submit">Checklist nộp</a>
+    </nav>
+    <div class="prog"><i id="progbar"></i></div>
+    <div class="progtxt"><span id="progtxt">Tiến độ chuẩn bị: 0%</span> — tick các ô để theo dõi cùng team (tự lưu trên máy bạn)</div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="banner">
+      <div class="k">Insight quyết định</div>
+      <h2>Cuộc thi chấm 100% bằng community voting — KHÔNG chấm kỹ thuật hay chi phí.</h2>
+      <p>BTC nói nguyên văn cuộc thi <b>“hoàn toàn 100% dựa trên voting page”</b>. Toàn bộ nhân viên VNG sẽ tự mở agent của bạn trên voting page và <b>test bằng mock data</b>, rồi đánh giá 3 tiêu chí: <span class="crit">tính khả thi · tính hữu dụng · tính hiệu quả</span></p>
+    </div>
+
+    <div class="grid g2" style="margin-top:18px">
+      <div class="card">
+        <h3 style="margin-top:0">Hệ quả số 1 — Trực quan thắng kỹ thuật</h3>
+        <p>Một agent <span class="g">ai cũng hiểu trong 15 giây</span> sẽ thắng một pipeline kỹ thuật sâu mà chỉ dân Adtima mới hiểu. Bạn không thi với kỹ sư giỏi nhất — bạn thi để được nhiều người bấm vote nhất.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Hệ quả số 2 — Cấm API production là lợi thế</h3>
+        <p>Mọi team đều phải mock dữ liệu. Điều này <span class="g">xóa lợi thế của team có sẵn hệ thống thật</span> và mở khóa use case full-pipeline của bạn: rủi ro phụ thuộc API Adtima nay không còn.</p>
+      </div>
+    </div>
+
+    <h3>Hướng đã chốt</h3>
+    <div class="card">
+      <p style="margin-bottom:14px"><span class="badge">Sản phẩm</span> &nbsp; <b>“Camp Ads Agent”</b> — agent hội thoại dẫn voter đi trọn luồng vận hành quảng cáo Adtima trên dữ liệu giả lập.</p>
+      <p style="margin-bottom:14px"><span class="badge track">Track nộp</span> &nbsp; <b>Automation &amp; Integration</b> (track “cánh tay nối dài” — BTC nói hấp dẫn nhất), nhưng phô diễn cả 3 năng lực: chat nhận brief + tự động setup + phân tích report.</p>
+      <p style="margin-bottom:0"><span class="badge">Hero</span> &nbsp; <b>Audience Segment (DMP)</b> + <b>Report Analyzer</b> — map brief → tệp DMP &amp; báo gap; thả file 500 camps → xếp hạng tốt/xấu + tự soạn cảnh báo AO. Các khoảnh khắc “wow” dễ kéo vote nhất, mock được 100%.</p>
+    </div>
+  </section>
+
+  <!-- PREP -->
+  <section id="prep">
+    <div class="eyebrow">Giai đoạn 0</div>
+    <h2>Chuẩn bị (từ nay → 10/06)</h2>
+    <p class="lead">Thua oan thường vì lỡ mốc đăng ký hoặc vào training tay không. Hoàn tất các việc này trước ngày build.</p>
+    <ul class="check" data-key="prep">
+      <li><input type="checkbox"><span><b>Đăng ký + chốt tên đội + 3 thành viên</b> trước <b>09/06</b> (có thể đóng sớm nếu đông). Ưu tiên mix tech + non-tech.</span></li>
+      <li><input type="checkbox"><span>Cả team dự <b>Webinar #2 (05/06)</b> — “Từ prompt đến Agent”, lấy tips scoping &amp; prompting.</span></li>
+      <li><input type="checkbox"><span>Dự đầy đủ <b>Training Day 10/06 (8:30–11:30)</b> — nhận account, MaaS token, gói 10.000.000đ.</span></li>
+      <li><input type="checkbox"><span>Ngay tại training: deploy thử 1 <b>“hello-world” agent</b> lên Runtime để chắc hạ tầng thông.</span></li>
+      <li><input type="checkbox"><span>Tạo sẵn <b>repo GitHub public</b> + GitHub Desktop/Docker trên máy builder.</span></li>
+      <li><input type="checkbox"><span>Chuẩn bị nháp <b>bộ mock data</b>: 3 brief mẫu + cấu trúc cột report 500 camps.</span></li>
+    </ul>
+    <div class="callout"><div class="t">Cần hỏi BTC tại training 10/06</div>Xác nhận: hạn nộp 17/06 &amp; khung voting 22/06–03/07; voting page cho test live hay xem video; có nhúng UI web tùy biến được không; giới hạn token thực tế; <b>có được chuẩn bị code trước training không</b> (agent cuối vẫn chạy bằng model BTC).</div>
+
+    <h3 style="margin-top:26px">Vũ khí bí mật — Pre-build &amp; Handoff (làm trước bằng model xịn)</h3>
+    <div class="banner" style="background:linear-gradient(135deg,#0f2417,#27500A);margin-bottom:16px">
+      <div class="k" style="color:#bfe6c9">Đòn bẩy lớn nhất của đội</div>
+      <h2 style="font-size:20px">Dùng Claude (Claude Code) / GPT (Codex) để dựng <b>mockup chạy hoàn chỉnh NGAY BÂY GIỜ</b> — rồi trong 7 ngày chỉ port sang model BTC trên GreenNode.</h2>
+      <p>7 ngày rất ngắn và cuộc thi chấm bằng vote → demo phải cực mượt. Ai làm sẵn được nhiều nhất trước giờ G sẽ có sản phẩm bóng bẩy nhất. Bí quyết: <b>thiết kế “model-agnostic”</b> để mockup làm bằng model xịn vẫn build lại được bằng Qwen/Gemma/MiniMax.</p>
+    </div>
+
+    <div class="pipe" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+      <div class="step"><div class="num">TRƯỚC GIỜ G</div><div class="st">Pre-build bằng model xịn</div><div class="sd">Claude Code / Codex dựng full FastAPI + UI + 6 bước chạy thật trên mock data. Tốc độ &amp; chất lượng code cao nhất.</div></div>
+      <div class="step"><div class="num">SẢN PHẨM</div><div class="st">Gói Handoff / Transfer</div><div class="sd">Repo + mock data + prompt library + eval set + config đổi model + runbook “rebuild 7 ngày”.</div></div>
+      <div class="step hero"><div class="num">TRONG 7 NGÀY</div><div class="st">Rebuild trên GreenNode</div><div class="sd">Đổi <span class="mono">base_url</span> + <span class="mono">model</span> sang MaaS (Gemma/Qwen). Chạy eval set xác nhận parity → polish → deploy.</div></div>
+    </div>
+
+    <div class="callout green"><div class="t">Nguyên tắc “model-agnostic” để rebuild không vỡ</div>MaaS của GreenNode <b>tương thích OpenAI</b> → đổi model chỉ là đổi <span class="mono">base_url</span> + tham số <span class="mono">model</span>, không sửa kiến trúc. Nhưng prompt làm bằng Claude/GPT dễ “quá thông minh”: phải <b>test sớm trên model yếu hơn</b> (Gemma-4-31b-it tương đương) và ràng buộc output bằng few-shot + JSON schema + nhiệt độ thấp, để Qwen/Gemma vẫn chạy đúng.</div>
+
+    <ul class="check" data-key="prebuild">
+      <li><input type="checkbox"><span><b>Dựng mockup hoàn chỉnh</b> 6 bước bằng Claude Code/Codex trên mock data — chạy end-to-end trước 10/06.</span></li>
+      <li><input type="checkbox"><span><b>Tách lớp LLM</b> sau 1 hàm <span class="mono">call_llm(model, messages)</span> chuẩn OpenAI — đổi provider chỉ 1 dòng config.</span></li>
+      <li><input type="checkbox"><span><b>Viết eval set 15–20 case</b> (input brief/report → output kỳ vọng) để đo parity khi đổi sang model BTC.</span></li>
+      <li><input type="checkbox"><span><b>Test prompt trên model yếu hơn</b> ngay từ đầu (không chỉ Claude/GPT) — ràng buộc bằng few-shot + JSON schema + temperature thấp.</span></li>
+      <li><input type="checkbox"><span><b>Viết runbook handoff</b>: cách set env, đổi <span class="mono">base_url</span>/model MaaS, build Docker, deploy AgentBase, chạy eval — để D0 bắt tay làm ngay.</span></li>
+      <li><input type="checkbox"><span><b>Gitignore secrets</b> + giữ repo pre-build riêng, chỉ public bản chạy bằng model BTC khi nộp.</span></li>
+    </ul>
+    <p class="note">Lưu ý fair-play: chuẩn bị code/mockup trước là hợp lệ miễn <b>agent nộp cuối cùng chạy bằng model BTC trên GreenNode</b>. Vẫn nên xác nhận với BTC tại training 10/06.</p>
+  </section>
+
+  <!-- BUILD -->
+  <section id="build">
+    <div class="eyebrow">Giai đoạn 1</div>
+    <h2>Build Phase — 7 ngày (10/06 → 17/06)</h2>
+    <p class="lead">Nguyên tắc xuyên suốt: <b>hero (bước 3, 5–6) xong trước</b>, connective tissue (1, 2, 4) làm sau. Nếu hụt giờ, bạn vẫn có một sản phẩm Data-track hoàn chỉnh để nộp.</p>
+    <div class="tl">
+      <div class="day"><div class="dot dark">D0</div><div class="daycard"><div class="dh"><span class="goal">Hạ tầng thông</span><span class="dd">10/06</span></div><ul><li>Lấy account/token tại training.</li><li>Deploy “hello-world” agent (chỉ <span class="mono">/health</span> + echo) lên Runtime.</li><li>Xác nhận gọi được MaaS qua chuẩn OpenAI.</li></ul></div></div>
+      <div class="day"><div class="dot">D1</div><div class="daycard"><div class="dh"><span class="goal">Xương sống</span><span class="dd">11/06</span></div><ul><li>Dựng khung FastAPI + UI (port sang mockup pre-build).</li><li>Mock 500 camps + 2 brief mẫu + taxonomy DMP (~300 interest/behavior).</li><li>Chốt rule tốt/xấu (ngưỡng CTR/CPC/CR).</li></ul></div></div>
+      <div class="day"><div class="dot">D2</div><div class="daycard"><div class="dh"><span class="goal">Hero trước tiên</span><span class="dd">12/06</span></div><ul><li>Hoàn thiện <b>Report Analyzer</b> (bước 5) + <b>Audience Segment/DMP</b> (bước 3, map &amp; báo gap).</li><li>Đây là phần ăn vote → làm trước.</li></ul></div></div>
+      <div class="day"><div class="dot">D3</div><div class="daycard"><div class="dh"><span class="goal">End-to-end (dù xấu)</span><span class="dd">13/06</span></div><ul><li>Nối đủ 6 bước chạy thông.</li><li>Bấm từ brief → segment → cảnh báo. Cột mốc “walking skeleton”.</li></ul></div></div>
+      <div class="day"><div class="dot">D4</div><div class="daycard"><div class="dh"><span class="goal">Cảnh báo + setup plan</span><span class="dd">14/06</span></div><ul><li>Hoàn thiện bước 4 (setup plan) &amp; bước 6 (soạn cảnh báo AO).</li><li>Test consistency: chạy 10 lần, output ổn định.</li></ul></div></div>
+      <div class="day"><div class="dot">D5</div><div class="daycard"><div class="dh"><span class="goal">Đánh bóng demo</span><span class="dd">15/06</span></div><ul><li>UI đẹp, thêm biểu đồ, copy tiếng Việt rõ.</li><li>Nút “dùng thử ngay” với mock data — người lạ hiểu trong 30s.</li></ul></div></div>
+      <div class="day"><div class="dot amber">D6</div><div class="daycard"><div class="dh"><span class="goal">Khóa &amp; quay video</span><span class="dd">16/06</span></div><ul><li>Freeze tính năng. README chỉn chu.</li><li>Quay video demo 60–90s. Deploy bản final, test trên Runtime thật.</li></ul></div></div>
+      <div class="day"><div class="dot red">D7</div><div class="daycard"><div class="dh"><span class="goal">Nộp sớm</span><span class="dd">17/06 · trước 12:00</span></div><ul><li>Mục tiêu nộp 10:00 để dự phòng.</li><li>Kiểm tra repo public + link agent đang sống.</li></ul></div></div>
+    </div>
+  </section>
+
+  <!-- PRODUCT -->
+  <section id="product">
+    <div class="eyebrow">Sản phẩm</div>
+    <h2>Camp Ads Agent — pipeline 6 bước</h2>
+    <p class="lead">Làm <b>trọn 6 bước về trải nghiệm demo</b> (voter thấy cả câu chuyện), nhưng chỉ đầu tư chiều sâu AI vào các bước “hero”. Thanh nhiệt = mức đầu tư.</p>
+    <div class="pipe">
+      <div class="step"><div class="num">BƯỚC 1</div><div class="st">Nhận brief</div><div class="sd">Chat: dán brief khách (mock) → bóc tách objective, funnel, target, KPI.</div><div class="heat"><span class="bars"><b class="on"></b><b class="on"></b><b></b></span> Trung bình · <span class="badge track">Assistant</span></div></div>
+      <div class="step"><div class="num">BƯỚC 2</div><div class="st">Gợi ý creative</div><div class="sd">Gợi ý angle/headline banner từ brief (text, không render ảnh).</div><div class="heat"><span class="bars"><b class="on"></b><b></b><b></b></span> Nhẹ · <span class="badge track">Assistant</span></div></div>
+      <div class="step hero"><div class="num">BƯỚC 3 ★ HERO</div><div class="st">Tạo Audience Segment (DMP)</div><div class="sd">Map target trong brief → tệp interest/behavior có trong DMP, ước lượng size, <b>cảnh báo segment còn thiếu</b> cần bổ sung.</div><div class="heat"><span class="bars"><b class="on"></b><b class="on"></b><b class="on"></b></span> Sâu · <span class="badge track">Data / DMP</span></div></div>
+      <div class="step"><div class="num">BƯỚC 4</div><div class="st">Setup camp</div><div class="sd">Sinh “setup plan” có cấu trúc: zone, bid, lịch, ngân sách → bảng/JSON.</div><div class="heat"><span class="bars"><b class="on"></b><b class="on"></b><b></b></span> Trung bình · <span class="badge track">Automation</span></div></div>
+      <div class="step hero"><div class="num">BƯỚC 5 ★ HERO</div><div class="st">Phân tích report</div><div class="sd">Thả CSV 500 camps → xếp hạng tốt/xấu theo CTR/CPC/CR + giải thích lý do.</div><div class="heat"><span class="bars"><b class="on"></b><b class="on"></b><b class="on"></b></span> Sâu · <span class="badge track">Data</span></div></div>
+      <div class="step hero"><div class="num">BƯỚC 6 ★ HERO</div><div class="st">Cảnh báo AO</div><div class="sd">Tự soạn message cảnh báo (Slack/email mock) cho camp cần xử lý + khuyến nghị.</div><div class="heat"><span class="bars"><b class="on"></b><b class="on"></b><b class="on"></b></span> Sâu · <span class="badge track">Automation</span></div></div>
+    </div>
+    <div class="callout green"><div class="t">Vì sao bước 3 &amp; 5–6 là hero</div>Bước 3 (Audience Segment) là <b>điểm đau thật của Adtima</b>: brief khách hay đòi tệp mà DMP chưa có (xem cột “Hạn chế cần Improve” trong brief mẫu) — agent tự map &amp; báo gap là wow rất nghề. Bước 5–6: “500 camps check sao nổi” ai cũng cảm được; “đổ file rối vào → 20 giây ra danh sách camp cần cứu + tin nhắn sẵn để gửi” là wow kéo vote mạnh nhất. Cả ba đều mock được 100%.</div>
+  </section>
+
+  <!-- BRIEFS -->
+  <section id="briefs">
+    <div class="eyebrow">Dữ liệu đầu vào</div>
+    <h2>2 brief mẫu — chuẩn input để AI nhận diện</h2>
+    <p class="lead">Hai mẫu phủ 2 đầu phễu marketing. Đủ trường để agent bóc tách <b>input → output</b> nhất quán: từ brief khách → segment DMP → setup plan → KPI. Team copy thẳng vào prompt/demo. Số liệu &amp; tệp interest lấy từ file <span class="mono">Brief Sample.xlsx</span> bạn gửi.</p>
+
+    <div class="grid g2">
+      <!-- AWARENESS -->
+      <div class="card">
+        <div class="bhead"><span class="ftag aw">Awareness funnel</span><span class="g">Brief #1 · Brand A</span></div>
+        <p class="note" style="margin-bottom:10px">Top-funnel · mục tiêu nhận biết, đo bằng reach/CPM/VTR.</p>
+        <table class="bf">
+          <tr><td>Brand / Ngành</td><td>Brand A · Tài chính – Du lịch</td></tr>
+          <tr><td>Objective</td><td>Tăng nhận biết với nhóm có ý định du lịch khu vực SEA</td></tr>
+          <tr><td>Funnel stage</td><td>Awareness (Top-funnel)</td></tr>
+          <tr><td>Primary KPI</td><td>Reach, Impressions, CPM, Video View Rate (VTR), Frequency 3–5</td></tr>
+          <tr><td>Demographic</td><td>18+, all gender, NAT (ưu tiên đô thị: HCM, HN, ĐN)</td></tr>
+          <tr><td>Interests</td><td>Travel, Air travel, Hotels, Personal finance, Credit cards, Technology</td></tr>
+          <tr><td>Behaviors</td><td>Pre-travel signal, traveler destination signal → SG/TH/MY/ID/PH</td></tr>
+          <tr><td>DMP mapping</td><td>Có sẵn: Travel, Air travel, Hotels, Credit cards. <span class="gap">⚠ Thiếu: signal điểm đến theo khu vực SEA → đề xuất proxy</span></td></tr>
+          <tr><td>Budget / Flight</td><td>425.000.000đ · 4 tuần</td></tr>
+          <tr><td>Format / Zone</td><td>Display banner + Video skippable · zone tin tức &amp; giải trí, homepage premium</td></tr>
+          <tr><td>Success metric</td><td>Reach ≥ X triệu unique, CPM ≤ ngưỡng, VTR ≥ 25%</td></tr>
+        </table>
+      </div>
+
+      <!-- CONVERSION -->
+      <div class="card">
+        <div class="bhead"><span class="ftag cv">Conversion funnel</span><span class="g">Brief #2 · Brand B</span></div>
+        <p class="note" style="margin-bottom:10px">Bottom-funnel · mục tiêu thu lead, đo bằng CR/CPL/ROAS.</p>
+        <table class="bf">
+          <tr><td>Brand / Ngành</td><td>Brand B · Bảo hiểm – Tài chính</td></tr>
+          <tr><td>Objective</td><td>Thu lead đăng ký tư vấn gói bảo hiểm sức khỏe (performance, mix format)</td></tr>
+          <tr><td>Funnel stage</td><td>Conversion / Performance (Bottom-funnel)</td></tr>
+          <tr><td>Primary KPI</td><td>Leads / Form submit, Conversion Rate (CR), CPL/CPA, ROAS</td></tr>
+          <tr><td>Demographic</td><td>TA1: 25–45, all gender, single, NAT · TA2: 35–54, có con nhỏ, NAT</td></tr>
+          <tr><td>Interests</td><td>TA1: Health, Insurance, Finance · TA2: Doanh nghiệp/startup, Finance, Du học</td></tr>
+          <tr><td>Behaviors</td><td>Đã tương tác form bảo hiểm, retargeting tệp truy cập landing</td></tr>
+          <tr><td>DMP mapping</td><td>Có sẵn: Health, Finance. <span class="gap">⚠ Thiếu: Insurance, Du học → cần bổ sung segment</span></td></tr>
+          <tr><td>Budget / Flight</td><td>150.000.000đ · 3 tuần</td></tr>
+          <tr><td>Format / Zone</td><td>Lead form native + retargeting · luồng Zalo Lead Center → Brand CRM</td></tr>
+          <tr><td>Success metric</td><td>≥ N leads hợp lệ, CR ≥ X%, CPL ≤ ngưỡng, lead-quality ≥ 70%</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <h3>Schema input → output (để dán vào prompt)</h3>
+    <p style="margin-bottom:10px">Ép agent đọc &amp; sinh đúng các trường này để output ổn định khi voter test:</p>
+    <div class="schema"><span class="c"># INPUT — brief khách (agent phải bóc tách đủ)</span>
+{
+  <span class="k">"brand"</span>: str,            <span class="c"># tên brand + ngành</span>
+  <span class="k">"objective"</span>: str,        <span class="c"># mục tiêu chiến dịch</span>
+  <span class="k">"funnel_stage"</span>: <span class="c">"awareness" | "consideration" | "conversion"</span>,
+  <span class="k">"target"</span>: { <span class="k">"age"</span>, <span class="k">"gender"</span>, <span class="k">"location"</span>, <span class="k">"interests"</span>[], <span class="k">"behaviors"</span>[] },
+  <span class="k">"budget_vnd"</span>: int, <span class="k">"flight"</span>: str,
+  <span class="k">"kpi"</span>[], <span class="k">"format"</span>[]
+}
+
+<span class="c"># OUTPUT — agent sinh ra (xuyên suốt 6 bước)</span>
+{
+  <span class="k">"audience_segment"</span>: { <span class="k">"matched"</span>[], <span class="k">"size_est"</span>, <span class="k">"gaps"</span>[] },   <span class="c"># bước 3</span>
+  <span class="k">"setup_plan"</span>: { <span class="k">"zones"</span>[], <span class="k">"bid"</span>, <span class="k">"schedule"</span>, <span class="k">"budget_split"</span> }, <span class="c"># bước 4</span>
+  <span class="k">"kpi_target"</span>: { ... },                                       <span class="c"># theo funnel</span>
+  <span class="k">"report_eval"</span>: [ { <span class="k">"camp_id"</span>, <span class="k">"verdict"</span>, <span class="k">"reason"</span> } ],   <span class="c"># bước 5</span>
+  <span class="k">"ao_alert"</span>: str                                             <span class="c"># bước 6</span>
+}</div>
+    <div class="callout green"><div class="t">Vì sao tách theo funnel</div>KPI &amp; cơ chế tối ưu khác hẳn nhau: Awareness chấm reach/CPM/VTR, Conversion chấm CR/CPL/ROAS. Cho agent <b>nhận diện funnel_stage ngay từ brief</b> rồi đổi bộ KPI &amp; logic setup tương ứng — đây là điểm “thông minh nghiệp vụ” voter đánh giá cao.</div>
+  </section>
+
+  <!-- TEAM -->
+  <section id="team">
+    <div class="eyebrow">Con người</div>
+    <h2>Phân vai 3 người</h2>
+    <p class="lead">Mô hình BTC khuyến nghị mạnh: trộn tech + non-tech. Bạn (Data PM, biết Python, tư duy hệ thống) là người ghép nối.</p>
+    <div class="grid g3">
+      <div class="role"><h4>Product / Prompt Lead</h4><div class="who">Bạn (Quang)</div><p>Chốt scope, viết prompt/spec, thiết kế luồng demo, đảm bảo output consistent, dựng kịch bản kể chuyện cho voting.</p><div class="out">Bàn giao: spec, prompt library, kịch bản demo</div></div>
+      <div class="role"><h4>Builder / Deploy</h4><div class="who">Người code mạnh nhất</div><p><b>Pre-build mockup</b> bằng Claude Code/Codex; tách lớp <span class="mono">call_llm()</span>; rebuild sang MaaS, đóng Docker, deploy AgentBase, dựng <span class="mono">/health</span> port 8080.</p><div class="out">Bàn giao: gói handoff + agent chạy trên Runtime</div></div>
+      <div class="role"><h4>Data / Demo</h4><div class="who">Người hiểu nghiệp vụ ads</div><p>Tạo mock data thực tế (2 brief funnel, 500 camps CSV, taxonomy DMP ~300 interest), định nghĩa rule tốt/xấu &amp; gap segment, làm visual/biểu đồ, video demo.</p><div class="out">Bàn giao: bộ mock data + eval set + tài sản demo</div></div>
+    </div>
+    <div class="callout"><div class="t">Cảnh báo blind-spot (cá nhân hóa cho bạn)</div>Bạn có xu hướng over-optimize framework và muốn mọi thứ chuẩn chỉnh trước khi public. Trong hackathon chấm bằng vote, “demo mượt &amp; dễ hiểu” thắng “kiến trúc hoàn hảo”. Luật cho team: <b>“Ngày 3 phải chạy được end-to-end (dù xấu). Mọi tối ưu sau đó chỉ phục vụ demo dễ hiểu hơn.”</b></div>
+  </section>
+
+  <!-- TECH -->
+  <section id="tech">
+    <div class="eyebrow">Kỹ thuật</div>
+    <h2>Kiến trúc &amp; chọn model</h2>
+    <p class="lead">Bám khuôn repo mẫu Interview Assistant của BTC: FastAPI + UI thuần + gọi MaaS, không dùng framework agent nặng.</p>
+    <div class="card" style="text-align:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px;color:var(--green-d);background:var(--green-l2)">
+      [ Browser UI ] &nbsp;⇄&nbsp; [ FastAPI :8080 + /health ] &nbsp;⇄&nbsp; [ GreenNode MaaS /v1 (OpenAI-compatible) ]
+      <div style="font-size:12px;color:var(--muted);margin-top:8px;font-family:var(--font)">Mọi dữ liệu (brief, 500 camps CSV) là mock trong repo — không gọi hệ thống thật.</div>
+    </div>
+    <h3>Chọn model đúng task — “token là trí tuệ”</h3>
+    <table>
+      <tr><th>Tác vụ trong Camp Ads Agent</th><th>Model nên dùng</th><th>Lý do</th></tr>
+      <tr><td>Chat nhận brief, hỏi-đáp, soạn cảnh báo</td><td><b>Qwen3.6-27b</b></td><td>Nhẹ, nhanh, rẻ cho hội thoại/tóm tắt</td></tr>
+      <tr><td>Phân tích report, sinh setup plan có cấu trúc</td><td><b>Gemma-4-31b-it</b></td><td>Cân bằng coding/analysis — mặc định repo mẫu</td></tr>
+      <tr><td>Sinh code phức tạp khi build (nội bộ team)</td><td><b>MiniMax 2.5-229b</b></td><td>Code-gen nặng — dùng lúc DEV, không cần trong runtime</td></tr>
+    </table>
+    <h3>Hợp đồng bắt buộc với AgentBase Runtime</h3>
+    <ul class="check" data-key="tech">
+      <li><input type="checkbox"><span>Container nghe <span class="mono">0.0.0.0:8080</span> + có <span class="mono">GET /health → 200</span>.</span></li>
+      <li><input type="checkbox"><span>Không hardcode key — đăng ký trong Access Control, gitignore <span class="mono">.env</span>.</span></li>
+      <li><input type="checkbox"><span>MaaS base_url: <span class="mono">https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1</span>; truyền <span class="mono">model</span> bằng giá trị <b>path</b>.</span></li>
+      <li><input type="checkbox"><span>Cân nhắc SDK <span class="mono">pip install greennode-agentbase</span> (tự lo /health + context).</span></li>
+      <li><input type="checkbox"><span>Deploy nhanh bằng skill pack: <span class="mono">/agentbase-wizard</span> → <span class="mono">/agentbase-deploy</span> → <span class="mono">/agentbase-monitor</span>.</span></li>
+    </ul>
+    <p class="note">Lưu ý: endpoint/giá trị trên trích từ tài liệu AgentBase tại thời điểm research — hãy xác nhận lại tại training 10/06.</p>
+  </section>
+
+  <!-- VOTE -->
+  <section id="vote">
+    <div class="eyebrow">Giai đoạn 2</div>
+    <h2>Voting toàn VNG (22/06 → 03/07)</h2>
+    <p class="lead">Sản phẩm tốt + phân phối tốt mới thắng. BTC không cấm vận động và chủ động lan tỏa project.</p>
+    <ul class="check" data-key="vote">
+      <li><input type="checkbox"><span><b>Tagline + thumbnail bắt mắt</b> trên voting page — nhiều người chỉ lướt và bấm theo ấn tượng đầu.</span></li>
+      <li><input type="checkbox"><span><b>Video 60–90s</b> tự bán được sản phẩm — phần lớn voter xem video chứ không cài đặt.</span></li>
+      <li><input type="checkbox"><span><b>Huy động mạng lưới VNG</b> của bạn (Zalo, FPT Online, VnExpress cũ) — nhờ trải nghiệm &amp; vote kèm link trực tiếp.</span></li>
+      <li><input type="checkbox"><span><b>Đăng kênh nội bộ</b>: Teams group cuộc thi, VNG Diary, Zalo OA — một GIF demo ngắn lan nhanh hơn mô tả dài.</span></li>
+      <li><input type="checkbox"><span><b>Khung thông điệp “hữu ích cho team bạn”</b>: “Nếu team bạn cũng phải đọc báo cáo thủ công, thử cái này” → mở rộng tệp người vote.</span></li>
+    </ul>
+    <div class="callout green"><div class="t">Mẹo “tính hiệu quả” dễ nhớ khi vote</div>Đưa một <b>con số chi phí/tiết kiệm cụ thể</b> vào demo (vd “20 giây thay vì 2 giờ check tay 500 camps”, “chạy cả tháng chỉ tốn ~50.000đ”). Nó khiến tính hiệu quả trở nên định lượng và đáng nhớ.</div>
+  </section>
+
+  <!-- RISK -->
+  <section id="risk">
+    <div class="eyebrow">Phòng thủ</div>
+    <h2>Rủi ro &amp; giảm thiểu</h2>
+    <table>
+      <tr><th>Rủi ro</th><th style="width:90px">Mức</th><th>Giảm thiểu</th></tr>
+      <tr><td>Deploy AgentBase lỗi sát hạn</td><td><span class="pill hi">Cao</span></td><td>Deploy hello-world ngay D0; freeze &amp; deploy final D6, chừa 1 ngày đệm.</td></tr>
+      <tr><td>Scope phình to, không kịp</td><td><span class="pill hi">Cao</span></td><td>Hero trước; walking skeleton D3; cắt tính năng phụ không thương tiếc.</td></tr>
+      <tr><td>Output không ổn định khi voter test</td><td><span class="pill mid">TB</span></td><td>Test consistency 10+ lần; prompt chặt + ví dụ; temperature thấp cho phần phân tích.</td></tr>
+      <tr><td>Ít người biết để vote</td><td><span class="pill mid">TB</span></td><td>Chạy playbook voting từ ngày mở vote 22/06.</td></tr>
+      <tr><td>Mock data trông giả</td><td><span class="pill lo">Thấp</span></td><td>Dùng cấu trúc cột thật của Adtima, số liệu hợp lý.</td></tr>
+    </table>
+  </section>
+
+  <!-- SUBMIT -->
+  <section id="submit">
+    <div class="eyebrow">Về đích</div>
+    <h2>Checklist trước khi nộp</h2>
+    <ul class="check" data-key="submit">
+      <li><input type="checkbox"><span>Repo GitHub public + README chỉn chu (vấn đề, giải pháp, cách chạy, kiến trúc, ảnh demo).</span></li>
+      <li><input type="checkbox"><span>Agent đang chạy (ACTIVE) trên AgentBase Runtime — kiểm tra trên Portal.</span></li>
+      <li><input type="checkbox"><span>Nút “dùng thử ngay” + mock data nạp sẵn; người lạ test được không cần hướng dẫn.</span></li>
+      <li><input type="checkbox"><span>Video demo 60–90s, tiếng Việt, có tagline + con số hiệu quả.</span></li>
+      <li><input type="checkbox"><span>Test consistency 10+ lần, không màn trống/lỗi.</span></li>
+      <li><input type="checkbox"><span>Không có key/secret trong repo (gitignore .env).</span></li>
+      <li><input type="checkbox"><span>Nộp trước 12:00 ngày 17/06 (mục tiêu 10:00).</span></li>
+    </ul>
+  </section>
+
+  <footer>Camp Ads Agent · Chiến lược Claw-a-thon 2026 — <b>Đội Pawgrammers</b> (Quang &amp; team). Cập nhật 30/05/2026.<br>Dựa trên webinar 29/05, repo mẫu BTC &amp; tài liệu GreenNode AgentBase. Một số mốc/endpoint cần xác nhận tại training 10/06.</footer>
+</div>
+
+<script>
+(function(){
+  // load saved state
+  function load(){try{return JSON.parse(localStorage.getItem('adspilot')||'{}')}catch(e){return {}}}
+  function save(s){try{localStorage.setItem('adspilot',JSON.stringify(s))}catch(e){}}
+  var state=load();
+  var boxes=[];
+  document.querySelectorAll('ul.check').forEach(function(ul){
+    var key=ul.getAttribute('data-key');
+    ul.querySelectorAll('li').forEach(function(li,i){
+      var id=key+'_'+i;
+      var cb=li.querySelector('input');
+      boxes.push(cb);
+      if(state[id]){cb.checked=true;li.classList.add('done');}
+      li.addEventListener('click',function(e){
+        if(e.target!==cb){cb.checked=!cb.checked;}
+        li.classList.toggle('done',cb.checked);
+        state[id]=cb.checked;save(state);prog();
+      });
+      cb.addEventListener('click',function(e){e.stopPropagation();li.classList.toggle('done',cb.checked);state[id]=cb.checked;save(state);prog();});
+    });
+  });
+  function prog(){
+    var done=boxes.filter(function(b){return b.checked}).length;
+    var pct=boxes.length?Math.round(done/boxes.length*100):0;
+    document.getElementById('progbar').style.width=pct+'%';
+    document.getElementById('progtxt').textContent='Tiến độ chuẩn bị: '+pct+'% ('+done+'/'+boxes.length+')';
+  }
+  prog();
+
+  // nav active on scroll
+  var links=Array.prototype.slice.call(document.querySelectorAll('#tabs a'));
+  var secs=links.map(function(a){return document.querySelector(a.getAttribute('href'))});
+  function onScroll(){
+    var y=window.scrollY+120,idx=0;
+    secs.forEach(function(s,i){if(s&&s.offsetTop<=y)idx=i;});
+    links.forEach(function(a,i){a.classList.toggle('active',i===idx);});
+    var act=links[idx];if(act&&act.parentNode.scrollWidth>act.parentNode.clientWidth){act.scrollIntoView({inline:'center',block:'nearest'});}
+  }
+  window.addEventListener('scroll',onScroll,{passive:true});onScroll();
+})();
+</script>
+</body>
+</html>

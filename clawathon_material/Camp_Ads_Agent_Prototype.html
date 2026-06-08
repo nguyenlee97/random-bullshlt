@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camp Ads Agent · Chat Prototype</title>
+<style>
+  :root{
+    --green:#1F7A3D; --green-d:#145C2C; --green-l:#E8F3EC; --green-l2:#F4F8F5;
+    --amber:#9A6700; --amber-l:#FFF6E5; --red:#B00020; --red-l:#FCEAEC;
+    --blue:#185FA5; --blue-l:#E6F1FB; --violet:#5b3aa6; --violet-l:#EEEBFA;
+    --ink:#16241b; --muted:#5b6b60; --line:#dbe5de; --white:#fff;
+    --r:14px; --rs:10px; --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --shadow:0 1px 3px rgba(20,60,40,.07),0 8px 28px rgba(20,60,40,.07);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);color:var(--ink);background:#eef3f0;line-height:1.55;-webkit-font-smoothing:antialiased}
+  button{font-family:inherit;cursor:pointer}
+  .app{max-width:1180px;margin:18px auto;background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow);min-height:92vh;display:flex;flex-direction:column}
+  .bar{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.96)}
+  .logo{font-weight:800;color:var(--green-d);letter-spacing:-.3px}
+  .logo span{color:var(--amber)}
+  .bar .spacer{margin-left:auto}
+  .ghost{border:1px solid var(--line);background:#fff;color:var(--green-d);font-weight:700;font-size:13px;padding:7px 12px;border-radius:999px}
+  .ghost:hover{background:var(--green-l2)}
+  .stepper{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .stp{display:flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;background:#f1f5f2;border:1px solid var(--line);font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+  .stp .n{width:18px;height:18px;border-radius:50%;background:#cdd8d0;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+  .stp.done{color:var(--green-d);background:var(--green-l);border-color:#bfe0c9}
+  .stp.done .n{background:var(--green)}
+  .stp.cur{color:#fff;background:var(--green);border-color:var(--green)}
+  .stp.cur .n{background:#fff;color:var(--green)}
+  .stp.hero .n{box-shadow:0 0 0 2px #DCCCFF}
+  .stp.locked{opacity:.55;cursor:not-allowed}
+
+  .main{flex:1;display:flex;min-height:0}
+  .pane{flex:1;display:flex;flex-direction:column;min-width:0}
+  .pane.left{border-right:1px solid var(--line);background:var(--green-l2)}
+  .pane.right{background:#fff;max-width:380px}
+  .ph{padding:10px 18px;border-bottom:1px solid var(--line);font-weight:700;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;background:#fff}
+  .left .ph{background:var(--green-l2)}
+
+  .thread{flex:1;overflow-y:auto;padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+  .msg{display:flex;gap:10px;max-width:88%}
+  .msg .av{flex:0 0 32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff}
+  .msg.bot .av{background:var(--green)}
+  .msg.me .av{background:var(--blue)}
+  .msg.me{align-self:flex-end;flex-direction:row-reverse}
+  .bub{padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55}
+  .msg.bot .bub{background:#fff;border:1px solid var(--line);border-top-left-radius:4px;box-shadow:var(--shadow)}
+  .msg.me .bub{background:var(--blue);color:#fff;border-top-right-radius:4px}
+  .msg .bub .tool{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:10.5px;font-weight:700;color:var(--green-d);background:var(--green-l);border:1px solid #cbe4d2;padding:2px 8px;border-radius:999px}
+  .msg .bub .tool.gemma{color:var(--violet);background:var(--violet-l);border-color:#d8cdf2}
+  .statusbub{align-self:flex-start;display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);background:#fff;border:1px solid var(--line);padding:9px 13px;border-radius:13px}
+  .spin{width:14px;height:14px;border:2px solid #d7e2db;border-top-color:var(--green);border-radius:50%;animation:s .7s linear infinite;flex:0 0 auto}
+  @keyframes s{to{transform:rotate(360deg)}}
+
+  /* Wide bubble for forms/cards */
+  .msg.bot.wide{max-width:96%}
+  .msg.bot.wide .bub{padding:14px 16px}
+
+  /* Composer */
+  .composer{border-top:1px solid var(--line);padding:12px 16px;background:#fff}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+  .chip{border:1px solid #bfe0c9;background:var(--green-l);color:var(--green-d);border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+  .chip:hover{background:#d9eede}
+  .chip .nm{background:var(--green);color:#fff;width:16px;height:16px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px}
+  .chip.hero{border-color:#d8cdf2}
+  .chip.hero .nm{background:var(--violet)}
+  .inrow{display:flex;gap:8px}
+  .inrow input{flex:1;border:1px solid var(--line);border-radius:var(--rs);padding:11px 14px;font-family:inherit;font-size:14px;background:#fff}
+  .inrow input:focus{outline:none;border-color:var(--green)}
+  .btn{background:var(--green);color:#fff;border:none;font-weight:700;font-size:14px;padding:10px 18px;border-radius:var(--rs)}
+  .btn:hover{background:var(--green-d)}
+  .btn.sec{background:#fff;color:var(--green-d);border:1px solid var(--line)}
+  .btn.amber{background:var(--amber);color:#fff}
+  .btn.danger{background:var(--red);color:#fff}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+
+  /* Right panel result */
+  .res{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--rs);padding:14px}
+  .card h4{font-size:13px;color:var(--green-d);margin-bottom:10px}
+  .kv{font-size:13px;display:grid;grid-template-columns:110px 1fr;gap:5px 10px}
+  .kv b{color:var(--muted);font-weight:600}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;display:inline-block}
+  .pill.aw{background:var(--blue-l);color:var(--blue)} .pill.good{background:var(--green-l);color:var(--green-d)}
+  .pill.bad{background:var(--red-l);color:var(--red)} .pill.watch{background:var(--amber-l);color:var(--amber)}
+  .empty{color:var(--muted);font-size:13px;text-align:center;margin-top:30px}
+
+  /* Form inside chat */
+  .label{font-size:11.5px;font-weight:700;color:var(--amber);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.5px}
+  .label:first-child{margin-top:4px}
+  .ipt,textarea,select{width:100%;border:1px solid var(--line);border-radius:var(--rs);padding:9px 11px;font-family:inherit;font-size:13.5px;background:#fff}
+  textarea{resize:vertical}
+  .ipt:focus,textarea:focus,select:focus{outline:none;border-color:var(--green)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  /* Upload + phone preview */
+  .drop{border:2px dashed #c4d6cb;border-radius:var(--rs);padding:18px;text-align:center;color:var(--muted);font-size:13px;background:var(--green-l2);cursor:pointer;display:block}
+  .drop:hover{border-color:var(--green)}
+  .drop.has{border-style:solid;border-color:var(--green);background:#fff;text-align:left}
+  .drop b{color:var(--green-d)}
+  .creative-wrap{display:grid;grid-template-columns:1fr 230px;gap:16px;align-items:start}
+  .phone{width:215px;margin:0 auto;background:#0b0d12;border-radius:28px;padding:8px;box-shadow:0 12px 32px rgba(0,0,0,.18)}
+  .phone .notch{height:14px;width:70px;background:#0b0d12;border-radius:0 0 12px 12px;margin:0 auto 3px}
+  .phone-screen{background:#fff;border-radius:20px;overflow:hidden;height:380px;display:flex;flex-direction:column;font-size:11px}
+  .ph-bar{height:20px;background:#f1f5f2;display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-size:9px;color:#999;font-weight:700}
+  .ph-feed{flex:1;overflow:hidden;display:flex;flex-direction:column}
+  .ph-post{padding:6px 8px;border-bottom:1px solid #eee}
+  .ph-post .au{display:flex;align-items:center;gap:5px;margin-bottom:3px}
+  .ph-post .av2{width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#ff6a3d,#ffae3d)}
+  .ph-post .nm{font-weight:700;font-size:9px}
+  .ph-post .tx{font-size:9px;color:#333}
+  .ph-ad{padding:8px;border:1px solid #e3e7ea;border-radius:7px;margin:6px;background:#fafbfd;position:relative}
+  .ph-ad::before{content:"Tài trợ";position:absolute;top:-6px;left:6px;background:var(--amber);color:#fff;font-size:7px;font-weight:700;padding:1px 5px;border-radius:5px}
+  .ph-ad .pic{height:110px;border-radius:5px;background:linear-gradient(135deg,#1F7A3D 0%,#5fd07a 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px;text-align:center;padding:8px;overflow:hidden}
+  .ph-ad .pic img{max-width:100%;max-height:100%;object-fit:contain}
+  .ph-ad h5{font-size:10px;font-weight:800;margin:6px 0 2px;color:#16241b}
+  .ph-ad p{font-size:8.5px;color:#5b6b60}
+  .ph-ad .cta{margin-top:6px;background:var(--green);color:#fff;text-align:center;font-size:9px;font-weight:700;padding:4px;border-radius:4px}
+
+  /* Audience attr picker */
+  .attr-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:6px}
+  .attr{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;cursor:pointer;background:#fff;font-size:12.5px;transition:.15s}
+  .attr:hover{border-color:var(--green);background:var(--green-l2)}
+  .attr.sel{border-color:var(--green);background:var(--green-l)}
+  .attr .ck{width:14px;height:14px;border:1.5px solid #c4d6cb;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;flex:0 0 auto}
+  .attr.sel .ck{background:var(--green);border-color:var(--green)}
+  .attr .sz{margin-left:auto;font-size:10.5px;color:var(--muted);font-weight:600}
+  .attr.sel .sz{color:var(--green-d)}
+  .size-meter{background:var(--green-l2);border:1px solid #bfe0c9;border-radius:var(--rs);padding:10px 12px;margin-top:10px;display:flex;align-items:center;gap:14px}
+  .size-meter .big{font-size:20px;font-weight:800;color:var(--green-d)}
+  .size-meter .lab{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+
+  /* Camp rows */
+  .camp-row{display:flex;align-items:center;gap:10px;padding:10px 11px;border:1px solid var(--line);border-radius:var(--rs);background:#fff;margin-bottom:7px}
+  .camp-row .nm{font-weight:700;font-size:13px;flex:1}
+  .camp-row .hint2{font-size:11px;color:var(--muted)}
+  .camp-row .st{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px}
+  .camp-row .st.run{background:var(--green-l);color:var(--green-d)}
+  .camp-row .st.pause{background:var(--amber-l);color:var(--amber)}
+  .camp-row .st.draft{background:#f1f5f2;color:var(--muted)}
+  .camp-row button{font-size:11.5px;padding:5px 10px}
+
+  /* Success */
+  .success-hero{text-align:center;padding:10px 0 4px}
+  .success-hero .ic{width:54px;height:54px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 10px;animation:pop .4s ease-out}
+  @keyframes pop{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+  .success-hero h3{font-size:16px;color:var(--green-d)}
+  .success-hero p{color:var(--muted);font-size:12.5px}
+
+  /* Chart */
+  .chart-card{background:#fff;border:1px solid var(--line);border-radius:var(--rs);padding:12px;margin-top:8px}
+  .chart-card svg{display:block;width:100%;height:auto}
+  .legend{display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:11px;color:var(--muted);flex-wrap:wrap}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+  /* Mini table */
+  table.mini{width:100%;border-collapse:collapse;font-size:12px}
+  table.mini th{background:var(--green);color:#fff;text-align:left;padding:5px 7px;font-size:11px}
+  table.mini td{padding:5px 7px;border-top:1px solid var(--line)}
+
+  /* Email */
+  .email-card{background:#fff;border:1px solid var(--line);border-radius:var(--rs);padding:12px;font-size:13px}
+  .email-card .hdr{display:grid;grid-template-columns:60px 1fr;gap:4px 8px;font-size:12.5px;padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .email-card .hdr b{color:var(--muted);font-weight:600}
+  .email-card .body{font-size:12.5px;line-height:1.6;white-space:pre-wrap}
+
+  .doneconfirm{background:var(--green-l);border-left:3px solid var(--green);border-radius:0 8px 8px 0;padding:10px 12px;font-size:13px;color:var(--green-d);font-weight:600;margin-top:10px}
+  .alert{border-left:3px solid var(--amber);background:var(--amber-l);padding:9px 12px;border-radius:0 8px 8px 0;font-size:13px;margin-top:10px}
+  .alert .t{font-weight:700;color:var(--amber);margin-bottom:2px}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;transition:.25s;pointer-events:none;z-index:50;display:flex;align-items:center;gap:9px}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast .dot{width:8px;height:8px;border-radius:50%;background:#5fd07a}
+
+  @media(max-width:920px){.pane.right{display:none}.creative-wrap{grid-template-columns:1fr}.attr-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="bar">
+    <div class="logo">Camp <span>Ads</span> Agent</div>
+    <div class="stepper" id="stepper"></div>
+    <div class="spacer"></div>
+    <button class="ghost" onclick="restart()">↻ Reset chat</button>
+  </div>
+  <section class="main">
+    <div class="pane left">
+      <div class="ph"><span id="curLabel" style="color:var(--green-d)"></span></div>
+      <div class="thread" id="thread"></div>
+      <div class="composer" id="composer"></div>
+    </div>
+    <div class="pane right">
+      <div class="ph">Output tích lũy</div>
+      <div class="res" id="res"><div class="empty">Hoàn tất bước để xem output ở đây.</div></div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"><span class="dot"></span><span id="toastTx"></span></div>
+
+<script>
+/* ========= STEPS META ========= */
+const STEPS = [
+  { id:"brief",    title:"Brief",            hero:false, chip:"Nhập brief khách hàng",
+    ask:"Chào anh/chị 👋 Em là Camp Ads Agent. Mình bắt đầu với bước 1 — Brief nhé. Hãy điền objective và yêu cầu brief của khách, em sẽ chuẩn hóa và đề xuất KPI.", tool:"brief_parse", model:"qwen"  },
+  { id:"creative", title:"Creative",         hero:false, chip:"Upload creative",
+    ask:"Tiếp theo — bước 2 Creative. Ad Opt upload material (ảnh/video) trực tiếp, em sẽ hiện preview ngay trên màn hình điện thoại.", tool:"creative_upload", model:"qwen" },
+  { id:"segment",  title:"Audience Segment", hero:true,  chip:"Chọn audience attributes",
+    ask:"Bước 3 — Audience Segment 🎯. Em đọc file dmp_attributes.json (8 tệp). Chọn attribute phù hợp, audience size tự tính theo logic giao tệp.", tool:"dmp_match.py", model:"gemma" },
+  { id:"setup",    title:"Setup Camp Ads",   hero:false, chip:"Tạo camp ads",
+    ask:"Bước 4 — Setup Camp Ads. Em đã chia ngân sách theo 3 zone tối ưu CPM. Bấm 'Tạo tất cả' để khởi tạo, sau đó pause/run từng camp tùy ý.", tool:"camp_create", model:"gemma" },
+  { id:"success",  title:"Tạo thành công",   hero:false, chip:"Xem tổng kết",
+    ask:"🎉 Bước 5 — Camp ads đã tạo thành công! Em tổng kết lại setup ở dưới.", tool:"notify", model:"qwen" },
+  { id:"report",   title:"Phân tích Report", hero:true,  chip:"Phân tích báo cáo 500 camps",
+    ask:"Bước 6 — Phân tích Report 📊. Bấm để em vào file camps_report.csv, extract dữ liệu, vẽ chart và đề xuất hành động.", tool:"report_extract + chart_render", model:"gemma" },
+  { id:"email",    title:"Gửi Email Teams",  hero:false, chip:"Gửi email cho 2 teams",
+    ask:"Bước cuối — Gửi email cho Account team và Ad Opt team. Em đã soạn sẵn template, review rồi bấm gửi.", tool:"email_compose + smtp_send", model:"qwen" },
+];
+const N=STEPS.length;
+
+const ATTRIBUTES = [
+  { k:"travel_intent_sea",  name:"Travel Intent · SEA",        size:1850000 },
+  { k:"air_travel",         name:"Air Travel Enthusiast",      size:2200000 },
+  { k:"hotel_booker",       name:"Hotel Booker (3m)",          size:1430000 },
+  { k:"credit_card_user",   name:"Credit Card Active User",    size:3100000 },
+  { k:"fintech_high_value", name:"Fintech High-Value Segment", size:680000  },
+  { k:"hcm_hn_dn",          name:"GEO · HCM / HN / ĐN",        size:5200000 },
+  { k:"age_25_44",          name:"Age 25-44",                  size:8900000 },
+  { k:"premium_lifestyle",  name:"Premium Lifestyle",          size:920000  },
+];
+
+/* ========= STATE ========= */
+let cur=0;
+let status=STEPS.map(()=>'pending');
+let busy=false;
+let log=[]; // chat entries: {who, html, tool?, model?, widget?}
+const state = {
+  brief: { brand:"Brand A", objective:"awareness", kpi:"Reach + VTR", budget:425, duration:4, notes:"Tăng nhận biết nhóm 18+ quan tâm du lịch SEA" },
+  creative: { uploaded:false, fileName:"", fileType:"", dataUrl:"", headline:"Tự tin vi vu SEA", subtext:"Một thẻ — cả Đông Nam Á trong tầm tay" },
+  segment: { attrs:[], size:0 },
+  setup:   { camps:[
+    { id:"CA-001", name:"Brand A · Awareness · Zone Tin tức",   budget:"45%", bid:"55.000đ CPM", st:"draft" },
+    { id:"CA-002", name:"Brand A · Awareness · Zone Giải trí",  budget:"35%", bid:"48.000đ CPM", st:"draft" },
+    { id:"CA-003", name:"Brand A · Awareness · Zone Du lịch",   budget:"20%", bid:"52.000đ CPM", st:"draft" },
+  ], created:false },
+  report:  { analyzed:false },
+  email:   { sent:false }
+};
+
+/* ========= UTILS ========= */
+function fmt(n){ if(n>=1e6) return (n/1e6).toFixed(2).replace(/\.?0+$/,"")+"M"; if(n>=1e3) return (n/1e3).toFixed(0)+"K"; return n.toString(); }
+function toast(tx){ const t=document.getElementById('toast'); document.getElementById('toastTx').textContent=tx; t.classList.add('show'); clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove('show'),1700); }
+function pushBot(html,opts){ log.push({who:'bot',html:html,tool:opts&&opts.tool,model:opts&&opts.model,wide:opts&&opts.wide}); renderThread(); }
+function pushMe(html){ log.push({who:'me',html:html}); renderThread(); }
+function pushStatus(html,tool){ log.push({who:'status',html:html,tool:tool}); renderThread(); }
+function clearStatus(){ log = log.filter(m=>m.who!=='status'); }
+function scrollEnd(){ const t=document.getElementById('thread'); t.scrollTop=t.scrollHeight; }
+
+/* ========= STEPPER ========= */
+function renderStepper(){
+  const el=document.getElementById('stepper'); el.innerHTML='';
+  STEPS.forEach((s,i)=>{
+    const reach = status[i]==='done' || i<=cur;
+    const d=document.createElement('div');
+    d.className='stp'+(status[i]==='done'?' done':'')+(i===cur?' cur':'')+(s.hero?' hero':'')+(reach?'':' locked');
+    d.innerHTML=`<span class="n">${status[i]==='done'?'✓':(i+1)}</span>${s.title}`;
+    if(reach) d.onclick=()=>jumpStep(i);
+    el.appendChild(d);
+  });
+  document.getElementById('curLabel').textContent='Bước '+(cur+1)+'/'+N+': '+STEPS[cur].title;
+}
+
+function jumpStep(i){
+  if(busy) return;
+  cur=i;
+  // re-introduce the step in chat
+  pushBot(STEPS[i].ask, {tool:STEPS[i].tool, model:STEPS[i].model});
+  showStepWidget(i);
+  renderStepper();
+  renderResult();
+  scrollEnd();
+}
+
+/* ========= WIDGETS (rendered as wide bot bubble) ========= */
+function widgetBrief(){
+  const b=state.brief;
+  return `<div>
+    <div class="label">Brand</div><input class="ipt" type="text" id="f_brand" value="${b.brand}">
+    <div class="label">Objective (mục tiêu)</div>
+    <select id="f_obj">
+      <option value="awareness" ${b.objective==="awareness"?"selected":""}>Awareness — Tăng nhận biết</option>
+      <option value="consideration" ${b.objective==="consideration"?"selected":""}>Consideration — Tăng quan tâm</option>
+      <option value="conversion" ${b.objective==="conversion"?"selected":""}>Conversion — Chuyển đổi</option>
+      <option value="retention" ${b.objective==="retention"?"selected":""}>Retention — Giữ chân</option>
+    </select>
+    <div class="label">KPI mong muốn</div><input class="ipt" type="text" id="f_kpi" value="${b.kpi}">
+    <div class="grid2">
+      <div><div class="label">Ngân sách (triệu)</div><input class="ipt" type="number" id="f_budget" value="${b.budget}"></div>
+      <div><div class="label">Thời lượng (tuần)</div><input class="ipt" type="number" id="f_dur" value="${b.duration}"></div>
+    </div>
+    <div class="label">Yêu cầu / brief mong muốn của khách</div>
+    <textarea id="f_notes" rows="3">${b.notes}</textarea>
+    <div style="margin-top:12px;display:flex;gap:8px"><button class="btn" onclick="confirmBrief()">Bóc tách brief →</button></div>
+  </div>`;
+}
+function bindBrief(){
+  ['f_brand','f_obj','f_kpi','f_budget','f_dur','f_notes'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.addEventListener('input',()=>{
+      state.brief.brand=document.getElementById('f_brand').value;
+      state.brief.objective=document.getElementById('f_obj').value;
+      state.brief.kpi=document.getElementById('f_kpi').value;
+      state.brief.budget=+document.getElementById('f_budget').value||0;
+      state.brief.duration=+document.getElementById('f_dur').value||0;
+      state.brief.notes=document.getElementById('f_notes').value;
+    });
+  });
+}
+function confirmBrief(){
+  if(busy) return; busy=true;
+  pushMe("Bóc tách brief này giúp anh");
+  pushStatus("Đang chuẩn hóa brief về JSON schema...", STEPS[0].tool);
+  setTimeout(()=>{
+    clearStatus(); status[0]='done';
+    pushBot(`Em đã chuẩn hóa xong ✓<br>Brand <b>${state.brief.brand}</b> · Objective <span class="pill aw">${state.brief.objective}</span> · KPI ${state.brief.kpi} · ${state.brief.budget}M / ${state.brief.duration} tuần`, {tool:STEPS[0].tool, model:STEPS[0].model});
+    advanceTo(1);
+    busy=false;
+  }, 900);
+}
+
+function widgetCreative(){
+  const c=state.creative;
+  const preview = c.uploaded ? (c.fileType.startsWith('image/')
+      ? `<img src="${c.dataUrl}" alt="">`
+      : c.fileType.startsWith('video/')
+        ? `<video src="${c.dataUrl}" autoplay muted loop playsinline style="max-width:100%;max-height:100%"></video>`
+        : `<span>${c.fileName}</span>`)
+    : `<span>BRAND A<br><span style="font-size:9px;opacity:.85">Preview ở đây</span></span>`;
+  return `<div class="creative-wrap">
+    <div>
+      <div class="label">Upload creative (ảnh / video)</div>
+      <label class="drop ${c.uploaded?'has':''}" for="fileIn">
+        ${c.uploaded
+          ? `<b>✓ ${c.fileName}</b><div style="font-size:11px;color:var(--muted);margin-top:3px">${c.fileType} — bấm để đổi file</div>`
+          : `<b>Kéo thả</b> hoặc bấm để chọn file<br><span style="font-size:11px">PNG · JPG · MP4 — khuyên 1080×1080 / 1080×1920</span>`}
+      </label>
+      <input type="file" id="fileIn" accept="image/*,video/*" style="display:none">
+      <div class="label">Headline</div><input class="ipt" type="text" id="c_head" value="${c.headline}">
+      <div class="label">Sub-text</div><input class="ipt" type="text" id="c_sub" value="${c.subtext}">
+      <div style="margin-top:12px"><button class="btn" onclick="confirmCreative()" ${c.uploaded?'':'disabled'}>Xác nhận creative →</button></div>
+    </div>
+    <div>
+      <div class="label" style="text-align:center;margin-top:0">Phone preview</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="phone-screen">
+          <div class="ph-bar"><span>9:41</span><span>● ● ●</span></div>
+          <div class="ph-feed">
+            <div class="ph-post"><div class="au"><div class="av2"></div><div class="nm">Adtima News</div></div><div class="tx">Tin nóng sáng nay...</div></div>
+            <div class="ph-ad">
+              <div class="pic">${preview}</div>
+              <h5>${c.headline||"Headline"}</h5>
+              <p>${c.subtext||"Sub-text mô tả."}</p>
+              <div class="cta">Tìm hiểu thêm</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function bindCreative(){
+  const fi=document.getElementById('fileIn'); if(!fi) return;
+  fi.addEventListener('change',e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      state.creative.uploaded=true;
+      state.creative.fileName=f.name;
+      state.creative.fileType=f.type||"unknown";
+      state.creative.dataUrl=r.result;
+      // re-render the last widget bubble
+      replaceLastWidget(widgetCreative()); bindCreative();
+      toast('✓ Upload xong — preview hiện ở phone');
+    };
+    r.readAsDataURL(f);
+  });
+  ['c_head','c_sub'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.addEventListener('input',()=>{
+      state.creative.headline=document.getElementById('c_head').value;
+      state.creative.subtext=document.getElementById('c_sub').value;
+      replaceLastWidget(widgetCreative()); bindCreative();
+    });
+  });
+}
+function confirmCreative(){
+  if(busy||!state.creative.uploaded) return; busy=true;
+  pushMe("Xác nhận creative này");
+  pushStatus("Đang validate format & ratio...", STEPS[1].tool);
+  setTimeout(()=>{
+    clearStatus(); status[1]='done';
+    pushBot(`Creative ✓ — file <b>${state.creative.fileName}</b> hợp lệ, hiển thị OK trên feed mobile.`, {tool:STEPS[1].tool, model:STEPS[1].model});
+    advanceTo(2);
+    busy=false;
+  }, 900);
+}
+
+function widgetSegment(){
+  const sel=state.segment.attrs;
+  return `<div>
+    <div class="label" style="margin-top:0">Chọn attributes (file dmp_attributes.json · 8 tệp)</div>
+    <div class="attr-grid">
+      ${ATTRIBUTES.map(a=>`
+        <div class="attr ${sel.includes(a.k)?'sel':''}" data-k="${a.k}" onclick="toggleAttr('${a.k}')">
+          <div class="ck">${sel.includes(a.k)?'✓':''}</div>
+          <span>${a.name}</span>
+          <span class="sz">${fmt(a.size)}</span>
+        </div>`).join("")}
+    </div>
+    <div class="size-meter">
+      <div><div class="lab">Audience size</div><div class="big">${fmt(state.segment.size)}</div></div>
+      <div style="flex:1"></div>
+      <div style="text-align:right">
+        <div class="lab">Đã chọn</div>
+        <div style="font-weight:700;color:var(--green-d)">${sel.length} attributes</div>
+      </div>
+    </div>
+    ${sel.length===0?'<div class="alert"><div class="t">⚠ Chưa chọn attribute</div>Chọn ít nhất 1 attribute để tính size.</div>':''}
+    <div style="margin-top:12px"><button class="btn" onclick="confirmSegment()" ${sel.length>0?'':'disabled'}>Tạo segment →</button></div>
+  </div>`;
+}
+function recalcSize(){
+  if(!state.segment.attrs.length){ state.segment.size=0; return; }
+  const sizes=state.segment.attrs.map(k=>ATTRIBUTES.find(a=>a.k===k).size);
+  let s=Math.min(...sizes);
+  s = Math.round(s * Math.pow(0.78, state.segment.attrs.length-1));
+  state.segment.size=s;
+}
+function toggleAttr(k){
+  const i=state.segment.attrs.indexOf(k);
+  if(i>=0) state.segment.attrs.splice(i,1); else state.segment.attrs.push(k);
+  recalcSize();
+  replaceLastWidget(widgetSegment());
+  renderResult();
+}
+function confirmSegment(){
+  if(busy||!state.segment.attrs.length) return; busy=true;
+  pushMe(`Tạo segment với ${state.segment.attrs.length} attribute`);
+  pushStatus("Đối chiếu interest với taxonomy DMP · tính overlap...", STEPS[2].tool);
+  setTimeout(()=>{
+    clearStatus(); status[2]='done';
+    pushBot(`Segment đã tạo ✓ — size ước lượng <b>${fmt(state.segment.size)}</b>. Anh có muốn em mở rộng thêm tệp proxy không?`, {tool:STEPS[2].tool, model:STEPS[2].model});
+    advanceTo(3);
+    busy=false;
+  }, 1000);
+}
+
+function widgetSetup(){
+  const camps=state.setup.camps;
+  const allCreated=state.setup.created;
+  return `<div>
+    <div class="label" style="margin-top:0">3 camp ads (auto-split ngân sách)</div>
+    ${camps.map((c,i)=>`
+      <div class="camp-row">
+        <div style="flex:1">
+          <div class="nm">${c.name}</div>
+          <div class="hint2">${c.id} · Budget ${c.budget} · Bid ${c.bid}</div>
+        </div>
+        <span class="st ${c.st}">${c.st==='run'?'● Running':c.st==='pause'?'❚❚ Paused':'○ Draft'}</span>
+        ${allCreated
+          ? (c.st==='run'
+              ? `<button class="btn amber" onclick="toggleCamp(${i})">Pause</button>`
+              : `<button class="btn" onclick="toggleCamp(${i})">Run</button>`)
+          : ''}
+      </div>`).join("")}
+    ${!allCreated
+      ? `<div style="margin-top:10px;display:flex;gap:8px">
+           <button class="btn" onclick="createCamps()">▶ Tạo tất cả ${camps.length} camp ads</button>
+           <button class="btn sec" onclick="toast('Đã lưu draft')">Lưu draft</button>
+         </div>`
+      : `<div class="doneconfirm">✓ ${camps.filter(c=>c.st==='run').length} chạy · ${camps.filter(c=>c.st==='pause').length} pause</div>
+         <div style="margin-top:10px"><button class="btn" onclick="confirmSetup()">Xác nhận setup →</button></div>`}
+  </div>`;
+}
+function createCamps(){
+  if(busy) return; busy=true;
+  pushMe("Tạo tất cả camp ads");
+  pushStatus("Đang gọi Ad Server API · khởi tạo 3 camp...", STEPS[3].tool);
+  setTimeout(()=>{
+    clearStatus();
+    state.setup.camps.forEach(c=>c.st='run');
+    state.setup.created=true;
+    pushBot("Đã tạo xong 3 camp ads ✓ — tất cả đang Running. Anh có thể pause từng camp ngay tại đây.", {tool:STEPS[3].tool, model:STEPS[3].model});
+    replaceLastWidget(widgetSetup());
+    renderResult();
+    busy=false;
+  }, 1100);
+}
+function toggleCamp(i){
+  const c=state.setup.camps[i];
+  c.st = c.st==='run'?'pause':'run';
+  toast(c.st==='run'?`▶ Resumed ${c.id}`:`❚❚ Paused ${c.id}`);
+  replaceLastWidget(widgetSetup());
+  renderResult();
+}
+function confirmSetup(){
+  if(busy) return; busy=true;
+  status[3]='done';
+  pushMe("Xác nhận setup");
+  setTimeout(()=>{ advanceTo(4); busy=false; }, 300);
+}
+
+function widgetSuccess(){
+  const running=state.setup.camps.filter(c=>c.st==='run').length;
+  const paused=state.setup.camps.filter(c=>c.st==='pause').length;
+  return `<div class="success-hero">
+      <div class="ic">✓</div>
+      <h3>Đã tạo thành công ${state.setup.camps.length} camp ads cho ${state.brief.brand}</h3>
+      <p>${running} đang chạy · ${paused} tạm dừng · Audience ${fmt(state.segment.size)} · Budget ${state.brief.budget}M</p>
+    </div>
+    <table class="mini">
+      <tr><th>Camp ID</th><th>Zone</th><th>Trạng thái</th></tr>
+      ${state.setup.camps.map(c=>`<tr><td>${c.id}</td><td>${c.name.split('·').pop().trim()}</td><td>${c.st==='run'?'<span class="pill good">Running</span>':'<span class="pill watch">Paused</span>'}</td></tr>`).join("")}
+    </table>
+    <div style="margin-top:10px"><button class="btn" onclick="confirmSuccess()">Xong, sang phân tích report →</button></div>`;
+}
+function confirmSuccess(){
+  if(busy) return; busy=true;
+  status[4]='done';
+  setTimeout(()=>{ advanceTo(5); busy=false; }, 200);
+}
+
+function widgetReport(){
+  const analyzed=state.report.analyzed;
+  if(!analyzed){
+    return `<div>
+      <div class="label" style="margin-top:0">File báo cáo (mock)</div>
+      <div class="drop has"><b>📄 camps_report.csv</b><div style="font-size:11px;color:var(--muted);margin-top:3px">500 dòng · 14 cột · cập nhật hôm qua 23:55</div></div>
+      <div style="margin-top:12px"><button class="btn" onclick="runReport()">🔍 Phân tích báo cáo</button></div>
+    </div>`;
+  }
+  return reportResultHTML()+`<div style="margin-top:12px"><button class="btn" onclick="confirmReport()">Soạn email gửi teams →</button></div>`;
+}
+function runReport(){
+  if(busy) return; busy=true;
+  pushMe("Phân tích báo cáo 500 camps giúp anh");
+  pushStatus("Extract 500 dòng · tính CTR/CPM/VTR · vẽ chart · LLM đánh giá...", STEPS[5].tool);
+  setTimeout(()=>{
+    clearStatus();
+    state.report.analyzed=true;
+    pushBot("Phân tích xong ✓ — 312 good / 96 watch / 92 bad. Em vẽ chart và đề xuất 4 hành động ưu tiên ở dưới.", {tool:STEPS[5].tool, model:STEPS[5].model});
+    replaceLastWidget(widgetReport());
+    renderResult();
+    busy=false;
+  }, 1500);
+}
+function confirmReport(){
+  if(busy) return; busy=true;
+  status[5]='done';
+  setTimeout(()=>{ advanceTo(6); busy=false; }, 200);
+}
+function reportResultHTML(){
+  const weeks=["W1","W2","W3","W4"];
+  const reach=[1.2, 1.8, 2.1, 2.4];
+  const ctr=[1.1, 1.35, 1.42, 1.58];
+  const cpm=[58, 53, 52, 49];
+  const W=520, H=210, PL=38, PR=18, PT=18, PB=32;
+  const cw=W-PL-PR, ch=H-PT-PB;
+  const bw=cw/weeks.length;
+  const mxReach=3, mxCpm=70, mxCtr=2;
+  function y(v,mx){ return PT+ch-(v/mx)*ch; }
+  let svg=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><g font-family="Inter,system-ui" font-size="10" fill="#5b6b60">`;
+  for(let i=0;i<=4;i++){ const yy=PT+(ch/4)*i; svg+=`<line x1="${PL}" x2="${W-PR}" y1="${yy}" y2="${yy}" stroke="#eef3f0"/>`; }
+  weeks.forEach((w,i)=>{
+    const x=PL+bw*i+8;
+    const barW=(bw-16)/2;
+    const yh=y(reach[i],mxReach);
+    svg+=`<rect x="${x}" y="${yh}" width="${barW}" height="${PT+ch-yh}" fill="#1F7A3D" rx="3"/>`;
+    svg+=`<text x="${x+barW/2}" y="${yh-4}" text-anchor="middle" font-weight="700" fill="#145C2C">${reach[i]}M</text>`;
+    const x2=x+barW+4;
+    const yh2=y(cpm[i],mxCpm);
+    svg+=`<rect x="${x2}" y="${yh2}" width="${barW}" height="${PT+ch-yh2}" fill="#9A6700" rx="3"/>`;
+    svg+=`<text x="${x2+barW/2}" y="${yh2-4}" text-anchor="middle" font-weight="700" fill="#9A6700">${cpm[i]}k</text>`;
+    svg+=`<text x="${PL+bw*i+bw/2}" y="${H-12}" text-anchor="middle" font-weight="700">${w}</text>`;
+  });
+  let path="";
+  ctr.forEach((v,i)=>{ const cx=PL+bw*i+bw/2; const cy=PT+ch-(v/mxCtr)*ch; path+=(i===0?"M":"L")+cx+","+cy+" "; });
+  svg+=`<path d="${path}" fill="none" stroke="#185FA5" stroke-width="2.5"/>`;
+  ctr.forEach((v,i)=>{ const cx=PL+bw*i+bw/2; const cy=PT+ch-(v/mxCtr)*ch; svg+=`<circle cx="${cx}" cy="${cy}" r="3.5" fill="#185FA5"/><text x="${cx+8}" y="${cy-4}" fill="#185FA5" font-weight="700">${v}%</text>`; });
+  svg+=`</g></svg>`;
+  const good=312, watch=96, bad=92, total=good+watch+bad;
+  const C=2*Math.PI*38;
+  const gA=(good/total)*C, wA=(watch/total)*C, bA=(bad/total)*C;
+  const donut=`<svg viewBox="0 0 120 120" width="100" height="100">
+    <circle cx="60" cy="60" r="38" fill="none" stroke="#1F7A3D" stroke-width="17" stroke-dasharray="${gA} ${C-gA}" transform="rotate(-90 60 60)"/>
+    <circle cx="60" cy="60" r="38" fill="none" stroke="#9A6700" stroke-width="17" stroke-dasharray="${wA} ${C-wA}" stroke-dashoffset="${-gA}" transform="rotate(-90 60 60)"/>
+    <circle cx="60" cy="60" r="38" fill="none" stroke="#B00020" stroke-width="17" stroke-dasharray="${bA} ${C-bA}" stroke-dashoffset="${-(gA+wA)}" transform="rotate(-90 60 60)"/>
+    <text x="60" y="58" text-anchor="middle" font-size="20" font-weight="800" fill="#145C2C">500</text>
+    <text x="60" y="74" text-anchor="middle" font-size="9" fill="#5b6b60">camps</text>
+  </svg>`;
+  return `<div class="chart-card">
+    <h4 style="font-size:12.5px;color:var(--green-d);margin-bottom:6px">Performance theo tuần (Reach · CPM · CTR)</h4>
+    ${svg}
+    <div class="legend"><span><i style="background:#1F7A3D"></i>Reach (M)</span><span><i style="background:#9A6700"></i>CPM (k)</span><span><i style="background:#185FA5"></i>CTR (%)</span></div>
+  </div>
+  <div class="chart-card" style="display:flex;gap:12px;align-items:center">
+    ${donut}
+    <div>
+      <h4 style="margin-bottom:4px">Verdict 500 camps</h4>
+      <div class="kv" style="grid-template-columns:16px 60px 1fr;font-size:12px">
+        <span style="color:#1F7A3D">●</span><b>Good</b><span>312 · scale +20% ngân sách</span>
+        <span style="color:#9A6700">●</span><b>Watch</b><span>96 · theo dõi CTR giảm</span>
+        <span style="color:#B00020">●</span><b>Bad</b><span>92 · pause / đổi creative</span>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h4>🧠 AI Đề xuất hành động</h4>
+    <ol style="padding-left:20px;font-size:13px;line-height:1.65">
+      <li><b>Pause 92 camp 'bad'</b> — ưu tiên 12 camp tiêu lớn nhất (64% spend nhóm bad)</li>
+      <li><b>Scale 312 camp 'good'</b> +20% budget — CPM giảm dần 58k→49k</li>
+      <li><b>Re-test creative</b> 96 camp 'watch' — đổi angle "Đặc quyền" → "Trải nghiệm"</li>
+      <li><b>Shift budget</b> sang zone Du lịch · CPM thấp nhất, VTR cao nhất</li>
+    </ol>
+  </div>`;
+}
+
+function widgetEmail(){
+  const body=`Hi Account & Ad Opt teams,
+
+Camp Ads Agent đã hoàn tất setup + phân tích chiến dịch ${state.brief.brand}.
+
+Tóm tắt:
+• ${state.setup.camps.filter(c=>c.st==='run').length}/${state.setup.camps.length} camp đang chạy · Budget ${state.brief.budget}M · ${state.brief.duration} tuần
+• Audience: ${fmt(state.segment.size)} người dùng (${state.segment.attrs.length} attributes)
+• Performance 500 camp tham chiếu: 312 good · 96 watch · 92 bad
+
+Đề xuất ưu tiên:
+1. Pause 92 camp 'bad', ưu tiên 12 camp tiêu lớn
+2. Scale +20% budget cho 312 camp 'good'
+3. Re-test creative cho 96 camp 'watch'
+4. Shift budget sang zone Du lịch
+
+Đính kèm:
+- camps_report_analysis.pdf
+- setup_plan_${state.brief.brand.replace(/\s/g,"_")}.xlsx
+
+— Camp Ads Agent`;
+  return `<div class="email-card">
+      <div class="hdr">
+        <b>To:</b><span>account@adtima.vn, adopt@adtima.vn</span>
+        <b>Cc:</b><span>${state.brief.brand.toLowerCase().replace(/\s/g,"")}-pm@adtima.vn</span>
+        <b>Subject:</b><span>[Camp Ads Agent] Báo cáo &amp; đề xuất ${state.brief.brand}</span>
+      </div>
+      <div class="body">${body}</div>
+    </div>
+    ${state.email.sent
+      ? `<div class="doneconfirm">✓ Email đã gửi lúc ${new Date().toLocaleTimeString('vi-VN')} — 2 người nhận, 1 cc</div>
+         <div style="margin-top:10px"><button class="btn sec" onclick="restart()">↻ Bắt đầu chiến dịch mới</button></div>`
+      : `<div style="margin-top:10px;display:flex;gap:8px">
+           <button class="btn" onclick="sendEmail()">✉ Gửi email</button>
+           <button class="btn sec" onclick="toast('Mở editor chỉnh sửa')">✎ Chỉnh sửa</button>
+         </div>`}`;
+}
+function sendEmail(){
+  if(busy) return; busy=true;
+  pushMe("Gửi email cho 2 teams");
+  pushStatus("Đang gửi qua SMTP nội bộ Adtima...", STEPS[6].tool);
+  setTimeout(()=>{
+    clearStatus();
+    state.email.sent=true; status[6]='done';
+    pushBot("Email đã gửi ✓ — Account team & Ad Opt team sẽ nhận trong 1-2 phút. Quy trình hoàn tất 🎉", {tool:STEPS[6].tool, model:STEPS[6].model});
+    replaceLastWidget(widgetEmail());
+    renderStepper(); renderResult(); renderComposer();
+    busy=false;
+  }, 900);
+}
+
+/* ========= STEP DISPATCH ========= */
+const widgetFns = [widgetBrief, widgetCreative, widgetSegment, widgetSetup, widgetSuccess, widgetReport, widgetEmail];
+const bindFns   = [bindBrief,   bindCreative,   ()=>{},        ()=>{},      ()=>{},        ()=>{},        ()=>{}];
+
+function showStepWidget(i){
+  pushBot(widgetFns[i](), {wide:true});
+  // bind after DOM update
+  setTimeout(()=>bindFns[i](),0);
+}
+function advanceTo(i){
+  cur=i;
+  renderStepper(); renderResult(); renderComposer();
+  pushBot(STEPS[i].ask, {tool:STEPS[i].tool, model:STEPS[i].model});
+  showStepWidget(i);
+  scrollEnd();
+}
+
+function replaceLastWidget(html){
+  // find last wide bot bubble and replace it
+  for(let i=log.length-1;i>=0;i--){
+    if(log[i].who==='bot' && log[i].wide){ log[i].html=html; break; }
+  }
+  renderThread();
+  // re-bind
+  setTimeout(()=>bindFns[cur](),0);
+}
+
+/* ========= THREAD / COMPOSER RENDER ========= */
+function renderThread(){
+  const t=document.getElementById('thread'); t.innerHTML='';
+  log.forEach(m=>{
+    if(m.who==='status'){
+      const d=document.createElement('div'); d.className='statusbub';
+      d.innerHTML='<span class="spin"></span> '+m.html+' <span style="color:var(--green-d);font-weight:700">['+m.tool+']</span>';
+      t.appendChild(d); return;
+    }
+    const w=document.createElement('div'); w.className='msg '+(m.who==='me'?'me':'bot')+(m.wide?' wide':'');
+    const tool=m.tool?'<div class="tool '+(m.model==='gemma'?'gemma':'')+'">⚙ '+m.tool+' · '+(m.model==='gemma'?'Gemma-4-31b':'Qwen3.6-27b')+'</div>':'';
+    w.innerHTML='<div class="av">'+(m.who==='me'?'Q':'AI')+'</div><div class="bub">'+m.html+tool+'</div>';
+    t.appendChild(w);
+  });
+  scrollEnd();
+}
+
+function renderComposer(){
+  const c=document.getElementById('composer');
+  // chip = current step (or next pending step)
+  let chipHTML='';
+  const i = status.findIndex(s=>s!=='done');
+  if(i>=0){
+    chipHTML = STEPS.map((s,idx)=>{
+      const reach = status[idx]==='done' || idx<=cur+1;
+      if(!reach) return '';
+      const cls = s.hero?'chip hero':'chip';
+      return `<button class="${cls}" onclick="chipClick(${idx})"><span class="nm">${idx+1}</span>${s.chip}</button>`;
+    }).filter(Boolean).join("");
+  }else{
+    chipHTML = `<button class="chip" onclick="restart()"><span class="nm">↻</span>Bắt đầu chiến dịch mới</button>`;
+  }
+  c.innerHTML = `<div class="chips">${chipHTML}</div>
+    <div class="inrow">
+      <input type="text" id="chatIn" placeholder="Hỏi/yêu cầu thêm cho agent...">
+      <button class="btn" onclick="sendFreeText()">Gửi</button>
+    </div>`;
+  const ci=document.getElementById('chatIn');
+  if(ci) ci.addEventListener('keydown',e=>{ if(e.key==='Enter') sendFreeText(); });
+}
+function chipClick(i){ if(busy) return; jumpStep(i); }
+function sendFreeText(){
+  const ci=document.getElementById('chatIn'); if(!ci) return;
+  const v=(ci.value||"").trim(); if(!v) return;
+  pushMe(v); ci.value="";
+  // simple reply
+  setTimeout(()=>{
+    const i = status.findIndex(s=>s!=='done');
+    if(i>=0){
+      pushBot(`Rõ — em vẫn đang ở bước <b>${STEPS[i].title}</b>. Anh dùng widget bên dưới để hoàn tất bước này, hoặc bấm chip "${STEPS[i].chip}" để em hướng dẫn lại.`, {tool:STEPS[i].tool, model:STEPS[i].model});
+    } else {
+      pushBot("Tất cả 7 bước đã xong. Anh có muốn bắt đầu chiến dịch mới không?");
+    }
+  }, 350);
+}
+
+function restart(){
+  cur=0;
+  status=STEPS.map(()=>'pending');
+  busy=false;
+  log=[];
+  state.creative.uploaded=false; state.creative.fileName=""; state.creative.dataUrl="";
+  state.segment.attrs=[]; state.segment.size=0;
+  state.setup.camps.forEach(c=>c.st='draft'); state.setup.created=false;
+  state.report.analyzed=false; state.email.sent=false;
+  renderStepper(); renderResult(); renderComposer();
+  pushBot(STEPS[0].ask, {tool:STEPS[0].tool, model:STEPS[0].model});
+  showStepWidget(0);
+}
+
+/* ========= RIGHT PANEL OUTPUT ========= */
+function renderResult(){
+  const el=document.getElementById('res');
+  const blocks=[];
+  if(status[0]==='done' || cur>0){
+    blocks.push(`<div class="card"><h4>① Brief</h4>
+      <div class="kv">
+        <b>Brand</b><span>${state.brief.brand}</span>
+        <b>Objective</b><span><span class="pill aw">${state.brief.objective}</span></span>
+        <b>KPI</b><span>${state.brief.kpi}</span>
+        <b>Budget</b><span>${state.brief.budget}M · ${state.brief.duration} tuần</span>
+      </div></div>`);
+  }
+  if(state.creative.uploaded && (status[1]==='done' || cur>1)){
+    blocks.push(`<div class="card"><h4>② Creative</h4>
+      <div class="kv">
+        <b>File</b><span>${state.creative.fileName}</span>
+        <b>Loại</b><span>${state.creative.fileType}</span>
+        <b>Headline</b><span>${state.creative.headline}</span>
+      </div></div>`);
+  }
+  if((status[2]==='done' || cur>2) && state.segment.attrs.length){
+    blocks.push(`<div class="card"><h4>③ Audience</h4>
+      <div class="kv">
+        <b>Attributes</b><span>${state.segment.attrs.length} tệp</span>
+        <b>Size</b><span><b style="color:var(--green-d)">${fmt(state.segment.size)}</b></span>
+      </div></div>`);
+  }
+  if(status[3]==='done' || cur>3){
+    const running=state.setup.camps.filter(c=>c.st==='run').length;
+    const paused=state.setup.camps.filter(c=>c.st==='pause').length;
+    blocks.push(`<div class="card"><h4>④ Setup</h4>
+      <div class="kv">
+        <b>Tổng</b><span>${state.setup.camps.length} camps</span>
+        <b>Running</b><span><span class="pill good">${running}</span></span>
+        <b>Paused</b><span><span class="pill watch">${paused}</span></span>
+      </div></div>`);
+  }
+  if(state.report.analyzed){
+    blocks.push(`<div class="card"><h4>⑥ Insight</h4>
+      <div class="chips"><span class="pill good">312 good</span><span class="pill watch">96 watch</span><span class="pill bad">92 bad</span></div>
+      <div class="kv"><b>CTR TB</b><span>1.42%</span><b>CPM TB</b><span>52.300đ</span><b>VTR TB</b><span>38%</span></div></div>`);
+  }
+  if(state.email.sent){
+    blocks.push(`<div class="card" style="border-color:#bfe0c9;background:var(--green-l2)"><h4>⑦ Email ✓</h4>
+      <div class="kv"><b>Account</b><span>account@adtima.vn</span><b>Ad Opt</b><span>adopt@adtima.vn</span></div></div>`);
+  }
+  el.innerHTML = blocks.length ? blocks.join("") : '<div class="empty">Hoàn tất bước để xem output ở đây.</div>';
+}
+
+/* ========= BOOT ========= */
+renderStepper();
+renderResult();
+renderComposer();
+pushBot(STEPS[0].ask, {tool:STEPS[0].tool, model:STEPS[0].model});
+showStepWidget(0);
+</script>
+</body>
+</html>

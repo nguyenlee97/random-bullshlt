@@ -1,0 +1,559 @@
+/* Category Sticky Ads (BaoMoi Reference) */
+.sticky-ad {
+    position: fixed;
+    top: 180px;
+    width: 300px;
+    height: 600px;
+    z-index: 10;
+    display: none; /* Hidden by default on mobile */
+}
+
+@media (min-width: 1780px) {
+    .sticky-ad {
+        display: block;
+    }
+    .ad-side-left {
+        left: calc(50vw - 580px - 310px);
+    }
+    .ad-side-right {
+        right: calc(50vw - 580px - 310px);
+    }
+}
+
+/* Skin Ad Overlay Link */
+.ad-skin {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 1080px;
+    z-index: -1;
+    overflow: hidden;
+}
+
+.ad-sidebar-box {
+    width: 300px;
+    height: auto;
+    min-height: 250px;
+    margin-bottom: 20px;
+}
+
+.sidebar-widget {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    padding: 15px;
+    border-radius: 4px;
+}
+.sidebar-widget h3 {
+    margin-top: 0;
+    font-size: 18px;
+    color: #078243;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+/* FIX CATEGORY LAYOUT */
+.category-page {
+    position: relative;
+    z-index: 1;
+}
+
+.layout-two-col {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-start !important;
+    width: 1160px !important;
+    max-width: 1160px !important;
+    margin: 0 auto !important;
+    gap: 30px !important;
+}
+
+.main-content {
+    flex: 1 1 auto !important;
+    width: 800px !important;
+    max-width: 800px !important;
+}
+
+.sidebar {
+    flex: 0 0 330px !important;
+    width: 330px !important;
+    background: #f8fafc;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.article-list {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.article-list .article-item {
+    width: 100% !important;
+    float: none !important;
+    display: flex !important;
+    flex-direction: row !important;
+    margin-bottom: 20px !important;
+    padding-bottom: 20px !important;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.article-list .article-item .article-thumbnail {
+    width: 240px !important;
+    flex-shrink: 0 !important;
+    margin-right: 20px !important;
+}
+
+.article-list .article-item .article-thumbnail img {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 16/10;
+    object-fit: cover;
+}
+
+
+/* STRONGER OVERRIDES */
+body .page-wrapper.category-page .layout-two-col {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 1160px !important;
+    max-width: 1160px !important;
+    margin: 0 auto !important;
+    gap: 30px !important;
+    overflow: visible !important;
+    clear: both !important;
+}
+
+body .page-wrapper.category-page .main-content {
+    flex: 1 !important;
+    width: auto !important;
+    max-width: calc(100% - 330px - 30px) !important;
+    float: none !important;
+}
+
+body .page-wrapper.category-page .sidebar {
+    flex: 0 0 330px !important;
+    width: 330px !important;
+    display: block !important;
+    float: none !important;
+    background: #fff;
+}
+
+body .page-wrapper.category-page .sidebar * {
+    display: block;
+}
+
+.sticky-ad {
+    position: fixed !important;
+    top: 300px !important;
+    width: 300px !important;
+    height: auto !important;
+    min-height: 600px !important;
+    z-index: 10 !important;
+}
+
+@media (min-width: 1500px) {
+    .ad-side-left {
+        left: 20px !important;
+    }
+    .ad-side-right {
+        right: 20px !important;
+        left: auto !important;
+    }
+}
+
+body .page-wrapper.category-page .layout-two-col {
+    background-color: #fff !important;
+    padding: 20px !important;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+body .page-wrapper.category-page .main-content {
+    background-color: #fff !important;
+}
+
+/* FEATURED GRID 1+4 LAYOUT */
+.featured-grid {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 30px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 20px;
+}
+.featured-lead {
+    flex: 2;
+}
+.featured-lead .article-item {
+    display: block !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.featured-lead .article-thumbnail {
+    width: 100% !important;
+    margin-bottom: 15px !important;
+    margin-right: 0 !important;
+}
+.featured-lead .article-thumbnail img {
+    width: 100% !important;
+    height: auto !important;
+    border-radius: 4px;
+}
+.featured-lead .article-title {
+    font-size: 24px;
+    font-weight: 700;
+}
+.featured-sub-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.featured-sub-list .article-item {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 10px !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.featured-sub-list .article-thumbnail {
+    width: 120px !important;
+    flex-shrink: 0 !important;
+    margin-right: 0 !important;
+}
+.featured-sub-list .article-title {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+/* HIGH SPECIFICITY FIX FOR 1+4 GRID */
+body .page-wrapper.category-page .featured-grid {
+    display: flex !important;
+    flex-direction: row !important;
+}
+
+body .page-wrapper.category-page .featured-lead .article-thumbnail {
+    width: 100% !important;
+    margin-right: 0 !important;
+}
+
+body .page-wrapper.category-page .featured-sub-list .article-item {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+}
+
+body .page-wrapper.category-page .featured-sub-list .article-item .article-thumbnail {
+    width: 140px !important;
+    flex: 0 0 140px !important;
+    margin-right: 15px !important;
+}
+
+body .page-wrapper.category-page .featured-sub-list .article-title {
+    font-size: 16px !important;
+    font-weight: 500 !important;
+}
+
+
+body .page-wrapper.category-page .featured-grid .article-item header,
+body .page-wrapper.category-page .featured-grid .article-item .article-title,
+body .page-wrapper.category-page .featured-grid .article-item .article-title a {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+body .page-wrapper.category-page .featured-sub-list .article-item {
+    margin-bottom: 20px !important;
+}
+
+/* FINAL 1+4 GRID SPACING FIX */
+body .page-wrapper.category-page .featured-grid {
+    gap: 30px !important;
+}
+
+body .page-wrapper.category-page .featured-sub-list {
+    flex: 0 0 330px !important; /* Make right side match sidebar width */
+}
+
+body .page-wrapper.category-page .featured-sub-list .article-item .article-thumbnail {
+    width: 100px !important;
+    flex: 0 0 100px !important;
+    margin-right: 15px !important;
+}
+
+body .page-wrapper.category-page .featured-sub-list .article-title {
+    font-size: 15px !important;
+    line-height: 1.4 !important;
+}
+
+/* HIDE SITE HEADER MASTHEAD COMPLETELY */
+#ZingNews_Masthead {
+    display: none !important;
+}
+#Zingnews_SiteHeader {
+    display: none !important;
+}
+
+/* FIX SKIN AD */
+.ad-skin {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100vh !important;
+    z-index: -1 !important;
+}
+
+body .page-wrapper.category-page {
+    background-color: #fff !important;
+    max-width: 1160px !important;
+    margin: 0 auto !important;
+}
+
+#zing-header {
+    background-color: #fff !important;
+    position: fixed !important;
+    top: 0 !important;
+    width: 100% !important;
+    z-index: 9999 !important;
+}
+
+/* FIX 1+4 GRID STYLING */
+body .page-wrapper.category-page .featured-grid {
+    gap: 30px !important;
+    align-items: flex-start !important;
+}
+
+body .page-wrapper.category-page .featured-lead .article-summary {
+    display: block !important;
+    font-size: 15px !important;
+    color: #4a5568 !important;
+    margin-top: 10px !important;
+    line-height: 1.5 !important;
+}
+
+body .page-wrapper.category-page .featured-sub-list .article-item {
+    flex-direction: row-reverse !important;
+    justify-content: space-between !important;
+}
+
+body .page-wrapper.category-page .featured-sub-list .article-item .article-thumbnail {
+    margin-right: 0 !important;
+    margin-left: 15px !important;
+    width: 120px !important;
+    flex: 0 0 120px !important;
+}
+
+/* FIX SIDE BANNERS TO START LOWER AND STICK */
+.sticky-ad {
+    position: absolute !important;
+    top: 500px !important; /* Starts below the 1+4 grid */
+    width: 300px !important;
+    height: 600px !important;
+}
+
+@media (min-width: 1500px) {
+    .ad-side-left {
+        left: -320px !important;
+    }
+    .ad-side-right {
+        right: -320px !important;
+        left: auto !important;
+    }
+}
+
+/* Make page-wrapper relative so absolute side ads position correctly */
+body .page-wrapper.category-page {
+    position: relative !important;
+}
+
+
+/* WE DO NOT SHOW SITE HEADER MASTHEAD */
+
+/* PERFECT CENTERING FOR SIDE ADS */
+.sticky-ad {
+    width: 300px !important;
+    height: 600px !important;
+    z-index: 10 !important;
+    display: none; /* hidden on small screens */
+}
+
+@media (min-width: 1200px) {
+    .sticky-ad {
+        display: block !important;
+    }
+    .ad-side-left {
+        left: calc(50vw - 580px - 320px) !important;
+    }
+    .ad-side-right {
+        right: calc(50vw - 580px - 320px) !important;
+        left: auto !important;
+    }
+}
+
+/* Fix main layout to prevent shifting */
+body .page-wrapper.category-page {
+    width: 1160px !important;
+    max-width: 1160px !important;
+    margin: 0 auto !important;
+    background-color: #fff !important;
+    position: relative !important;
+    display: block !important;
+    clear: both !important;
+}
+
+body .page-wrapper.category-page .layout-two-col {
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+
+/* FIX PAGE-WRAPPER STARTING AT 50% */
+body .page-wrapper.category-page {
+    left: 0 !important;
+    transform: none !important;
+}
+
+/* FIX SIDE ADS VISIBILITY AND POSITIONING */
+body .sticky-ad {
+    display: none !important; /* Hide by default */
+}
+
+@media (min-width: 1700px) {
+    body .sticky-ad {
+        display: block !important;
+    }
+}
+
+
+/* FIX PAGE-WRAPPER SPACING FOR SKIN AD BANNER */
+body .page-wrapper.category-page {
+    margin-top: 20px !important; /* Masthead handles the main spacing now */
+    padding-top: 40px !important;
+}
+
+
+/* BULLETPROOF CENTERING */
+body .page-wrapper.category-page {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+}
+
+body .page-wrapper.category-page .ad-side-left,
+body .page-wrapper.category-page .ad-side-right {
+    position: absolute !important;
+    display: none !important;
+}
+
+@media (min-width: 1200px) {
+    body .page-wrapper.category-page .ad-side-left,
+    body .page-wrapper.category-page .ad-side-right {
+        display: block !important;
+    }
+}
+
+
+/* FIX SIDEBAR AD POSITION */
+body .page-wrapper.category-page aside.sidebar {
+    padding-top: 800px !important; /* Pushes the sidebar content down below the 1+4 grid level */
+}
+
+
+/* HIDE TOP POPUP */
+#pushed_popup {
+    display: none !important;
+}
+
+/* FORCE CENTERING IGNORING ALL ZNEWS CSS */
+body .center-wrapper {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+    overflow-x: hidden !important; /* Prevent side ad overflow from breaking centering */
+}
+
+body .page-wrapper.category-page {
+    margin: 250px auto 0 !important;
+    position: relative !important;
+}
+
+body .page-wrapper.category-page {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+}
+
+/* Hide side ads on small screens to prevent overflow entirely */
+@media (max-width: 1700px) {
+    .sticky-ad {
+        display: none !important;
+    }
+}
+
+
+/* OVERHAUL SIDE AD ARCHITECTURE */
+body > .ad-side-left,
+body > .ad-side-right,
+.ad-side-left.sticky-ad,
+.ad-side-right.sticky-ad {
+    position: fixed !important;
+    top: 300px !important; /* Start below the top banner */
+    z-index: -1 !important; /* Sit behind content so it doesn't block clicks */
+    display: none !important;
+}
+
+@media (min-width: 1200px) {
+    .ad-side-left.sticky-ad {
+        display: block !important;
+        left: calc(50vw - 580px - 320px) !important; /* 580 = half wrapper, 320 = ad width */
+    }
+    .ad-side-right.sticky-ad {
+        display: block !important;
+        right: calc(50vw - 580px - 320px) !important;
+    }
+}
+
+/* FIX MASTHEAD ZONE */
+/* Since #Zingnews_SiteHeader is hidden, the background top banner shows through. We don't need a separate Masthead DOM element if it's baked into the background image. */
+
+
+/* FIX MULTI-GRID LAYOUT AND SIDEBAR */
+body .page-wrapper.category-page .container.layout-two-col {
+    display: flex !important;
+    position: relative !important;
+    gap: 30px !important;
+    width: 100% !important;
+    clear: both !important;
+}
+
+body .page-wrapper.category-page .sidebar {
+    position: static !important;
+    padding-top: 0 !important;
+    flex: 0 0 300px !important;
+    margin-top: 0 !important;
+    float: none !important;
+}
+
+body .page-wrapper.category-page .main-content {
+    flex: 1 !important;
+}
+
+/* FIX CATEGORY GRIDS */
+body .page-wrapper.category-page .grid-4-col {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 25px !important;
+    width: 100% !important;
+}
+
+body .page-wrapper.category-page .cat-col {
+    min-width: 0 !important; /* prevent overflow */
+}
+

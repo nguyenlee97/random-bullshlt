@@ -1,0 +1,284 @@
+/* BaoMoi Custom Ad Zones Stylesheet */
+
+/* Background Ad & Clickable Gutters */
+body.has-bg-ad {
+    background-attachment: fixed !important;
+    background-position: center 110px !important;
+    background-repeat: no-repeat !important;
+    background-color: #ffea00 !important;
+}
+
+/* Invisible clickable gutter overlays that capture left/right clicks */
+.baomoi-background-ad {
+    display: none;
+}
+body.has-bg-ad .baomoi-background-ad {
+    display: block;
+}
+/* Clickable overlay for top gap showing the background skin ad creative */
+.baomoi-bg-top-link {
+    position: absolute;
+    top: 110px; /* Below header (66px) + nav bar (44px) */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1168px;
+    height: 265px; /* Matches the margin-top gap of main-container */
+    z-index: 80;
+    cursor: pointer;
+    display: none;
+}
+body.has-bg-ad .baomoi-bg-top-link {
+    display: block;
+}
+.baomoi-background-ad::before,
+.baomoi-background-ad::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    height: 100vh;
+    z-index: 80;
+    cursor: pointer;
+}
+/* Left gutter link area */
+.baomoi-background-ad::before {
+    left: 0;
+    width: calc((100vw - 1168px) / 2);
+}
+/* Right gutter link area */
+.baomoi-background-ad::after {
+    right: 0;
+    width: calc((100vw - 1168px) / 2);
+}
+@media (max-width: 1180px) {
+    .baomoi-background-ad {
+        display: none !important;
+    }
+}
+
+/* Ensure structural containers have opaque backgrounds so the background ad doesn't show behind texts */
+header, 
+footer, 
+.main-container,
+.bm-section,
+.column.shrink {
+    background-color: #fff;
+    position: relative;
+    z-index: 85; /* Sit above the background ad gutters */
+}
+
+/* Maintain solid primary background for navigation bar while keeping z-index above gutter links */
+.navbar-wrapper {
+    position: relative;
+    z-index: 85;
+}
+
+/* Masthead Ad */
+.baomoi-masthead-ad {
+    width: 1168px;
+    max-width: 95%;
+    margin: 15px auto;
+    background-color: #f7f9fa;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    transition: all 0.3s ease;
+    z-index: 90;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+/* Hide the redundant top masthead ad entirely when background skin is active */
+body.has-bg-ad .baomoi-masthead-ad {
+    display: none !important;
+}
+.baomoi-masthead-ad.collapsed {
+    height: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    opacity: 0;
+    pointer-events: none;
+}
+.baomoi-masthead-ad.skin-active {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    height: 250px;
+}
+
+/* Sticky Floating Side Banners */
+.baomoi-sticky-side {
+    position: fixed;
+    top: 75%;
+    transform: translateY(-50%);
+    width: 600px;
+    height: auto;
+    z-index: 110;
+    background-color: transparent;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.baomoi-sticky-side .ad-wrapper img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+.baomoi-sticky-side.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+.baomoi-sticky-left {
+    left: auto;
+    right: calc(50vw + 584px + 30px);
+    transform: translateY(-50%) translateX(-20px);
+}
+.baomoi-sticky-left.visible {
+    transform: translateY(-50%) translateX(0);
+}
+.baomoi-sticky-right {
+    right: auto;
+    left: calc(50vw + 584px + 30px);
+    transform: translateY(-50%) translateX(20px);
+}
+.baomoi-sticky-right.visible {
+    transform: translateY(-50%) translateX(0);
+}
+.baomoi-sticky-right .ad-close-btn {
+    right: auto;
+    left: 6px;
+}
+@media (max-width: 1520px) {
+    .baomoi-sticky-side {
+        display: none !important;
+    }
+}
+
+/* Sidebar Ads */
+.baomoi-sidebar-ad {
+    width: 100%;
+    background-color: #f7f9fa;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+}
+.baomoi-sidebar-ad.collapsed {
+    height: 0 !important;
+    margin-bottom: 0 !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Common Ad Container Elements */
+.ad-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.ad-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border: none;
+}
+.ad-close-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    background-color: rgba(30, 30, 30, 0.7);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+    z-index: 10;
+    transition: background-color 0.2s;
+    user-select: none;
+}
+.ad-close-btn:hover {
+    background-color: rgba(200, 30, 30, 0.9);
+}
+
+/* Loading state */
+.ad-loader {
+    width: 100%;
+    height: 100%;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #888;
+    font-size: 12px;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f9f9f9;
+}
+.spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #ddd;
+    border-top: 3px solid #0076a3;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Premium gradient placeholders */
+.ad-fallback-gradient {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-family: system-ui, -apple-system, sans-serif;
+    text-decoration: none;
+    position: relative;
+    padding: 15px;
+    box-sizing: border-box;
+    text-align: center;
+}
+.ad-fallback-gradient .brand {
+    font-weight: 800;
+    font-size: 20px;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.ad-fallback-gradient .tagline {
+    font-size: 13px;
+    opacity: 0.9;
+    margin-bottom: 15px;
+}
+.ad-fallback-gradient .cta {
+    background-color: rgba(255,255,255,0.25);
+    border: 1px solid rgba(255,255,255,0.5);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    transition: background-color 0.2s;
+}
+.ad-fallback-gradient:hover .cta {
+    background-color: rgba(255,255,255,0.4);
+}
+.ad-label-tag {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    background-color: rgba(0, 0, 0, 0.4);
+    color: rgba(255,255,255,0.8);
+    font-size: 9px;
+    padding: 2px 4px;
+    border-radius: 2px;
+}

@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AdsPilot · Ad Server Console (Mock)</title>
+<style>
+  :root{
+    --navy:#1f3551; --navy-d:#16263c; --navy-l:#2c4a72;
+    --green:#5ba33d; --green-d:#4a8a30; --green-l:#eaf3e3;
+    --amber:#c98a14; --red:#c0392b; --blue:#2c7fb8;
+    --ink:#2b3a4a; --muted:#6c7c8c; --line:#dde3ea; --lineH:#cfd7e0;
+    --bg:#f3f5f8; --white:#fff;
+    --font:"Inter","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 4px 16px rgba(20,30,50,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);color:var(--ink);background:var(--bg);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  button{font-family:inherit;cursor:pointer}
+  a{color:var(--blue);text-decoration:none}
+
+  /* TOPBAR */
+  .topbar{background:var(--navy);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:18px;border-bottom:3px solid var(--navy-d)}
+  .topbar .logo{font-weight:800;font-size:17px;letter-spacing:-.2px;display:flex;align-items:center;gap:8px}
+  .topbar .logo .ic{width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,#5ba33d,#7cc056);display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;color:#fff}
+  .topbar .ver{font-size:10px;font-weight:700;background:rgba(255,255,255,.12);padding:2px 7px;border-radius:4px;color:#cbe0d5;letter-spacing:.5px}
+  .topbar nav{margin-left:auto;display:flex;gap:4px}
+  .topbar nav button{background:transparent;border:none;color:#dde7f0;font-weight:600;padding:6px 12px;border-radius:5px;font-size:12.5px;display:flex;align-items:center;gap:5px}
+  .topbar nav button:hover{background:rgba(255,255,255,.1)}
+  .topbar nav button.on{background:rgba(255,255,255,.15);color:#fff}
+  .topbar .user{font-size:11.5px;color:#aebccc;margin-left:14px;padding-left:14px;border-left:1px solid rgba(255,255,255,.15)}
+  .topbar .user b{color:#fff}
+
+  /* LAYOUT */
+  .layout{display:flex;min-height:calc(100vh - 53px)}
+  .sidebar{flex:0 0 220px;background:#fff;border-right:1px solid var(--line);padding:14px 10px}
+  .sidebar .search{width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:5px;font-size:12.5px;margin-bottom:10px;background:#fafbfd}
+  .sidebar ul{list-style:none}
+  .sidebar li{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;font-size:13px;font-weight:600;color:var(--ink);border-radius:5px;margin-bottom:2px;cursor:pointer;border:1px solid transparent}
+  .sidebar li:hover{background:#f3f6fa}
+  .sidebar li.active{background:var(--green-l);color:var(--green-d);border-color:#d3e7c5}
+  .sidebar li .ic{color:var(--muted);font-size:11px}
+  .sidebar li.active .ic{color:var(--green-d)}
+  .sidebar .group{font-size:10.5px;font-weight:800;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:12px 10px 6px}
+
+  .main{flex:1;padding:14px 18px;min-width:0}
+
+  /* BREADCRUMB */
+  .crumb{background:#fff;border:1px solid var(--line);border-radius:6px;padding:9px 14px;font-size:12px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .crumb a{color:var(--blue);font-weight:600}
+  .crumb .sep{color:var(--lineH)}
+  .crumb b{color:var(--ink);font-weight:700}
+
+  /* CARDS / SECTIONS */
+  .card{background:#fff;border:1px solid var(--line);border-radius:6px;margin-bottom:12px;overflow:hidden}
+  .card .head{padding:11px 14px;border-bottom:1px solid var(--line);font-weight:700;font-size:13px;background:#f7f9fb;display:flex;align-items:center;gap:8px}
+  .card .head .ic{color:var(--muted)}
+  .card .body{padding:14px 16px}
+  .section-title{font-weight:700;font-size:13.5px;padding:10px 0 8px;border-bottom:1px solid var(--line);margin-bottom:10px;color:var(--navy);display:flex;align-items:center;gap:8px}
+  .sub-section{background:#fafbfd;border:1px solid var(--line);border-radius:5px;margin-bottom:10px}
+  .sub-section .sh{padding:8px 12px;border-bottom:1px solid var(--line);font-weight:700;font-size:12px;color:var(--ink);display:flex;align-items:center;gap:8px;background:#f0f3f7}
+  .sub-section .sh .x{margin-left:auto;color:var(--red);font-size:13px;cursor:pointer}
+  .sub-section .sb{padding:14px 16px}
+
+  /* FORM ELEMENTS */
+  .row{display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center;margin-bottom:9px}
+  .row.top{align-items:start}
+  .row .lab{text-align:right;color:var(--muted);font-size:12.5px;padding-top:5px}
+  .row .lab .req{color:var(--red)}
+  .ipt,select,textarea{width:100%;border:1px solid var(--line);border-radius:4px;padding:6px 9px;font-family:inherit;font-size:12.5px;background:#fff;color:var(--ink)}
+  .ipt:focus,select:focus,textarea:focus{outline:none;border-color:var(--navy-l);box-shadow:0 0 0 2px rgba(44,74,114,.1)}
+  .ipt.sm{max-width:200px}
+  .ipt.md{max-width:300px}
+  .pill-status{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:3px;text-transform:uppercase;letter-spacing:.4px}
+  .pill-status.pending{background:#fff4d8;color:#a07614}
+  .pill-status.active{background:#e3f2da;color:#4a8a30}
+  .pill-status.paused{background:#fde5d5;color:#c46a14}
+  .pill-status.draft{background:#e3e7ec;color:#6c7c8c}
+  .pill-status.archived{background:#f1c8c5;color:#a72a1f}
+  .check{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;margin-right:14px;color:var(--ink)}
+  .check input{margin:0;cursor:pointer}
+  .check-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 14px}
+  .radio-group{display:inline-flex;gap:14px}
+  .radio-group label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px}
+  .btn-group{display:inline-flex}
+  .btn-group button{background:#f3f5f8;border:1px solid var(--line);padding:6px 14px;font-size:12.5px;font-weight:600;color:var(--ink)}
+  .btn-group button:first-child{border-radius:4px 0 0 4px}
+  .btn-group button:last-child{border-radius:0 4px 4px 0;border-left:none}
+  .btn-group button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .ic-help{color:var(--green);font-size:13px;cursor:help}
+
+  /* DUAL LIST (zones/locations/etc) */
+  .duallist{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+  .duallist .col{border:1px solid var(--line);border-radius:5px;background:#fff;display:flex;flex-direction:column;min-height:160px;max-height:200px}
+  .duallist .col input.s{border:none;border-bottom:1px solid var(--line);padding:7px 10px;font-size:12px;border-radius:5px 5px 0 0;outline:none;background:#fafbfd}
+  .duallist .col .list{flex:1;overflow-y:auto;padding:5px 0}
+  .duallist .col .it{padding:5px 12px;font-size:12.5px;display:flex;align-items:center;gap:7px;cursor:pointer}
+  .duallist .col .it:hover{background:#f3f6fa}
+  .duallist .col .it.sel{background:var(--green-l)}
+  .duallist .col .it .ck{width:13px;height:13px;border:1px solid #b4bfc9;border-radius:2px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;color:#fff;background:#fff}
+  .duallist .col .it.sel .ck{background:var(--green);border-color:var(--green)}
+  .duallist .col .it.kid{padding-left:28px;color:var(--muted);font-size:12px}
+  .duallist .col .it.kid2{padding-left:40px}
+
+  /* BUTTONS */
+  .btn{background:var(--green);color:#fff;border:none;font-weight:700;font-size:13px;padding:8px 18px;border-radius:4px;letter-spacing:.3px}
+  .btn:hover{background:var(--green-d)}
+  .btn.sec{background:#fff;color:var(--ink);border:1px solid var(--lineH)}
+  .btn.sec:hover{background:#f3f5f8}
+  .btn.navy{background:var(--navy);color:#fff}
+  .btn.navy:hover{background:var(--navy-d)}
+  .btn.amber{background:var(--amber);color:#fff}
+  .btn.danger{background:var(--red);color:#fff}
+  .btn.sm{padding:5px 11px;font-size:11.5px}
+  .btn.xs{padding:3px 9px;font-size:11px;font-weight:600}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .actions{padding:14px 16px;border-top:1px solid var(--line);background:#fafbfd;display:flex;gap:10px}
+
+  /* TABLE */
+  table.tbl{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff}
+  table.tbl th{background:#f3f5f8;text-align:left;padding:9px 12px;font-weight:700;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--line)}
+  table.tbl td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  table.tbl tr:hover{background:#fafbfd}
+  table.tbl td.tar{text-align:right;font-variant-numeric:tabular-nums}
+  table.tbl td .act{display:inline-flex;gap:4px}
+
+  /* AUDIENCE SIZE METER */
+  .audi-meter{background:linear-gradient(135deg,#16263c,#2c4a72);color:#fff;border-radius:6px;padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:18px}
+  .audi-meter .big{font-size:24px;font-weight:800;letter-spacing:-.3px;font-variant-numeric:tabular-nums}
+  .audi-meter .lab{font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;opacity:.85}
+  .audi-meter .gauge{flex:1;height:8px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden}
+  .audi-meter .gauge span{display:block;height:100%;background:linear-gradient(90deg,#5ba33d,#7cc056);border-radius:4px;transition:.4s}
+  .audi-meter .tag{font-size:11px;font-weight:700;background:rgba(255,255,255,.15);padding:3px 9px;border-radius:3px}
+
+  /* API CONSOLE */
+  .api-tabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:14px}
+  .api-tabs button{background:transparent;border:none;padding:9px 16px;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent}
+  .api-tabs button.on{color:var(--navy);border-bottom-color:var(--navy)}
+  .console{background:#0d1929;color:#cbe0d5;border-radius:6px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;height:480px;overflow-y:auto;line-height:1.55}
+  .console .ln{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+  .console .ts{color:#6e8a9c;margin-right:8px}
+  .console .mt{display:inline-block;font-weight:700;padding:1px 6px;border-radius:3px;font-size:10px;margin-right:6px}
+  .console .mt.GET{background:#185fa5;color:#fff}
+  .console .mt.POST{background:#5ba33d;color:#fff}
+  .console .mt.PUT{background:#c98a14;color:#fff}
+  .console .mt.DELETE{background:#c0392b;color:#fff}
+  .console .pa{color:#7fb3cf}
+  .console .res{color:#e3f2da;display:block;margin-top:2px;padding-left:18px;font-size:11px;opacity:.85}
+
+  .endpoint{background:#fff;border:1px solid var(--line);border-radius:5px;padding:10px 14px;margin-bottom:8px;font-size:12.5px}
+  .endpoint .mt{display:inline-block;font-weight:700;padding:1px 7px;border-radius:3px;font-size:10.5px;margin-right:8px;font-family:ui-monospace,monospace}
+  .endpoint .mt.GET{background:#e6f1fb;color:#185fa5}
+  .endpoint .mt.POST{background:#eaf3e3;color:#5ba33d}
+  .endpoint .mt.PUT{background:#fff4d8;color:#a07614}
+  .endpoint .mt.DELETE{background:#fde5d5;color:#c0392b}
+  .endpoint code{font-family:ui-monospace,monospace;color:var(--navy);font-weight:600}
+  .endpoint p{margin-top:5px;color:var(--muted);font-size:12px}
+
+  /* TOAST */
+  .toast{position:fixed;right:18px;bottom:18px;background:var(--navy);color:#fff;padding:10px 16px;border-radius:5px;font-size:12.5px;font-weight:600;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.2);display:flex;align-items:center;gap:8px}
+  .toast.show{opacity:1;transform:translateY(0)}
+  .toast .dot{width:6px;height:6px;border-radius:50%;background:#5ba33d}
+
+  /* HIDE */
+  .hidden{display:none !important}
+
+  /* CALLOUT */
+  .callout{background:#fff8e0;border-left:3px solid var(--amber);padding:10px 13px;font-size:12.5px;border-radius:0 4px 4px 0;margin-bottom:12px;color:#7a5a0a}
+  .callout b{color:var(--amber)}
+
+  /* DMP textareas */
+  .dmp-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .dmp-grid label{font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo"><span class="ic">A</span>AdsPilot</div>
+  <span class="ver">MOCK · v0.9 · Claw-a-thon</span>
+  <nav>
+    <button class="on" onclick="navTo('orders')">📊 Orders</button>
+    <button onclick="navTo('create')">＋ Create</button>
+    <button onclick="navTo('report')">📈 Report</button>
+    <button onclick="navTo('api')">⚙ API Console</button>
+  </nav>
+  <div class="user">Logged in as <b>agent_demo</b> · <span style="opacity:.8">Settings ▾</span></div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <input class="search" placeholder="Search...">
+    <div class="group">Campaigns</div>
+    <ul>
+      <li class="active" data-nav="orders"><span>All Orders</span><span class="ic">›</span></li>
+      <li data-nav="create"><span>Create Order</span><span class="ic">›</span></li>
+      <li data-nav="conversion"><span>Conversion Tracking</span><span class="ic">›</span></li>
+      <li data-nav="bundle"><span>Ads Bundle</span><span class="ic">›</span></li>
+    </ul>
+    <div class="group">Reports</div>
+    <ul>
+      <li data-nav="report"><span>Report</span><span class="ic">›</span></li>
+      <li data-nav="log"><span>View log</span><span class="ic">›</span></li>
+    </ul>
+    <div class="group">Developers</div>
+    <ul>
+      <li data-nav="api"><span>API Console</span><span class="ic">›</span></li>
+      <li data-nav="docs"><span>API Docs</span><span class="ic">›</span></li>
+    </ul>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main"></main>
+</div>
+
+<div class="toast" id="toast"><span class="dot"></span><span id="toastTx"></span></div>
+
+<script>
+/* ================================================================
+   ADSPILOT MOCK BACKEND — single-file fake Ad Server
+   ----------------------------------------------------------------
+   Exposes window.AdsPilotAPI for the agent to integrate.
+   Persists to localStorage so changes survive reload.
+   ================================================================ */
+
+const LS_KEY = 'adspilot_db_v1';
+const LS_LOG = 'adspilot_log_v1';
+
+/* ---------- SEED DATA (zones renamed, targeting kept) ---------- */
+const ZONES = {
+  groups: [
+    { id:"pulse-news",  name:"PulseNews",     desc:"News portal (web + app + WAP)", channels:["pulse-news-app","pulse-news-wap","pulse-news-pr","pulse-news-pr-wap"] },
+    { id:"vibe-tv",     name:"VibeTV Studio", desc:"Short video & livestream",      channels:["vibe-tv-web","vibe-tv-app","vibe-tv-onsocial"] },
+    { id:"wave-news",   name:"WaveNews",      desc:"Lifestyle & entertainment news",channels:["wave-news-wap","wave-news-web"] },
+    { id:"play-verse",  name:"PlayVerse",     desc:"Gaming portal",                 channels:["play-verse-web"] },
+    { id:"stream-wave", name:"StreamWave",    desc:"Music & podcast",               channels:["stream-wave-app"] },
+  ],
+  channels: {
+    "pulse-news-app":   { name:"PulseNews App",     reach: 4_200_000 },
+    "pulse-news-wap":   { name:"PulseNews Wap",     reach: 6_800_000 },
+    "pulse-news-pr":    { name:"PulseNews PR",      reach:   980_000 },
+    "pulse-news-pr-wap":{ name:"PulseNews PR_Wap",  reach: 1_400_000 },
+    "vibe-tv-web":      { name:"VibeTV Web",        reach: 3_100_000 },
+    "vibe-tv-app":      { name:"VibeTV App",        reach: 5_500_000 },
+    "vibe-tv-onsocial": { name:"VibeTV onSocial",   reach: 2_300_000 },
+    "wave-news-wap":    { name:"WaveNews Wap",      reach: 2_900_000 },
+    "wave-news-web":    { name:"WaveNews Web",      reach: 1_600_000 },
+    "play-verse-web":   { name:"PlayVerse Web",     reach: 1_200_000 },
+    "stream-wave-app":  { name:"StreamWave App",    reach: 1_850_000 },
+  },
+  // Placements (zone slots inside a channel)
+  placements: [
+    // PulseNews
+    { id:"PulseNews.Cate.Inpage1",   channel:"pulse-news-wap", format:"banner", reach: 1_200_000 },
+    { id:"PulseNews.Cate.Inpage2",   channel:"pulse-news-wap", format:"banner", reach: 1_050_000 },
+    { id:"PulseNews.Home.Inpage1",   channel:"pulse-news-wap", format:"banner", reach: 2_400_000 },
+    { id:"PulseNews.Home.Inpage2",   channel:"pulse-news-wap", format:"banner", reach: 2_100_000 },
+    { id:"PulseNews.Sub.Inpage",     channel:"pulse-news-wap", format:"banner", reach:   860_000 },
+    { id:"PulseNews.onSocial.Inpage",channel:"vibe-tv-onsocial",format:"native", reach: 1_950_000 },
+    // WaveNews
+    { id:"WaveNews.Inpage1",         channel:"wave-news-wap",  format:"banner", reach: 1_100_000 },
+    { id:"WaveNews.Inpage2",         channel:"wave-news-wap",  format:"banner", reach:   980_000 },
+    { id:"WaveNews.Home.Inpage1",    channel:"wave-news-wap",  format:"banner", reach: 1_650_000 },
+    // VibeTV ShortVideo
+    { id:"VibeTV.ShortVideo.Infeed.Fullscreen1", channel:"vibe-tv-app", format:"video-vertical", reach: 2_400_000 },
+    { id:"VibeTV.ShortVideo.Infeed.Fullscreen2", channel:"vibe-tv-app", format:"video-vertical", reach: 2_200_000 },
+    { id:"VibeTV.ShortVideo.Infeed.Fullscreen3", channel:"vibe-tv-app", format:"video-vertical", reach: 2_000_000 },
+    { id:"VibeTV.ShortVideo.Infeed.Fullscreen4", channel:"vibe-tv-app", format:"video-vertical", reach: 1_850_000 },
+    { id:"VibeTV.ShortVideo.Infeed.Fullscreen5", channel:"vibe-tv-app", format:"video-vertical", reach: 1_750_000 },
+    // PlayVerse
+    { id:"PlayVerse.Banner.Home",    channel:"play-verse-web", format:"banner", reach:   720_000 },
+    // StreamWave
+    { id:"StreamWave.AudioAd.Mid",   channel:"stream-wave-app",format:"audio", reach: 1_200_000 },
+  ]
+};
+
+const TARGETING = {
+  geo: {
+    "Miền Bắc": ["Hà Nội","Cao Bằng","Hải Phòng","Quảng Ninh","Sơn La","Thái Bình","Bắc Ninh","Vĩnh Phúc"],
+    "Miền Trung": ["Đà Nẵng","Huế","Nghệ An","Thanh Hóa","Khánh Hòa","Bình Định"],
+    "Miền Nam": ["TP.HCM","Cần Thơ","Đồng Nai","Bình Dương","Vũng Tàu","Long An"]
+  },
+  age: ["Under 18","18-24","25-34","35-44","45-54","55-64","Over 64"],
+  gender: ["Male","Female"],
+  deviceOS: ["Android","iOS","Windows Phone","PC and other"],
+  deviceBrand: ["Samsung","Apple","Xiaomi","Oppo","Vivo","Realme","Huawei","ZTE","Vertex","Lava","iBRIT","Blu"],
+  marital: ["Single","Married"],
+  parental: ["Have children under age 6","Have children","No children"],
+  education: ["Entry Level","College & Bachelor","Master","Doctor"],
+  income: ["Top 5%","Top 5-10%","Top 10-25%","Top 25-50%","Top 50-75%","Top 75-100%"],
+  career: ["Student","Office Worker","Labour Worker","Housewife","Shop owner","Arts/Design/Entertainment","Sales","Healthcare","Engineering","Farming/Fishing/Forestry","Installation/Maintenance"],
+  interest: ["Real Estate","Entertainment > Movie","Entertainment > Celebrities","Entertainment > Reading","Travel","Air travel","Hotel","Credit cards","Fintech","Fashion","F&B","Sports","Automotive","Education","Healthcare"],
+  weather: ["Sunny","Rain","Cloudy","Other"]
+};
+
+const DMP_ATTRS = [
+  { k:"travel_intent_sea",  name:"Travel Intent · SEA",        size:1_850_000 },
+  { k:"air_travel",         name:"Air Travel Enthusiast",      size:2_200_000 },
+  { k:"hotel_booker",       name:"Hotel Booker (3m)",          size:1_430_000 },
+  { k:"credit_card_user",   name:"Credit Card Active User",    size:3_100_000 },
+  { k:"fintech_high_value", name:"Fintech High-Value Segment", size:  680_000 },
+  { k:"hcm_hn_dn",          name:"GEO · HCM / HN / ĐN",        size:5_200_000 },
+  { k:"age_25_44",          name:"Age 25-44",                  size:8_900_000 },
+  { k:"premium_lifestyle",  name:"Premium Lifestyle",          size:  920_000 },
+  { k:"first_jobber",       name:"First Jobber 22-28",         size:1_780_000 },
+  { k:"car_buyer_intent",   name:"Car Buyer Intent (6m)",      size:  420_000 },
+  { k:"new_parent",         name:"New Parent (12m)",           size:  680_000 },
+  { k:"gamer_hardcore",     name:"Hardcore Gamer",             size:1_120_000 },
+];
+
+/* ---------- STATE (loaded from localStorage) ---------- */
+let DB = loadDB();
+let LOG = loadLog();
+
+function loadDB(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  // seed
+  return {
+    seq: 3,
+    orders: [
+      { id:"ORD-2026-001", brand:"Brand A", advertiser:"BrandA Vietnam", objective:"awareness",
+        status:"active", budget:425_000_000, daily:43_000_000, rate:36960, rateType:"CPM",
+        startDate:"2026-05-10", endDate:"2026-06-07",
+        creative:{ name:"Mazda CX-5 Inpage 16/5", size:"720x1280", url:"" },
+        placements:["PulseNews.Home.Inpage1","PulseNews.Sub.Inpage","VibeTV.ShortVideo.Infeed.Fullscreen1"],
+        targeting:{
+          geo:["Hà Nội","TP.HCM","Đà Nẵng"], age:["25-34","35-44"], gender:[], deviceOS:["Android","iOS"],
+          marital:[], parental:[], education:[], income:["Top 5-10%","Top 10-25%"], career:[], interest:["Automotive"], weather:[]
+        },
+        dmp:{ include:["car_buyer_intent","premium_lifestyle"], exclude:[] },
+        createdAt: "2026-05-08 09:14", updatedAt:"2026-05-22 16:30"
+      },
+      { id:"ORD-2026-002", brand:"FlyDragon Airlines", advertiser:"FlyDragon JSC", objective:"conversion",
+        status:"paused", budget:280_000_000, daily:25_000_000, rate:42000, rateType:"CPM",
+        startDate:"2026-05-15", endDate:"2026-06-15",
+        creative:{ name:"FlyDragon Summer Sale", size:"1080x1080", url:"" },
+        placements:["VibeTV.ShortVideo.Infeed.Fullscreen2","WaveNews.Home.Inpage1"],
+        targeting:{ geo:["Hà Nội","TP.HCM"], age:["25-34","35-44","45-54"], gender:[], deviceOS:["Android","iOS"], marital:[], parental:[], education:[], income:["Top 5%","Top 5-10%"], career:[], interest:["Travel","Air travel","Hotel"], weather:[] },
+        dmp:{ include:["travel_intent_sea","air_travel"], exclude:["age_25_44"] },
+        createdAt: "2026-05-12 11:02", updatedAt:"2026-05-25 09:11"
+      },
+      { id:"ORD-2026-003", brand:"NeoCard Finance", advertiser:"NeoCard Vietnam", objective:"consideration",
+        status:"pending", budget:180_000_000, daily:18_000_000, rate:38500, rateType:"CPM",
+        startDate:"2026-06-01", endDate:"2026-06-30",
+        creative:{ name:"NeoCard Cashback Launch", size:"320x480", url:"" },
+        placements:["PulseNews.Cate.Inpage1","WaveNews.Inpage2"],
+        targeting:{ geo:["TP.HCM","Hà Nội"], age:["25-34"], gender:["Male"], deviceOS:["iOS"], marital:[], parental:[], education:["College & Bachelor","Master"], income:["Top 10-25%"], career:["Office Worker"], interest:["Fintech","Credit cards"], weather:[] },
+        dmp:{ include:["credit_card_user","fintech_high_value"], exclude:[] },
+        createdAt: "2026-05-28 14:45", updatedAt:"2026-05-28 14:45"
+      }
+    ]
+  };
+}
+function saveDB(){ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
+function loadLog(){
+  try{ const r=localStorage.getItem(LS_LOG); if(r) return JSON.parse(r); }catch(e){}
+  return [];
+}
+function saveLog(){ localStorage.setItem(LS_LOG, JSON.stringify(LOG.slice(-100))); }
+
+/* ---------- API ---------- */
+function nowTs(){ const d=new Date(); return d.toISOString().replace('T',' ').slice(0,19); }
+function logCall(method, path, body, resp){
+  LOG.push({ ts:nowTs(), method, path, body:body||null, resp:resp||null });
+  saveLog();
+  if(currentView==='api') renderConsoleLines();
+  flashApiDot();
+}
+
+function nextOrderId(){
+  DB.seq++;
+  const yr = new Date().getFullYear();
+  const id = "ORD-"+yr+"-"+String(DB.seq).padStart(3,"0");
+  return id;
+}
+
+const AdsPilotAPI = {
+  /* Catalog */
+  listZones(){
+    logCall("GET","/api/zones",null,{groups:ZONES.groups.length, channels:Object.keys(ZONES.channels).length, placements:ZONES.placements.length});
+    return JSON.parse(JSON.stringify(ZONES));
+  },
+  listTargetingOptions(){
+    logCall("GET","/api/targeting/options",null,"ok");
+    return JSON.parse(JSON.stringify(TARGETING));
+  },
+  listDmpAttributes(){
+    logCall("GET","/api/dmp/attributes",null,{count:DMP_ATTRS.length});
+    return JSON.parse(JSON.stringify(DMP_ATTRS));
+  },
+
+  /* Orders / Campaigns */
+  listOrders(filter){
+    const f = filter||{};
+    let res = DB.orders.slice();
+    if(f.status) res = res.filter(o=>o.status===f.status);
+    if(f.brand)  res = res.filter(o=>o.brand.toLowerCase().includes(f.brand.toLowerCase()));
+    logCall("GET","/api/orders",f,{count:res.length});
+    return res;
+  },
+  getOrder(id){
+    const o = DB.orders.find(x=>x.id===id);
+    logCall("GET","/api/orders/"+id,null, o?"found":"not_found");
+    return o ? JSON.parse(JSON.stringify(o)) : null;
+  },
+  createOrder(payload){
+    const o = {
+      id: nextOrderId(),
+      brand: payload.brand||"Untitled Brand",
+      advertiser: payload.advertiser||payload.brand||"",
+      objective: payload.objective||"awareness",
+      status: payload.status||"pending",
+      budget: payload.budget||0,
+      daily:  payload.daily||0,
+      rate:   payload.rate||0,
+      rateType: payload.rateType||"CPM",
+      startDate: payload.startDate||"",
+      endDate:   payload.endDate||"",
+      creative: payload.creative||{name:"",size:"",url:""},
+      placements: payload.placements||[],
+      targeting:  payload.targeting||{geo:[],age:[],gender:[],deviceOS:[],marital:[],parental:[],education:[],income:[],career:[],interest:[],weather:[]},
+      dmp: payload.dmp||{include:[],exclude:[]},
+      createdAt: nowTs(),
+      updatedAt: nowTs()
+    };
+    DB.orders.unshift(o);
+    saveDB();
+    logCall("POST","/api/orders",payload,{id:o.id,status:o.status});
+    return o;
+  },
+  updateOrder(id, patch){
+    const o = DB.orders.find(x=>x.id===id);
+    if(!o){ logCall("PUT","/api/orders/"+id,patch,"not_found"); return null; }
+    Object.assign(o, patch);
+    o.updatedAt = nowTs();
+    saveDB();
+    logCall("PUT","/api/orders/"+id,patch,{ok:true});
+    return o;
+  },
+  pauseOrder(id){
+    const o = DB.orders.find(x=>x.id===id);
+    if(!o) return null;
+    o.status = "paused"; o.updatedAt = nowTs();
+    saveDB();
+    logCall("POST","/api/orders/"+id+"/pause",null,{ok:true,newStatus:"paused"});
+    return o;
+  },
+  resumeOrder(id){
+    const o = DB.orders.find(x=>x.id===id);
+    if(!o) return null;
+    o.status = "active"; o.updatedAt = nowTs();
+    saveDB();
+    logCall("POST","/api/orders/"+id+"/resume",null,{ok:true,newStatus:"active"});
+    return o;
+  },
+  archiveOrder(id){
+    const o = DB.orders.find(x=>x.id===id);
+    if(!o) return null;
+    o.status = "archived"; o.updatedAt = nowTs();
+    saveDB();
+    logCall("POST","/api/orders/"+id+"/archive",null,{ok:true});
+    return o;
+  },
+  deleteOrder(id){
+    const i = DB.orders.findIndex(x=>x.id===id);
+    if(i<0){ logCall("DELETE","/api/orders/"+id,null,"not_found"); return false; }
+    DB.orders.splice(i,1);
+    saveDB();
+    logCall("DELETE","/api/orders/"+id,null,{ok:true});
+    return true;
+  },
+
+  /* Audience estimate */
+  estimateAudience(targeting){
+    // Base = total pop ~ 60M; apply rough multipliers per filter group
+    let pop = 60_000_000;
+    const t = targeting||{};
+    if(t.geo && t.geo.length){      // each province slice
+      const all = Object.values(TARGETING.geo).flat().length;
+      pop = pop * (t.geo.length/all);
+    }
+    if(t.age && t.age.length)       pop *= (t.age.length/TARGETING.age.length);
+    if(t.gender && t.gender.length) pop *= (t.gender.length/TARGETING.gender.length);
+    if(t.deviceOS && t.deviceOS.length) pop *= (t.deviceOS.length/TARGETING.deviceOS.length);
+    if(t.income && t.income.length) pop *= (t.income.length/TARGETING.income.length);
+    if(t.education && t.education.length) pop *= (t.education.length/TARGETING.education.length);
+    if(t.interest && t.interest.length) pop *= Math.min(1, t.interest.length*0.15);
+    if(t.dmpInclude && t.dmpInclude.length){
+      const sizes = t.dmpInclude.map(k=>{const a=DMP_ATTRS.find(x=>x.k===k);return a?a.size:0;});
+      const m = Math.min(...sizes);
+      pop = Math.min(pop, m * Math.pow(0.82, t.dmpInclude.length-1));
+    }
+    const size = Math.round(pop);
+    logCall("POST","/api/audience/estimate",t,{size});
+    return { size, low: Math.round(size*0.85), high: Math.round(size*1.15) };
+  },
+
+  /* DB ops */
+  resetDB(){ localStorage.removeItem(LS_KEY); DB = loadDB(); logCall("POST","/api/admin/reset",null,"ok"); return true; },
+  clearLog(){ LOG=[]; saveLog(); }
+};
+window.AdsPilotAPI = AdsPilotAPI;
+
+/* ================================================================
+   UI LAYER
+   ================================================================ */
+let currentView = 'orders';
+let editing = null;     // current order being edited (null = new)
+let formState = null;   // working copy
+
+function toast(tx){ const t=document.getElementById('toast'); document.getElementById('toastTx').textContent=tx; t.classList.add('show'); clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove('show'),1800); }
+function fmt(n){ if(!n) return "0"; if(n>=1e9) return (n/1e9).toFixed(2)+"B"; if(n>=1e6) return (n/1e6).toFixed(2).replace(/\.?0+$/,"")+"M"; if(n>=1e3) return (n/1e3).toFixed(0)+"K"; return String(n); }
+function fmtVND(n){ return (n||0).toLocaleString('vi-VN'); }
+function escHTML(s){ return (s==null?"":String(s)).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]); }
+
+function navTo(v, payload){
+  currentView = v;
+  document.querySelectorAll('.sidebar li').forEach(li=>{
+    li.classList.toggle('active', li.dataset.nav===v);
+  });
+  document.querySelectorAll('.topbar nav button').forEach((b,i)=>{
+    const map=['orders','create','report','api'];
+    b.classList.toggle('on', map[i]===v);
+  });
+  if(v==='orders') renderOrders();
+  else if(v==='create') renderCreate(payload);
+  else if(v==='report') renderReport();
+  else if(v==='api') renderApi();
+  else if(v==='docs') renderDocs();
+  else if(v==='conversion'||v==='bundle'||v==='log') renderPlaceholder(v);
+}
+
+document.querySelectorAll('.sidebar li').forEach(li=>{
+  li.addEventListener('click',()=>navTo(li.dataset.nav));
+});
+
+/* ---------- ORDERS LIST ---------- */
+function renderOrders(){
+  const orders = AdsPilotAPI.listOrders();
+  const m = document.getElementById('main');
+  const stRow = (s)=>`<span class="pill-status ${s}">${s}</span>`;
+  m.innerHTML = `
+    <div class="crumb"><a onclick="navTo('orders')">All Orders</a></div>
+    <div class="card">
+      <div class="head">
+        <span>All Orders (${orders.length})</span>
+        <span style="margin-left:auto;display:flex;gap:6px">
+          <select class="ipt sm" onchange="filterStatus(this.value)" style="font-size:11.5px;padding:4px 8px">
+            <option value="">All status</option>
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+            <option value="pending">Pending</option>
+            <option value="draft">Draft</option>
+            <option value="archived">Archived</option>
+          </select>
+          <button class="btn sm" onclick="navTo('create')">＋ New Order</button>
+        </span>
+      </div>
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Order ID</th><th>Brand</th><th>Objective</th><th>Placements</th>
+            <th class="tar">Budget</th><th class="tar">Daily</th><th>Schedule</th>
+            <th>Status</th><th>Updated</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="ordTbody">
+          ${orders.map(o=>`
+            <tr>
+              <td><b style="color:var(--navy)">${o.id}</b></td>
+              <td>${escHTML(o.brand)}</td>
+              <td><span class="pill-status pending" style="background:#e6f1fb;color:#185fa5">${o.objective}</span></td>
+              <td>${o.placements.length} placement(s)</td>
+              <td class="tar">${fmtVND(o.budget)}đ</td>
+              <td class="tar">${fmtVND(o.daily)}đ</td>
+              <td style="font-size:11.5px;color:var(--muted)">${o.startDate} → ${o.endDate}</td>
+              <td>${stRow(o.status)}</td>
+              <td style="font-size:11.5px;color:var(--muted)">${o.updatedAt}</td>
+              <td>
+                <span class="act">
+                  <button class="btn xs sec" onclick="editOrder('${o.id}')">Edit</button>
+                  ${o.status==='active'
+                    ? `<button class="btn xs amber" onclick="pauseFromList('${o.id}')">Pause</button>`
+                    : (o.status==='paused' || o.status==='pending'
+                       ? `<button class="btn xs" onclick="resumeFromList('${o.id}')">${o.status==='pending'?'Activate':'Resume'}</button>`
+                       : ``)}
+                  <button class="btn xs sec" onclick="deleteFromList('${o.id}')" style="color:var(--red)">×</button>
+                </span>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function filterStatus(s){
+  const orders = s? AdsPilotAPI.listOrders({status:s}) : AdsPilotAPI.listOrders();
+  const m = document.getElementById('ordTbody'); if(!m) return;
+  m.innerHTML = orders.map(o=>`
+    <tr>
+      <td><b style="color:var(--navy)">${o.id}</b></td>
+      <td>${escHTML(o.brand)}</td>
+      <td><span class="pill-status pending" style="background:#e6f1fb;color:#185fa5">${o.objective}</span></td>
+      <td>${o.placements.length} placement(s)</td>
+      <td class="tar">${fmtVND(o.budget)}đ</td>
+      <td class="tar">${fmtVND(o.daily)}đ</td>
+      <td style="font-size:11.5px;color:var(--muted)">${o.startDate} → ${o.endDate}</td>
+      <td><span class="pill-status ${o.status}">${o.status}</span></td>
+      <td style="font-size:11.5px;color:var(--muted)">${o.updatedAt}</td>
+      <td>
+        <span class="act">
+          <button class="btn xs sec" onclick="editOrder('${o.id}')">Edit</button>
+          ${o.status==='active'
+            ? `<button class="btn xs amber" onclick="pauseFromList('${o.id}')">Pause</button>`
+            : (o.status==='paused' || o.status==='pending'
+               ? `<button class="btn xs" onclick="resumeFromList('${o.id}')">${o.status==='pending'?'Activate':'Resume'}</button>`
+               : ``)}
+          <button class="btn xs sec" onclick="deleteFromList('${o.id}')" style="color:var(--red)">×</button>
+        </span>
+      </td>
+    </tr>
+  `).join('');
+}
+function pauseFromList(id){ AdsPilotAPI.pauseOrder(id); toast("⏸ Paused "+id); renderOrders(); }
+function resumeFromList(id){ AdsPilotAPI.resumeOrder(id); toast("▶ Resumed "+id); renderOrders(); }
+function deleteFromList(id){ if(!confirm("Xóa "+id+" ?")) return; AdsPilotAPI.deleteOrder(id); toast("× Deleted "+id); renderOrders(); }
+function editOrder(id){
+  const o = AdsPilotAPI.getOrder(id);
+  if(!o) return;
+  editing = id;
+  formState = JSON.parse(JSON.stringify(o));
+  navTo('create');
+}
+
+/* ---------- CREATE / EDIT ORDER ---------- */
+function blankForm(){
+  return {
+    id:"(auto)", brand:"", advertiser:"", objective:"awareness",
+    status:"pending", budget:100_000_000, daily:10_000_000, rate:35_000, rateType:"CPM",
+    startDate:"2026-06-10", endDate:"2026-07-10",
+    creative:{ name:"", size:"720x1280", url:"" },
+    placements:[],
+    targeting:{ geo:[],age:[],gender:[],deviceOS:[],marital:[],parental:[],education:[],income:[],career:[],interest:[],weather:[] },
+    dmp:{ include:[], exclude:[] }
+  };
+}
+
+function renderCreate(payload){
+  if(!editing && !formState) formState = blankForm();
+  if(payload && payload.fromList){ /* already set */ }
+  const m = document.getElementById('main');
+  const isEdit = !!editing;
+  const f = formState;
+
+  m.innerHTML = `
+    <div class="crumb">
+      <a onclick="navTo('orders')">All Orders</a>
+      <span class="sep">›</span>
+      <b>${isEdit?'Edit Order '+editing:'Create New Order'}</b>
+    </div>
+
+    <div class="callout">
+      <b>Demo Mode</b> — Đây là Ad Server mock cho Claw-a-thon. Mọi thay đổi lưu vào <code>localStorage</code>. Agent có thể đọc/ghi qua <code>window.AdsPilotAPI</code> (xem tab API Docs).
+    </div>
+
+    <div id="audiBar"></div>
+
+    <!-- BANNER STATUS & BASIC -->
+    <div class="card">
+      <div class="head">📦 Banner / Order Info
+        <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <span style="font-size:11.5px;color:var(--muted)">Status:</span>
+          <span class="pill-status ${f.status}">${f.status}</span>
+          ${isEdit?`<span style="font-size:11px;color:var(--muted)">UID: ${editing}</span>`:''}
+        </span>
+      </div>
+      <div class="body">
+        <div class="section-title">Source</div>
+        <div class="row"><div class="lab">Source</div><div><select id="f_src" class="ipt sm"><option>CRM</option><option>Self-serve</option><option>Programmatic</option></select></div></div>
+
+        <div class="section-title" style="margin-top:14px">Banner Ads</div>
+        <div class="row"><div class="lab">Name <span class="req">*</span></div><div><input class="ipt md" id="f_creativeName" value="${escHTML(f.creative.name)}" placeholder="VD: BrandX Summer Launch 6/2026"></div></div>
+        <div class="row"><div class="lab">Brand <span class="req">*</span></div><div><input class="ipt md" id="f_brand" value="${escHTML(f.brand)}" placeholder="Tên brand"></div></div>
+        <div class="row"><div class="lab">Advertiser</div><div><input class="ipt md" id="f_adv" value="${escHTML(f.advertiser)}" placeholder="Công ty quảng cáo"></div></div>
+        <div class="row"><div class="lab">Objective</div><div>
+          <select id="f_obj" class="ipt sm">
+            <option value="awareness" ${f.objective==='awareness'?'selected':''}>Awareness</option>
+            <option value="consideration" ${f.objective==='consideration'?'selected':''}>Consideration</option>
+            <option value="conversion" ${f.objective==='conversion'?'selected':''}>Conversion</option>
+            <option value="retention" ${f.objective==='retention'?'selected':''}>Retention</option>
+          </select>
+        </div></div>
+        <div class="row"><div class="lab">Size</div><div><input class="ipt sm" id="f_size" value="${escHTML(f.creative.size)}" placeholder="720x1280"></div></div>
+        <div class="row"><div class="lab">Banner File</div><div><input class="ipt md" id="f_url" value="${escHTML(f.creative.url)}" placeholder="https://cdn.adspilot.vn/..."> <button class="btn xs sec" style="margin-left:5px">Browse...</button></div></div>
+        <div class="row"><div class="lab">Target URL</div><div><input class="ipt md" placeholder="https://landing.brand.com/..."></div></div>
+        <div class="row"><div class="lab">Allow turn on/off volume</div><div><label class="check"><input type="checkbox"> Enable</label></div></div>
+        <div class="row"><div class="lab">Add Click Tag</div><div><label class="check"><input type="checkbox" checked> Enable</label></div></div>
+      </div>
+    </div>
+
+    <!-- TRACKING UTM -->
+    <div class="card">
+      <div class="head">📍 Tracking UTM Source</div>
+      <div class="body">
+        <div class="row"><div class="lab">Tracking UTM Source</div><div><label class="check"><input type="checkbox"> Enable</label></div></div>
+      </div>
+    </div>
+
+    <!-- THIRD PARTY (compact) -->
+    <div class="card">
+      <div class="head">🧷 Third party tracking</div>
+      <div class="body">
+        <div class="row"><div class="lab">Third-party Impression</div><div><input class="ipt md" placeholder="https://3p.tracker/imp?..."></div></div>
+        <div class="row"><div class="lab">Third-party Click</div><div><input class="ipt md" placeholder="https://3p.tracker/click?..."></div></div>
+        <div class="row"><div class="lab">Video events</div><div>
+          <label class="check"><input type="checkbox" checked> Creative View</label>
+          <label class="check"><input type="checkbox" checked> First quartile</label>
+          <label class="check"><input type="checkbox" checked> Mid point</label>
+          <label class="check"><input type="checkbox" checked> Third quartile</label>
+          <label class="check"><input type="checkbox" checked> Fullview</label>
+          <label class="check"><input type="checkbox"> Progress 30s</label>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- CATEGORY (compact) -->
+    <div class="card">
+      <div class="head">🗂 Category</div>
+      <div class="body">
+        <div class="row"><div class="lab">Category info</div><div><span style="color:var(--muted)">(0) null</span></div></div>
+        <div class="row"><div class="lab">Category id</div><div><input class="ipt sm"></div></div>
+      </div>
+    </div>
+
+    <!-- PRICE INFO -->
+    <div class="card">
+      <div class="head">💰 Price Information</div>
+      <div class="body">
+        <div class="row"><div class="lab">Rate <span class="req">*</span></div><div>
+          <input class="ipt sm" type="number" id="f_rate" value="${f.rate}" style="display:inline-block;width:120px">
+          <select id="f_rateType" class="ipt sm" style="display:inline-block;width:90px">
+            <option ${f.rateType==='CPM'?'selected':''}>CPM</option>
+            <option ${f.rateType==='CPC'?'selected':''}>CPC</option>
+            <option ${f.rateType==='CPV'?'selected':''}>CPV</option>
+            <option ${f.rateType==='FlatFee'?'selected':''}>FlatFee</option>
+          </select>
+          <span style="font-size:11px;color:var(--muted);margin-left:8px">Enter value 1000-9000 + 8500</span>
+        </div></div>
+        <div class="row"><div class="lab">Handicap</div><div><input class="ipt sm" value="1" style="width:80px"></div></div>
+        <div class="row"><div class="lab">Self-serving Handicap</div><div><input class="ipt sm" value="1" style="width:80px"></div></div>
+        <div class="row"><div class="lab">High priority</div><div><label class="check"><input type="checkbox"></label></div></div>
+        <div class="row"><div class="lab">Lifetime limit <span class="req">*</span></div><div><input class="ipt sm" type="number" id="f_budget" value="${f.budget}" style="width:160px"> <span style="color:var(--muted);font-size:11px">đ (impressions)</span></div></div>
+        <div class="row"><div class="lab">Daily limit <span class="req">*</span></div><div>
+          <input class="ipt sm" type="number" id="f_daily" value="${f.daily}" style="width:120px">
+          <select class="ipt sm" style="display:inline-block;width:130px"><option>impression</option><option>budget (đ)</option></select>
+        </div></div>
+        <div class="row"><div class="lab">Last range time</div><div>
+          <input class="ipt sm" type="date" id="f_start" value="${f.startDate}" style="width:140px">
+          <span style="color:var(--muted);margin:0 6px">→</span>
+          <input class="ipt sm" type="date" id="f_end" value="${f.endDate}" style="width:140px">
+        </div></div>
+        <div class="row"><div class="lab">Frequency Capping</div><div><input class="ipt sm" value="3 imp / user / day" style="width:200px"></div></div>
+      </div>
+    </div>
+
+    <!-- TARGETING -->
+    <div class="card">
+      <div class="head">🎯 Targeting</div>
+      <div class="body">
+        <div class="row"><div class="lab">Targeting</div><div><select class="ipt sm"><option>Choose Targeting</option><option>Adopt template</option></select></div></div>
+
+        <!-- WEBSITE ZONE -->
+        <div class="sub-section">
+          <div class="sh">Website Zone (Placements) <span class="x">×</span></div>
+          <div class="sb">
+            <div style="margin-bottom:6px;font-size:11.5px;color:var(--muted)">Chọn placement (zone) sẽ chạy quảng cáo:</div>
+            <div class="duallist">
+              <div class="col">
+                <input class="s" placeholder="Search placement..." oninput="filterZones(this.value)">
+                <div class="list" id="zoneList">${renderZoneList('')}</div>
+              </div>
+              <div class="col">
+                <input class="s" placeholder="Selected placements" readonly>
+                <div class="list" id="zoneSel">${renderZoneSel()}</div>
+              </div>
+            </div>
+            <div class="radio-group" style="margin-top:8px">
+              <label><input type="radio" name="dispMode" checked> Displayed on all suitable zones</label>
+              <label><input type="radio" name="dispMode"> Displayed on selected zones only</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- DEMOGRAPHICS -->
+        <div class="sub-section">
+          <div class="sh">Demographics <span class="x">×</span></div>
+          <div class="sb">
+            <div class="row top">
+              <div class="lab">Location</div>
+              <div>
+                <label class="check"><input type="checkbox"> Exclude location</label>
+                <div style="margin-top:5px"><b style="font-size:11.5px">GeoDb:</b>
+                  <label class="check"><input type="radio" name="geodb" checked> IP2Location</label>
+                  <label class="check"><input type="radio" name="geodb"> Maxmind</label>
+                </div>
+                <div class="duallist" style="margin-top:6px">
+                  <div class="col">
+                    <input class="s" placeholder="Search location...">
+                    <div class="list" id="geoList">${renderGeoTree()}</div>
+                  </div>
+                  <div class="col">
+                    <input class="s" placeholder="Selected location" readonly>
+                    <div class="list" id="geoSel">${renderGeoSel()}</div>
+                  </div>
+                </div>
+                <label class="check" style="margin-top:6px"><input type="checkbox"> Targeting with district Việt Nam</label>
+              </div>
+            </div>
+
+            <div class="row top">
+              <div class="lab">Age</div>
+              <div class="check-grid">
+                ${TARGETING.age.map(a=>`<label class="check"><input type="checkbox" ${f.targeting.age.includes(a)?'checked':''} onchange="toggleTgt('age','${a}',this.checked)"> ${a}</label>`).join('')}
+              </div>
+            </div>
+
+            <div class="row top">
+              <div class="lab">Gender</div>
+              <div>
+                ${TARGETING.gender.map(g=>`<label class="check"><input type="checkbox" ${f.targeting.gender.includes(g)?'checked':''} onchange="toggleTgt('gender','${g}',this.checked)"> ${g}</label>`).join('')}
+              </div>
+            </div>
+
+            <div class="row top">
+              <div class="lab">Device OS</div>
+              <div class="check-grid">
+                ${TARGETING.deviceOS.map(d=>`<label class="check"><input type="checkbox" ${f.targeting.deviceOS.includes(d)?'checked':''} onchange="toggleTgt('deviceOS','${d}',this.checked)"> ${d}</label>`).join('')}
+              </div>
+            </div>
+
+            <div class="row top">
+              <div class="lab">Device Brand</div>
+              <div class="check-grid">
+                ${TARGETING.deviceBrand.map(d=>`<label class="check"><input type="checkbox"> ${d}</label>`).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADVANCE TARGETING -->
+        <div class="sub-section">
+          <div class="sh">Advance Targeting <span class="x">×</span></div>
+          <div class="sb">
+            <div class="row top">
+              <div class="lab">Married status</div>
+              <div class="btn-group">
+                ${TARGETING.marital.map(m=>`<button type="button" class="${f.targeting.marital.includes(m)?'on':''}" onclick="toggleTgt('marital','${m}',!this.classList.contains('on'));this.classList.toggle('on')">${m}</button>`).join('')}
+              </div>
+            </div>
+            <div class="row top">
+              <div class="lab">Parental status</div>
+              <div class="btn-group">
+                ${TARGETING.parental.map(p=>`<button type="button" class="${f.targeting.parental.includes(p)?'on':''}" onclick="toggleTgt('parental','${p.replace(/'/g,'&#39;')}',!this.classList.contains('on'));this.classList.toggle('on')">${p}</button>`).join('')}
+              </div>
+            </div>
+            <div class="row top">
+              <div class="lab">Education status</div>
+              <div class="check-grid">
+                ${TARGETING.education.map(e=>`<label class="check"><input type="checkbox" ${f.targeting.education.includes(e)?'checked':''} onchange="toggleTgt('education','${e}',this.checked)"> ${e}</label>`).join('')}
+              </div>
+            </div>
+            <div class="row top">
+              <div class="lab">Income</div>
+              <div class="check-grid">
+                ${TARGETING.income.map(i=>`<label class="check"><input type="checkbox" ${f.targeting.income.includes(i)?'checked':''} onchange="toggleTgt('income','${i}',this.checked)"> ${i}</label>`).join('')}
+              </div>
+            </div>
+            <div class="row top">
+              <div class="lab">Career</div>
+              <div class="check-grid" style="max-height:140px;overflow-y:auto;border:1px solid var(--line);padding:8px;border-radius:4px;background:#fff">
+                ${TARGETING.career.map(c=>`<label class="check"><input type="checkbox" ${f.targeting.career.includes(c)?'checked':''} onchange="toggleTgt('career','${c.replace(/'/g,'&#39;')}',this.checked)"> ${c}</label>`).join('')}
+              </div>
+            </div>
+            <div class="row top">
+              <div class="lab">Interest</div>
+              <div class="check-grid" style="max-height:140px;overflow-y:auto;border:1px solid var(--line);padding:8px;border-radius:4px;background:#fff">
+                ${TARGETING.interest.map(i=>`<label class="check"><input type="checkbox" ${f.targeting.interest.includes(i)?'checked':''} onchange="toggleTgt('interest','${i.replace(/'/g,'&#39;')}',this.checked)"> ${i}</label>`).join('')}
+              </div>
+            </div>
+            <div class="row top">
+              <div class="lab">Weather</div>
+              <div class="btn-group">
+                ${TARGETING.weather.map(w=>`<button type="button" class="${f.targeting.weather.includes(w)?'on':''}" onclick="toggleTgt('weather','${w}',!this.classList.contains('on'));this.classList.toggle('on')">${w}</button>`).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DMP AUDIENCE -->
+        <div class="sub-section">
+          <div class="sh">DMP Audience Targeting <span class="x">×</span></div>
+          <div class="sb">
+            <div class="dmp-grid">
+              <div>
+                <label>Include</label>
+                <div class="duallist" style="grid-template-columns:1fr">
+                  <div class="col" style="min-height:180px;max-height:220px">
+                    <input class="s" placeholder="Search DMP attribute...">
+                    <div class="list" id="dmpIncList">
+                      ${DMP_ATTRS.map(a=>`
+                        <div class="it ${f.dmp.include.includes(a.k)?'sel':''}" onclick="toggleDmp('include','${a.k}')">
+                          <span class="ck">${f.dmp.include.includes(a.k)?'✓':''}</span>
+                          <span>${a.name}</span>
+                          <span style="margin-left:auto;font-size:11px;color:var(--muted)">${fmt(a.size)}</span>
+                        </div>`).join('')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label>Exclude</label>
+                <div class="duallist" style="grid-template-columns:1fr">
+                  <div class="col" style="min-height:180px;max-height:220px">
+                    <input class="s" placeholder="Exclude DMP attribute...">
+                    <div class="list" id="dmpExcList">
+                      ${DMP_ATTRS.map(a=>`
+                        <div class="it ${f.dmp.exclude.includes(a.k)?'sel':''}" onclick="toggleDmp('exclude','${a.k}')">
+                          <span class="ck">${f.dmp.exclude.includes(a.k)?'✓':''}</span>
+                          <span>${a.name}</span>
+                          <span style="margin-left:auto;font-size:11px;color:var(--muted)">${fmt(a.size)}</span>
+                        </div>`).join('')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="actions">
+        <button class="btn" onclick="submitForm('${isEdit?'update':'create'}','active')">${isEdit?'💾 Update & Activate':'＋ Create & Activate'}</button>
+        <button class="btn navy" onclick="submitForm('${isEdit?'update':'create'}','pending')">Save as Pending</button>
+        <button class="btn sec" onclick="submitForm('${isEdit?'update':'create'}','draft')">Save Draft</button>
+        <button class="btn sec" onclick="cancelForm()">Cancel</button>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)">API endpoint: <code>${isEdit?'PUT /api/orders/'+editing:'POST /api/orders'}</code></span>
+      </div>
+    </div>
+  `;
+
+  // bind basics
+  ['f_brand','f_adv','f_obj','f_creativeName','f_size','f_url','f_rate','f_rateType','f_budget','f_daily','f_start','f_end'].forEach(id=>{
+    const el = document.getElementById(id); if(!el) return;
+    el.addEventListener('input',syncForm);
+    el.addEventListener('change',syncForm);
+  });
+
+  refreshAudienceBar();
+}
+
+function syncForm(){
+  if(!formState) return;
+  const f=formState;
+  const g=id=>{const e=document.getElementById(id);return e?e.value:'';};
+  f.brand = g('f_brand');
+  f.advertiser = g('f_adv');
+  f.objective = g('f_obj');
+  f.creative.name = g('f_creativeName');
+  f.creative.size = g('f_size');
+  f.creative.url = g('f_url');
+  f.rate = +g('f_rate')||0;
+  f.rateType = g('f_rateType');
+  f.budget = +g('f_budget')||0;
+  f.daily = +g('f_daily')||0;
+  f.startDate = g('f_start');
+  f.endDate = g('f_end');
+  refreshAudienceBar();
+}
+
+function toggleTgt(group, val, on){
+  if(!formState) return;
+  const arr = formState.targeting[group];
+  const i = arr.indexOf(val);
+  if(on && i<0) arr.push(val);
+  if(!on && i>=0) arr.splice(i,1);
+  refreshAudienceBar();
+}
+
+function toggleDmp(side, key){
+  const arr = formState.dmp[side];
+  const i = arr.indexOf(key);
+  if(i<0) arr.push(key); else arr.splice(i,1);
+  // rerender just the affected list
+  const id = side==='include'?'dmpIncList':'dmpExcList';
+  const el = document.getElementById(id);
+  if(el){
+    el.innerHTML = DMP_ATTRS.map(a=>`
+      <div class="it ${arr.includes(a.k)?'sel':''}" onclick="toggleDmp('${side}','${a.k}')">
+        <span class="ck">${arr.includes(a.k)?'✓':''}</span>
+        <span>${a.name}</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)">${fmt(a.size)}</span>
+      </div>`).join('');
+  }
+  refreshAudienceBar();
+}
+
+function renderZoneList(filter){
+  const f = (filter||'').toLowerCase();
+  let html = '';
+  ZONES.groups.forEach(g=>{
+    if(g.name.toLowerCase().includes(f) || ZONES.placements.some(p=>p.id.toLowerCase().includes(f) && p.channel.startsWith(g.id.split('-')[0]))){
+      html += `<div class="it" style="font-weight:700;color:var(--navy);background:#fafbfd"><span style="opacity:.6">▾</span> ${g.name}</div>`;
+      ZONES.placements.filter(p=>{
+        const channelGroup = ZONES.channels[p.channel];
+        // map channel to group: by prefix
+        return ZONES.groups.some(gr=>gr.channels && gr.channels.includes(p.channel) && gr.id===g.id);
+      }).filter(p=>!f||p.id.toLowerCase().includes(f)).forEach(p=>{
+        const sel = formState && formState.placements.includes(p.id);
+        html += `<div class="it kid ${sel?'sel':''}" onclick="togglePlacement('${p.id}')">
+          <span class="ck">${sel?'✓':''}</span>
+          <span>${p.id}</span>
+          <span style="margin-left:auto;font-size:10.5px;color:var(--muted)">${fmt(p.reach)} · ${p.format}</span>
+        </div>`;
+      });
+    }
+  });
+  return html || '<div style="padding:20px;text-align:center;color:var(--muted);font-size:11.5px">Không có placement khớp</div>';
+}
+function renderZoneSel(){
+  if(!formState) return '';
+  if(!formState.placements.length) return '<div style="padding:18px;text-align:center;color:var(--muted);font-size:11.5px">Chưa chọn placement nào</div>';
+  return formState.placements.map(id=>{
+    const p = ZONES.placements.find(x=>x.id===id);
+    if(!p) return '';
+    return `<div class="it sel" onclick="togglePlacement('${id}')">
+      <span class="ck">✓</span>
+      <span>${id}</span>
+      <span style="margin-left:auto;font-size:10.5px">${fmt(p.reach)}</span>
+    </div>`;
+  }).join('');
+}
+function filterZones(v){
+  document.getElementById('zoneList').innerHTML = renderZoneList(v);
+}
+function togglePlacement(id){
+  const arr = formState.placements;
+  const i = arr.indexOf(id);
+  if(i<0) arr.push(id); else arr.splice(i,1);
+  document.getElementById('zoneList').innerHTML = renderZoneList('');
+  document.getElementById('zoneSel').innerHTML = renderZoneSel();
+  refreshAudienceBar();
+}
+
+function renderGeoTree(){
+  let html='';
+  Object.keys(TARGETING.geo).forEach(region=>{
+    html += `<div class="it" style="font-weight:700;background:#fafbfd"><span style="opacity:.6">▾</span> ${region}</div>`;
+    TARGETING.geo[region].forEach(prov=>{
+      const sel = formState && formState.targeting.geo.includes(prov);
+      html += `<div class="it kid ${sel?'sel':''}" onclick="toggleGeo('${prov.replace(/'/g,'&#39;')}')">
+        <span class="ck">${sel?'✓':''}</span>
+        <span>${prov}</span>
+      </div>`;
+    });
+  });
+  return html;
+}
+function renderGeoSel(){
+  if(!formState || !formState.targeting.geo.length) return '<div style="padding:18px;text-align:center;color:var(--muted);font-size:11.5px">Chưa chọn location</div>';
+  return formState.targeting.geo.map(g=>`<div class="it sel" onclick="toggleGeo('${g.replace(/'/g,'&#39;')}')"><span class="ck">✓</span><span>${g}</span></div>`).join('');
+}
+function toggleGeo(prov){
+  const arr = formState.targeting.geo;
+  const i = arr.indexOf(prov);
+  if(i<0) arr.push(prov); else arr.splice(i,1);
+  document.getElementById('geoList').innerHTML = renderGeoTree();
+  document.getElementById('geoSel').innerHTML = renderGeoSel();
+  refreshAudienceBar();
+}
+
+function refreshAudienceBar(){
+  if(!formState) return;
+  const t = {
+    ...formState.targeting,
+    dmpInclude: formState.dmp.include
+  };
+  const est = AdsPilotAPI.estimateAudience(t);
+  // Compare to total (60M)
+  const pct = Math.min(100, Math.round((est.size/60_000_000)*100));
+  const html = `
+    <div class="audi-meter">
+      <div>
+        <div class="lab">Estimated Audience Size</div>
+        <div class="big">${fmt(est.size)}</div>
+      </div>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;font-size:11px;opacity:.85;margin-bottom:5px">
+          <span>${fmt(est.low)} (low)</span><span>${fmt(est.high)} (high)</span>
+        </div>
+        <div class="gauge"><span style="width:${pct}%"></span></div>
+        <div style="font-size:10.5px;opacity:.75;margin-top:4px">${pct}% of total reachable population (~60M)</div>
+      </div>
+      <div class="tag">${formState.placements.length} placement(s)</div>
+      <div class="tag">${formState.dmp.include.length} DMP attr</div>
+    </div>
+  `;
+  document.getElementById('audiBar').innerHTML = html;
+}
+
+function submitForm(action, status){
+  syncForm();
+  if(!formState.brand){ toast("⚠ Brand bắt buộc"); return; }
+  if(!formState.creative.name){ toast("⚠ Tên creative bắt buộc"); return; }
+  formState.status = status;
+  if(action==='create'){
+    const o = AdsPilotAPI.createOrder(formState);
+    toast("✓ Created "+o.id);
+  } else {
+    AdsPilotAPI.updateOrder(editing, formState);
+    toast("✓ Updated "+editing);
+  }
+  editing = null; formState = null;
+  navTo('orders');
+}
+function cancelForm(){ editing=null; formState=null; navTo('orders'); }
+
+/* ---------- REPORT ---------- */
+function renderReport(){
+  const m=document.getElementById('main');
+  const orders = AdsPilotAPI.listOrders();
+  const totBudget = orders.reduce((s,o)=>s+o.budget,0);
+  const totDaily = orders.reduce((s,o)=>s+o.daily,0);
+  const byStatus = {};
+  orders.forEach(o=>byStatus[o.status]=(byStatus[o.status]||0)+1);
+  m.innerHTML=`
+    <div class="crumb"><a onclick="navTo('orders')">Reports</a><span class="sep">›</span><b>Overview</b></div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      <div class="card" style="margin:0"><div class="body" style="padding:14px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total Orders</div><div style="font-size:24px;font-weight:800;color:var(--navy);margin-top:4px">${orders.length}</div></div></div>
+      <div class="card" style="margin:0"><div class="body" style="padding:14px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Active</div><div style="font-size:24px;font-weight:800;color:var(--green);margin-top:4px">${byStatus.active||0}</div></div></div>
+      <div class="card" style="margin:0"><div class="body" style="padding:14px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total Budget</div><div style="font-size:20px;font-weight:800;color:var(--navy);margin-top:4px">${fmtVND(totBudget)}đ</div></div></div>
+      <div class="card" style="margin:0"><div class="body" style="padding:14px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Daily Spend</div><div style="font-size:20px;font-weight:800;color:var(--navy);margin-top:4px">${fmtVND(totDaily)}đ</div></div></div>
+    </div>
+    <div class="card">
+      <div class="head">📊 Status Breakdown</div>
+      <div class="body">
+        ${Object.entries(byStatus).map(([s,c])=>`
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <span class="pill-status ${s}" style="min-width:90px;text-align:center">${s}</span>
+            <div style="flex:1;background:#f3f5f8;border-radius:4px;height:14px;overflow:hidden">
+              <div style="background:var(--navy);height:100%;width:${(c/orders.length*100)}%"></div>
+            </div>
+            <span style="font-weight:700;color:var(--navy);min-width:30px;text-align:right">${c}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+/* ---------- API CONSOLE ---------- */
+function renderApi(){
+  const m=document.getElementById('main');
+  m.innerHTML=`
+    <div class="crumb"><b>API Console</b></div>
+    <div class="callout">
+      <b>Live log</b> các API calls vào Ad Server. Agent integrate qua <code>window.AdsPilotAPI</code> — mỗi method có endpoint REST tương ứng (xem tab <a onclick="navTo('docs')">API Docs</a>).
+    </div>
+    <div class="api-tabs">
+      <button class="on" onclick="switchApi('log')" id="tabLog">Activity Log</button>
+      <button onclick="switchApi('test')" id="tabTest">Test Endpoints</button>
+    </div>
+    <div id="apiPanel"></div>
+  `;
+  switchApi('log');
+}
+function switchApi(t){
+  document.getElementById('tabLog').classList.toggle('on',t==='log');
+  document.getElementById('tabTest').classList.toggle('on',t==='test');
+  const p = document.getElementById('apiPanel');
+  if(t==='log'){
+    p.innerHTML = `
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button class="btn sm sec" onclick="AdsPilotAPI.clearLog();renderConsoleLines()">Clear log</button>
+        <span style="margin-left:auto;font-size:11.5px;color:var(--muted);align-self:center">Auto-refresh on every API call</span>
+      </div>
+      <div class="console" id="consoleBox"></div>
+    `;
+    renderConsoleLines();
+  } else {
+    p.innerHTML = `
+      <div class="card">
+        <div class="head">🧪 Quick test endpoints</div>
+        <div class="body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <button class="btn sec sm" onclick="testCall('listOrders')">GET /api/orders</button>
+            <button class="btn sec sm" onclick="testCall('listZones')">GET /api/zones</button>
+            <button class="btn sec sm" onclick="testCall('listTargeting')">GET /api/targeting/options</button>
+            <button class="btn sec sm" onclick="testCall('listDmp')">GET /api/dmp/attributes</button>
+            <button class="btn sec sm" onclick="testCall('createOrder')">POST /api/orders (sample)</button>
+            <button class="btn sec sm" onclick="testCall('pauseLast')">POST /api/orders/:id/pause</button>
+            <button class="btn sec sm" onclick="testCall('estimate')">POST /api/audience/estimate</button>
+            <button class="btn danger sm" onclick="if(confirm('Reset DB?')){AdsPilotAPI.resetDB();toast('DB reset');}">DELETE /api/admin/reset</button>
+          </div>
+          <div style="margin-top:14px"><b>Result:</b><pre id="testResult" style="background:#0d1929;color:#cbe0d5;padding:12px;border-radius:5px;font-size:11.5px;font-family:ui-monospace,monospace;max-height:300px;overflow:auto;margin-top:6px">Bấm nút trên để test endpoint...</pre></div>
+        </div>
+      </div>
+    `;
+  }
+}
+function testCall(name){
+  let r;
+  if(name==='listOrders') r = AdsPilotAPI.listOrders();
+  else if(name==='listZones') r = AdsPilotAPI.listZones();
+  else if(name==='listTargeting') r = AdsPilotAPI.listTargetingOptions();
+  else if(name==='listDmp') r = AdsPilotAPI.listDmpAttributes();
+  else if(name==='createOrder') r = AdsPilotAPI.createOrder({
+    brand:"Test Brand "+(Math.floor(Math.random()*900)+100), advertiser:"Demo Co.", objective:"awareness",
+    budget:100_000_000, daily:8_000_000, rate:35_000, rateType:"CPM",
+    startDate:"2026-06-15", endDate:"2026-07-15",
+    creative:{name:"Demo Banner",size:"720x1280",url:""},
+    placements:["PulseNews.Home.Inpage1"],
+    targeting:{geo:["TP.HCM"],age:["25-34"],gender:[],deviceOS:["Android"],marital:[],parental:[],education:[],income:[],career:[],interest:[],weather:[]},
+    dmp:{include:["premium_lifestyle"],exclude:[]}
+  });
+  else if(name==='pauseLast'){
+    const last = DB.orders.find(o=>o.status==='active'||o.status==='pending');
+    if(!last) r="No active order";
+    else r=AdsPilotAPI.pauseOrder(last.id);
+  }
+  else if(name==='estimate') r = AdsPilotAPI.estimateAudience({geo:["Hà Nội","TP.HCM"],age:["25-34","35-44"],deviceOS:["Android","iOS"],dmpInclude:["air_travel","hotel_booker"]});
+  document.getElementById('testResult').textContent = JSON.stringify(r,null,2);
+  toast("✓ "+name+" called");
+}
+function renderConsoleLines(){
+  const box = document.getElementById('consoleBox'); if(!box) return;
+  const lines = LOG.slice(-100).reverse();
+  if(!lines.length){ box.innerHTML='<div style="color:#6e8a9c;text-align:center;padding:40px">Chưa có API call nào. Thử tạo/sửa order hoặc bấm "Test endpoints".</div>'; return; }
+  box.innerHTML = lines.map(l=>`
+    <div class="ln">
+      <span class="ts">${l.ts}</span>
+      <span class="mt ${l.method}">${l.method}</span>
+      <span class="pa">${l.path}</span>
+      ${l.body?`<span class="res">body: ${escHTML(JSON.stringify(l.body).slice(0,200))}${JSON.stringify(l.body).length>200?'...':''}</span>`:''}
+      ${l.resp?`<span class="res">→ ${escHTML(typeof l.resp==='string'?l.resp:JSON.stringify(l.resp).slice(0,200))}</span>`:''}
+    </div>
+  `).join('');
+}
+function flashApiDot(){
+  // small visual feedback on nav button
+  const btn = document.querySelectorAll('.topbar nav button')[3];
+  if(!btn) return;
+  btn.style.boxShadow = '0 0 0 2px #5ba33d';
+  setTimeout(()=>{ btn.style.boxShadow=''; }, 400);
+}
+
+/* ---------- API DOCS ---------- */
+function renderDocs(){
+  const m=document.getElementById('main');
+  const endpoints = [
+    { m:"GET",    p:"/api/zones",                  d:"Liệt kê tất cả ad zones (groups, channels, placements) với reach.", code:"AdsPilotAPI.listZones()" },
+    { m:"GET",    p:"/api/targeting/options",      d:"Trả về tất cả tùy chọn targeting (age, gender, geo, income, ...).", code:"AdsPilotAPI.listTargetingOptions()" },
+    { m:"GET",    p:"/api/dmp/attributes",         d:"Liệt kê các DMP audience attributes + size ước lượng.",            code:"AdsPilotAPI.listDmpAttributes()" },
+    { m:"GET",    p:"/api/orders",                 d:"Liệt kê campaigns. Filter: ?status=&brand=",                       code:"AdsPilotAPI.listOrders({status:'active'})" },
+    { m:"GET",    p:"/api/orders/:id",             d:"Lấy chi tiết một campaign theo ID.",                               code:"AdsPilotAPI.getOrder('ORD-2026-001')" },
+    { m:"POST",   p:"/api/orders",                 d:"Tạo campaign mới. Body: {brand, objective, budget, daily, rate, placements, targeting, dmp, ...}", code:"AdsPilotAPI.createOrder({...})" },
+    { m:"PUT",    p:"/api/orders/:id",             d:"Cập nhật trường bất kỳ trên campaign.",                            code:"AdsPilotAPI.updateOrder('ORD-2026-001',{budget:500e6})" },
+    { m:"POST",   p:"/api/orders/:id/pause",       d:"Pause campaign — chuyển status sang 'paused'.",                    code:"AdsPilotAPI.pauseOrder('ORD-2026-001')" },
+    { m:"POST",   p:"/api/orders/:id/resume",      d:"Resume campaign đã pause — chuyển status sang 'active'.",          code:"AdsPilotAPI.resumeOrder('ORD-2026-001')" },
+    { m:"POST",   p:"/api/orders/:id/archive",     d:"Archive campaign (status='archived').",                            code:"AdsPilotAPI.archiveOrder('ORD-2026-001')" },
+    { m:"DELETE", p:"/api/orders/:id",             d:"Xóa hẳn campaign khỏi DB.",                                        code:"AdsPilotAPI.deleteOrder('ORD-2026-001')" },
+    { m:"POST",   p:"/api/audience/estimate",      d:"Estimate audience size theo targeting + DMP include. Trả {size, low, high}.", code:"AdsPilotAPI.estimateAudience({geo:['TP.HCM'],age:['25-34'],dmpInclude:['air_travel']})" },
+    { m:"POST",   p:"/api/admin/reset",            d:"Reset toàn bộ DB về seed data.",                                   code:"AdsPilotAPI.resetDB()" },
+  ];
+  m.innerHTML=`
+    <div class="crumb"><b>API Docs</b></div>
+    <div class="callout">
+      <b>Integration cho Agent</b> — Tất cả method đều đồng bộ (sync), trả JSON trực tiếp. Trong production sẽ là REST endpoints; ở demo này gọi qua <code>window.AdsPilotAPI</code>. Lưu trữ ở <code>localStorage</code> key <code>${LS_KEY}</code>.
+    </div>
+    <div class="card">
+      <div class="head">📚 Endpoints (${endpoints.length})</div>
+      <div class="body">
+        ${endpoints.map(e=>`
+          <div class="endpoint">
+            <span class="mt ${e.m}">${e.m}</span><code>${e.p}</code>
+            <p>${e.d}</p>
+            <pre style="background:#f3f5f8;padding:7px 10px;border-radius:4px;font-size:11.5px;margin-top:6px;font-family:ui-monospace,monospace">${escHTML(e.code)}</pre>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="head">💡 Quick start (cho Agent)</div>
+      <div class="body">
+        <pre style="background:#0d1929;color:#cbe0d5;padding:14px;border-radius:5px;font-size:12px;line-height:1.65;font-family:ui-monospace,monospace;overflow:auto">// 1. List zones &amp; targeting options
+const zones = window.AdsPilotAPI.listZones();
+const targeting = window.AdsPilotAPI.listTargetingOptions();
+const dmp = window.AdsPilotAPI.listDmpAttributes();
+
+// 2. Create campaign
+const order = window.AdsPilotAPI.createOrder({
+  brand: "Brand A",
+  advertiser: "Brand A Vietnam",
+  objective: "awareness",
+  budget: 425_000_000,
+  daily:   43_000_000,
+  rate:    36_960,
+  rateType:"CPM",
+  startDate:"2026-06-10",
+  endDate:  "2026-07-10",
+  creative:{ name:"BrandA Summer", size:"720x1280", url:"" },
+  placements:["PulseNews.Home.Inpage1","VibeTV.ShortVideo.Infeed.Fullscreen1"],
+  targeting:{
+    geo:["Hà Nội","TP.HCM"], age:["25-34","35-44"],
+    deviceOS:["Android","iOS"], income:["Top 5-10%"],
+    interest:["Travel","Air travel"],
+    gender:[], marital:[], parental:[], education:[], career:[], weather:[]
+  },
+  dmp:{ include:["air_travel","hotel_booker"], exclude:[] }
+});
+
+// 3. Audience estimate before commit
+const est = window.AdsPilotAPI.estimateAudience({
+  geo:["TP.HCM","Hà Nội"], age:["25-34"], deviceOS:["iOS"],
+  dmpInclude:["premium_lifestyle"]
+});
+// → { size: 850000, low: 720000, high: 980000 }
+
+// 4. Pause / Resume / Update
+window.AdsPilotAPI.pauseOrder(order.id);
+window.AdsPilotAPI.updateOrder(order.id, { daily: 55_000_000 });
+window.AdsPilotAPI.resumeOrder(order.id);</pre>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------- PLACEHOLDER ---------- */
+function renderPlaceholder(v){
+  const labels={conversion:"Conversion Tracking",bundle:"Ads Bundle",log:"System Log"};
+  const m=document.getElementById('main');
+  m.innerHTML=`<div class="crumb"><b>${labels[v]||v}</b></div>
+    <div class="card"><div class="body" style="text-align:center;padding:60px 20px;color:var(--muted)">
+      <div style="font-size:36px;margin-bottom:10px">🚧</div>
+      <h3 style="font-size:16px;margin-bottom:6px;color:var(--ink)">${labels[v]||v}</h3>
+      <p>Section này chưa cài đặt trong demo. Tập trung demo: <a onclick="navTo('orders')">Orders</a>, <a onclick="navTo('create')">Create</a>, <a onclick="navTo('api')">API Console</a>.</p>
+    </div></div>`;
+}
+
+/* ---------- BOOT ---------- */
+navTo('orders');
+console.log('%c AdsPilot Mock Ready ','background:#1f3551;color:#5ba33d;font-weight:bold;padding:3px 8px;border-radius:3px','window.AdsPilotAPI exposed.');
+console.log('Endpoints:', Object.keys(AdsPilotAPI).join(', '));
+</script>
+</body>
+</html>
