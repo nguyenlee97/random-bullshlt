@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camp Ads Analytics — Claw-a-thon</title>
+<meta name="description" content="Campaign analytics dashboard for the Claw-a-thon ad platform. 15 use-cases across 6 tabs: Daily Ops, Awareness, Consideration, Conversion, Retention, Executive.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ==================== TOPBAR ==================== -->
+<div class="topbar" id="topbar">
+  <div class="logo">
+    <span class="logo-ic">📊</span>
+    Camp Ads Analytics
+  </div>
+  <span class="ver">v1.0 · Use-Case-driven · Claw-a-thon</span>
+  <div class="spacer"></div>
+  <div class="stat">
+    Coverage: <b>15/15 use cases</b> &nbsp;·&nbsp;
+    <b id="totalRows">—</b> records &nbsp;·&nbsp;
+    Total Spend: <b id="totalSpend">—</b>
+  </div>
+  <div class="conn-status" id="connStatus">
+    <span class="conn-dot" id="connDot"></span>
+    <span id="connLabel">Connecting…</span>
+  </div>
+</div>
+
+<!-- ==================== FILTER BAR ==================== -->
+<div class="filterbar" id="filterbar">
+  <div class="filter-group">
+    <label for="fBrand">Brand</label>
+    <select id="fBrand">
+      <option value="">All brands</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label for="fZone">Zone</label>
+    <select id="fZone">
+      <option value="">All zones</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label for="fAudience">Audience</label>
+    <select id="fAudience">
+      <option value="">All audiences</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label for="fStart">From</label>
+    <input type="date" id="fStart">
+  </div>
+  <div class="filter-group">
+    <label for="fEnd">To</label>
+    <input type="date" id="fEnd">
+  </div>
+  <button class="btn-filter" id="btnApplyFilter">Apply</button>
+  <button class="btn-reset" id="btnResetFilter">Reset</button>
+  <div class="filter-count">
+    Filtered: <b id="filteredCount">—</b> rows
+  </div>
+</div>
+
+<!-- ==================== TAB BAR ==================== -->
+<nav class="tabs" id="tabs">
+  <button class="tab-btn on" data-tab="op" id="tab-op">
+    <span class="tab-icn">📅</span> Daily Ops <span class="tab-ct">Default</span>
+  </button>
+  <button class="tab-btn" data-tab="aw" id="tab-aw">
+    <span class="tab-icn">📣</span> Awareness <span class="tab-ct">A1·A2·A3</span>
+  </button>
+  <button class="tab-btn" data-tab="co" id="tab-co">
+    <span class="tab-icn">👀</span> Consideration <span class="tab-ct">B1·B2·B3</span>
+  </button>
+  <button class="tab-btn" data-tab="cv" id="tab-cv">
+    <span class="tab-icn">🎯</span> Conversion <span class="tab-ct">C1·C2·C3</span>
+  </button>
+  <button class="tab-btn" data-tab="rt" id="tab-rt">
+    <span class="tab-icn">🔁</span> Retention <span class="tab-ct">D1·D2</span>
+  </button>
+  <button class="tab-btn" data-tab="ex" id="tab-ex">
+    <span class="tab-icn">📋</span> Executive <span class="tab-ct">E1·E2·E3·E4</span>
+  </button>
+</nav>
+
+<!-- ==================== MAIN CONTENT ==================== -->
+<main id="main">
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Loading analytics data…</div>
+  </div>
+
+  <!-- Error state -->
+  <div class="error-state hidden" id="errorState">
+    <div class="error-icon">⚠️</div>
+    <div class="error-title">Could not load data</div>
+    <div class="error-msg" id="errorMsg">Backend at localhost:3000 is unreachable.</div>
+    <button class="btn-retry" id="btnRetry">Retry</button>
+  </div>
+
+  <!-- Daily Ops Tab -->
+  <div class="panel on" id="p-op"></div>
+
+  <!-- Awareness Tab — rendered by tabs/awareness.js -->
+  <div class="panel" id="p-aw"></div>
+
+  <!-- Consideration Tab — rendered by tabs/consideration.js -->
+  <div class="panel" id="p-co"></div>
+
+  <!-- Conversion Tab — rendered by tabs/conversion.js -->
+  <div class="panel" id="p-cv"></div>
+
+  <!-- Retention Tab — rendered by tabs/retention.js -->
+  <div class="panel" id="p-rt"></div>
+
+  <!-- Executive Tab — rendered by tabs/executive.js -->
+  <div class="panel" id="p-ex"></div>
+
+</main>
+
+<script type="module" src="api.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

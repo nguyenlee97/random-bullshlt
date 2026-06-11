@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AdsPilot · Ad Server Console</title>
+<meta name="description" content="AdsPilot Ad Server Console — Campaign management dashboard for the Claw-a-thon ad platform.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo"><span class="ic">A</span>AdsPilot</div>
+  <span class="ver">v1.0 · Claw-a-thon</span>
+  <nav id="topNav">
+    <button class="on" data-view="orders" onclick="navTo('orders')">📊 Orders</button>
+    <button data-view="create" onclick="navTo('create')">＋ Create</button>
+    <button data-view="report" onclick="navTo('report')">📈 Report</button>
+    <button data-view="api" onclick="navTo('api')">⚙ API Console</button>
+  </nav>
+  <div class="user">Logged in as <b>agent_demo</b> · <span style="opacity:.8">Settings ▾</span></div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <input class="search" placeholder="Search..." id="sidebarSearch">
+    <div class="group">Campaigns</div>
+    <ul>
+      <li class="active" data-nav="orders"><span>All Orders</span><span class="ic">›</span></li>
+      <li data-nav="create"><span>Create Order</span><span class="ic">›</span></li>
+      <li data-nav="conversion"><span>Conversion Tracking</span><span class="ic">›</span></li>
+      <li data-nav="bundle"><span>Ads Bundle</span><span class="ic">›</span></li>
+    </ul>
+    <div class="group">Reports</div>
+    <ul>
+      <li data-nav="report"><span>Report</span><span class="ic">›</span></li>
+      <li data-nav="log"><span>View log</span><span class="ic">›</span></li>
+    </ul>
+    <div class="group">Developers</div>
+    <ul>
+      <li data-nav="api"><span>API Console</span><span class="ic">›</span></li>
+      <li data-nav="docs"><span>API Docs</span><span class="ic">›</span></li>
+    </ul>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main">
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading AdsPilot...</p>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"><span class="dot"></span><span id="toastTx"></span></div>
+
+<script src="api.js"></script>
+<script src="views/orders.js"></script>
+<script src="views/create.js"></script>
+<script src="views/create_zones.js"></script>
+<script src="views/create_targeting.js"></script>
+<script src="views/create_dmp.js"></script>
+<script src="views/report.js"></script>
+<script src="views/console.js"></script>
+<script src="views/docs.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

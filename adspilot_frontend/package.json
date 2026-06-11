@@ -1,0 +1,10 @@
+{
+  "name": "adspilot-frontend",
+  "version": "1.0.0",
+  "description": "AdsPilot Ad Server Console — Claw-a-thon",
+  "scripts": {
+    "serve": "npx -y serve . -p 5173 --no-clipboard",
+    "dev": "npx -y serve . -p 5173"
+  },
+  "private": true
+}

@@ -236,6 +236,7 @@ const ZONES = {
     { id:"wave-news",   name:"WaveNews",      desc:"Lifestyle & entertainment news",channels:["wave-news-wap","wave-news-web"] },
     { id:"play-verse",  name:"PlayVerse",     desc:"Gaming portal",                 channels:["play-verse-web"] },
     { id:"stream-wave", name:"StreamWave",    desc:"Music & podcast",               channels:["stream-wave-app"] },
+    { id:"message-app", name:"MessageApp",    desc:"Messaging super-app (chat, feed, story, mini-app)", channels:["message-app"] },
   ],
   channels: {
     "pulse-news-app":   { name:"PulseNews App",     reach: 4_200_000 },
@@ -249,30 +250,46 @@ const ZONES = {
     "wave-news-web":    { name:"WaveNews Web",      reach: 1_600_000 },
     "play-verse-web":   { name:"PlayVerse Web",     reach: 1_200_000 },
     "stream-wave-app":  { name:"StreamWave App",    reach: 1_850_000 },
+    "message-app":      { name:"MessageApp",        reach: 52_000_000 },
   },
   // Placements (zone slots inside a channel)
+  // Placement schema: size = kích thước (px), vi = viewable impression %, ctr = CTR %, cpm = giá VND/1000 imp, obj = objective phù hợp nhất
   placements: [
     // PulseNews
-    { id:"PulseNews.Cate.Inpage1",   channel:"pulse-news-wap", format:"banner", reach: 1_200_000 },
-    { id:"PulseNews.Cate.Inpage2",   channel:"pulse-news-wap", format:"banner", reach: 1_050_000 },
-    { id:"PulseNews.Home.Inpage1",   channel:"pulse-news-wap", format:"banner", reach: 2_400_000 },
-    { id:"PulseNews.Home.Inpage2",   channel:"pulse-news-wap", format:"banner", reach: 2_100_000 },
-    { id:"PulseNews.Sub.Inpage",     channel:"pulse-news-wap", format:"banner", reach:   860_000 },
-    { id:"PulseNews.onSocial.Inpage",channel:"vibe-tv-onsocial",format:"native", reach: 1_950_000 },
+    { id:"PulseNews.Cate.Inpage1",   channel:"pulse-news-wap", format:"banner", size:"300x250", reach: 1_200_000, vi:58, ctr:0.55, cpm:18000, obj:"conversion" },
+    { id:"PulseNews.Cate.Inpage2",   channel:"pulse-news-wap", format:"banner", size:"320x50",  reach: 1_050_000, vi:51, ctr:0.42, cpm:14000, obj:"conversion" },
+    { id:"PulseNews.Home.Inpage1",   channel:"pulse-news-wap", format:"banner", size:"728x90",  reach: 2_400_000, vi:64, ctr:0.70, cpm:24000, obj:"consideration" },
+    { id:"PulseNews.Home.Inpage2",   channel:"pulse-news-wap", format:"banner", size:"300x250", reach: 2_100_000, vi:61, ctr:0.62, cpm:22000, obj:"consideration" },
+    { id:"PulseNews.Sub.Inpage",     channel:"pulse-news-wap", format:"banner", size:"300x250", reach:   860_000, vi:56, ctr:0.50, cpm:16000, obj:"conversion" },
+    { id:"PulseNews.onSocial.Inpage",channel:"vibe-tv-onsocial",format:"native", size:"1200x628", reach: 1_950_000, vi:70, ctr:1.15, cpm:30000, obj:"consideration" },
     // WaveNews
-    { id:"WaveNews.Inpage1",         channel:"wave-news-wap",  format:"banner", reach: 1_100_000 },
-    { id:"WaveNews.Inpage2",         channel:"wave-news-wap",  format:"banner", reach:   980_000 },
-    { id:"WaveNews.Home.Inpage1",    channel:"wave-news-wap",  format:"banner", reach: 1_650_000 },
-    // VibeTV ShortVideo
-    { id:"VibeTV.ShortVideo.Infeed.Fullscreen1", channel:"vibe-tv-app", format:"video-vertical", reach: 2_400_000 },
-    { id:"VibeTV.ShortVideo.Infeed.Fullscreen2", channel:"vibe-tv-app", format:"video-vertical", reach: 2_200_000 },
-    { id:"VibeTV.ShortVideo.Infeed.Fullscreen3", channel:"vibe-tv-app", format:"video-vertical", reach: 2_000_000 },
-    { id:"VibeTV.ShortVideo.Infeed.Fullscreen4", channel:"vibe-tv-app", format:"video-vertical", reach: 1_850_000 },
-    { id:"VibeTV.ShortVideo.Infeed.Fullscreen5", channel:"vibe-tv-app", format:"video-vertical", reach: 1_750_000 },
+    { id:"WaveNews.Inpage1",         channel:"wave-news-wap",  format:"banner", size:"300x250", reach: 1_100_000, vi:57, ctr:0.52, cpm:15000, obj:"conversion" },
+    { id:"WaveNews.Inpage2",         channel:"wave-news-wap",  format:"banner", size:"320x50",  reach:   980_000, vi:50, ctr:0.40, cpm:13000, obj:"conversion" },
+    { id:"WaveNews.Home.Inpage1",    channel:"wave-news-wap",  format:"banner", size:"970x250", reach: 1_650_000, vi:66, ctr:0.66, cpm:21000, obj:"consideration" },
+    // VibeTV ShortVideo (dọc, fullscreen)
+    { id:"VibeTV.ShortVideo.Infeed.Fullscreen1", channel:"vibe-tv-app", format:"video-vertical", size:"1080x1920", reach: 2_400_000, vi:92, ctr:0.85, cpm:55000, obj:"awareness" },
+    { id:"VibeTV.ShortVideo.Infeed.Fullscreen2", channel:"vibe-tv-app", format:"video-vertical", size:"1080x1920", reach: 2_200_000, vi:90, ctr:0.80, cpm:52000, obj:"awareness" },
+    { id:"VibeTV.ShortVideo.Infeed.Fullscreen3", channel:"vibe-tv-app", format:"video-vertical", size:"1080x1920", reach: 2_000_000, vi:89, ctr:0.78, cpm:50000, obj:"awareness" },
+    { id:"VibeTV.ShortVideo.Infeed.Fullscreen4", channel:"vibe-tv-app", format:"video-vertical", size:"1080x1920", reach: 1_850_000, vi:88, ctr:0.75, cpm:48000, obj:"awareness" },
+    { id:"VibeTV.ShortVideo.Infeed.Fullscreen5", channel:"vibe-tv-app", format:"video-vertical", size:"1080x1920", reach: 1_750_000, vi:88, ctr:0.72, cpm:46000, obj:"awareness" },
     // PlayVerse
-    { id:"PlayVerse.Banner.Home",    channel:"play-verse-web", format:"banner", reach:   720_000 },
+    { id:"PlayVerse.Banner.Home",    channel:"play-verse-web", format:"banner", size:"300x250", reach:   720_000, vi:60, ctr:0.90, cpm:26000, obj:"conversion" },
     // StreamWave
-    { id:"StreamWave.AudioAd.Mid",   channel:"stream-wave-app",format:"audio", reach: 1_200_000 },
+    { id:"StreamWave.AudioAd.Mid",   channel:"stream-wave-app",format:"audio", size:"audio-30s", reach: 1_200_000, vi:100, ctr:0.25, cpm:20000, obj:"consideration" },
+    // MessageApp — Inbox Ads
+    { id:"MessageApp.Inbox.Banner",  channel:"message-app", format:"banner",  size:"1080x180",  reach: 38_000_000, vi:74, ctr:0.95, cpm:17000, obj:"conversion" },
+    { id:"MessageApp.Inbox.Native",  channel:"message-app", format:"native",  size:"1080x540",  reach: 35_000_000, vi:70, ctr:1.25, cpm:24000, obj:"consideration" },
+    // MessageApp — New Feed
+    { id:"MessageApp.Feed.Native1",  channel:"message-app", format:"native",  size:"1200x628",  reach: 41_000_000, vi:68, ctr:1.45, cpm:30000, obj:"conversion" },
+    { id:"MessageApp.Feed.Native2",  channel:"message-app", format:"native",  size:"1200x628",  reach: 36_000_000, vi:66, ctr:1.30, cpm:28000, obj:"consideration" },
+    { id:"MessageApp.Feed.Carousel", channel:"message-app", format:"carousel",size:"1080x1080", reach: 30_000_000, vi:64, ctr:1.60, cpm:34000, obj:"conversion" },
+    // MessageApp — Story
+    { id:"MessageApp.Story.Fullscreen", channel:"message-app", format:"story-image",  size:"1080x1920", reach: 26_000_000, vi:93, ctr:0.70, cpm:48000, obj:"awareness" },
+    { id:"MessageApp.Story.Video",      channel:"message-app", format:"story-video",  size:"1080x1920", reach: 22_000_000, vi:95, ctr:0.62, cpm:56000, obj:"awareness" },
+    // MessageApp — InApp (mini-app)
+    { id:"MessageApp.InApp.Interstitial", channel:"message-app", format:"interstitial", size:"640x960",   reach: 24_000_000, vi:88, ctr:1.05, cpm:38000, obj:"awareness" },
+    { id:"MessageApp.InApp.MREC",         channel:"message-app", format:"banner",       size:"300x250",   reach: 20_000_000, vi:80, ctr:0.90, cpm:22000, obj:"conversion" },
+    { id:"MessageApp.InApp.RewardVideo",  channel:"message-app", format:"rewarded-video",size:"1080x1920", reach: 14_000_000, vi:97, ctr:1.40, cpm:60000, obj:"conversion" },
   ]
 };
 
@@ -1025,7 +1042,7 @@ function renderZoneList(filter){
         html += `<div class="it kid ${sel?'sel':''}" onclick="togglePlacement('${p.id}')">
           <span class="ck">${sel?'✓':''}</span>
           <span>${p.id}</span>
-          <span style="margin-left:auto;font-size:10.5px;color:var(--muted)">${fmt(p.reach)} · ${p.format}</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--muted);text-align:right;line-height:1.35">${fmt(p.reach)} · ${p.size||p.format}${p.vi!=null?`<br>VI ${p.vi}% · CTR ${p.ctr}% · ${fmtVND(p.cpm)}đ · <b style="color:var(--green)">${(p.obj||'').toUpperCase()}</b>`:''}</span>
         </div>`;
       });
     }
@@ -1041,7 +1058,7 @@ function renderZoneSel(){
     return `<div class="it sel" onclick="togglePlacement('${id}')">
       <span class="ck">✓</span>
       <span>${id}</span>
-      <span style="margin-left:auto;font-size:10.5px">${fmt(p.reach)}</span>
+      <span style="margin-left:auto;font-size:10px;text-align:right;line-height:1.35">${fmt(p.reach)} · ${p.size||''}<br>CTR ${p.ctr}% · ${fmtVND(p.cpm)}đ · <b style="color:var(--green)">${(p.obj||'').toUpperCase()}</b></span>
     </div>`;
   }).join('');
 }

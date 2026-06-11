@@ -1,0 +1,10 @@
+{
+  "name": "analytics-frontend",
+  "version": "1.0.0",
+  "description": "Camp Ads Analytics Dashboard — Claw-a-thon",
+  "scripts": {
+    "serve": "npx -y serve . -p 5174 --no-clipboard",
+    "dev": "npx -y serve . -p 5174"
+  },
+  "private": true
+}
