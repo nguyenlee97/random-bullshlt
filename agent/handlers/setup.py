@@ -1,0 +1,298 @@
+"""
+Setup handler — Step 3.
+Phase 0: Zone recommendation (zone ranker)
+Phase 1: Creative assignment (auto_assign)
+Phase 2: Order creation (single POST /api/orders with all zones + creatives[])
+"""
+from models import AgentResponse, SetupData, ResponseMeta
+from session import get_or_create_session, update_form_state, update_order_ids, log_event
+from tools.zone_ranker import rank_zones
+from tools.creative_match import auto_assign
+from tools.order_api import create_order
+from tools.zone_catalog import get_zone_map
+
+
+async def handle_setup(setup: SetupData, session_id: str) -> AgentResponse:
+    phase = setup.phase if setup.phase is not None else 0
+    if phase == 0:
+        return await _zone_recommend(setup, session_id)
+    elif phase == 1:
+        return await _creative_match(setup, session_id)
+    elif phase == 2:
+        return await _order_create(setup, session_id)
+    return AgentResponse(
+        text="⚠ Phase không hợp lệ.",
+        blocks=[],
+        meta=ResponseMeta(tool="setup", model="none", step=3),
+    )
+
+
+async def _zone_recommend(setup: SetupData, session_id: str) -> AgentResponse:
+    session = await get_or_create_session(session_id)
+    brief = session["form_state"].get("brief", {})
+    creative = session["form_state"].get("creative", {})
+
+    ranked = await rank_zones(
+        objective=brief.get("objective", "awareness"),
+        budget=brief.get("budget", 0),
+        kpi=brief.get("kpi", ""),
+        creative_files=creative.get("files", []),
+        limit=6,
+    )
+
+    await update_form_state(session_id, "reco_zones", ranked)
+
+    zone_rows = []
+    for i, z in enumerate(ranked):
+        imp = f"{z['est_impressions']:,}" if z.get("est_impressions") else "—"
+        reach_m = f"{z['reach']/1_000_000:.1f}M" if z.get("reach", 0) > 0 else "—"
+        zone_rows.append([
+            str(i + 1), z["id"],
+            f"Reach {reach_m} · VI {z['vi']}% · CTR {z['ctr']}% · CPM {z['cpm']:,}đ",
+            imp, z["reason"],
+        ])
+
+    top3 = ", ".join(z["id"] for z in ranked[:3])
+    blocks = [
+        {
+            "type": "table",
+            "title": f"🎯 Top {len(ranked)} Zone gợi ý ({brief.get('objective', 'awareness')})",
+            "columns": ["#", "Zone ID", "Metrics", "Est. Impressions", "Lý do"],
+            "rows": zone_rows,
+        },
+        {"type": "info", "text": "👆 Anh chọn zone ở panel phải, rồi bấm tiếp tục để gán creative!"},
+    ]
+
+    return AgentResponse(
+        text=f"✅ Em đã phân tích **{len(ranked)} zone** tối ưu. Top picks: {top3}.",
+        blocks=blocks,
+        meta=ResponseMeta(tool="zone_recommend", model="none", step=3),
+    )
+
+
+async def handle_zone_recommend_api(session_id: str) -> dict:
+    """
+    GET /api/agent/zones-recommend?session_id=xxx
+    Returns all real zones + ranked top list based on brief.
+    Zones with booking conflicts for this campaign's date range are annotated
+    with a `conflict` object and excluded from AI recommendations.
+    """
+    from tools.zone_catalog import get_all_zones
+    from tools.order_api import fetch_zone_conflicts
+
+    session = await get_or_create_session(session_id)
+    brief = session["form_state"].get("brief", {})
+    creative = session["form_state"].get("creative", {})
+
+    start_date = brief.get("startDate", "")
+    end_date = brief.get("endDate", "")
+
+    # Fetch all zones + conflict map in parallel
+    import asyncio
+    all_zones, conflict_map = await asyncio.gather(
+        get_all_zones(),
+        fetch_zone_conflicts(start_date, end_date),
+    )
+
+    # Rank all zones by brief metrics
+    ranked = await rank_zones(
+        objective=brief.get("objective", "awareness"),
+        budget=brief.get("budget", 0),
+        kpi=brief.get("kpi", ""),
+        creative_files=creative.get("files", []),
+        limit=len(all_zones),  # return all zones, sorted
+    )
+
+    # Annotate each zone with conflict info (if any)
+    for z in ranked:
+        z["conflict"] = conflict_map.get(z["id"])
+
+    # Recommend top 6 available zones only (skip conflicted)
+    available = [z for z in ranked if not z["conflict"]]
+    top_ids = {z["id"] for z in available[:6]}
+
+    for z in ranked:
+        z["recommended"] = z["id"] in top_ids
+
+    await update_form_state(session_id, "reco_zones", [z for z in ranked if z["id"] in top_ids])
+    return {"zones": ranked, "recommended_ids": list(top_ids)}
+
+
+async def _creative_match(setup: SetupData, session_id: str) -> AgentResponse:
+    session = await get_or_create_session(session_id)
+    creative = session["form_state"].get("creative", {})
+    files = creative.get("files", [])
+    zone_ids = setup.selectedZoneIds or []
+
+    if not zone_ids:
+        return AgentResponse(
+            text="⚠ Anh chưa chọn zone nào. Vui lòng chọn ít nhất 1 zone.",
+            blocks=[],
+            meta=ResponseMeta(tool="creative_match", model="none", step=3),
+        )
+
+    zone_map = await get_zone_map()
+    selected_zones = [zone_map[zid] for zid in zone_ids if zid in zone_map]
+    result = auto_assign(selected_zones, files)
+
+    await update_form_state(session_id, "assignments", result["assignments"])
+
+    rows = []
+    for zone in selected_zones:
+        zid = zone["id"]
+        fidx = result["assignments"].get(zid, 0)
+        fname = files[fidx]["name"] if fidx < len(files) else "—"
+        zone_warns = [w["message"] for w in result["warnings"] if w["zoneId"] == zid]
+        status = " · ".join(zone_warns) if zone_warns else "✅ Phù hợp"
+        rows.append([zid, zone.get("format", ""), fname, status])
+
+    blocks = [
+        {
+            "type": "table",
+            "title": "🔗 Gán Creative → Zone",
+            "columns": ["Zone ID", "Format", "Creative", "Trạng thái"],
+            "rows": rows,
+        },
+    ]
+    if result["warnings"]:
+        blocks.append({"type": "info", "text": f"⚠ {len(result['warnings'])} cảnh báo — anh kiểm tra và điều chỉnh nếu cần."})
+    blocks.append({"type": "info", "text": "✅ Anh xem lại và bấm **Xác nhận & Tạo chiến dịch** để hoàn tất!"})
+
+    return AgentResponse(
+        text=f"✅ Em đã gán **{len(files)} creative** vào **{len(selected_zones)} zone**.",
+        blocks=blocks,
+        meta=ResponseMeta(tool="creative_match", model="none", step=3),
+    )
+
+
+async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
+    session = await get_or_create_session(session_id)
+    brief = session["form_state"].get("brief", {})
+    creative = session["form_state"].get("creative", {})
+    segment = session["form_state"].get("segment", {})
+    targeting = session["form_state"].get("targeting", {})
+
+    zone_ids = setup.selectedZoneIds or []
+    assignments = setup.assignments or session["form_state"].get("assignments", {})
+    files = creative.get("files", [])
+
+    if not zone_ids:
+        return AgentResponse(
+            text="⚠ Không có zone nào được chọn.",
+            blocks=[],
+            meta=ResponseMeta(tool="order_create", model="none", step=3),
+        )
+
+    # ── Build creatives[] — group zones by file index ─────────────────────────
+    file_to_zones: dict[int, list[str]] = {}
+    for zone_id, file_idx in assignments.items():
+        if zone_id in zone_ids:
+            file_to_zones.setdefault(int(file_idx), []).append(zone_id)
+
+    # Any zones not in assignments → assign file 0 as fallback
+    assigned_zones = set(assignments.keys())
+    for zid in zone_ids:
+        if zid not in assigned_zones:
+            file_to_zones.setdefault(0, []).append(zid)
+
+    creatives_payload = []
+    for file_idx, z_ids in file_to_zones.items():
+        f = files[file_idx] if file_idx < len(files) else {}
+        is_skin = "skin" in (f.get("name") or "").lower()
+        # Prefer URL uploaded by frontend (base64→VPS), fall back to session-stored url
+        resolved_url = setup.fileUrls.get(str(file_idx)) or f.get("url", "")
+        creatives_payload.append({
+            "groupId": f"g_{file_idx}",
+            "name": f.get("name", ""),
+            "size": "skin" if is_skin else f.get("size", f"{f.get('width',0)}x{f.get('height',0)}"),
+            "format": "skin" if is_skin else "banner",
+            "url": resolved_url,
+            "zones": z_ids,
+            "label": f.get("name", ""),
+        })
+
+    # ── DMP: use _id values ───────────────────────────────────────────────────
+    dmp_include = [a.get("_id", "") for a in segment.get("attrs", []) if a.get("_id")]
+
+    # ── Default targeting if none set ─────────────────────────────────────────
+    empty_targeting = {
+        "geo": [], "age": [], "gender": [], "deviceOS": [], "deviceBrand": [],
+        "marital": [], "parental": [], "education": [], "income": [],
+        "career": [], "interest": [], "weather": [],
+    }
+    final_targeting = {**empty_targeting, **targeting}
+
+    # ── Build single order payload ────────────────────────────────────────────
+    total_budget_vnd = brief.get("budget", 0) * 1_000_000
+
+    # Auto-activate if campaign start date is today or already past
+    from datetime import date as _date
+    try:
+        start = _date.fromisoformat(brief.get("startDate", "")[:10])
+        order_status = "active" if start <= _date.today() else "pending"
+    except Exception:
+        order_status = "pending"
+
+    payload = {
+        "brand": brief.get("brand", "Brand"),
+        "advertiser": brief.get("brand", ""),
+        "objective": brief.get("objective", "awareness"),
+        "status": order_status,
+        "budget": total_budget_vnd,
+        "daily": 0,
+        "rate": 0,
+        "rateType": "CPM",
+        "startDate": brief.get("startDate", ""),
+        "endDate": brief.get("endDate", ""),
+        "creative": creatives_payload[0] if creatives_payload else {},
+        "creatives": creatives_payload,
+        "placements": zone_ids,
+        "targeting": final_targeting,
+        "dmp": {"include": dmp_include, "exclude": []},
+        "freqCap": "3",
+    }
+
+    await log_event(session_id, "api_call", {"endpoint": "POST /api/orders", "placements": zone_ids})
+
+    try:
+        result = await create_order(payload)
+        if "error" in result:
+            return AgentResponse(
+                text=f"⚠ Lỗi tạo order: {result.get('detail', result['error'])}",
+                blocks=[],
+                meta=ResponseMeta(tool="order_create", model="none", step=3),
+            )
+    except Exception as e:
+        await log_event(session_id, "error", {"handler": "order_create", "error": str(e)})
+        return AgentResponse(
+            text=f"⚠ Không thể tạo order: {str(e)[:120]}",
+            blocks=[],
+            meta=ResponseMeta(tool="order_create", model="none", step=3),
+        )
+
+    order_id = result.get("id", "—")
+    await update_order_ids(session_id, [order_id])
+
+    api_warnings = result.get("warnings", [])
+    budget_display = brief.get("budget", 0)
+
+    campaigns = [{
+        "id": order_id,
+        "name": f"{brief.get('brand', 'Brand')} — {len(zone_ids)} zones",
+        "status": result.get("status", "pending"),
+        "budget": budget_display,
+        "reach": 0,
+        "impressions": 0,
+        "ctr": 0,
+    }]
+
+    blocks: list[dict] = [{"type": "campaign_list", "campaigns": campaigns}]
+    if api_warnings:
+        blocks.append({"type": "info", "text": "⚠ API cảnh báo:\n" + "\n".join(f"- {w}" for w in api_warnings)})
+    blocks.append({"type": "info", "text": "🎉 Chiến dịch đã được khởi tạo! Anh xem tổng kết ở bước tiếp theo."})
+
+    return AgentResponse(
+        text=f"✅ Tạo thành công order **{order_id}** với **{len(zone_ids)} zone**, ngân sách **{budget_display:,.0f} triệu đồng**!",
+        blocks=blocks,
+        meta=ResponseMeta(tool="order_create", model="none", step=3),
+    )

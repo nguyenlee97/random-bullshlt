@@ -14,7 +14,7 @@
 <!-- TOPBAR -->
 <div class="topbar">
   <div class="logo"><span class="ic">A</span>AdsPilot</div>
-  <span class="ver">v1.0 · Claw-a-thon</span>
+  <span class="ver">v1.5 · Claw-a-thon</span>
   <nav id="topNav">
     <button class="on" data-view="orders" onclick="navTo('orders')">📊 Orders</button>
     <button data-view="create" onclick="navTo('create')">＋ Create</button>
@@ -54,6 +54,18 @@
       <p>Loading AdsPilot...</p>
     </div>
   </main>
+</div>
+
+<!-- IN-PAGE CONFIRM MODAL (replaces browser confirm()) -->
+<div id="confirmOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <div class="modal-icon">🗑️</div>
+    <p id="confirmMsg" class="modal-msg">Are you sure?</p>
+    <div class="modal-actions">
+      <button id="confirmOk"     class="btn danger" id="confirmOkBtn">Delete</button>
+      <button id="confirmCancel" class="btn sec"    id="confirmCancelBtn">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"><span class="dot"></span><span id="toastTx"></span></div>

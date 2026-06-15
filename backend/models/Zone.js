@@ -15,6 +15,7 @@ const placementSchema = new mongoose.Schema(
     // Extra validation metadata (added for zone-validation warnings)
     testSiteZone: { type: String, default: null }, // if this maps to a real test site zone id
     siteId:       { type: String, default: null }, // 'znews' | 'baomoi' | 'zingmp3'
+    siteUrl:      { type: String, default: null }, // direct URL to the test site page where this ad shows
   },
   { _id: false }
 );

@@ -25,6 +25,42 @@ async function getZonePlacements() {
   return catalog ? catalog.placements || [] : [];
 }
 
+/**
+ * Check if any other active/pending campaign overlaps in zone AND date with this order.
+ * Returns array of warning strings.
+ */
+async function checkZoneConflicts(placements, startDate, endDate, excludeOrderId) {
+  if (!placements || !placements.length) return [];
+
+  const query = {
+    status: { $in: ['active', 'pending'] },
+    placements: { $in: placements },
+  };
+  if (excludeOrderId) query.orderId = { $ne: excludeOrderId };
+
+  const conflicts = await Campaign.find(query).select('orderId brand placements startDate endDate').lean();
+
+  const warnings = [];
+  for (const c of conflicts) {
+    // Date overlap check: both must have dates to compare; no dates = always-on = always overlaps
+    const hasNewDates = startDate && endDate;
+    const hasExistDates = c.startDate && c.endDate;
+    const overlaps = !hasNewDates || !hasExistDates
+      || (c.startDate <= endDate && c.endDate >= startDate);
+
+    if (!overlaps) continue;
+
+    const sharedZones = placements.filter(p => c.placements.includes(p));
+    if (sharedZones.length) {
+      warnings.push(
+        `Zone conflict: ${sharedZones.join(', ')} already booked by ${c.orderId} (${c.brand}) ` +
+        `[${c.startDate || 'always'} → ${c.endDate || 'always'}]`
+      );
+    }
+  }
+  return warnings;
+}
+
 // Reformat mongoose doc → clean API shape matching mock
 function formatOrder(doc) {
   return {
@@ -40,6 +76,7 @@ function formatOrder(doc) {
     startDate:  doc.startDate,
     endDate:    doc.endDate,
     creative:   doc.creative,
+    creatives:  doc.creatives || [],
     placements: doc.placements,
     targeting:  doc.targeting,
     dmp:        doc.dmp,
@@ -82,11 +119,28 @@ router.post('/', async (req, res) => {
     const seq = await getSeq();
     const placements = await getZonePlacements();
 
-    const warnings = validatePlacements(
+    const sizeWarnings = validatePlacements(
       payload.placements || [],
-      payload.creative || {},
-      placements
+      payload.creative   || {},
+      placements,
+      payload.creatives  || []
     );
+
+    // Hard-block: zone conflict returns 409
+    const conflicts = await checkZoneConflicts(
+      payload.placements || [],
+      payload.startDate  || '',
+      payload.endDate    || '',
+      null
+    );
+    if (conflicts.length) {
+      return res.status(409).json({
+        error: 'Zone conflict — one or more placements are already booked by another campaign in this date range.',
+        conflicts,
+      });
+    }
+
+    const warnings = sizeWarnings;
 
     const order = await Campaign.create({
       orderId:    nextOrderId(seq),
@@ -101,6 +155,7 @@ router.post('/', async (req, res) => {
       startDate:  payload.startDate  || '',
       endDate:    payload.endDate    || '',
       creative:   payload.creative   || { name: '', size: '', url: '' },
+      creatives:  payload.creatives  || [],
       placements: payload.placements || [],
       targeting:  payload.targeting  || {},
       dmp:        payload.dmp        || { include: [], exclude: [] },
@@ -126,11 +181,30 @@ router.put('/:id', async (req, res) => {
     const placements = await getZonePlacements();
     const targetPlacements = patch.placements  || order.placements;
     const targetCreative   = patch.creative    || order.creative;
-    const warnings = validatePlacements(targetPlacements, targetCreative, placements);
+    const targetStart      = patch.startDate   !== undefined ? patch.startDate : order.startDate;
+    const targetEnd        = patch.endDate     !== undefined ? patch.endDate   : order.endDate;
+
+    const sizeWarnings = validatePlacements(
+      targetPlacements,
+      targetCreative,
+      placements,
+      patch.creatives || order.creatives || []
+    );
+
+    // Hard-block: zone conflict returns 409
+    const conflicts = await checkZoneConflicts(targetPlacements, targetStart, targetEnd, req.params.id);
+    if (conflicts.length) {
+      return res.status(409).json({
+        error: 'Zone conflict — one or more placements are already booked by another campaign in this date range.',
+        conflicts,
+      });
+    }
+
+    const warnings = sizeWarnings;
 
     // Apply patch fields (whitelist important ones, spread rest)
     const allowed = ['brand','advertiser','objective','status','budget','daily','rate','rateType',
-                     'startDate','endDate','creative','placements','targeting','dmp'];
+                     'startDate','endDate','creative','creatives','placements','targeting','dmp'];
     allowed.forEach((k) => { if (patch[k] !== undefined) order[k] = patch[k]; });
     order.warnings = warnings;
 

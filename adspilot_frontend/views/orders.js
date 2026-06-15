@@ -156,12 +156,17 @@ async function archiveFromList(id) {
 }
 
 async function deleteFromList(id) {
-  if (!confirm('Delete order ' + id + '? This cannot be undone.')) return;
-  try {
-    await Api.deleteOrder(id);
-    toast('× Deleted ' + id);
-    renderOrders();
-  } catch (e) { toast('Error: ' + e.message, true); }
+  showConfirm(
+    `Delete order ${id}? This cannot be undone.`,
+    async () => {
+      try {
+        await Api.deleteOrder(id);
+        toast('× Deleted ' + id);
+        renderOrders();
+      } catch (e) { toast('Error: ' + e.message, true); }
+    },
+    'Delete'
+  );
 }
 
 async function editOrder(id) {
@@ -173,8 +178,61 @@ async function editOrder(id) {
     formState.targeting  = formState.targeting  || {};
     formState.dmp        = formState.dmp        || { include: [], exclude: [] };
     formState.placements = formState.placements || [];
+
+    // ── Reconstruct creativeGroups from saved creatives[] ──────────────────
+    // Priority 1: creative has zones[] → restore those exact groups
+    // Priority 2: creatives with same URL → group those zones together
+    // Priority 3: group by size (fallback, same as new campaign)
+    formState.creativeGroups = [];
+    const savedCreatives = formState.creatives || [];
+
+    if (savedCreatives.length) {
+      // Build a URL→group map for priority-2 grouping
+      const urlGroupMap = {};
+
+      for (const c of savedCreatives) {
+        const hasZones = Array.isArray(c.zones) && c.zones.length > 0;
+
+        if (hasZones) {
+          // Priority 1: restore exact zone group from saved data
+          formState.creativeGroups.push({
+            groupId: c.groupId || ('g_' + Math.random().toString(36).slice(2, 9)),
+            zones:   [...c.zones],
+            size:    c.size   || 'unknown',
+            format:  c.format || 'banner',
+            url:     c.url    || '',
+            label:   c.label  || c.name || ''
+          });
+        } else if (c.url) {
+          // Priority 2: group zones that share the exact same image URL
+          if (!urlGroupMap[c.url]) {
+            urlGroupMap[c.url] = {
+              groupId: c.groupId || ('g_' + Math.random().toString(36).slice(2, 9)),
+              zones:   [],
+              size:    c.size   || 'unknown',
+              format:  c.format || 'banner',
+              url:     c.url,
+              label:   c.label  || c.name || ''
+            };
+            formState.creativeGroups.push(urlGroupMap[c.url]);
+          }
+          // No zones array saved → use placements of this size as best guess
+          const sizePlacements = formState.placements.filter(pid => {
+            // Will be cross-referenced with catalog in refreshCreativesPanel
+            return true; // placeholder; refreshCreativesPanel reconciles properly
+          });
+          // Leave zones[] empty; refreshCreativesPanel will fill unclaimed zones
+        } else {
+          // Priority 3: empty creative, will be assigned by refreshCreativesPanel by size
+        }
+      }
+    }
+    // refreshCreativesPanel (called by renderCreate) will reconcile any
+    // placements not yet claimed by a group, adding them by size-match.
+
     navTo('create');
   } catch (e) {
     toast('Failed to load order: ' + e.message, true);
   }
 }
+

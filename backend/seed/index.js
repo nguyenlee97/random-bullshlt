@@ -1,16 +1,19 @@
 /**
- * Block 5 — Seed Script (v2)
- * Source of truth: Ads Zone.xlsx + Audience Library.xlsx
+ * Block 5 — Seed Script (v3)
+ * Source of truth: seed/data/Ads Zone.xlsx + seed/data/Audience Library.xlsx
  *
- * Populates:
- *   - zones          (ZoneCatalog)   — 26 official + 14 test-site zones
- *   - audience_library (AudienceLibrary) — 310 segments from Excel
- *   - campaigns      (Campaign)      — 3 seed orders from mock
- *   - analytics_records (AnalyticsRecord) — 30-day generated data
+ * Strategy (E1 Zone Refinement):
+ *   - 26 mock zones are FORCED-MAPPED to real test-site zone IDs.
+ *     Performance metrics (Reach/VI/CTR/CPM/Objective) kept from mock data.
+ *     Format/size/channel changed to match real ad slots.
+ *   - 12 unmapped real zone slots (category side strips) added as catalog-only entries.
+ *   - Audio/video formats converted to banner/skin.
+ *   - Total: 38 placements (26 mock-mapped + 12 real-only)
  *
  * Usage:
- *   node seed/index.js           — skip collections that already have data
- *   node seed/index.js --force   — wipe and re-seed everything
+ *   node seed/index.js              — skip collections that already have data
+ *   node seed/index.js --force      — wipe + re-seed everything
+ *   node seed/index.js --zones-only — seed only zones+campaigns (skip analytics)
  */
 require('dotenv').config();
 const path     = require('path');
@@ -23,16 +26,16 @@ const AnalyticsRecord  = require('../models/AnalyticsRecord');
 const AudienceLibrary  = require('../models/AudienceLibrary');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// READ EXCEL FILES
+// READ EXCEL FILES — relative paths (works on any OS)
 // ─────────────────────────────────────────────────────────────────────────────
-const ZONE_FILE     = 'C:\\Users\\LENOVO\\Downloads\\Ads Zone.xlsx';
-const AUDIENCE_FILE = 'C:\\Users\\LENOVO\\Downloads\\Audience Library.xlsx';
+const ZONE_FILE     = path.join(__dirname, 'data', 'Ads Zone.xlsx');
+const AUDIENCE_FILE = path.join(__dirname, 'data', 'Audience Library.xlsx');
 
 function readZonesFromExcel() {
   const wb   = xlsx.readFile(ZONE_FILE);
   const rows = xlsx.utils.sheet_to_json(wb.Sheets['Ad Zones'], { defval: null });
   return rows.map((r) => ({
-    id:      r['Zone ID'],
+    mockId:  r['Zone ID'],
     channel: r['Channel'],
     format:  r['Format'],
     size:    r['Size'],
@@ -63,113 +66,182 @@ function readAudienceFromExcel() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BUILD ZONES CATALOG
-// Derives groups & channels from zone rows + adds test-site zones
+// E1 FORCED MAPPING: mock zone ID → real zone ID + overrides
+// Keys are mock zone IDs from Excel.
+// Values define the real zone to use, overriding format/size/channel.
+// Performance metrics (reach/vi/ctr/cpm/obj) are kept from the mock data.
 // ─────────────────────────────────────────────────────────────────────────────
-function buildZonesCatalog(zoneRows) {
-  // Groups from Excel (unique by Group column)
-  const groupMap = {};
-  for (const r of zoneRows) {
-    if (!groupMap[r.channel]) groupMap[r.channel] = r.id.split('.')[0]; // rough group
-  }
+const FORCED_ZONE_MAP = {
+  // ── PulseNews zones → Znews home + category ──────────────────────────────
+  'PulseNews.Cate.Inpage1':    { id: 'ZingNews_PrBox_2',            format: 'banner', size: '300x600',  channel: 'znews-site',        siteId: 'znews' },
+  'PulseNews.Cate.Inpage2':    { id: 'Znews_KinhDoanh_SidebarBox',  format: 'banner', size: '300x250',  channel: 'znews-kinh-doanh',  siteId: 'znews',  flexible: true },
+  'PulseNews.Home.Inpage1':    { id: 'ZingNews_Masthead',            format: 'banner', size: '1160x250', channel: 'znews-site',        siteId: 'znews' },
+  'PulseNews.Home.Inpage2':    { id: 'ZingNews_Halfpage',            format: 'banner', size: '300x600',  channel: 'znews-site',        siteId: 'znews' },
+  'PulseNews.Sub.Inpage':      { id: 'Znews_DoiSong_SidebarBox',    format: 'banner', size: '300x250',  channel: 'znews-doi-song',    siteId: 'znews',  flexible: true },
 
-  // Official group definitions (match mock exactly)
+  // ── WaveNews zones → Znews inline + BaoMoi ───────────────────────────────
+  'WaveNews.Inpage1':          { id: 'BaoMoi_Box1',                  format: 'banner', size: '300x250',  channel: 'baomoi-site',       siteId: 'baomoi' },
+  'WaveNews.Inpage2':          { id: 'BaoMoi_Box2',                  format: 'banner', size: '300x600',  channel: 'baomoi-site',       siteId: 'baomoi' },
+  'WaveNews.Home.Inpage1':     { id: 'ZingNews_Masthead_Inline_1',   format: 'banner', size: '1160x250', channel: 'znews-site',        siteId: 'znews' },
+
+  // ── VibeTV (video → skin/banner) ─────────────────────────────────────────
+  'VibeTV.ShortVideo.Infeed.Fullscreen1': { id: 'Znews_CongNghe_Background', format: 'skin', size: 'skin', channel: 'znews-cong-nghe', siteId: 'znews' },
+  'VibeTV.ShortVideo.Infeed.Fullscreen2': { id: 'Znews_TheThao_Background',  format: 'skin', size: 'skin', channel: 'znews-the-thao',  siteId: 'znews' },
+  'VibeTV.ShortVideo.Infeed.Fullscreen3': { id: 'Znews_GiaiTri_Background',  format: 'skin', size: 'skin', channel: 'znews-giai-tri',  siteId: 'znews' },
+  'VibeTV.ShortVideo.Infeed.Fullscreen4': { id: 'Znews_DoiSong_Background',  format: 'skin', size: 'skin', channel: 'znews-doi-song',  siteId: 'znews' },
+  'VibeTV.ShortVideo.Infeed.Fullscreen5': { id: 'Znews_SucKhoe_Background',  format: 'skin', size: 'skin', channel: 'znews-suc-khoe',  siteId: 'znews' },
+
+  // ── PlayVerse → Znews Tech category ──────────────────────────────────────
+  'PlayVerse.Banner.Home':     { id: 'Znews_CongNghe_SidebarBox',   format: 'banner', size: '300x250',  channel: 'znews-cong-nghe',   siteId: 'znews',  flexible: true },
+
+  // ── StreamWave (audio → skin) ─────────────────────────────────────────────
+  'StreamWave.AudioAd.Mid':    { id: 'Znews_KinhDoanh_Background',  format: 'skin',   size: 'skin',     channel: 'znews-kinh-doanh',  siteId: 'znews' },
+
+  // ── MessageApp (various → banner/skin) ───────────────────────────────────
+  'MessageApp.Inbox.Banner':      { id: 'BaoMoi_Masthead',           format: 'banner', size: '1160x280', channel: 'baomoi-site',       siteId: 'baomoi' },
+  'MessageApp.Inbox.Native':      { id: 'BaoMoi_Background',         format: 'skin',   size: 'skin',     channel: 'baomoi-site',       siteId: 'baomoi', subFormat: 'background' },
+  'MessageApp.Feed.Carousel':     { id: 'BaoMoi_StickyLeft',         format: 'skin',   size: 'skin',     channel: 'baomoi-site',       siteId: 'baomoi', subFormat: 'side-left' },
+  'MessageApp.Story.Fullscreen':  { id: 'BaoMoi_StickyRight',        format: 'skin',   size: 'skin',     channel: 'baomoi-site',       siteId: 'baomoi', subFormat: 'side-right' },
+  'MessageApp.Story.Video':       { id: 'Znews_TheThao_SidebarBox',  format: 'banner', size: '300x250',  channel: 'znews-the-thao',    siteId: 'znews',  flexible: true },
+  'MessageApp.InApp.Interstitial':{ id: 'Znews_GiaiTri_SidebarBox',  format: 'banner', size: '300x250',  channel: 'znews-giai-tri',    siteId: 'znews',  flexible: true },
+  'MessageApp.InApp.MREC':        { id: 'Znews_SucKhoe_SidebarBox',  format: 'banner', size: '300x250',  channel: 'znews-suc-khoe',    siteId: 'znews',  flexible: true },
+  'MessageApp.InApp.RewardVideo': { id: 'ZingMP3_Masthead',          format: 'banner', size: '2032x528', channel: 'zingmp3-site',      siteId: 'zingmp3' },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHANNEL → TEST SITE URL
+// Maps each channel key (used in FORCED_ZONE_MAP) to the exact page URL on the
+// staging test site where that ad slot appears.
+// ─────────────────────────────────────────────────────────────────────────────
+const CHANNEL_SITE_URLS = {
+  'znews-site':       'https://znews-stg.pawgrammers.io.vn/',
+  'znews-kinh-doanh': 'https://znews-stg.pawgrammers.io.vn/kinh-doanh.html',
+  'znews-suc-khoe':   'https://znews-stg.pawgrammers.io.vn/suc-khoe.html',
+  'znews-the-thao':   'https://znews-stg.pawgrammers.io.vn/the-thao.html',
+  'znews-doi-song':   'https://znews-stg.pawgrammers.io.vn/doi-song.html',
+  'znews-cong-nghe':  'https://znews-stg.pawgrammers.io.vn/cong-nghe.html',
+  'znews-giai-tri':   'https://znews-stg.pawgrammers.io.vn/giai-tri.html',
+  'baomoi-site':      'https://baomoi-stg.pawgrammers.io.vn/',
+  'zingmp3-site':     'https://zingmp3-stg.pawgrammers.io.vn/',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+function buildZonesCatalog(mockRows) {
   const groups = [
-    { id: 'pulse-news',  name: 'PulseNews',      desc: 'News portal (web + app + WAP)',                       channels: ['pulse-news-app','pulse-news-wap','pulse-news-pr','pulse-news-pr-wap'] },
-    { id: 'vibe-tv',     name: 'VibeTV Studio',  desc: 'Short video & livestream',                            channels: ['vibe-tv-web','vibe-tv-app','vibe-tv-onsocial'] },
-    { id: 'wave-news',   name: 'WaveNews',        desc: 'Lifestyle & entertainment news',                      channels: ['wave-news-wap','wave-news-web'] },
-    { id: 'play-verse',  name: 'PlayVerse',       desc: 'Gaming portal',                                      channels: ['play-verse-web'] },
-    { id: 'stream-wave', name: 'StreamWave',      desc: 'Music & podcast',                                    channels: ['stream-wave-app'] },
-    { id: 'message-app', name: 'MessageApp',      desc: 'Messaging super-app (chat, feed, story, mini-app)',  channels: ['message-app'] },
-    // Test sites (Phase 1 from zone_mapping.md)
-    { id: 'znews-site',  name: 'Znews (Test)',    desc: 'Real Znews replicate — stg.pawgrammers.io.vn',        channels: ['znews-site'] },
-    { id: 'baomoi-site', name: 'BaoMoi (Test)',   desc: 'Real BaoMoi replicate — stg.pawgrammers.io.vn',       channels: ['baomoi-site'] },
-    { id: 'zingmp3-site',name: 'ZingMP3 (Test)',  desc: 'Real ZingMP3 replicate — stg.pawgrammers.io.vn',      channels: ['zingmp3-site'] },
+    // Real test-site groups only
+    { id: 'znews-site',       name: 'ZNews Home',        desc: 'Znews homepage — znews-stg.pawgrammers.io.vn',              channels: ['znews-site'] },
+    { id: 'znews-categories', name: 'ZNews Categories',  desc: 'Znews category pages (Tech, Sport, Business, etc.)',        channels: ['znews-cong-nghe','znews-the-thao','znews-giai-tri','znews-doi-song','znews-suc-khoe','znews-kinh-doanh'] },
+    { id: 'baomoi-site',      name: 'BaoMoi',            desc: 'BaoMoi homepage — baomoi-stg.pawgrammers.io.vn',            channels: ['baomoi-site'] },
+    { id: 'zingmp3-site',     name: 'ZingMP3',           desc: 'ZingMP3 homepage — zingmp3-stg.pawgrammers.io.vn',          channels: ['zingmp3-site'] },
   ];
 
   const channels = {
-    'pulse-news-app':    { name: 'PulseNews App',     reach: 4200000  },
-    'pulse-news-wap':    { name: 'PulseNews Wap',     reach: 6800000  },
-    'pulse-news-pr':     { name: 'PulseNews PR',      reach:  980000  },
-    'pulse-news-pr-wap': { name: 'PulseNews PR_Wap',  reach: 1400000  },
-    'vibe-tv-web':       { name: 'VibeTV Web',        reach: 3100000  },
-    'vibe-tv-app':       { name: 'VibeTV App',        reach: 5500000  },
-    'vibe-tv-onsocial':  { name: 'VibeTV onSocial',   reach: 2300000  },
-    'wave-news-wap':     { name: 'WaveNews Wap',      reach: 2900000  },
-    'wave-news-web':     { name: 'WaveNews Web',      reach: 1600000  },
-    'play-verse-web':    { name: 'PlayVerse Web',     reach: 1200000  },
-    'stream-wave-app':   { name: 'StreamWave App',    reach: 1850000  },
-    'message-app':       { name: 'MessageApp',        reach: 52000000 },
-    'znews-site':        { name: 'Znews Replicate',   reach: 1000000  },
-    'baomoi-site':       { name: 'BaoMoi Replicate',  reach:  800000  },
-    'zingmp3-site':      { name: 'ZingMP3 Replicate', reach:  500000  },
+    // Znews channels
+    'znews-site':        { name: 'Znews Home',       reach: 1000000 },
+    'znews-cong-nghe':   { name: 'Znews Tech',       reach:  420000 },
+    'znews-doi-song':    { name: 'Znews Lifestyle',  reach:  380000 },
+    'znews-giai-tri':    { name: 'Znews Entertainment', reach: 460000 },
+    'znews-kinh-doanh':  { name: 'Znews Business',   reach:  350000 },
+    'znews-suc-khoe':    { name: 'Znews Health',     reach:  310000 },
+    'znews-the-thao':    { name: 'Znews Sports',     reach:  500000 },
+    // BaoMoi channels
+    'baomoi-site':       { name: 'BaoMoi',           reach:  800000 },
+    // ZingMP3 channel
+    'zingmp3-site':      { name: 'ZingMP3',          reach:  500000 },
   };
 
-  // Official placements from Excel (26 zones)
-  const placements = zoneRows;
+  // ── Build placements: apply forced mapping to mock rows ──────────────────
+  const mappedPlacements = mockRows.map((row) => {
+    const override = FORCED_ZONE_MAP[row.mockId];
+    if (!override) {
+      console.warn(`  ⚠️  No forced mapping for mock zone: ${row.mockId} — skipping`);
+      return null;
+    }
+    return {
+      id:       override.id,
+      mockId:   row.mockId,          // original mock zone ID for reference
+      channel:  override.channel,
+      format:   override.format,
+      size:     override.size,
+      reach:    row.reach,
+      vi:       row.vi,
+      ctr:      row.ctr,
+      cpm:      row.cpm,
+      obj:      row.obj,
+      note:     row.note,
+      siteId:   override.siteId,
+      testSiteZone: override.id,
+      siteUrl:  CHANNEL_SITE_URLS[override.channel] || null,
+    };
+  }).filter(Boolean);
 
-  // Test-site zones (Phase 1 — from zone_mapping.md analysis)
-  const testSiteZones = [
-    { id: 'ZingNews_Masthead',          channel: 'znews-site',  format: 'banner', size: '1160x250', reach: 600000, vi: 72, ctr: 0.65, cpm: 20000, obj: 'awareness',     testSiteZone: 'ZingNews_Masthead',          siteId: 'znews' },
-    { id: 'ZingNews_Halfpage',          channel: 'znews-site',  format: 'banner', size: '300x600',  reach: 420000, vi: 65, ctr: 0.55, cpm: 18000, obj: 'consideration', testSiteZone: 'ZingNews_Halfpage',          siteId: 'znews' },
-    { id: 'ZingNews_PrBox_2',           channel: 'znews-site',  format: 'banner', size: '300x250',  reach: 380000, vi: 60, ctr: 0.50, cpm: 15000, obj: 'conversion',    testSiteZone: 'ZingNews_PrBox_2',           siteId: 'znews' },
-    { id: 'ZingNews_Masthead_Inline_1', channel: 'znews-site',  format: 'banner', size: '970x250',  reach: 500000, vi: 68, ctr: 0.60, cpm: 19000, obj: 'consideration', testSiteZone: 'ZingNews_Masthead_Inline_1', siteId: 'znews' },
-    { id: 'ZingNews_Background',        channel: 'znews-site',  format: 'banner', size: 'skin',     reach: 600000, vi: 55, ctr: 0.30, cpm: 25000, obj: 'awareness',     testSiteZone: 'ZingNews_Background',        siteId: 'znews' },
-    { id: 'ZingNews_SideLeft',          channel: 'znews-site',  format: 'banner', size: 'skin',     reach: 600000, vi: 50, ctr: 0.28, cpm: 12000, obj: 'awareness',     testSiteZone: 'ZingNews_SideLeft',          siteId: 'znews' },
-    { id: 'ZingNews_SideRight',         channel: 'znews-site',  format: 'banner', size: 'skin',     reach: 600000, vi: 50, ctr: 0.28, cpm: 12000, obj: 'awareness',     testSiteZone: 'ZingNews_SideRight',         siteId: 'znews' },
-    { id: 'BaoMoi_Masthead',            channel: 'baomoi-site', format: 'banner', size: '1160x280', reach: 480000, vi: 70, ctr: 0.62, cpm: 19000, obj: 'awareness',     testSiteZone: 'BaoMoi_Masthead',            siteId: 'baomoi' },
-    { id: 'BaoMoi_Box1',                channel: 'baomoi-site', format: 'banner', size: '300x250',  reach: 360000, vi: 62, ctr: 0.52, cpm: 14000, obj: 'conversion',    testSiteZone: 'BaoMoi_Box1',                siteId: 'baomoi' },
-    { id: 'BaoMoi_Box2',                channel: 'baomoi-site', format: 'banner', size: '300x600',  reach: 320000, vi: 64, ctr: 0.56, cpm: 16000, obj: 'consideration', testSiteZone: 'BaoMoi_Box2',                siteId: 'baomoi' },
-    { id: 'BaoMoi_Background',          channel: 'baomoi-site', format: 'banner', size: 'skin',     reach: 480000, vi: 55, ctr: 0.30, cpm: 23000, obj: 'awareness',     testSiteZone: 'BaoMoi_Background',          siteId: 'baomoi' },
-    { id: 'BaoMoi_StickyLeft',          channel: 'baomoi-site', format: 'banner', size: 'skin',     reach: 480000, vi: 50, ctr: 0.28, cpm: 11000, obj: 'awareness',     testSiteZone: 'BaoMoi_StickyLeft',          siteId: 'baomoi' },
-    { id: 'BaoMoi_StickyRight',         channel: 'baomoi-site', format: 'banner', size: 'skin',     reach: 480000, vi: 50, ctr: 0.28, cpm: 11000, obj: 'awareness',     testSiteZone: 'BaoMoi_StickyRight',         siteId: 'baomoi' },
-    { id: 'ZingMP3_Masthead',           channel: 'zingmp3-site',format: 'banner', size: '1200x250', reach: 300000, vi: 68, ctr: 0.45, cpm: 17000, obj: 'awareness',     testSiteZone: 'ZingMP3_Masthead',           siteId: 'zingmp3' },
-  ];
+  // ── 12 unmapped real zone slots (category side strips, no mock counterpart) ─
+  const CATE_SIDE_STRIPS = [
+    'CongNghe','TheThao','GiaiTri','DoiSong','SucKhoe','KinhDoanh',
+  ].flatMap((cat) => {
+    const channelId = `znews-${cat.toLowerCase().replace('congnghe','cong-nghe').replace('theThao','the-thao').replace('giaitri','giai-tri').replace('doisong','doi-song').replace('suckhoe','suc-khoe').replace('kinhdoanh','kinh-doanh')}`;
+    // map category name to channel id properly
+    const chanMap = {
+      CongNghe:  'znews-cong-nghe',
+      TheThao:   'znews-the-thao',
+      GiaiTri:   'znews-giai-tri',
+      DoiSong:   'znews-doi-song',
+      SucKhoe:   'znews-suc-khoe',
+      KinhDoanh: 'znews-kinh-doanh',
+    };
+    const ch = chanMap[cat];
+    return [
+      { id: `Znews_${cat}_SideLeft`,  channel: ch, format: 'skin', size: 'skin', subFormat: 'side-left',  reach: 200000, vi: 45, ctr: 0.25, cpm: 10000, obj: 'awareness', siteId: 'znews', testSiteZone: `Znews_${cat}_SideLeft`,  siteUrl: CHANNEL_SITE_URLS[ch] || null },
+      { id: `Znews_${cat}_SideRight`, channel: ch, format: 'skin', size: 'skin', subFormat: 'side-right', reach: 200000, vi: 45, ctr: 0.25, cpm: 10000, obj: 'awareness', siteId: 'znews', testSiteZone: `Znews_${cat}_SideRight`, siteUrl: CHANNEL_SITE_URLS[ch] || null },
+    ];
+  });
 
-  return { groups, channels, placements: [...placements, ...testSiteZones] };
+  const placements = [...mappedPlacements, ...CATE_SIDE_STRIPS];
+
+  return { groups, channels, placements };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SEED: CAMPAIGNS (from mock — no Excel source for these)
+// SEED CAMPAIGNS (updated to use real zone IDs)
 // ─────────────────────────────────────────────────────────────────────────────
 const CAMPAIGNS_SEED = [
   {
     orderId: 'ORD-2026-001', brand: 'Brand A', advertiser: 'BrandA Vietnam',
     objective: 'awareness', status: 'active',
     budget: 425000000, daily: 43000000, rate: 36960, rateType: 'CPM',
-    startDate: '2026-05-10', endDate: '2026-06-07',
-    creative: { name: 'Mazda CX-5 Inpage 16/5', size: '720x1280', url: '' },
-    placements: ['PulseNews.Home.Inpage1','PulseNews.Sub.Inpage','VibeTV.ShortVideo.Infeed.Fullscreen1'],
+    startDate: '2026-05-10', endDate: '2026-07-07',
+    creative: { name: 'Mazda CX-5 Inpage', size: '1160x250', url: '' },
+    placements: ['ZingNews_Masthead', 'Znews_CongNghe_Background'],
     targeting: { geo: ['Hà Nội','TP.HCM','Đà Nẵng'], age: ['25-34','35-44'], gender: [], deviceOS: ['Android','iOS'], marital: [], parental: [], education: [], income: ['Top 5-10%','Top 10-25%'], career: [], interest: [], weather: [] },
-    dmp: { include: ['INT056','INT004'], exclude: [] }, // Automotive, Aviation
-    warnings: ['Zone "PulseNews.Home.Inpage1" expects 728x90 banner, but creative size is 720x1280.'],
+    dmp: { include: ['INT056','INT004'], exclude: [] },
+    warnings: [],
   },
   {
     orderId: 'ORD-2026-002', brand: 'FlyDragon Airlines', advertiser: 'FlyDragon JSC',
     objective: 'conversion', status: 'paused',
     budget: 280000000, daily: 25000000, rate: 42000, rateType: 'CPM',
-    startDate: '2026-05-15', endDate: '2026-06-15',
-    creative: { name: 'FlyDragon Summer Sale', size: '1080x1080', url: '' },
-    placements: ['VibeTV.ShortVideo.Infeed.Fullscreen2','WaveNews.Home.Inpage1'],
+    startDate: '2026-05-15', endDate: '2026-07-15',
+    creative: { name: 'FlyDragon Summer Sale', size: '1160x250', url: '' },
+    placements: ['ZingNews_Masthead_Inline_1', 'BaoMoi_Masthead'],
     targeting: { geo: ['Hà Nội','TP.HCM'], age: ['25-34','35-44','45-54'], gender: [], deviceOS: ['Android','iOS'], marital: [], parental: [], education: [], income: ['Top 5%','Top 5-10%'], career: [], interest: [], weather: [] },
-    dmp: { include: ['BEH001','INT004'], exclude: [] }, // Travel, Aviation
-    warnings: ['Zone "VibeTV.ShortVideo.Infeed.Fullscreen2" expects 1080x1920 video-vertical, but creative size is 1080x1080.'],
+    dmp: { include: ['BEH001','INT004'], exclude: [] },
+    warnings: [],
   },
   {
     orderId: 'ORD-2026-003', brand: 'NeoCard Finance', advertiser: 'NeoCard Vietnam',
     objective: 'consideration', status: 'pending',
     budget: 180000000, daily: 18000000, rate: 38500, rateType: 'CPM',
-    startDate: '2026-06-01', endDate: '2026-06-30',
-    creative: { name: 'NeoCard Cashback Launch', size: '320x480', url: '' },
-    placements: ['PulseNews.Cate.Inpage1','WaveNews.Inpage2'],
+    startDate: '2026-06-01', endDate: '2026-07-30',
+    creative: { name: 'NeoCard Cashback Launch', size: '300x250', url: '' },
+    placements: ['ZingNews_PrBox_2', 'BaoMoi_Box1'],
     targeting: { geo: ['TP.HCM','Hà Nội'], age: ['25-34'], gender: ['Male'], deviceOS: ['iOS'], marital: [], parental: [], education: ['College & Bachelor','Master'], income: ['Top 10-25%'], career: ['Office Worker'], interest: [], weather: [] },
-    dmp: { include: ['INT021','INT022'], exclude: [] }, // Banking, Credit cards
-    warnings: ['Zone "PulseNews.Cate.Inpage1" expects 300x250 banner, but creative size is 320x480.'],
+    dmp: { include: ['INT021','INT022'], exclude: [] },
+    warnings: [],
   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ANALYTICS GENERATOR (realistic 30-day data)
+// ANALYTICS GENERATOR
 // ─────────────────────────────────────────────────────────────────────────────
 function generateAnalytics(campaigns, placements) {
   const records = [];
@@ -187,20 +259,27 @@ function generateAnalytics(campaigns, placements) {
 
         if (dateStr < campaign.startDate || dateStr > campaign.endDate) continue;
 
-        const noise        = () => 0.7 + Math.random() * 0.6;
-        const baseImp      = Math.round((campaign.daily / placement.cpm) * 1000 * noise());
-        const impressions  = Math.max(100, baseImp);
-        const ctr          = parseFloat((placement.ctr * noise()).toFixed(3));
-        const clicks       = Math.round(impressions * (ctr / 100));
-        const vi           = parseFloat((placement.vi * (0.9 + Math.random() * 0.2)).toFixed(1));
-        const cpm          = Math.round(placement.cpm * noise());
-        const spend        = Math.round((impressions / 1000) * cpm);
-        const conversions  = campaign.objective === 'conversion'
+        const noise       = () => 0.7 + Math.random() * 0.6;
+        const baseImp     = Math.round((campaign.daily / placement.cpm) * 1000 * noise());
+        const impressions = Math.max(100, baseImp);
+        const ctr         = parseFloat((placement.ctr * noise()).toFixed(3));
+        const clicks      = Math.round(impressions * (ctr / 100));
+        const vi          = parseFloat((placement.vi * (0.9 + Math.random() * 0.2)).toFixed(1));
+        const cpm         = Math.round(placement.cpm * noise());
+        const spend       = Math.round((impressions / 1000) * cpm);
+        const conversions = campaign.objective === 'conversion'
           ? Math.round(clicks * (0.02 + Math.random() * 0.04))
           : Math.round(clicks * (0.005 + Math.random() * 0.01));
-        const reach        = Math.round(impressions * (0.7 + Math.random() * 0.25));
+        const reach = Math.round(impressions * (0.7 + Math.random() * 0.25));
 
-        records.push({ campaignId: campaign.orderId, placementId, date: dateStr, channel: placement.channel, format: placement.format, impressions, clicks, spend, ctr, cpm, vi, reach, conversions });
+        records.push({
+          campaignId:  campaign.orderId,
+          placementId,
+          date:        dateStr,
+          channel:     placement.channel,
+          format:      placement.format,
+          impressions, clicks, spend, ctr, cpm, vi, reach, conversions,
+        });
       }
     }
   }
@@ -211,29 +290,31 @@ function generateAnalytics(campaigns, placements) {
 // MAIN
 // ─────────────────────────────────────────────────────────────────────────────
 async function runSeed(opts = {}) {
-  const force = opts.force || process.argv.includes('--force');
+  const force     = opts.force     || process.argv.includes('--force');
+  const zonesOnly = opts.zonesOnly || process.argv.includes('--zones-only');
 
-  // ── Read Excel files ────────────────────────────────────────────────────────
+  // ── Read Excel files ───────────────────────────────────────────────────────
   console.log('  📂  Reading Excel files...');
-  const zoneRows    = readZonesFromExcel();
+  const mockRows    = readZonesFromExcel();
   const audRows     = readAudienceFromExcel();
-  const zonesCatalog = buildZonesCatalog(zoneRows);
-  console.log(`       Zones from Excel: ${zoneRows.length} official + ${zonesCatalog.placements.length - zoneRows.length} test-site`);
+  const zonesCatalog = buildZonesCatalog(mockRows);
+  const { placements } = zonesCatalog;
+  console.log(`       Mock zones read: ${mockRows.length}`);
+  console.log(`       Mapped placements: ${placements.filter(p => p.mockId).length} (+ ${placements.filter(p => !p.mockId).length} real-only)`);
+  console.log(`       Total placements: ${placements.length}`);
   console.log(`       Audience segments: ${audRows.length}`);
 
-  // ── Zones ───────────────────────────────────────────────────────────────────
-  if (!opts.skipZones) {
-    const count = await ZoneCatalog.countDocuments();
-    if (count && !force) {
-      console.log('  ⏭  Zones already seeded — skip (--force to overwrite)');
-    } else {
-      await ZoneCatalog.deleteMany({});
-      await ZoneCatalog.create(zonesCatalog);
-      console.log(`  ✅  Zones seeded: ${zonesCatalog.groups.length} groups, ${Object.keys(zonesCatalog.channels).length} channels, ${zonesCatalog.placements.length} placements`);
-    }
+  // ── Zones ──────────────────────────────────────────────────────────────────
+  const zoneCount = await ZoneCatalog.countDocuments();
+  if (zoneCount && !force) {
+    console.log('  ⏭  Zones already seeded — skip (--force to overwrite)');
+  } else {
+    await ZoneCatalog.deleteMany({});
+    await ZoneCatalog.create(zonesCatalog);
+    console.log(`  ✅  Zones seeded: ${zonesCatalog.groups.length} groups, ${Object.keys(zonesCatalog.channels).length} channels, ${placements.length} placements`);
   }
 
-  // ── Audience Library ────────────────────────────────────────────────────────
+  // ── Audience Library ───────────────────────────────────────────────────────
   const audCount = await AudienceLibrary.countDocuments();
   if (audCount && !force) {
     console.log(`  ⏭  Audience Library already seeded (${audCount} segments) — skip`);
@@ -243,7 +324,7 @@ async function runSeed(opts = {}) {
     console.log(`  ✅  Audience Library seeded: ${audRows.length} segments`);
   }
 
-  // ── Campaigns ───────────────────────────────────────────────────────────────
+  // ── Campaigns ──────────────────────────────────────────────────────────────
   const campCount = await Campaign.countDocuments();
   if (campCount && !force) {
     console.log(`  ⏭  Campaigns already seeded (${campCount} orders) — skip`);
@@ -253,13 +334,18 @@ async function runSeed(opts = {}) {
     console.log(`  ✅  Campaigns seeded: ${CAMPAIGNS_SEED.length} orders`);
   }
 
-  // ── Analytics ───────────────────────────────────────────────────────────────
+  // ── Analytics (skip if --zones-only) ──────────────────────────────────────
+  if (zonesOnly) {
+    console.log('  ⏭  Analytics skipped (--zones-only mode)');
+    return;
+  }
+
   const analyticsCount = await AnalyticsRecord.countDocuments();
   if (analyticsCount && !force) {
     console.log(`  ⏭  Analytics already seeded (${analyticsCount} records) — skip`);
   } else {
     await AnalyticsRecord.deleteMany({});
-    const rows = generateAnalytics(CAMPAIGNS_SEED, zonesCatalog.placements);
+    const rows = generateAnalytics(CAMPAIGNS_SEED, placements);
     await AnalyticsRecord.insertMany(rows);
     console.log(`  ✅  Analytics seeded: ${rows.length} daily records`);
   }
@@ -270,9 +356,10 @@ async function runSeed(opts = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 if (require.main === module) {
   const URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/adspilot';
-  console.log(`\n🌱  AdsPilot Seed Script v2`);
+  console.log(`\n🌱  AdsPilot Seed Script v3 (E1 Zone Refinement)`);
   console.log(`    DB  : ${URI}`);
-  console.log(`    Mode: ${process.argv.includes('--force') ? 'FORCE (wipe + re-seed)' : 'safe (skip existing)'}\n`);
+  console.log(`    Mode: ${process.argv.includes('--force') ? 'FORCE (wipe + re-seed)' : 'safe (skip existing)'}`);
+  console.log(`    Zones: ${process.argv.includes('--zones-only') ? 'zones+campaigns only' : 'full seed'}\n`);
 
   mongoose.connect(URI)
     .then(async () => {

@@ -3,9 +3,10 @@
 /* Background Ad & Clickable Gutters */
 body.has-bg-ad {
     background-attachment: fixed !important;
-    background-position: center 110px !important;
+    background-position: center top !important;
     background-repeat: no-repeat !important;
-    background-color: #ffea00 !important;
+    background-size: cover !important;
+    background-color: #f0f0f0 !important;
 }
 
 /* Invisible clickable gutter overlays that capture left/right clicks */

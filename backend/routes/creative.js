@@ -52,11 +52,16 @@ const upload = multer({
 
 // ── Helper: build the public URL for an uploaded file ─────────────────────
 function buildPublicUrl(req, filename) {
-    // Prefer explicit PUBLIC_BASE_URL env var (set on VPS to https://api.pawgrammers.io.vn)
-    // Falls back to request origin for local dev
-    const base = process.env.PUBLIC_BASE_URL
-        || `${req.protocol}://${req.get('host')}`;
-    return `${base}/uploads/${filename}`;
+    // Priority 1: explicit env var (set on VPS: PUBLIC_BASE_URL=https://api.pawgrammers.io.vn)
+    if (process.env.PUBLIC_BASE_URL) {
+        return `${process.env.PUBLIC_BASE_URL}/uploads/${filename}`;
+    }
+    // Priority 2: X-Forwarded-Proto from nginx SSL termination (req.protocol is always 'http' behind proxy)
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    // Force https for production domains
+    const host  = req.get('host') || '';
+    const scheme = (proto === 'https' || host.includes('pawgrammers.io.vn')) ? 'https' : proto;
+    return `${scheme}://${host}/uploads/${filename}`;
 }
 
 // ── POST /api/creative/upload  (multipart) ─────────────────────────────────

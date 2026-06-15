@@ -1,0 +1,783 @@
+import { fmt, generateId } from '@/lib/utils'
+
+// ─── Real Agent API client ────────────────────────────────────────────────────
+const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8000'
+// AdsPilot backend (for /api/creative/upload)
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+let _agentReachable = null // null=unknown, true/false after first probe
+
+async function probeAgent() {
+  if (_agentReachable !== null) return _agentReachable
+  try {
+    const r = await fetch(`${AGENT_URL}/api/health`, { signal: AbortSignal.timeout(2000) })
+    _agentReachable = r.ok
+  } catch {
+    _agentReachable = false
+  }
+  return _agentReachable
+}
+
+/**
+ * Call real agent backend. Returns null on failure (caller falls back to mock).
+ * @param {Object} payload  ChatRequest body
+ */
+async function callAgent(payload) {
+  try {
+    const res = await fetch(`${AGENT_URL}/api/agent/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(35000),
+    })
+    if (!res.ok) {
+      console.warn('[agent] backend error:', res.status)
+      return null
+    }
+    const data = await res.json()
+    // Normalise to frontend message format
+    return {
+      id: generateId(),
+      role: 'assistant',
+      content: data.text || '',
+      blocks: data.blocks || [],
+      timestamp: new Date().toISOString(),
+      metadata: {
+        tool: data.meta?.tool || null,
+        model: data.meta?.model || 'minimax',
+        step: data.meta?.step ?? null,
+      },
+    }
+  } catch (err) {
+    console.warn('[agent] unreachable, using mock:', err.message)
+    _agentReachable = false
+    return null
+  }
+}
+
+
+
+// ─── DMP Attributes from real backend ────────────────────────────────────────
+const DMP_FALLBACK = [
+  { code: 'INT001', name: 'Du lịch · SEA', type: 'interest', category: 'Travel', est_size: 1850000 },
+  { code: 'INT002', name: 'Du lịch quốc tế', type: 'interest', category: 'Travel', est_size: 2200000 },
+  { code: 'INT003', name: 'Khách sạn & Resort', type: 'interest', category: 'Travel', est_size: 1430000 },
+  { code: 'BEH001', name: 'Người dùng thẻ tín dụng', type: 'behavior', category: 'Finance', est_size: 3100000 },
+  { code: 'BEH002', name: 'Fintech · Giá trị cao', type: 'behavior', category: 'Finance', est_size: 680000 },
+  { code: 'INT010', name: 'HCM / HN / ĐN', type: 'geo', category: 'Geographic', est_size: 5200000 },
+  { code: 'INT020', name: 'Độ tuổi 25-44', type: 'demographic', category: 'Age', est_size: 8900000 },
+  { code: 'BEH010', name: 'Premium Lifestyle', type: 'behavior', category: 'Lifestyle', est_size: 920000 },
+  { code: 'INT050', name: 'Mua sắm online thường xuyên', type: 'interest', category: 'Shopping', est_size: 4100000 },
+  { code: 'BEH005', name: 'Người dùng mobile banking', type: 'behavior', category: 'Finance', est_size: 2700000 },
+  { code: 'INT030', name: 'Thể thao & Fitness', type: 'interest', category: 'Sports', est_size: 3300000 },
+  { code: 'INT040', name: 'Ẩm thực & Nhà hàng', type: 'interest', category: 'Food', est_size: 4800000 },
+]
+
+// ─── Calc audience size (union model: OR logic, selecting more = larger reach) ─
+// Sorts known sizes desc, applies 30% overlap discount per additional segment.
+// Segments with null/0 est_size are counted as "no constraint" (ignored in math).
+export function calcAudienceSize(attrs) {
+  if (!attrs.length) return 0
+  const knownSizes = attrs.map(a => a.est_size || 0).filter(s => s > 0)
+  if (!knownSizes.length) return 0
+  knownSizes.sort((a, b) => b - a) // largest first
+  let total = 0
+  for (let i = 0; i < knownSizes.length; i++) {
+    // Each additional segment contributes less (30% overlap assumed)
+    total += knownSizes[i] * Math.pow(0.7, i)
+  }
+  return Math.round(total)
+}
+
+// ─── Generate mock campaigns from brief ──────────────────────────────────────
+function generateMockCampaigns(brief) {
+  const totalBudget = brief.budget || 100
+  const zones = [
+    { zone: 'ZingNews Masthead', pct: 45, cpm: 55000, type: 'awareness' },
+    { zone: 'BaoMoi Background', pct: 35, cpm: 48000, type: 'consideration' },
+    { zone: 'ZingMP3 Masthead', pct: 20, cpm: 52000, type: 'awareness' },
+  ]
+  return zones.map((z, i) => ({
+    id: `CA-${String(i + 1).padStart(3, '0')}`,
+    name: `${brief.brand} · ${brief.objective === 'awareness' ? 'Nhận biết' : 'Chuyển đổi'} · ${z.zone}`,
+    zone: z.zone,
+    budget: Math.round(totalBudget * z.pct / 100),
+    budgetPct: z.pct,
+    cpm: z.cpm,
+    status: 'draft',
+    objective: brief.objective,
+  }))
+}
+
+// ─── Agent message factory ────────────────────────────────────────────────────
+function agentMessage(text, blocks = [], meta = {}) {
+  return {
+    id: generateId(),
+    role: 'assistant',
+    content: text,
+    blocks,
+    timestamp: new Date().toISOString(),
+    metadata: {
+      tool: meta.tool || null,
+      model: meta.model || 'minimax',
+      step: meta.step ?? null,
+    },
+  }
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// ─── Mock agent scenarios ─────────────────────────────────────────────────────
+export const AGENT_SCENARIOS = {
+
+  // ── BOOT ──────────────────────────────────────────────────────────────────
+  async boot() {
+    await delay(600)
+    return agentMessage(
+      'Chào anh/chị 👋 Em là **Camp Ads Agent**, trợ lý AI giúp anh thiết lập và tối ưu chiến dịch quảng cáo.\n\nEm sẽ dẫn anh qua **7 bước**: Brief → Creative → Audience → Setup Camp → Kết quả → Phân tích Report → Gửi Email tổng kết.\n\nAnh điền thông tin Brief ở panel phải để bắt đầu nhé!',
+      [],
+      { tool: 'agent_boot', model: 'minimax', step: 0 }
+    )
+  },
+
+  // ── CHAT REPLY (free text) ─────────────────────────────────────────────────
+  async chat(text, currentStep, formState) {
+    await delay(500 + Math.random() * 400)
+    const t = text.toLowerCase()
+    const stepNames = ['Brief', 'Creative', 'Audience', 'Setup Camp', 'Kết quả', 'Phân tích Report', 'Email']
+    const stepName = stepNames[currentStep] || 'hiện tại'
+
+    if (t.includes('giải thích') || t.includes('explain') || t.includes('là gì')) {
+      const explanations = [
+        'Bước **Brief** là nơi anh điền thông tin chiến dịch: tên thương hiệu, mục tiêu (awareness/conversion/...), KPI mong muốn và ngân sách. Em sẽ dùng thông tin này để đề xuất audience và ad zones phù hợp.',
+        'Bước **Creative** là nơi anh upload nhiều hình ảnh / video quảng cáo. Creative sẽ được lưu vào storage và dùng ở bước Setup Camp để gắn vào từng zone.',
+        'Bước **Audience** sử dụng DMP (Data Management Platform) với 310+ audience segments. Anh chọn attributes phù hợp, em tự tính audience size theo logic giao tệp.',
+        'Bước **Setup Camp** em sẽ tự động phân bổ ngân sách vào 3 zone tối ưu CPM dựa trên objective. Anh có thể điều chỉnh và pause/run từng campaign.',
+      ]
+      return agentMessage(explanations[currentStep] || `Bước **${stepName}**: Em đang hỗ trợ anh hoàn thành bước này. Tương tác với form ở panel phải và bấm **Đồng ý & Tiếp tục** khi xong.`, [], { model: 'minimax', step: currentStep })
+    }
+
+    if (t.includes('rủi ro') || t.includes('risk') || t.includes('lưu ý')) {
+      return agentMessage(
+        `⚠️ **Lưu ý ở bước ${stepName}:**\n\n- Dữ liệu không đầy đủ sẽ ảnh hưởng đến các bước sau\n- Em đã đặt validation — nút *Đồng ý* chỉ bật khi đủ điều kiện\n- Anh có thể quay lại bước trước bất cứ lúc nào để chỉnh sửa`,
+        [],
+        { model: 'minimax', step: currentStep }
+      )
+    }
+
+    if (t.includes('budget') || t.includes('ngân sách')) {
+      return agentMessage(
+        'Về ngân sách, em sẽ tự động phân bổ theo công thức:\n\n- **45%** → Zone tin tức (Reach cao nhất)\n- **35%** → Zone giải trí (CPM tối ưu)\n- **20%** → Zone âm nhạc (Target chính xác)\n\nAnh có thể điều chỉnh % này ở bước Setup Camp.',
+        [{ type: 'table', title: 'Phân bổ ngân sách gợi ý', columns: ['Zone', 'Tỷ lệ', 'CPM dự kiến'], rows: [['ZingNews Masthead', '45%', '55.000đ'], ['BaoMoi Background', '35%', '48.000đ'], ['ZingMP3 Masthead', '20%', '52.000đ']] }],
+        { tool: 'budget_split', model: 'minimax', step: currentStep }
+      )
+    }
+
+    if (t.includes('kpi') || t.includes('mục tiêu')) {
+      return agentMessage(
+        '**Gợi ý KPI theo objective:**\n\n- **Awareness** → Reach + VTR (View-Through Rate)\n- **Consideration** → Click + CTR + Engagement\n- **Conversion** → CPA + ROAS + Conversion Rate\n- **Retention** → Frequency + Return Visit Rate',
+        [{ type: 'table', title: 'KPI theo mục tiêu', columns: ['Objective', 'KPI chính', 'KPI phụ'], rows: [['Awareness', 'Reach, VTR', 'Impression, Freq'], ['Consideration', 'CTR, Click', 'Engagement, VI%'], ['Conversion', 'CPA, ROAS', 'CVR, Revenue'], ['Retention', 'Frequency', 'Return Visit']] }],
+        { tool: 'kpi_suggest', model: 'minimax', step: currentStep }
+      )
+    }
+
+    if (t.includes('tiếp') || t.includes('next') || t.includes('đồng ý') || t.includes('xong')) {
+      return agentMessage(
+        `Anh bấm nút **"Đồng ý & Tiếp tục"** ở cuối panel phải để em xử lý và chuyển sang bước tiếp theo nhé! 👉`,
+        [],
+        { model: 'minimax', step: currentStep }
+      )
+    }
+
+    if (t.includes('xin chào') || t.includes('hello') || t.includes('hi')) {
+      return agentMessage(
+        `Chào anh! 👋 Em đang ở bước **${stepName}**. Anh cần hỗ trợ gì không?`,
+        [],
+        { model: 'minimax', step: currentStep }
+      )
+    }
+
+    // Default
+    return agentMessage(
+      `Rõ — em đang ở bước **${stepName}**. Anh có thể tương tác với form ở panel phải và bấm **Đồng ý & Tiếp tục** khi hoàn tất. Nếu cần giải thích thêm, cứ hỏi em!`,
+      [],
+      { model: 'minimax', step: currentStep }
+    )
+  },
+
+  // ── STEP APPROVALS ──────────────────────────────────────────────────────────
+
+  async approveBrief(briefData) {
+    await delay(1200)
+    return agentMessage(
+      `✅ Em đã phân tích brief của **${briefData.brand}**. Đây là tóm tắt chiến dịch:`,
+      [
+        {
+          type: 'table',
+          title: '📋 Brief Campaign',
+          columns: ['Thuộc tính', 'Giá trị'],
+          rows: [
+            ['Thương hiệu', briefData.brand],
+            ['Mục tiêu', briefData.objective === 'awareness' ? 'Tăng nhận biết (Awareness)' : briefData.objective === 'consideration' ? 'Tăng quan tâm (Consideration)' : briefData.objective === 'conversion' ? 'Chuyển đổi (Conversion)' : 'Giữ chân (Retention)'],
+            ['KPI', briefData.kpi],
+            ['Ngân sách', `${briefData.budget} triệu đồng`],
+            ['Thời gian', briefData.startDate && briefData.endDate ? `${briefData.startDate} → ${briefData.endDate}` : briefData.startDate || '—'],
+            ['Ghi chú', briefData.notes || '—'],
+          ]
+        },
+        {
+          type: 'info',
+          text: '📸 Tiếp theo, anh upload creative (hình ảnh / video) cho chiến dịch này nhé!'
+        }
+      ],
+      { tool: 'brief_parse', model: 'minimax', step: 0 }
+    )
+  },
+
+  async approveCreative(creativeData) {
+    await delay(1000)
+    const files = creativeData.files || []
+    const fileRows = files.map((f, i) => [
+      String(i + 1),
+      f.name,
+      f.type?.split('/')[1]?.toUpperCase() || 'FILE',
+      f.width && f.height ? `${f.width}×${f.height}px` : `${(f.size / 1024).toFixed(0)} KB`,
+      '✅ Đã duyệt',
+    ])
+    return agentMessage(
+      `✅ **${files.length} creative** đã được upload và kiểm tra thành công! Em đã xác minh format và kích thước.`,
+      [
+        {
+          type: 'table',
+          title: '🎨 Creative đã upload',
+          columns: ['#', 'Tên file', 'Định dạng', 'Kích thước', 'Trạng thái'],
+          rows: fileRows.length ? fileRows : [['—', '—', '—', '—', '—']],
+        },
+        {
+          type: 'info',
+          text: '🎯 Tiếp theo, anh chọn audience segments từ DMP để nhắm mục tiêu chính xác!'
+        }
+      ],
+      { tool: 'creative_upload', model: 'minimax', step: 1 }
+    )
+  },
+
+
+  async approveAudience(selectedAttrs, audienceSize) {
+    await delay(1500)
+    const attrRows = selectedAttrs.map(a => [a.code || a._uid || '—', a.name || '—', fmt(a.est_size || 0), a.type || '—'])
+    return agentMessage(
+      `✅ Em đã tính toán audience size: **${fmt(audienceSize)} người dùng** dựa trên ${selectedAttrs.length} attributes được chọn.`,
+      [
+        {
+          type: 'table',
+          title: '🎯 Audience Segments đã chọn',
+          columns: ['Mã', 'Tên segment', 'Size', 'Loại'],
+          rows: attrRows
+        },
+        {
+          type: 'audience_size',
+          size: audienceSize,
+          count: selectedAttrs.length
+        },
+        {
+          type: 'info',
+          text: '⚙️ Tiếp theo, em sẽ tạo campaign ads với ngân sách được phân bổ tối ưu!'
+        }
+      ],
+      { tool: 'dmp_match', model: 'minimax', step: 2 }
+    )
+  },
+
+  async createCampaigns(brief, setupData) {
+    await delay(2000)
+    const zoneIds = setupData?.selectedZoneIds || []
+    const recoZones = setupData?.recoZones || []
+    const count = zoneIds.length || 3
+    const budgetPerZone = count > 0 ? (brief.budget || 0) / count : 0
+
+    // Build mock campaign rows from zone data
+    const campRows = zoneIds.map((id, i) => {
+      const zone = recoZones.find(z => z.id === id) || { name: id, cpm: 40000, reach: 10 }
+      const est = Math.round((budgetPerZone * 1_000_000) / zone.cpm * 1000)
+      return {
+        id: `CAMP-${String(i + 1).padStart(3, '0')}`,
+        name: `${brief.brand || 'Brand'} · ${zone.name}`,
+        status: 'running',
+        budget: budgetPerZone,
+        reach: zone.reach,
+        impressions: est,
+        ctr: zone.ctr || 0,
+      }
+    })
+
+    return agentMessage(
+      `✅ Em đã tạo thành công **${count} ad orders** với tổng ngân sách **${brief.budget} triệu đồng**!`,
+      [
+        {
+          type: 'campaign_list',
+          campaigns: campRows,
+        },
+        {
+          type: 'info',
+          text: '🎉 Chiến dịch đã được khởi tạo! Anh xem tổng kết ở bước tiếp theo.',
+        },
+      ],
+      { tool: 'camp_create', model: 'minimax', step: 3 }
+    )
+  },
+
+  async approveSetup(setupData) {
+    return AGENT_SCENARIOS.createCampaigns(
+      { brand: 'Brand', budget: 100, objective: 'awareness' },
+      setupData
+    )
+  },
+
+
+
+  async runReport(brief) {
+    await delay(2500)
+    return agentMessage(
+      `✅ Phân tích hoàn tất! Em đã xử lý **500 campaign** trong hệ thống và đưa ra đánh giá chi tiết.`,
+      [
+        {
+          type: 'chart',
+          chartType: 'bar',
+          title: '📊 Performance theo tuần — Reach, CPM, CTR',
+          data: {
+            labels: ['Tuần 1', 'Tuần 2', 'Tuần 3', 'Tuần 4'],
+            series: [
+              { name: 'Reach (M)', color: '#1F7A3D', values: [1.2, 1.8, 2.1, 2.4] },
+              { name: 'CPM (k VND)', color: '#9A6700', values: [58, 53, 52, 49] },
+            ]
+          }
+        },
+        {
+          type: 'chart',
+          chartType: 'line',
+          title: '📈 CTR theo tuần (%)',
+          data: {
+            labels: ['Tuần 1', 'Tuần 2', 'Tuần 3', 'Tuần 4'],
+            series: [
+              { name: 'CTR (%)', color: '#185FA5', values: [1.1, 1.35, 1.42, 1.58] },
+            ]
+          }
+        },
+        {
+          type: 'verdict',
+          good: 312, watch: 96, bad: 92, total: 500
+        },
+        {
+          type: 'table',
+          title: '🧠 AI Đề xuất hành động',
+          columns: ['#', 'Hành động', 'Ưu tiên'],
+          rows: [
+            ['1', 'Pause 92 camp "bad" — ưu tiên 12 camp tiêu lớn nhất', '🔴 Cao'],
+            ['2', 'Scale +20% budget cho 312 camp "good" — CPM giảm dần', '🟢 Cao'],
+            ['3', 'Re-test creative cho 96 camp "watch" — đổi angle', '🟡 Trung bình'],
+            ['4', 'Shift budget sang zone Du lịch · CPM thấp nhất', '🟡 Trung bình'],
+          ]
+        }
+      ],
+      { tool: 'report_extract + chart_render', model: 'minimax', step: 5 }
+    )
+  },
+
+  async sendEmail(brief, campaigns) {
+    await delay(1000)
+    return agentMessage(
+      `✅ Email đã gửi thành công đến **account@adtima.vn** và **adopt@adtima.vn**!\n\nQuy trình hoàn tất 🎉`,
+      [
+        {
+          type: 'email_preview',
+          to: 'account@adtima.vn, adopt@adtima.vn',
+          cc: `${(brief.brand || 'brand').toLowerCase().replace(/\s/g, '')}-pm@adtima.vn`,
+          subject: `[Camp Ads Agent] Báo cáo & đề xuất ${brief.brand}`,
+          body: `Hi Account & Ad Opt teams,
+
+Camp Ads Agent đã hoàn tất setup + phân tích chiến dịch ${brief.brand}.
+
+Tóm tắt:
+• ${campaigns.length} campaigns đang chạy · Budget ${brief.budget}M · ${brief.duration} tuần
+• Performance 500 camp tham chiếu: 312 good · 96 watch · 92 bad
+
+Đề xuất ưu tiên:
+1. Pause 92 camp 'bad'
+2. Scale +20% budget cho 312 camp 'good'
+3. Re-test creative cho 96 camp 'watch'
+4. Shift budget sang zone Du lịch
+
+— Camp Ads Agent`
+        }
+      ],
+      { tool: 'email_compose + smtp_send', model: 'minimax', step: 6 }
+    )
+  },
+}
+
+// ─── Real DMP fetch (paginated, cached, correct field mapping) ───────────────
+const DMP_BASE_URL = 'https://api.pawgrammers.io.vn/api/dmp/attributes'
+let _dmpCache = null
+let _dmpFetchPromise = null
+
+/**
+ * Normalize a raw DMP attribute from the real API.
+ * Real API shape: { segmentId, type, category, name, fullLabel, sizeMin, sizeMax, sizeRaw }
+ */
+export function normalizeDmpAttr(raw) {
+  const code = raw.segmentId || raw.code || raw.segment_code || String(raw._id || '')
+  const name = raw.fullLabel || raw.name || '(unknown)'
+  const sizeMin = Number(raw.sizeMin ?? 0)
+  const sizeMax = Number(raw.sizeMax ?? 0)
+  const estSize = sizeMin && sizeMax ? Math.round((sizeMin + sizeMax) / 2) : (raw.est_size || 0)
+  return {
+    _uid: code,
+    code,
+    name,
+    type: (raw.type || raw.segment_type || '').toLowerCase(),
+    category: raw.category || raw.segment_category || '',
+    est_size: estSize,
+    sizeMin,
+    sizeMax,
+    sizeRaw: raw.sizeRaw || null,
+  }
+}
+
+/**
+ * Fetch ALL DMP attributes with pagination.
+ * Uses module-level cache so multiple components don't trigger duplicate requests.
+ */
+export async function fetchDmpAttributes() {
+  if (_dmpCache) return _dmpCache
+  if (_dmpFetchPromise) return _dmpFetchPromise
+
+  _dmpFetchPromise = (async () => {
+    const PAGE_SIZE = 100
+    let allItems = []
+    const seenIds = new Set()
+    let page = 1
+
+    try {
+      while (true) {
+        const qs = new URLSearchParams({ limit: PAGE_SIZE, page }).toString()
+        const res = await fetch(`${DMP_BASE_URL}?${qs}`, {
+          signal: AbortSignal.timeout(8000),
+        })
+        if (!res.ok) throw new Error(`DMP API error ${res.status}`)
+        const json = await res.json()
+        const items = Array.isArray(json) ? json : (json.data || json.items || [])
+        if (!items.length) break
+
+        // Detect duplicate pages: if ALL items in this page are already seen, stop
+        const newItems = items.filter(it => {
+          const id = it._id || it.segmentId || JSON.stringify(it)
+          if (seenIds.has(id)) return false
+          seenIds.add(id)
+          return true
+        })
+        if (!newItems.length) {
+          console.log(`[DMP] Duplicate page detected at page=${page}, stopping.`)
+          break
+        }
+        allItems = allItems.concat(newItems)
+        // Stop if returned fewer than PAGE_SIZE (last real page)
+        if (items.length < PAGE_SIZE) break
+        // Safety cap
+        if (++page > 10) break
+      }
+      console.log(`[DMP] Loaded ${allItems.length} unique attributes`)
+      _dmpCache = allItems.map(normalizeDmpAttr)
+    } catch (err) {
+      console.warn('[DMP] API failed, using fallback:', err.message)
+      _dmpCache = DMP_FALLBACK.map(a => ({ ...a, _uid: a.code }))
+    }
+
+    return _dmpCache
+  })()
+
+
+  return _dmpFetchPromise
+}
+
+/**
+ * Given a list of keyword strings (from AI targeting response),
+ * returns up to `limit` DMP segments that best match by name/category.
+ *
+ * @param {string[]} keywords - e.g. ['Sports', 'Fashion', 'Entertainment']
+ * @param {object[]} allAttrs  - normalized DMP segments (already loaded)
+ * @param {number}   limit
+ */
+export function matchDmpByKeywords(keywords, allAttrs, limit = 6) {
+  if (!keywords.length || !allAttrs.length) return []
+  const kwLower = keywords.map(k => k.toLowerCase().trim())
+
+  const scored = allAttrs.map(attr => {
+    const haystack = `${attr.name} ${attr.category} ${attr.type}`.toLowerCase()
+    let score = 0
+    for (const kw of kwLower) {
+      if (!kw || kw.length < 2) continue
+      // Full word match scores more than partial
+      if (haystack.includes(kw)) score += kw.length > 4 ? 4 : 2
+      // Partial: first 4 chars match
+      else if (kw.length >= 4 && haystack.includes(kw.slice(0, 4))) score += 1
+    }
+    return { attr, score }
+  })
+
+  return scored
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(s => s.attr)
+}
+
+/**
+ * Given the blocks from a targeting_autopick AI response,
+ * extract the interest/category keywords to use for DMP matching.
+ */
+export function extractTargetingKeywords(blocks) {
+  const keywords = []
+  for (const b of blocks || []) {
+    if (b.type !== 'table' || !b.rows) continue
+    for (const row of b.rows) {
+      const group = String(row[0] || '').toLowerCase()
+      const values = String(row[1] || '')
+      if (group === 'interest' || group === 'category') {
+        values.split(/[,>]/).forEach(v => keywords.push(v.trim()))
+      }
+    }
+  }
+  return keywords.filter(Boolean)
+}
+
+/**
+ * Parse ALL rows from a targeting_autopick table into a structured map.
+ * Returns: { geo: ['Hà Nội','TP.HCM'], age: ['18-24','25-34'], gender: [...], ... }
+ */
+export function extractTargetingMap(blocks) {
+  const map = {}
+  for (const b of blocks || []) {
+    if (b.type !== 'table' || !b.rows) continue
+    for (const row of b.rows) {
+      const key = String(row[0] || '').trim().toLowerCase()
+      const values = String(row[1] || '').trim()
+      if (!key || !values) continue
+      // Split on commas, handle "A > B" style by keeping full token
+      map[key] = values.split(/\s*,\s*/).map(v => v.trim()).filter(Boolean)
+    }
+  }
+  return map
+}
+
+/**
+ * Session ID — persists for the browser tab lifetime.
+ * Reset on page refresh (acceptable for hackathon).
+ */
+const SESSION_ID = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+
+// Expose to window so ChatPane export can reference it
+if (typeof window !== 'undefined') window.__AGENT_SESSION_ID__ = SESSION_ID
+
+
+/**
+ * Fetch AI-powered DMP segment recommendations for the current session/brief.
+ * Calls GET /api/agent/dmp-recommend?session_id=xxx
+ * Returns array of segment objects (with _id, fullLabel, sizeMin, sizeMax, reason).
+ */
+export async function fetchDmpRecommendations() {
+  try {
+    const res = await fetch(
+      `${AGENT_URL}/api/agent/dmp-recommend?session_id=${SESSION_ID}`,
+      { signal: AbortSignal.timeout(30000) }
+    )
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.recommendations || []
+  } catch (e) {
+    console.warn('[dmpRecommend] failed:', e.message)
+    return []
+  }
+}
+
+
+/**
+ * Fetch real zone data + AI-ranked recommendations for the current brief.
+ * Calls GET /api/agent/zones-recommend?session_id=xxx
+ * Returns { zones: [...], recommended_ids: [...] }
+ */
+export async function fetchZonesFromAgent() {
+  try {
+    const res = await fetch(
+      `${AGENT_URL}/api/agent/zones-recommend?session_id=${SESSION_ID}`,
+      { signal: AbortSignal.timeout(15000) }
+    )
+    if (!res.ok) return null
+    return await res.json()
+  } catch (e) {
+    console.warn('[zonesRecommend] failed:', e.message)
+    return null
+  }
+}
+
+/**
+ * Upload a creative file (base64 dataUrl) to the AdsPilot VPS.
+ * Returns the VPS URL string on success, empty string on failure.
+ */
+export async function uploadCreativeFile(dataUrl, filename, mimeType) {
+  if (!dataUrl || !dataUrl.startsWith('data:')) return ''
+  try {
+    // Convert base64 dataUrl to Blob
+    const base64 = dataUrl.split(',')[1]
+    const bytes = atob(base64)
+    const arr = new Uint8Array(bytes.length)
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
+    const blob = new Blob([arr], { type: mimeType })
+    const file = new File([blob], filename, { type: mimeType })
+
+    const form = new FormData()
+    form.append('file', file)
+
+    const res = await fetch(`${BACKEND_URL}/api/creative/upload`, {
+      method: 'POST',
+      body: form,
+      signal: AbortSignal.timeout(20000),
+    })
+    if (!res.ok) {
+      console.warn('[uploadCreativeFile] upload failed:', res.status)
+      return ''
+    }
+    const data = await res.json()
+    // The AdsPilot backend returns { url } or { path } — normalise
+    const raw = data.url || data.path || ''
+    // If it's a relative path, prefix with the backend origin
+    if (raw && raw.startsWith('/')) {
+      const origin = new URL(BACKEND_URL).origin
+      return `${origin}${raw}`
+    }
+    return raw
+  } catch (e) {
+    console.warn('[uploadCreativeFile] error:', e.message)
+    return ''
+  }
+}
+
+/**
+ * Create campaign orders via agent backend (phase=2).
+ * Called directly from ConfirmPhase to avoid the approveStep flow
+ * which was sending phase=0 and triggering zone-recommend instead.
+ * @param {string[]} selectedZoneIds
+ * @param {Object}  assignments   { zoneId: fileIndexInt }
+ * @param {Object}  fileUrls      { "0": "https://...", "1": "https://..." }
+ */
+export async function createCampaignOrder(selectedZoneIds, assignments, fileUrls = {}) {
+  try {
+    const res = await fetch(`${AGENT_URL}/api/agent/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: SESSION_ID,
+        step: 3,
+        message: '',
+        formData: {
+          setup: {
+            phase: 2,
+            selectedZoneIds: selectedZoneIds || [],
+            assignments: assignments || {},
+            fileUrls: fileUrls || {},
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(30000),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch (e) {
+    console.warn('[createCampaignOrder] failed:', e.message)
+    return null
+  }
+}
+
+
+export const AgentAPI = {
+
+  async boot() {
+    const real = await callAgent({ session_id: SESSION_ID, step: -1, message: '' })
+    return real ?? AGENT_SCENARIOS.boot()
+  },
+
+  async chat(text, currentStep, formState) {
+    const real = await callAgent({
+      session_id: SESSION_ID,
+      step: currentStep,
+      message: text,
+    })
+    return real ?? AGENT_SCENARIOS.chat(text, currentStep, formState)
+  },
+
+  async approveBrief(briefData) {
+    const real = await callAgent({
+      session_id: SESSION_ID,
+      step: 0,
+      message: '',
+      formData: { brief: briefData },
+    })
+    return real ?? AGENT_SCENARIOS.approveBrief(briefData)
+  },
+
+  async approveCreative(creativeData) {
+    const real = await callAgent({
+      session_id: SESSION_ID,
+      step: 1,
+      message: '',
+      formData: { creative: creativeData },
+    })
+    return real ?? AGENT_SCENARIOS.approveCreative(creativeData)
+  },
+
+  async approveAudience(segmentData) {
+    const real = await callAgent({
+      session_id: SESSION_ID,
+      step: 2,
+      message: '',
+      formData: { segment: segmentData },
+    })
+    return real ?? AGENT_SCENARIOS.approveAudience(segmentData)
+  },
+
+  async approveSetup(setupData) {
+    const real = await callAgent({
+      session_id: SESSION_ID,
+      step: 3,
+      message: '',
+      formData: { setup: setupData },
+    })
+    return real ?? AGENT_SCENARIOS.approveSetup(setupData)
+  },
+
+  async getResult() {
+    const real = await callAgent({
+      session_id: SESSION_ID,
+      step: 4,
+      message: '',
+      formData: {},
+    })
+    return real ?? AGENT_SCENARIOS.showResult()
+  },
+
+  /** Probe health — called on app mount to decide badge status */
+  async isOnline() {
+    return probeAgent()
+  },
+
+  /** Reset session (used by "Tư vấn lại" button) */
+  resetSession() {
+    // Force new session ID on next call by reassigning constant isn't possible,
+    // but the server's in-memory fallback handles fresh state per session_id.
+    // For true reset, reload the page or call with a new session_id.
+    _agentReachable = null
+  },
+}
+
+export { generateMockCampaigns }

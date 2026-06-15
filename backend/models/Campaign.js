@@ -3,9 +3,16 @@ const mongoose = require('mongoose');
 // ── Creative sub-schema ───────────────────────────────────────────────────────
 const creativeSchema = new mongoose.Schema(
   {
-    name: { type: String, default: '' },
-    size: { type: String, default: '' },  // e.g. "720x1280"
-    url:  { type: String, default: '' },
+    name:   { type: String, default: '' },
+    size:   { type: String, default: '' },  // e.g. "1160x280", "300x600", "skin"
+    format: { type: String, default: 'banner' }, // banner | skin
+    url:    { type: String, default: '' },
+    // Optional: specific zone IDs that use this creative (overrides size-based matching).
+    // When present, zone-specific lookup takes priority over size-based fallback.
+    zones:  [{ type: String }],
+    // Optional user label for this creative group (e.g. "ZNews Mastheads")
+    label:  { type: String, default: '' },
+    groupId: { type: String, default: '' }, // client-side group UUID for tracking
   },
   { _id: false }
 );
@@ -56,6 +63,9 @@ const campaignSchema = new mongoose.Schema(
     startDate: { type: String, default: '' },     // ISO date string YYYY-MM-DD
     endDate:   { type: String, default: '' },
 
+    // Array of creatives — one per ad format/size
+    creatives:  [creativeSchema],
+    // Legacy single creative (kept for backward compat; also used as primary fallback)
     creative:   { type: creativeSchema,   default: () => ({}) },
     placements: [{ type: String }],               // placement IDs from zone catalog
     targeting:  { type: targetingSchema,  default: () => ({}) },

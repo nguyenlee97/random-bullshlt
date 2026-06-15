@@ -106,4 +106,6 @@ function togglePlacement(id) {
   if (zl) zl.innerHTML = renderZoneList(document.getElementById('zoneSearchInput')?.value || '', zonesCache, formState);
   if (zs) zs.innerHTML = renderZoneSel(zonesCache, formState);
   refreshAudienceBar();
+  // Update creative rows to match newly selected zones
+  if (typeof refreshCreativesPanel === 'function') refreshCreativesPanel();
 }

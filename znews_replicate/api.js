@@ -84,6 +84,7 @@ function buildCreativeHtml(ad, zoneId) {
                     background-attachment: fixed;
                     background-position: center top;
                     background-repeat: no-repeat;
+                    background-size: cover;
                     background-color: #f1f1f1;
                 }
                 .page-wrapper.category-page {

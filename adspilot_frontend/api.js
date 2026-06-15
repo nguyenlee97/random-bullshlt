@@ -28,10 +28,10 @@ const Api = (() => {
     }
   }
 
-  const get    = (path)        => request('GET',    path);
-  const post   = (path, body)  => request('POST',   path, body);
-  const put    = (path, body)  => request('PUT',    path, body);
-  const del    = (path)        => request('DELETE', path);
+  const get = (path) => request('GET', path);
+  const post = (path, body) => request('POST', path, body);
+  const put = (path, body) => request('PUT', path, body);
+  const del = (path) => request('DELETE', path);
 
   // ── Zone Catalog ──────────────────────────────────────────────────────────
 
@@ -60,10 +60,10 @@ const Api = (() => {
    */
   function listDmpAttributes(opts = {}) {
     const params = new URLSearchParams();
-    if (opts.q)        params.set('q',        opts.q);
-    if (opts.type)     params.set('type',     opts.type);
+    if (opts.q) params.set('q', opts.q);
+    if (opts.type) params.set('type', opts.type);
     if (opts.category) params.set('category', opts.category);
-    if (opts.limit)    params.set('limit',    opts.limit);
+    if (opts.limit) params.set('limit', opts.limit);
     const qs = params.toString();
     return get('/dmp/attributes' + (qs ? '?' + qs : ''));
   }
@@ -74,7 +74,7 @@ const Api = (() => {
   function listOrders(filter = {}) {
     const params = new URLSearchParams();
     if (filter.status) params.set('status', filter.status);
-    if (filter.brand)  params.set('brand',  filter.brand);
+    if (filter.brand) params.set('brand', filter.brand);
     const qs = params.toString();
     return get('/orders' + (qs ? '?' + qs : ''));
   }
@@ -129,9 +129,9 @@ const Api = (() => {
   /** @param {{limit?,method?,path?}} [opts] */
   function getLogs(opts = {}) {
     const params = new URLSearchParams();
-    if (opts.limit)  params.set('limit',  opts.limit);
+    if (opts.limit) params.set('limit', opts.limit);
     if (opts.method) params.set('method', opts.method);
-    if (opts.path)   params.set('path',   opts.path);
+    if (opts.path) params.set('path', opts.path);
     const qs = params.toString();
     return get('/logs' + (qs ? '?' + qs : ''));
   }
@@ -154,6 +154,27 @@ const Api = (() => {
     return get('/health');
   }
 
+  // ── Creative Upload ───────────────────────────────────────────────────────
+
+  /**
+   * Upload a creative image file to the backend CDN.
+   * @param {File} file - The image file selected by the user
+   * @returns {Promise<{ok, url, filename, size, mimeType}>}
+   */
+  async function uploadCreative(file) {
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch(API_BASE + '/creative/upload', { method: 'POST', body: form });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      return json;
+    } catch (err) {
+      console.error('[API] POST /creative/upload', err.message);
+      throw err;
+    }
+  }
+
   // ── Analytics ─────────────────────────────────────────────────────────────
 
   function getAnalyticsSummary() {
@@ -169,6 +190,7 @@ const Api = (() => {
     estimateAudience,
     getLogs, clearLogs,
     resetDb, getStats, healthCheck,
+    uploadCreative,
     getAnalyticsSummary,
   };
 })();

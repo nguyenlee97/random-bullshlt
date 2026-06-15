@@ -39,4 +39,27 @@ router.get('/stats', async (_req, res) => {
   }
 });
 
+// POST /api/admin/reseed-zones
+// Wipes the zone catalog and re-seeds from the seed script logic.
+// Use this after deploying new seed/index.js to apply zone group changes.
+router.post('/reseed-zones', async (_req, res) => {
+  try {
+    const { execFile } = require('child_process');
+    const path = require('path');
+    const seedScript = path.join(__dirname, '..', 'seed', 'index.js');
+
+    execFile('node', [seedScript, '--zones-only', '--force'], {
+      cwd: path.join(__dirname, '..'),
+      timeout: 60000,
+    }, (err, stdout, stderr) => {
+      if (err) {
+        return res.status(500).json({ error: err.message, stderr });
+      }
+      res.json({ ok: true, message: 'Zone catalog reseeded.', output: stdout });
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
