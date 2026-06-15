@@ -37,7 +37,7 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
 
     if not attrs:
         return AgentResponse(
-            text="⚠ Anh chưa chọn audience segment nào.",
+            text="⚠ Anh/Chị chưa chọn audience segment nào.",
             blocks=[{"type": "info", "text": "Vui lòng chọn ít nhất 1 segment từ thư viện DMP."}],
             meta=ResponseMeta(tool="audience_handler", model="none", step=2),
         )
@@ -181,7 +181,7 @@ async def handle_targeting_autopick(session_id: str) -> AgentResponse:
         },
         {
             "type": "info",
-            "text": "✅ Anh có thể điều chỉnh ở panel phải hoặc bấm tiếp tục để chấp nhận.",
+            "text": "✅ Anh/Chị có thể điều chỉnh ở panel phải hoặc bấm tiếp tục để chấp nhận.",
         },
     ]
 

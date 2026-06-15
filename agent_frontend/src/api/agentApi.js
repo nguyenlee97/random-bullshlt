@@ -1,4 +1,5 @@
 import { fmt, generateId } from '@/lib/utils'
+import log from '@/lib/logger'
 
 // ─── Real Agent API client ────────────────────────────────────────────────────
 const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8000'
@@ -17,11 +18,45 @@ async function probeAgent() {
   return _agentReachable
 }
 
+async function probeVersion() {
+  try {
+    const r = await fetch(`${AGENT_URL}/api/version`, { signal: AbortSignal.timeout(3000) })
+    if (!r.ok) return
+    const data = await r.json()
+    // Big, visible log so you can confirm the deployed backend version instantly
+    console.log(
+      `%c🚀 BACKEND v${data.version}%c  ${AGENT_URL}`,
+      'background:#16a34a;color:#fff;font-size:13px;font-weight:bold;padding:3px 10px;border-radius:4px',
+      'color:#6b7280;font-size:11px',
+    )
+    log.api('VERSION CHECK', {
+      version: data.version,
+      features: data.features,
+      agent_url: AGENT_URL,
+    })
+  } catch (e) {
+    log.error('version probe failed', e.message)
+  }
+}
+
+// Probe version immediately on module load
+probeVersion()
+
+
 /**
  * Call real agent backend. Returns null on failure (caller falls back to mock).
  * @param {Object} payload  ChatRequest body
  */
 async function callAgent(payload) {
+  const t0 = Date.now()
+  log.api('callAgent → request', {
+    step: payload.step,
+    message: payload.message?.slice(0, 120),
+    has_workspace: !!payload.workspace,
+    confirmed_steps: payload.confirmed_steps,
+    workspace_events: payload.workspace_events,
+    formData: payload.formData,
+  })
   try {
     const res = await fetch(`${AGENT_URL}/api/agent/chat`, {
       method: 'POST',
@@ -30,10 +65,22 @@ async function callAgent(payload) {
       signal: AbortSignal.timeout(35000),
     })
     if (!res.ok) {
-      console.warn('[agent] backend error:', res.status)
+      log.error(`callAgent HTTP ${res.status}`, { status: res.status, payload })
       return null
     }
     const data = await res.json()
+    const duration = Date.now() - t0
+    log.api('callAgent ← response', {
+      duration_ms: duration,
+      tool: data.meta?.tool,
+      model: data.meta?.model,
+      text_preview: (data.text || '').slice(0, 200),
+      blocks: (data.blocks || []).map(b => b.type),
+      workspace_update: data.workspace_update,
+    })
+    if (data.workspace_update) {
+      log.workspace('workspace_update received from API', data.workspace_update)
+    }
     // Normalise to frontend message format
     return {
       id: generateId(),
@@ -46,9 +93,10 @@ async function callAgent(payload) {
         model: data.meta?.model || 'minimax',
         step: data.meta?.step ?? null,
       },
+      workspace_update: data.workspace_update || null,
     }
   } catch (err) {
-    console.warn('[agent] unreachable, using mock:', err.message)
+    log.error('callAgent failed', { error: err.message, duration_ms: Date.now() - t0 })
     _agentReachable = false
     return null
   }
@@ -135,7 +183,7 @@ export const AGENT_SCENARIOS = {
   async boot() {
     await delay(600)
     return agentMessage(
-      'Chào anh/chị 👋 Em là **Camp Ads Agent**, trợ lý AI giúp anh thiết lập và tối ưu chiến dịch quảng cáo.\n\nEm sẽ dẫn anh qua **7 bước**: Brief → Creative → Audience → Setup Camp → Kết quả → Phân tích Report → Gửi Email tổng kết.\n\nAnh điền thông tin Brief ở panel phải để bắt đầu nhé!',
+      'Chào anh/chị 👋 Em là **Camp Ads Agent**, trợ lý AI giúp anh/chị thiết lập và tối ưu chiến dịch quảng cáo.\n\nEm sẽ dẫn anh/chị qua **7 bước**: Brief → Creative → Audience → Setup Camp → Kết quả → Phân tích Report → Gửi Email tổng kết.\n\nAnh/Chị điền thông tin Brief ở panel phải để bắt đầu nhé!',
       [],
       { tool: 'agent_boot', model: 'minimax', step: 0 }
     )
@@ -150,17 +198,17 @@ export const AGENT_SCENARIOS = {
 
     if (t.includes('giải thích') || t.includes('explain') || t.includes('là gì')) {
       const explanations = [
-        'Bước **Brief** là nơi anh điền thông tin chiến dịch: tên thương hiệu, mục tiêu (awareness/conversion/...), KPI mong muốn và ngân sách. Em sẽ dùng thông tin này để đề xuất audience và ad zones phù hợp.',
-        'Bước **Creative** là nơi anh upload nhiều hình ảnh / video quảng cáo. Creative sẽ được lưu vào storage và dùng ở bước Setup Camp để gắn vào từng zone.',
-        'Bước **Audience** sử dụng DMP (Data Management Platform) với 310+ audience segments. Anh chọn attributes phù hợp, em tự tính audience size theo logic giao tệp.',
-        'Bước **Setup Camp** em sẽ tự động phân bổ ngân sách vào 3 zone tối ưu CPM dựa trên objective. Anh có thể điều chỉnh và pause/run từng campaign.',
+        'Bước **Brief** là nơi anh/chị điền thông tin chiến dịch: tên thương hiệu, mục tiêu (awareness/conversion/...), KPI mong muốn và ngân sách. Em sẽ dùng thông tin này để đề xuất audience và ad zones phù hợp.',
+        'Bước **Creative** là nơi anh/chị upload nhiều hình ảnh / video quảng cáo. Creative sẽ được lưu vào storage và dùng ở bước Setup Camp để gắn vào từng zone.',
+        'Bước **Audience** sử dụng DMP (Data Management Platform) với 310+ audience segments. Anh/Chị chọn attributes phù hợp, em tự tính audience size theo logic giao tệp.',
+        'Bước **Setup Camp** em sẽ tự động phân bổ ngân sách vào 3 zone tối ưu CPM dựa trên objective. Anh/Chị có thể điều chỉnh và pause/run từng campaign.',
       ]
-      return agentMessage(explanations[currentStep] || `Bước **${stepName}**: Em đang hỗ trợ anh hoàn thành bước này. Tương tác với form ở panel phải và bấm **Đồng ý & Tiếp tục** khi xong.`, [], { model: 'minimax', step: currentStep })
+      return agentMessage(explanations[currentStep] || `Bước **${stepName}**: Em đang hỗ trợ anh/chị hoàn thành bước này. Tương tác với form ở panel phải và bấm **Đồng ý & Tiếp tục** khi xong.`, [], { model: 'minimax', step: currentStep })
     }
 
     if (t.includes('rủi ro') || t.includes('risk') || t.includes('lưu ý')) {
       return agentMessage(
-        `⚠️ **Lưu ý ở bước ${stepName}:**\n\n- Dữ liệu không đầy đủ sẽ ảnh hưởng đến các bước sau\n- Em đã đặt validation — nút *Đồng ý* chỉ bật khi đủ điều kiện\n- Anh có thể quay lại bước trước bất cứ lúc nào để chỉnh sửa`,
+        `⚠️ **Lưu ý ở bước ${stepName}:**\n\n- Dữ liệu không đầy đủ sẽ ảnh hưởng đến các bước sau\n- Em đã đặt validation — nút *Đồng ý* chỉ bật khi đủ điều kiện\n- Anh/Chị có thể quay lại bước trước bất cứ lúc nào để chỉnh sửa`,
         [],
         { model: 'minimax', step: currentStep }
       )
@@ -168,7 +216,7 @@ export const AGENT_SCENARIOS = {
 
     if (t.includes('budget') || t.includes('ngân sách')) {
       return agentMessage(
-        'Về ngân sách, em sẽ tự động phân bổ theo công thức:\n\n- **45%** → Zone tin tức (Reach cao nhất)\n- **35%** → Zone giải trí (CPM tối ưu)\n- **20%** → Zone âm nhạc (Target chính xác)\n\nAnh có thể điều chỉnh % này ở bước Setup Camp.',
+        'Về ngân sách, em sẽ tự động phân bổ theo công thức:\n\n- **45%** → Zone tin tức (Reach cao nhất)\n- **35%** → Zone giải trí (CPM tối ưu)\n- **20%** → Zone âm nhạc (Target chính xác)\n\nAnh/Chị có thể điều chỉnh % này ở bước Setup Camp.',
         [{ type: 'table', title: 'Phân bổ ngân sách gợi ý', columns: ['Zone', 'Tỷ lệ', 'CPM dự kiến'], rows: [['ZingNews Masthead', '45%', '55.000đ'], ['BaoMoi Background', '35%', '48.000đ'], ['ZingMP3 Masthead', '20%', '52.000đ']] }],
         { tool: 'budget_split', model: 'minimax', step: currentStep }
       )
@@ -184,7 +232,7 @@ export const AGENT_SCENARIOS = {
 
     if (t.includes('tiếp') || t.includes('next') || t.includes('đồng ý') || t.includes('xong')) {
       return agentMessage(
-        `Anh bấm nút **"Đồng ý & Tiếp tục"** ở cuối panel phải để em xử lý và chuyển sang bước tiếp theo nhé! 👉`,
+        `Anh/Chị bấm nút **"Đồng ý & Tiếp tục"** ở cuối panel phải để em xử lý và chuyển sang bước tiếp theo nhé! 👉`,
         [],
         { model: 'minimax', step: currentStep }
       )
@@ -192,7 +240,7 @@ export const AGENT_SCENARIOS = {
 
     if (t.includes('xin chào') || t.includes('hello') || t.includes('hi')) {
       return agentMessage(
-        `Chào anh! 👋 Em đang ở bước **${stepName}**. Anh cần hỗ trợ gì không?`,
+        `Chào anh/chị! 👋 Em đang ở bước **${stepName}**. Anh/Chị cần hỗ trợ gì không?`,
         [],
         { model: 'minimax', step: currentStep }
       )
@@ -200,7 +248,7 @@ export const AGENT_SCENARIOS = {
 
     // Default
     return agentMessage(
-      `Rõ — em đang ở bước **${stepName}**. Anh có thể tương tác với form ở panel phải và bấm **Đồng ý & Tiếp tục** khi hoàn tất. Nếu cần giải thích thêm, cứ hỏi em!`,
+      `Rõ — em đang ở bước **${stepName}**. Anh/Chị có thể tương tác với form ở panel phải và bấm **Đồng ý & Tiếp tục** khi hoàn tất. Nếu cần giải thích thêm, cứ hỏi em!`,
       [],
       { model: 'minimax', step: currentStep }
     )
@@ -228,7 +276,7 @@ export const AGENT_SCENARIOS = {
         },
         {
           type: 'info',
-          text: '📸 Tiếp theo, anh upload creative (hình ảnh / video) cho chiến dịch này nhé!'
+          text: '📸 Tiếp theo, anh/chị upload creative (hình ảnh / video) cho chiến dịch này nhé!'
         }
       ],
       { tool: 'brief_parse', model: 'minimax', step: 0 }
@@ -256,7 +304,7 @@ export const AGENT_SCENARIOS = {
         },
         {
           type: 'info',
-          text: '🎯 Tiếp theo, anh chọn audience segments từ DMP để nhắm mục tiêu chính xác!'
+          text: '🎯 Tiếp theo, anh/chị chọn audience segments từ DMP để nhắm mục tiêu chính xác!'
         }
       ],
       { tool: 'creative_upload', model: 'minimax', step: 1 }
@@ -321,7 +369,7 @@ export const AGENT_SCENARIOS = {
         },
         {
           type: 'info',
-          text: '🎉 Chiến dịch đã được khởi tạo! Anh xem tổng kết ở bước tiếp theo.',
+          text: '🎉 Chiến dịch đã được khởi tạo! Anh/Chị xem tổng kết ở bước tiếp theo.',
         },
       ],
       { tool: 'camp_create', model: 'minimax', step: 3 }
@@ -707,11 +755,43 @@ export const AgentAPI = {
     return real ?? AGENT_SCENARIOS.boot()
   },
 
-  async chat(text, currentStep, formState) {
+  async chat(text, currentStep, formState, stepStatuses, workspaceEvents) {
+    // Build compact workspace — strip dataUrls from creative files to minimize payload
+    const compactWorkspace = {
+      brief: formState?.brief || {},
+      segment: {
+        attrs: (formState?.segment?.attrs || []).map(a => ({
+          name: a.name || a.fullLabel || '',
+          type: a.type || '',
+          category: a.category || '',
+          est_size: a.est_size || 0,
+        })),
+        size: formState?.segment?.size || 0,
+      },
+      creative: {
+        files: (formState?.creative?.files || []).map(f => ({
+          name: f.name, type: f.type, size: f.size,
+        })),
+      },
+      setup: {
+        selectedZoneIds: formState?.setup?.selectedZoneIds || [],
+        phase: formState?.setup?.phase || 'zones',
+      },
+    }
+
+    // Build confirmed_steps from stepStatuses
+    const confirmedSteps = (stepStatuses || []).reduce((acc, s, i) => {
+      if (s === 'done') acc.push(i)
+      return acc
+    }, [])
+
     const real = await callAgent({
       session_id: SESSION_ID,
       step: currentStep,
       message: text,
+      workspace: compactWorkspace,
+      confirmed_steps: confirmedSteps,
+      workspace_events: workspaceEvents || [],
     })
     return real ?? AGENT_SCENARIOS.chat(text, currentStep, formState)
   },
@@ -727,9 +807,10 @@ export const AgentAPI = {
   },
 
   async approveCreative(creativeData) {
+    // Creative is now step 2 (Brief=0, Audience=1, Creative=2)
     const real = await callAgent({
       session_id: SESSION_ID,
-      step: 1,
+      step: 2,
       message: '',
       formData: { creative: creativeData },
     })
@@ -737,9 +818,10 @@ export const AgentAPI = {
   },
 
   async approveAudience(segmentData) {
+    // Audience is now step 1 (Brief=0, Audience=1)
     const real = await callAgent({
       session_id: SESSION_ID,
-      step: 2,
+      step: 1,
       message: '',
       formData: { segment: segmentData },
     })

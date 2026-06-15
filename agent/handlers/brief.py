@@ -21,7 +21,7 @@ async def handle_brief(brief: BriefData, session_id: str) -> AgentResponse:
     if errors:
         return AgentResponse(
             text="⚠ Brief có lỗi:\n" + "\n".join(f"- {e}" for e in errors),
-            blocks=[{"type": "info", "text": "Anh kiểm tra lại thông tin ở panel phải nhé!"}],
+            blocks=[{"type": "info", "text": "Anh/Chị kiểm tra lại thông tin ở panel phải nhé!"}],
             meta=ResponseMeta(tool="brief_validate", model="none", step=0),
         )
 
@@ -83,7 +83,7 @@ async def handle_brief(brief: BriefData, session_id: str) -> AgentResponse:
 
     blocks.append({
         "type": "info",
-        "text": "✅ Anh tiếp tục bằng cách upload creative ở bước tiếp theo!",
+        "text": "✅ Anh/Chị tiếp tục bằng cách upload creative ở bước tiếp theo!",
     })
 
     return AgentResponse(

@@ -3,12 +3,13 @@ import { useChat } from '@/hooks/useChat'
 import TopBar from '@/components/TopBar'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
+import log from '@/lib/logger'
 
-// ─── Steps meta ───────────────────────────────────────────────────────────────
+// ─── Steps meta — NEW ORDER: Brief → Audience → Creative → Setup → Result ─────
 export const STEPS = [
   { id: 'brief',    title: 'Brief',      tool: 'brief_parse',    heroLabel: null },
-  { id: 'creative', title: 'Creative',   tool: 'creative_upload',heroLabel: null },
   { id: 'segment',  title: 'Audience',   tool: 'dmp_match',      heroLabel: null },
+  { id: 'creative', title: 'Creative',   tool: 'creative_upload', heroLabel: null },
   { id: 'setup',    title: 'Setup Camp', tool: 'camp_create',    heroLabel: null },
   { id: 'success',  title: 'Kết quả',    tool: 'notify',         heroLabel: null },
   { id: 'report',   title: 'Report',     tool: 'report_extract', heroLabel: null },
@@ -25,7 +26,6 @@ const initialBrief = {
   notes: '',
 }
 
-// Creative now supports multiple files
 const initialCreative = {
   uploaded: false,
   files: [],          // [{ id, name, type, size, dataUrl }]
@@ -33,36 +33,165 @@ const initialCreative = {
 
 const initialState = {
   brief: initialBrief,
-  creative: initialCreative,
   segment: { attrs: [], size: 0 },
+  creative: initialCreative,
   setup: { initialized: false, recoZones: [], selectedZoneIds: [], created: false },
   report: { analyzed: false },
   email: { sent: false },
 }
 
+// Step key order matches STEPS array
+const STEP_KEYS = ['brief', 'segment', 'creative', 'setup', 'success', 'report', 'email']
+const STEP_DEFAULTS = [
+  initialBrief,
+  { attrs: [], size: 0 },
+  initialCreative,
+  { initialized: false, recoZones: [], selectedZoneIds: [], created: false, submitted: false, phase: 'zones', assignments: {} },
+  {},
+  { analyzed: false },
+  { sent: false },
+]
+const STEP_NAMES_VI = ['Brief', 'Audience', 'Creative', 'Setup Camp', 'Kết quả', 'Report', 'Email']
+
 export default function App() {
   const [currentStep, setCurrentStep] = useState(0)
   const [stepStatuses, setStepStatuses] = useState(STEPS.map(() => 'pending'))
   const [formState, setFormState] = useState(initialState)
+  const [workspaceEvents, setWorkspaceEvents] = useState([])
   const workspaceRef = useRef(null)
 
+  // ── Workspace event queue ──────────────────────────────────────────────────
+  const pushWorkspaceEvent = useCallback((description) => {
+    log.workspace('event queued', description)
+    setWorkspaceEvents(prev => [...prev, description])
+  }, [])
+
+  const clearWorkspaceEvents = useCallback(() => {
+    log.workspace('events cleared (sent)')
+    setWorkspaceEvents([])
+  }, [])
+
+  // ── setFormState wrapper that diffs and emits workspace events ─────────────
+  // Use a ref to track the previous state for diffing
+  const prevFormRef = useRef(formState)
+
+  const setFormStateWithEvents = useCallback((updater) => {
+    setFormState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+
+      // Diff brief fields
+      if (prev.brief && next.brief) {
+        if (prev.brief.brand !== next.brief.brand && next.brief.brand) {
+          pushWorkspaceEvent(`Đã thay đổi Brand: "${prev.brief.brand || '(trống)'}" → "${next.brief.brand}"`)
+        }
+        if (prev.brief.objective !== next.brief.objective && next.brief.objective) {
+          pushWorkspaceEvent(`Đã thay đổi Objective: ${prev.brief.objective} → ${next.brief.objective}`)
+        }
+        if (prev.brief.budget !== next.brief.budget && next.brief.budget) {
+          pushWorkspaceEvent(`Đã thay đổi Budget: ${prev.brief.budget || 0} → ${next.brief.budget} triệu VND`)
+        }
+        if (prev.brief.kpi !== next.brief.kpi && next.brief.kpi) {
+          pushWorkspaceEvent(`Đã thay đổi KPI: "${prev.brief.kpi || '(trống)'}" → "${next.brief.kpi}"`)
+        }
+        if (prev.brief.notes !== next.brief.notes && next.brief.notes) {
+          pushWorkspaceEvent(`Đã thêm/cập nhật ghi chú Brief`)
+        }
+      }
+
+      // Diff creative uploads
+      const prevFiles = prev.creative?.files?.length || 0
+      const nextFiles = next.creative?.files?.length || 0
+      if (nextFiles > prevFiles) {
+        const newFiles = (next.creative?.files || []).slice(prevFiles)
+        pushWorkspaceEvent(`Đã upload ${newFiles.length} creative file: ${newFiles.map(f => f.name).join(', ')}`)
+      }
+
+      // Diff audience selection
+      const prevAttrs = prev.segment?.attrs?.length || 0
+      const nextAttrs = next.segment?.attrs?.length || 0
+      if (nextAttrs !== prevAttrs) {
+        if (nextAttrs > prevAttrs) {
+          pushWorkspaceEvent(`Đã thêm ${nextAttrs - prevAttrs} DMP segment vào Audience (tổng: ${nextAttrs})`)
+        } else if (nextAttrs < prevAttrs && nextAttrs > 0) {
+          pushWorkspaceEvent(`Đã bỏ chọn ${prevAttrs - nextAttrs} DMP segment (còn: ${nextAttrs})`)
+        }
+      }
+
+      prevFormRef.current = next
+      return next
+    })
+  }, [pushWorkspaceEvent])
+
+  // ── Step management ────────────────────────────────────────────────────────
   const markStepDone = useCallback((stepIndex) => {
+    log.step(`markStepDone: step ${stepIndex} → done`)
     setStepStatuses(prev => {
       const next = [...prev]
       next[stepIndex] = 'done'
       return next
     })
-    // Auto-advance
     if (stepIndex < STEPS.length - 1) {
       setTimeout(() => {
         setCurrentStep(stepIndex + 1)
+        log.step(`auto-advance to step ${stepIndex + 1}`)
         workspaceRef.current?.flash?.()
       }, 400)
     }
   }, [])
 
-  const handleAutoSelectAudience = useCallback((matchedSegments, targetingMap = {}) => {
+  // ── Workspace update from agent (after user confirms proposal) ─────────────
+  const handleWorkspaceUpdate = useCallback((patch) => {
+    // patch = { field, value, reason }
+    if (!patch?.field) return
+    const field = patch.field
+    let value = patch.value
+
+    // The model sometimes JSON-stringifies the value — parse it back
+    if (typeof value === 'string') {
+      try { value = JSON.parse(value) } catch {}
+    }
+
+    log.workspace('handleWorkspaceUpdate → applying', {
+      field,
+      value_type: typeof value,
+      value_preview: typeof value === 'object' ? JSON.stringify(value).slice(0, 200) : String(value).slice(0, 100),
+      reason: patch.reason,
+    })
+
     setFormState(prev => {
+      const next = { ...prev }
+      const parts = field.split('.')
+
+      if (parts.length === 2) {
+        // Dotted path: e.g. "brief.brand" → update single key
+        const [section, key] = parts
+        if (section in next) {
+          log.workspace(`  dotted-path update: ${section}.${key} =`, value)
+          next[section] = { ...next[section], [key]: value }
+        } else {
+          log.error(`  unknown section "${section}" — no update applied`)
+        }
+      } else if (parts.length === 1) {
+        // Whole section update: e.g. field="brief", value={brand: "ZUMA", budget: 600, ...}
+        const section = parts[0]
+        if (section in next && typeof value === 'object' && value !== null) {
+          log.workspace(`  section merge: ${section} ← ${Object.keys(value).join(', ')}`)
+          next[section] = { ...next[section], ...value }
+        } else if (section in next) {
+          next[section] = value
+        } else {
+          log.error(`  unknown section "${section}" — no update applied`)
+        }
+      }
+      return next
+    })
+    pushWorkspaceEvent(`Agent đã cập nhật "${field}" (đã xác nhận bởi anh/chị)`)
+  }, [pushWorkspaceEvent])
+
+
+  // ── Auto-select audience from chat (targeting autopick) ───────────────────
+  const handleAutoSelectAudience = useCallback((matchedSegments, targetingMap = {}) => {
+    setFormStateWithEvents(prev => {
       const existing = prev.segment?.attrs || []
       const existingUids = new Set(existing.map(a => a._uid || a.code))
       const toAdd = matchedSegments.filter(a => !existingUids.has(a._uid || a.code))
@@ -74,7 +203,6 @@ export default function App() {
             let t = 0; known.forEach((s, i) => { t += s * Math.pow(0.7, i) }); return Math.round(t)
           })()
         : 0
-      // Normalize targeting keys: AI may return mixed-case, API expects lowercase
       const normalizedTargeting = {}
       for (const [k, v] of Object.entries(targetingMap)) {
         normalizedTargeting[k.toLowerCase()] = Array.isArray(v) ? v : [v]
@@ -89,19 +217,22 @@ export default function App() {
         },
       }
     })
-  }, [setFormState])
+  }, [setFormStateWithEvents])
 
   const { messages, busy, boot, newChat, sendMessage, approveStep } = useChat({
     currentStep,
     formState,
+    stepStatuses,
+    workspaceEvents,
+    onClearWorkspaceEvents: clearWorkspaceEvents,
     onStepApproved: markStepDone,
     onAutoSelectAudience: handleAutoSelectAudience,
+    onWorkspaceUpdate: handleWorkspaceUpdate,
   })
 
   useEffect(() => { boot() }, [boot])
 
-
-  // Auto-advance when setup Phase 3 confirms — skip manual "Đồng ý" click
+  // Auto-advance when setup Phase 3 confirms
   useEffect(() => {
     if (currentStep === 3 && formState.setup.submitted && stepStatuses[3] !== 'done') {
       const data = {
@@ -123,7 +254,6 @@ export default function App() {
       creative: formState.creative,
       attrs: formState.segment.attrs,
       size: formState.segment.size,
-      // Pass zones data for step 3
       selectedZoneIds: formState.setup.selectedZoneIds,
       recoZones: formState.setup.recoZones,
       campaigns: formState.setup.campaigns || [],
@@ -131,30 +261,25 @@ export default function App() {
     approveStep(currentStep, data)
   }, [currentStep, formState, approveStep])
 
-  // Max step the user has ever reached — allows forward navigation after going back
   const maxReached = stepStatuses.reduce((max, s, i) => s === 'done' ? i + 1 : max, 0)
 
   const handleStepJump = useCallback((i) => {
     if (busy) return
-    // Allow: going back (i <= currentStep), any done step, or the step right after all done steps
     if (i <= currentStep || stepStatuses[i] === 'done' || i <= maxReached) {
+      log.step(`stepJump: ${currentStep} → ${i}`)
       setCurrentStep(i)
       workspaceRef.current?.flash?.()
     }
   }, [busy, currentStep, stepStatuses, maxReached])
 
-  // Partial reset: wipe form data + statuses from `fromStep` onward, go back to that step
+  // Partial reset: wipe form data + statuses from fromStep onward
   const handlePartialReset = useCallback((fromStep) => {
-    const STEP_KEYS = ['brief', 'creative', 'segment', 'setup', 'success', 'report', 'email']
-    const STEP_DEFAULTS = [
-      initialBrief,
-      initialCreative,
-      { attrs: [], size: 0 },
-      { initialized: false, recoZones: [], selectedZoneIds: [], created: false, submitted: false, phase: 'zones', assignments: {} },
-      {},
-      { analyzed: false },
-      { sent: false },
-    ]
+    log.step(`handlePartialReset from step ${fromStep} (${STEP_NAMES_VI[fromStep]})`)
+    // Emit a workspace event so the agent knows
+    pushWorkspaceEvent(
+      `Đã bấm 'Chỉnh sửa lại' ở bước ${STEP_NAMES_VI[fromStep]} — ` +
+      `các bước ${STEP_NAMES_VI.slice(fromStep).join(', ')} đã được reset`
+    )
     setFormState(prev => {
       const next = { ...prev }
       STEP_KEYS.forEach((key, i) => {
@@ -164,30 +289,46 @@ export default function App() {
     })
     setStepStatuses(prev => prev.map((s, i) => i >= fromStep ? 'pending' : s))
     setCurrentStep(fromStep)
-  }, [])
+  }, [pushWorkspaceEvent])
 
   const handleReset = useCallback(() => handlePartialReset(0), [handlePartialReset])
 
-  // New Chat: clears workspace AND chat history, then re-boots agent greeting
   const handleNewChat = useCallback(() => {
     handlePartialReset(0)
     newChat()
   }, [handlePartialReset, newChat])
 
-  // Listen for agent:reset event fired by BlockRenderer's ActionResetBlock
+  // Listen for agent:reset event from BlockRenderer ActionResetBlock
   useEffect(() => {
     const handler = () => handleReset()
     window.addEventListener('agent:reset', handler)
     return () => window.removeEventListener('agent:reset', handler)
   }, [handleReset])
 
+  // Listen for agent:workspace_confirm — user clicked Đồng ý on a proposal block
+  useEffect(() => {
+    const handler = (e) => {
+      log.event('agent:workspace_confirm received', e.detail)
+      if (e.detail?.patch) {
+        handleWorkspaceUpdate(e.detail.patch)
+      }
+    }
+    window.addEventListener('agent:workspace_confirm', handler)
+    return () => window.removeEventListener('agent:workspace_confirm', handler)
+  }, [handleWorkspaceUpdate])
+
+  useEffect(() => {
+    const handler = (e) => log.event('agent:workspace_cancel received', e.detail)
+    window.addEventListener('agent:workspace_cancel', handler)
+    return () => window.removeEventListener('agent:workspace_cancel', handler)
+  }, [])
+
   const canApprove = (() => {
     if (stepStatuses[currentStep] === 'done') return false
     switch (currentStep) {
-      case 1: return (formState.creative.files || []).length > 0
-      case 2: return formState.segment.attrs.length > 0
-      // Step 3: handled by internal "Tạo chiến dịch" button — WorkFoot button hidden
-      case 3: return false
+      case 2: return (formState.creative.files || []).length > 0  // Creative is now step 2
+      case 1: return formState.segment.attrs.length > 0           // Audience is now step 1
+      case 3: return false  // Setup: handled by internal button
       case 5: return formState.report.analyzed
       case 6: return formState.email.sent
       default: return true
@@ -218,7 +359,7 @@ export default function App() {
             currentStep={currentStep}
             stepStatuses={stepStatuses}
             formState={formState}
-            setFormState={setFormState}
+            setFormState={setFormStateWithEvents}
             onStepJump={handleStepJump}
             onApprove={handleApprove}
             canApprove={canApprove}

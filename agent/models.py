@@ -71,9 +71,12 @@ class FormData(BaseModel):
 
 class ChatRequest(BaseModel):
     session_id: str = "default"
-    step: int = -1                 # -1=boot, 0=brief, 1=creative, 2=audience, 3=setup, 4=result
+    step: int = -1                 # -1=boot, 0=brief, 1=audience, 2=creative, 3=setup, 4=result
     message: str = ""              # Free-form text
     formData: FormData | None = None
+    workspace: dict | None = None          # Live formState from frontend (compact, no dataUrls)
+    confirmed_steps: list[int] | None = None   # Step indices that are "done" (locked)
+    workspace_events: list[str] | None = None  # Human-readable descriptions of direct UI changes
 
 
 # ── Outbound: agent response ──────────────────────────────────────────────────
@@ -87,11 +90,12 @@ class ResponseMeta(BaseModel):
 class Block(BaseModel):
     """
     Rich UI block. Types:
-    - table:         { title, columns[], rows[][] }
-    - info:          { text }
-    - campaign_list: { campaigns[] }
-    - audience_size: { size, breakdown[] }
-    - metric_grid:   { metrics[] }
+    - table:              { title, columns[], rows[][] }
+    - info:               { text }
+    - campaign_list:      { campaigns[] }
+    - audience_size:      { size, breakdown[] }
+    - metric_grid:        { metrics[] }
+    - workspace_proposal: { changes: {field, value, reason}, is_locked, warning }
     """
     type: str
     model_config = {"extra": "allow"}
@@ -101,3 +105,4 @@ class AgentResponse(BaseModel):
     text: str = ""
     blocks: list[dict] = []
     meta: ResponseMeta | dict = {}
+    workspace_update: dict | None = None   # Patch to apply to formState after user confirms

@@ -22,7 +22,7 @@ export default function TopBar({ onReset, onNewChat }) {
 
       <Badge variant="muted" className="gap-1.5 text-[11px]">
         <div className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-        v2.0.0.1 · AdsPilot
+        v2.1.1 · AdsPilot
       </Badge>
 
       <Badge variant="model-qwen" className="text-[11px]">

@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -75,7 +76,28 @@ function MessageBubble({ message }) {
         )}>
           {/* Text content */}
           <div className={cn('markdown-content text-sm', isUser && 'text-white [&_code]:bg-white/20 [&_code]:text-white')}>
-            <ReactMarkdown>{message.content}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                table: ({ node, ...props }) => (
+                  <div className="overflow-x-auto my-2">
+                    <table className="w-full text-xs border-collapse" {...props} />
+                  </div>
+                ),
+                thead: ({ node, ...props }) => (
+                  <thead className="bg-brand-50" {...props} />
+                ),
+                th: ({ node, ...props }) => (
+                  <th className="px-3 py-2 text-left font-semibold text-brand-700 border border-border whitespace-nowrap" {...props} />
+                ),
+                td: ({ node, ...props }) => (
+                  <td className="px-3 py-2 text-foreground border border-border" {...props} />
+                ),
+                tr: ({ node, ...props }) => (
+                  <tr className="even:bg-muted/30" {...props} />
+                ),
+              }}
+            >{message.content}</ReactMarkdown>
           </div>
 
           {/* Rich blocks (only on bot messages) */}

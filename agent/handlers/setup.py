@@ -60,7 +60,7 @@ async def _zone_recommend(setup: SetupData, session_id: str) -> AgentResponse:
             "columns": ["#", "Zone ID", "Metrics", "Est. Impressions", "Lý do"],
             "rows": zone_rows,
         },
-        {"type": "info", "text": "👆 Anh chọn zone ở panel phải, rồi bấm tiếp tục để gán creative!"},
+        {"type": "info", "text": "👆 Anh/Chị chọn zone ở panel phải, rồi bấm tiếp tục để gán creative!"},
     ]
 
     return AgentResponse(
@@ -126,7 +126,7 @@ async def _creative_match(setup: SetupData, session_id: str) -> AgentResponse:
 
     if not zone_ids:
         return AgentResponse(
-            text="⚠ Anh chưa chọn zone nào. Vui lòng chọn ít nhất 1 zone.",
+            text="⚠ Anh/Chị chưa chọn zone nào. Vui lòng chọn ít nhất 1 zone.",
             blocks=[],
             meta=ResponseMeta(tool="creative_match", model="none", step=3),
         )
@@ -155,8 +155,8 @@ async def _creative_match(setup: SetupData, session_id: str) -> AgentResponse:
         },
     ]
     if result["warnings"]:
-        blocks.append({"type": "info", "text": f"⚠ {len(result['warnings'])} cảnh báo — anh kiểm tra và điều chỉnh nếu cần."})
-    blocks.append({"type": "info", "text": "✅ Anh xem lại và bấm **Xác nhận & Tạo chiến dịch** để hoàn tất!"})
+        blocks.append({"type": "info", "text": f"⚠ {len(result['warnings'])} cảnh báo — anh/chị kiểm tra và điều chỉnh nếu cần."})
+    blocks.append({"type": "info", "text": "✅ Anh/Chị xem lại và bấm **Xác nhận & Tạo chiến dịch** để hoàn tất!"})
 
     return AgentResponse(
         text=f"✅ Em đã gán **{len(files)} creative** vào **{len(selected_zones)} zone**.",
@@ -289,7 +289,7 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
     blocks: list[dict] = [{"type": "campaign_list", "campaigns": campaigns}]
     if api_warnings:
         blocks.append({"type": "info", "text": "⚠ API cảnh báo:\n" + "\n".join(f"- {w}" for w in api_warnings)})
-    blocks.append({"type": "info", "text": "🎉 Chiến dịch đã được khởi tạo! Anh xem tổng kết ở bước tiếp theo."})
+    blocks.append({"type": "info", "text": "🎉 Chiến dịch đã được khởi tạo! Anh/Chị xem tổng kết ở bước tiếp theo."})
 
     return AgentResponse(
         text=f"✅ Tạo thành công order **{order_id}** với **{len(zone_ids)} zone**, ngân sách **{budget_display:,.0f} triệu đồng**!",

@@ -1,12 +1,23 @@
 """
 Free-form chat handler — LLM + OpenAI tool calling.
 Handles any text message not matched by form handlers.
+
+Workspace Sync Protocol:
+  - Receives live workspace state from frontend each call
+  - Builds a fresh workspace snapshot (never stored in history)
+  - Workspace diff events from direct UI edits are injected as system message
+  - update_workspace tool produces a proposal block (Option B: confirm before apply)
 """
 import json
+import time
 from models import AgentResponse, ResponseMeta
-from llm import chat_completion
-from session import get_or_create_session, get_history, add_message, log_event
+from llm import chat_completion, force_text_completion, sanitize_response
+from session import (
+    get_or_create_session, get_history, add_message, log_event,
+    set_pending_proposal, get_pending_proposal, clear_pending_proposal,
+)
 from prompts.system import SYSTEM_PROMPT, STEP_NAMES
+from agent_logger import alog
 
 from tools.registry import TOOL_DEFINITIONS, execute_tool
 from handlers.audience import handle_targeting_autopick
@@ -30,93 +41,228 @@ _RESET_TRIGGERS = [
     "thử lại từ đầu",
 ]
 
+# Intent keywords that confirm a pending workspace proposal
+_CONFIRM_TRIGGERS = [
+    "đồng ý",
+    "xác nhận",
+    "ok",
+    "đúng rồi",
+    "chuẩn rồi",
+    "được",
+    "correct",
+    "yes",
+    "apply",
+    "tiếp tục",
+]
 
-async def handle_freeform(message: str, step: int, session_id: str) -> AgentResponse:
-    # ── Check for targeting auto-pick intent ──────────────────────────────────
-    msg_lower = message.lower()
-    if any(kw in msg_lower for kw in _AUTOPICK_TRIGGERS):
-        return await handle_targeting_autopick(session_id)
+# Step name mapping for lock warnings
+_STEP_NAMES_VI = ["Brief", "Audience", "Creative", "Setup Camp", "Kết quả"]
 
-    # ── Check for campaign reset intent ──────────────────────────────────────
-    if any(kw in msg_lower for kw in _RESET_TRIGGERS):
-        return AgentResponse(
-            text="Được rồi! Em sẽ giúp anh bắt đầu chiến dịch mới. Anh bấm nút bên dưới để xóa toàn bộ thông tin và quay lại bước Brief nhé!",
-            blocks=[{
-                "type": "action_reset",
-                "text": "Tất cả dữ liệu (Brief, Creative, Audience, Setup) sẽ được xóa và anh bắt đầu lại từ đầu.",
-            }],
-            meta=ResponseMeta(tool="reset_intent", model="none", step=step),
-        )
+# Map workspace field path prefix → step index
+_FIELD_TO_STEP = {
+    "brief": 0,
+    "segment": 1,
+    "creative": 2,
+    "setup": 3,
+}
 
-    # ── Build rich campaign context ───────────────────────────────────────────
-    session = await get_or_create_session(session_id)
-    form = session.get("form_state", {})
-    brief = form.get("brief", {})
 
-    step_label = STEP_NAMES[step] if 0 <= step < len(STEP_NAMES) else f"Bước {step}"
+def _field_to_step_index(field: str) -> int:
+    """Map dotted field path (e.g. 'brief.brand') to step index."""
+    prefix = field.split(".")[0] if "." in field else field
+    return _FIELD_TO_STEP.get(prefix, -1)
 
-    ctx_lines = [
-        "=== TRẠNG THÁI CHIẾN DỊCH HIỆN TẠI ===",
-        f"Bước hiện tại: {step_label}",
-        "",
-    ]
+
+def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int]) -> str:
+    """Build a compact workspace context string injected as system message each call."""
+    confirmed = set(confirmed_steps or [])
+    lines = ["=== TRẠNG THÁI WORKSPACE HIỆN TẠI ==="]
+
+    # Step lock status
+    for i, name in enumerate(_STEP_NAMES_VI):
+        status = "✅ Đã xác nhận (LOCKED)" if i in confirmed else "⏳ Chưa xác nhận"
+        lines.append(f"  Bước {i+1} - {name}: {status}")
+    lines.append("")
 
     # Brief
-    if brief:
+    brief = workspace.get("brief", {})
+    if brief.get("brand"):
         OBJECTIVE_VI = {
             "awareness": "Awareness — Nhận diện thương hiệu",
             "consideration": "Consideration — Tăng quan tâm",
             "conversion": "Conversion — Chuyển đổi",
             "retention": "Retention — Giữ chân khách hàng",
         }
-        ctx_lines.append("--- Brief chiến dịch ---")
-        ctx_lines.append(f"Brand       : {brief.get('brand', '?')}")
-        ctx_lines.append(f"Objective   : {OBJECTIVE_VI.get(brief.get('objective',''), brief.get('objective','?'))}")
-        ctx_lines.append(f"KPI         : {brief.get('kpi') or '(chưa chọn)'}")
-        ctx_lines.append(f"Budget      : {brief.get('budget', 0):,.0f} triệu VND")
-        ctx_lines.append(f"Thời gian   : {brief.get('startDate','?')} → {brief.get('endDate','?')}")
-        if brief.get('notes'):
-            ctx_lines.append(f"Ghi chú     : {brief['notes']}")
-        ctx_lines.append("")
+        lines.append("--- Brief ---")
+        lines.append(f"Brand     : {brief.get('brand', '?')}")
+        lines.append(f"Objective : {OBJECTIVE_VI.get(brief.get('objective', ''), brief.get('objective', '?'))}")
+        lines.append(f"KPI       : {brief.get('kpi') or '(chưa chọn)'}")
+        lines.append(f"Budget    : {brief.get('budget', 0):,} triệu VND")
+        lines.append(f"Thời gian : {brief.get('startDate', '?')} → {brief.get('endDate', '?')}")
+        if brief.get("notes"):
+            lines.append(f"Ghi chú   : {brief['notes']}")
+        lines.append("")
 
     # Audience
-    segment = form.get("segment", {})
+    segment = workspace.get("segment", {})
     attrs = segment.get("attrs", [])
     if attrs:
-        ctx_lines.append("--- Audience đã chọn ---")
-        ctx_lines.append(f"Số segments : {len(attrs)}")
-        ctx_lines.append(f"Audience size ước tính: {segment.get('size', 0):,} người dùng")
-        names = [a.get('name', '') for a in attrs[:8] if a.get('name')]
+        lines.append("--- Audience ---")
+        lines.append(f"Segments  : {len(attrs)} đã chọn")
+        lines.append(f"Size ước tính: {segment.get('size', 0):,} người dùng")
+        names = [a.get("name") or a.get("fullLabel", "") for a in attrs[:6] if a.get("name") or a.get("fullLabel")]
         if names:
-            ctx_lines.append(f"Segments    : {', '.join(names)}" + (" ..." if len(attrs) > 8 else ""))
-        ctx_lines.append("")
+            lines.append(f"Tên       : {', '.join(names)}" + (" ..." if len(attrs) > 6 else ""))
+        lines.append("")
 
-    # Setup — recommended/selected zones (stored as reco_zones in session)
-    reco_zones = form.get("reco_zones", [])
-    if reco_zones:
-        ctx_lines.append("--- Ad Zones (AI gợi ý) ---")
-        zone_ids = [str(z.get('id') or z.get('name', '')) for z in reco_zones[:6]]
-        ctx_lines.append(f"Zones       : {', '.join(zone_ids)}" + (" ..." if len(reco_zones) > 6 else ""))
-        ctx_lines.append("")
+    # Creative
+    creative = workspace.get("creative", {})
+    files = creative.get("files", [])
+    if files:
+        lines.append("--- Creative ---")
+        lines.append(f"Files     : {len(files)} đã upload")
+        for f in files[:4]:
+            lines.append(f"  - {f.get('name', '')} ({f.get('type', '')})")
+        lines.append("")
 
-    # Orders
-    if session.get("created_order_ids"):
-        ctx_lines.append(f"Orders đã tạo: {', '.join(session['created_order_ids'])}")
-        ctx_lines.append("")
+    # Setup
+    setup = workspace.get("setup", {})
+    if setup.get("selectedZoneIds"):
+        lines.append("--- Setup ---")
+        lines.append(f"Zones đã chọn: {len(setup['selectedZoneIds'])}")
+        lines.append("")
 
-    ctx_lines.append("QUAN TRỌNG: Dùng thông tin trên để trả lời — KHÔNG hỏi lại các thông tin đã có (objective, brand, budget, ...).")
+    lines.append("QUY TẮC QUAN TRỌNG:")
+    lines.append("- Dùng thông tin trên để trả lời. KHÔNG hỏi lại thông tin đã có.")
+    lines.append("- Nếu bước ✅ LOCKED, hỏi xác nhận user trước khi thay đổi và cảnh báo reset downstream.")
+    lines.append("- User có thể thao tác bước sau ngay cả khi đang ở bước trước — luôn hỗ trợ.")
+    return "\n".join(lines)
 
-    messages = [
+
+def _build_workspace_diff(events: list[str]) -> str | None:
+    """Build system message for direct UI edits made outside chat."""
+    if not events:
+        return None
+    lines = ["=== THAY ĐỔI TRÊN WORKSPACE (người dùng thao tác trực tiếp, không qua chat) ==="]
+    for e in events:
+        lines.append(f"• {e}")
+    lines.append("Hãy ghi nhận những thay đổi này. Nếu user hỏi về trạng thái, phản ánh đúng thực tế hiện tại.")
+    return "\n".join(lines)
+
+
+async def handle_freeform(
+    message: str,
+    step: int,
+    session_id: str,
+    workspace: dict | None = None,
+    confirmed_steps: list[int] | None = None,
+    workspace_events: list[str] | None = None,
+) -> AgentResponse:
+
+    # ── Check for targeting auto-pick intent ──────────────────────────────────
+    msg_lower = message.lower().strip()
+    await alog(session_id, "request", {
+        "step": step,
+        "msg_preview": message[:120],
+        "has_workspace": bool(workspace),
+        "workspace_events": len(workspace_events or []),
+        "confirmed_steps": confirmed_steps or [],
+    })
+    if any(kw in msg_lower for kw in _AUTOPICK_TRIGGERS):
+        await alog(session_id, "info", {"intent": "autopick_targeting"})
+        return await handle_targeting_autopick(session_id)
+
+    # ── Check for campaign reset intent ──────────────────────────────────────
+    if any(kw in msg_lower for kw in _RESET_TRIGGERS):
+        await alog(session_id, "info", {"intent": "reset_campaign"})
+        return AgentResponse(
+            text="Được rồi! Em sẽ giúp anh/chị bắt đầu chiến dịch mới. Anh/Chị bấm nút bên dưới để xóa toàn bộ thông tin và quay lại bước Brief nhé!",
+            blocks=[{
+                "type": "action_reset",
+                "text": "Tất cả dữ liệu (Brief, Audience, Creative, Setup) sẽ được xóa và anh/chị bắt đầu lại từ đầu.",
+            }],
+            meta=ResponseMeta(tool="reset_intent", model="none", step=step),
+        )
+
+    # ── Check if this message confirms a pending proposal ─────────────────────
+    if any(kw in msg_lower for kw in _CONFIRM_TRIGGERS):
+        pending = await get_pending_proposal(session_id)
+        await alog(session_id, "confirm", {"has_pending": bool(pending), "trigger_word": msg_lower[:20]})
+        if pending:
+            await clear_pending_proposal(session_id)
+            await log_event(session_id, "proposal_confirmed", {"changes": pending})
+            await add_message(session_id, "user", message)
+
+            field = pending.get("field", "")
+            value = pending.get("value")
+            # Parse JSON-stringified value if needed
+            if isinstance(value, str):
+                try:
+                    import json as _j
+                    value = _j.loads(value)
+                except Exception:
+                    pass
+
+            confirm_text = (
+                f"✅ Đã cập nhật workspace! Brief đã được lưu — em sẽ tiến hành bước tiếp theo."
+                if field == "brief" else
+                f"✅ Đã cập nhật `{field}`. Em sẽ tiếp tục bước tiếp theo."
+            )
+            await add_message(session_id, "assistant", confirm_text)
+
+            return AgentResponse(
+                text=confirm_text,
+                blocks=[{
+                    "type": "info",
+                    "text": f"Workspace đã được cập nhật: `{field}`. Chọn Audience ở panel phải hoặc hỏi em để tiếp tục.",
+                }],
+                meta=ResponseMeta(tool="workspace_confirmed", model="none", step=step),
+                workspace_update={"field": field, "value": value, "reason": pending.get("reason", "")},
+            )
+
+    # ── Use live workspace if provided, else fall back to session ─────────────
+    effective_workspace = workspace or {}
+    if not effective_workspace:
+        session = await get_or_create_session(session_id)
+        effective_workspace = session.get("form_state", {})
+
+    step_label = STEP_NAMES[step] if 0 <= step < len(STEP_NAMES) else f"Bước {step}"
+
+    # ── Build message array ───────────────────────────────────────────────────
+    messages: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "system", "content": "\n".join(ctx_lines)},
+        {"role": "system", "content": _build_workspace_snapshot(effective_workspace, confirmed_steps or [])},
     ]
+
+    workspace_diff = _build_workspace_diff(workspace_events or [])
+    if workspace_diff:
+        messages.append({"role": "system", "content": workspace_diff})
+
     messages.extend(await get_history(session_id))
     messages.append({"role": "user", "content": message})
+
+    # ── Log LLM call context (stdout + MongoDB) ─────────────────────────────
+    await alog(session_id, "llm_call_start", {
+        "handler": "freeform",
+        "step": step_label,
+        "messages_count": len(messages),
+        "history_turns": len([m for m in messages if m["role"] in ("user", "assistant")]),
+        "tools": [t["function"]["name"] for t in TOOL_DEFINITIONS],
+    })
 
     # ── Call LLM ─────────────────────────────────────────────────────────────
     try:
         response = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
         msg = response.choices[0].message
+        raw_content = msg.content or ""
+        tool_calls_names = [tc.function.name for tc in (msg.tool_calls or [])]
+        await alog(session_id, "llm_call_done", {
+            "finish_reason": response.choices[0].finish_reason,
+            "has_content": bool(raw_content),
+            "content_len": len(raw_content),
+            "tool_calls": tool_calls_names,
+            "content_preview": raw_content[:200],
+        })
 
         # ── Handle tool calls ─────────────────────────────────────────────────
         if msg.tool_calls:
@@ -125,15 +271,86 @@ async def handle_freeform(message: str, step: int, session_id: str) -> AgentResp
 
             for tc in msg.tool_calls:
                 args = json.loads(tc.function.arguments)
+                await alog(session_id, "tool_call", {
+                    "tool": tc.function.name,
+                    "args": {k: str(v)[:100] for k, v in args.items()},
+                })
+                t_tool = time.time()
                 result = await execute_tool(tc.function.name, args)
-                await log_event(session_id, "tool_call", {"tool": tc.function.name, "args": args})
+                await alog(session_id, "tool_result", {
+                    "tool": tc.function.name,
+                    "duration_ms": int((time.time() - t_tool) * 1000),
+                    "result_len": len(json.dumps(result)) if result else 0,
+                    "result_preview": json.dumps(result, ensure_ascii=False)[:300],
+                })
                 tool_results.append({
                     "tool_call_id": tc.id,
                     "role": "tool",
                     "content": json.dumps(result, ensure_ascii=False),
                 })
 
-            # Second LLM call with tool results
+            # ── Handle update_workspace specially (proposal flow) ─────────────
+            if used_tool == "update_workspace":
+                # Get the LLM's natural language explanation (second call with tool result)
+                messages.append({
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": tc.id, "type": "function",
+                         "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                        for tc in msg.tool_calls
+                    ],
+                })
+                messages.extend(tool_results)
+                # Attempt 1: normal second call
+                await alog(session_id, "llm_call_start", {"attempt": 1, "purpose": "update_workspace_summary"})
+                t1 = time.time()
+                final = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
+                reply = sanitize_response(final.choices[0].message.content or "")
+                await alog(session_id, "llm_call_done", {"attempt": 1, "duration_ms": int((time.time()-t1)*1000), "reply_len": len(reply), "empty": not reply})
+                # Attempt 2: force text — no tools so model can't call them again
+                if not reply:
+                    await alog(session_id, "fallback", {"attempt": 2, "tool": used_tool, "reason": "attempt1_empty"})
+                    t2 = time.time()
+                    forced = force_text_completion(messages=messages)  # no tools!
+                    reply = sanitize_response(forced.choices[0].message.content or "")
+                    await alog(session_id, "llm_call_done", {"attempt": 2, "duration_ms": int((time.time()-t2)*1000), "reply_len": len(reply), "empty": not reply})
+                # Attempt 3: deterministic fallback
+                if not reply:
+                    reply = "Em đã xử lý xong. Anh/Chị xem đề xuất cập nhật bên dưới và xác nhận nhé!"
+                    await alog(session_id, "fallback", {"attempt": 3, "tool": used_tool, "using": "hardcoded"})
+
+                # Extract proposed changes from the first tool call
+                first_args = json.loads(msg.tool_calls[0].function.arguments)
+                field = first_args.get("field", "")
+                step_index = _field_to_step_index(field)
+                is_locked = step_index in (confirmed_steps or [])
+
+                # Build cascading reset warning
+                warning = ""
+                if is_locked and step_index >= 0:
+                    downstream = [_STEP_NAMES_VI[i] for i in range(step_index + 1, len(_STEP_NAMES_VI))]
+                    if downstream:
+                        warning = f"⚠️ Bước {_STEP_NAMES_VI[step_index]} đã được xác nhận. Nếu thay đổi, các bước sau ({', '.join(downstream)}) sẽ bị reset."
+
+                # Store pending proposal in session (for chat-based confirmation)
+                await set_pending_proposal(session_id, first_args)
+
+                await add_message(session_id, "user", message)
+                await add_message(session_id, "assistant", reply)
+
+                return AgentResponse(
+                    text=reply,
+                    blocks=[{
+                        "type": "workspace_proposal",
+                        "changes": first_args,
+                        "is_locked": is_locked,
+                        "warning": warning,
+                    }],
+                    meta=ResponseMeta(tool="update_workspace", model="minimax", step=step),
+                    workspace_update=None,  # Not applied yet — waiting for user confirmation
+                )
+
+            # ── Normal tool call: second LLM call with tool results ───────────
             messages.append({
                 "role": "assistant",
                 "tool_calls": [
@@ -143,13 +360,55 @@ async def handle_freeform(message: str, step: int, session_id: str) -> AgentResp
                 ],
             })
             messages.extend(tool_results)
-            final = chat_completion(messages=messages)
-            reply = final.choices[0].message.content or ""
+
+            # Attempt 1: normal second call (model summarises tool results)
+            await alog(session_id, "llm_call_start", {"attempt": 1, "purpose": f"{used_tool}_summary"})
+            t1 = time.time()
+            final = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
+            reply = sanitize_response(final.choices[0].message.content or "")
+            await alog(session_id, "llm_call_done", {"attempt": 1, "duration_ms": int((time.time()-t1)*1000), "reply_len": len(reply), "empty": not reply})
+
+            # Attempt 2: force text — do NOT pass tools so model can't call them again
+            if not reply:
+                await alog(session_id, "fallback", {"attempt": 2, "tool": used_tool, "reason": "attempt1_empty"})
+                t2 = time.time()
+                forced = force_text_completion(messages=messages)  # no tools!
+                reply = sanitize_response(forced.choices[0].message.content or "")
+                await alog(session_id, "llm_call_done", {"attempt": 2, "duration_ms": int((time.time()-t2)*1000), "reply_len": len(reply), "empty": not reply})
+
+            # Attempt 3: fully deterministic per-tool fallback (no LLM at all)
+            if not reply:
+                _TOOL_FALLBACKS = {
+                    "get_audience_list": "Đã tìm thấy các đối tượng phù hợp. Anh/Chị xem danh sách ở panel phải và chọn nhé!",
+                    "search_zones": "Đã tìm thấy các zone phù hợp. Anh/Chị xem danh sách ở panel phải và chọn nhé!",
+                    "update_workspace": "Workspace đã được cập nhật. Anh/Chị xem thông tin bên phải và xác nhận nhé!",
+                }
+                reply = _TOOL_FALLBACKS.get(
+                    used_tool,
+                    f"Em đã xử lý xong ({used_tool}). Anh/Chị hỏi thêm hoặc xem thông tin ở panel phải nhé!",
+                )
+                await alog(session_id, "fallback", {"attempt": 3, "tool": used_tool, "using": "hardcoded", "reply": reply})
+
         else:
-            reply = msg.content or ""
+            reply = sanitize_response(raw_content)
             used_tool = "freeform_chat"
 
-        await log_event(session_id, "llm_call", {"handler": "freeform", "tool": used_tool, "reply_len": len(reply)})
+        # Log sanitization if anything was stripped
+        sanitized_len = len(reply)
+        if sanitized_len != len(raw_content):
+            await alog(session_id, "warn", {
+                "event": "content_sanitized",
+                "original_len": len(raw_content),
+                "sanitized_len": sanitized_len,
+                "stripped_think": "<think>" in raw_content,
+                "stripped_xml": any(tag in raw_content for tag in ["minimax:tool_call", "<invoke", "</invoke"]),
+            })
+
+        await alog(session_id, "reply", {
+            "tool": used_tool,
+            "reply_len": len(reply),
+            "reply_preview": reply[:200],
+        })
         await add_message(session_id, "user", message)
         await add_message(session_id, "assistant", reply)
 
@@ -160,9 +419,15 @@ async def handle_freeform(message: str, step: int, session_id: str) -> AgentResp
         )
 
     except Exception as e:
-        await log_event(session_id, "error", {"handler": "freeform", "error": str(e)})
+        import traceback
+        tb = traceback.format_exc()
+        await alog(session_id, "error", {
+            "handler": "freeform",
+            "error": str(e),
+            "traceback": tb[-600:],  # last 600 chars of traceback
+        })
         return AgentResponse(
-            text=f"Em gặp lỗi khi xử lý: {str(e)[:100]}. Anh thử lại nhé!",
+            text=f"Em gặp lỗi khi xử lý: {str(e)[:100]}. Anh/Chị thử lại nhé!",
             blocks=[],
             meta=ResponseMeta(tool="freeform_chat", model="none", step=step),
         )

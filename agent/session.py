@@ -139,3 +139,40 @@ async def log_event(session_id: str, event_type: str, data: dict) -> None:
         _mem_logs.append(entry)
         if len(_mem_logs) > 500:
             _mem_logs.pop(0)
+
+
+# ── Pending proposal storage ──────────────────────────────────────────────────
+
+async def set_pending_proposal(session_id: str, changes: dict) -> None:
+    """Store the last workspace_proposal changes so confirmation can apply them."""
+    if await _ensure_mongo():
+        await _sessions_col.update_one(
+            {"_id": session_id},
+            {"$set": {"pending_proposal": changes, "updated_at": _now()}},
+            upsert=True,
+        )
+    else:
+        s = _mem.setdefault(session_id, _default_session(session_id))
+        s["pending_proposal"] = changes
+        s["updated_at"] = _now()
+
+
+async def get_pending_proposal(session_id: str) -> dict | None:
+    """Retrieve the last pending workspace_proposal, or None."""
+    if await _ensure_mongo():
+        doc = await _sessions_col.find_one({"_id": session_id}, {"pending_proposal": 1})
+        return (doc or {}).get("pending_proposal")
+    else:
+        return _mem.get(session_id, {}).get("pending_proposal")
+
+
+async def clear_pending_proposal(session_id: str) -> None:
+    """Clear the pending proposal after it's been applied or cancelled."""
+    if await _ensure_mongo():
+        await _sessions_col.update_one(
+            {"_id": session_id},
+            {"$unset": {"pending_proposal": ""}, "$set": {"updated_at": _now()}},
+        )
+    else:
+        _mem.get(session_id, {}).pop("pending_proposal", None)
+

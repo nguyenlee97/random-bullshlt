@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { AgentAPI, AGENT_SCENARIOS, fetchDmpAttributes, matchDmpByKeywords, extractTargetingKeywords, extractTargetingMap } from '@/api/agentApi'
-
 import { generateId } from '@/lib/utils'
+import log from '@/lib/logger'
 
 
 function userMessage(text) {
@@ -24,7 +24,16 @@ function thinkingMessage() {
   }
 }
 
-export function useChat({ currentStep, formState, onStepApproved, onAutoSelectAudience }) {
+export function useChat({
+  currentStep,
+  formState,
+  stepStatuses,
+  workspaceEvents,
+  onClearWorkspaceEvents,
+  onStepApproved,
+  onAutoSelectAudience,
+  onWorkspaceUpdate,
+}) {
 
   const [messages, setMessages] = useState([])
   const [busy, setBusy] = useState(false)
@@ -58,7 +67,9 @@ export function useChat({ currentStep, formState, onStepApproved, onAutoSelectAu
     if (bootedRef.current) return
     bootedRef.current = true
     setBusy(true)
+    log.chat('boot → start')
     const response = await AgentAPI.boot()
+    log.chat('boot ← done', { content_preview: response?.content?.slice(0, 100) })
     setMessages([response])
     setBusy(false)
   }, [])
@@ -68,6 +79,7 @@ export function useChat({ currentStep, formState, onStepApproved, onAutoSelectAu
     bootedRef.current = false
     setMessages([])
     setBusy(true)
+    log.chat('newChat → reset and re-boot')
     const response = await AgentAPI.boot()
     setMessages([response])
     setBusy(false)
@@ -78,30 +90,86 @@ export function useChat({ currentStep, formState, onStepApproved, onAutoSelectAu
     setBusy(true)
     addMessage(userMessage(text))
     startThinking()
-    const response = await AgentAPI.chat(text, currentStep, formState)
+
+    log.chat('sendMessage →', {
+      text: text.slice(0, 120),
+      step: currentStep,
+      workspace_events: workspaceEvents,
+      confirmed_steps: (stepStatuses || []).reduce((a, s, i) => { if (s === 'done') a.push(i); return a }, []),
+      formState_summary: {
+        brand: formState?.brief?.brand,
+        segment_count: formState?.segment?.attrs?.length,
+        files_count: formState?.creative?.files?.length,
+      },
+    })
+
+    // Send workspace state + pending events with every chat message
+    let response = await AgentAPI.chat(
+      text,
+      currentStep,
+      formState,
+      stepStatuses,
+      workspaceEvents,
+    )
+
+    log.chat('sendMessage ←', {
+      tool: response?.metadata?.tool,
+      content_preview: response?.content?.slice(0, 200),
+      blocks: response?.blocks?.map(b => b.type),
+      workspace_update: response?.workspace_update,
+    })
+
+    // Guard: if response came back empty (backend tool-call bug), show fallback
+    if (response && !response.content && (!response.blocks || response.blocks.length === 0)) {
+      log.error('empty response received — showing fallback', { tool: response?.metadata?.tool })
+      response = {
+        ...response,
+        content: '⚠️ Em gặp sự cố khi xử lý yêu cầu này. Anh/Chị thử lại hoặc diễn đạt khác nhé!',
+      }
+    }
+
+
     stopThinking(response)
     setBusy(false)
 
+    // Drain workspace events — they've been sent
+    onClearWorkspaceEvents?.()
+    log.workspace('workspace_events drained (sent to backend)')
+
+    // Handle workspace_update — agent confirmed a change
+    if (response?.workspace_update && onWorkspaceUpdate) {
+      log.workspace('applying workspace_update from response', response.workspace_update)
+      onWorkspaceUpdate(response.workspace_update)
+    }
+
     // When AI returns targeting_autopick: extract the targeting map and store it.
-    // Do NOT auto-select DMP segments — those are chosen manually from the panel.
     if (response?.metadata?.tool === 'targeting_autopick' && onAutoSelectAudience) {
       try {
         const targetingMap = extractTargetingMap(response.blocks || [])
         if (Object.keys(targetingMap).length) {
-          onAutoSelectAudience([], targetingMap) // empty segments = don't touch DMP selection
+          log.chat('targeting_autopick → auto-select audience', targetingMap)
+          onAutoSelectAudience([], targetingMap)
         }
       } catch (e) {
-        console.warn('[autoselect] failed:', e.message)
+        log.error('targeting_autopick parse failed', e.message)
       }
     }
-  }, [busy, currentStep, formState, addMessage, startThinking, stopThinking, onAutoSelectAudience])
+  }, [busy, currentStep, formState, stepStatuses, workspaceEvents, addMessage, startThinking, stopThinking, onClearWorkspaceEvents, onAutoSelectAudience, onWorkspaceUpdate])
 
 
+
+  const STEP_LABELS = ['Brief', 'Audience', 'Creative', 'Setup', 'Result', 'Report', 'Email']
 
   const approveStep = useCallback(async (stepIndex, stepData) => {
     if (busy) return
     setBusy(true)
     startThinking()
+
+    log.step(`approveStep ${stepIndex} (${STEP_LABELS[stepIndex] ?? '?'}) → start`, {
+      stepData_keys: Object.keys(stepData || {}),
+      attrs_count: stepData?.attrs?.length,
+      files_count: stepData?.creative?.files?.length,
+    })
 
     let response
     switch (stepIndex) {
@@ -110,26 +178,25 @@ export function useChat({ currentStep, formState, onStepApproved, onAutoSelectAu
         response = await AgentAPI.approveBrief(stepData.brief)
         break
 
-      // Step 1 — Creative
+      // Step 1 — Audience (NEW: was step 2)
       case 1:
-        response = await AgentAPI.approveCreative(stepData.creative)
-        break
-
-      // Step 2 — Audience (DMP segments + audience size)
-      case 2:
         response = await AgentAPI.approveAudience({
           attrs: stepData.attrs || [],
           size: stepData.size || 0,
         })
         break
 
+      // Step 2 — Creative (NEW: was step 1)
+      case 2:
+        response = await AgentAPI.approveCreative(stepData.creative)
+        break
+
       // Step 3 — Setup: order was already created by ConfirmPhase.handleCreate (phase=2).
-      // Just show a local success message to avoid a second backend call with wrong phase.
       case 3:
         response = {
           id: generateId(),
           role: 'assistant',
-          content: '✅ Chiến dịch đã được tạo thành công trên AdsPilot! Anh xem tổng kết ở bước Kết quả bên phải.',
+          content: '✅ Chiến dịch đã được tạo thành công trên AdsPilot! Anh/Chị xem tổng kết ở bước Kết quả bên phải.',
           blocks: [{ type: 'info', text: '🎉 Order đã được khởi tạo. Chuyển sang bước Kết quả...' }],
           timestamp: new Date().toISOString(),
           metadata: { tool: 'order_create', model: 'minimax', step: 3 },
@@ -141,7 +208,7 @@ export function useChat({ currentStep, formState, onStepApproved, onAutoSelectAu
         response = await AgentAPI.getResult()
         break
 
-      // Steps 5-6 — Report / Email (kept as mock for now)
+      // Steps 5-6 — Report / Email (mock)
       case 5:
         response = await AGENT_SCENARIOS.runReport(stepData.brief)
         break
@@ -161,6 +228,11 @@ export function useChat({ currentStep, formState, onStepApproved, onAutoSelectAu
     }
 
     stopThinking(response)
+    log.step(`approveStep ${stepIndex} ← done`, {
+      tool: response?.metadata?.tool,
+      content_preview: response?.content?.slice(0, 150),
+      blocks: response?.blocks?.map(b => b.type),
+    })
     setBusy(false)
     if (onStepApproved) onStepApproved(stepIndex)
   }, [busy, startThinking, stopThinking, onStepApproved])

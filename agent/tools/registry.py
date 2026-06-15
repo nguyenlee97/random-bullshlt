@@ -10,7 +10,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "get_zone_list",
-            "description": "Lấy danh sách ad zones với metrics. Dùng khi hỏi 'zone nào tốt', 'danh sách vị trí', 'zone awareness'.",
+            "description": "Lấy danh sách tất cả ad zones với metrics. Dùng khi hỏi danh sách zone hoặc muốn xem toàn bộ.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -23,15 +23,64 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
-            "name": "get_audience_list",
-            "description": "Tìm audience segments từ DMP. Dùng khi hỏi 'segment du lịch', 'audience tài chính'.",
+            "name": "search_zones",
+            "description": (
+                "Tìm kiếm ad zones theo từ khoá, objective, format hoặc platform. Có tổng 35 zones. "
+                "Dùng khi người dùng hỏi 'zone nào phù hợp cho awareness', 'zone ZingNews', "
+                "'zone banner 300x250', 'zone có VI% cao', 'zone rẻ nhất'. "
+                "Ưu tiên tool này hơn get_zone_list khi có từ khoá tìm kiếm cụ thể."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Từ khoá tìm kiếm (EN/VI)"},
+                    "query": {"type": "string", "description": "Từ khoá tìm (tên zone, platform như 'znews'/'baomoi'/'zmp3', format như 'banner'/'masthead'/'skin')"},
+                    "objective": {"type": "string", "description": "awareness|consideration|conversion|retention. Optional."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_audience_list",
+            "description": (
+                "Tìm audience segments từ DMP (310+ segments thực tế). "
+                "Dùng khi người dùng hỏi về segment, audience hoặc đối tượng mục tiêu. "
+                "Hỗ trợ tìm bằng tiếng Anh hoặc tiếng Việt. "
+                "Nếu không tìm thấy, thử lại với từ khoá rộng hơn hoặc tiếng Anh "
+                "(VD: thay 'Esport' → 'gaming', 'Livestream' → 'streaming', 'âm nhạc' → 'music'). "
+                "Có thể tìm theo category: Sports, Entertainment, Finance, Food, Travel, Technology, Gaming, Music, ..."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Từ khoá tìm kiếm (EN/VI). VD: 'gaming', 'du lịch', 'food & drink', 'music'"},
                     "type": {"type": "string", "enum": ["Behavior", "Interest"], "description": "Loại segment. Optional."},
                 },
                 "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_workspace",
+            "description": (
+                "Đề xuất cập nhật một field trên workspace. "
+                "CHỈ gọi tool này khi người dùng YÊU CẦU THAY ĐỔI RÕ RÀNG một thông tin nào đó. "
+                "KHÔNG gọi khi chỉ hỏi thông tin. "
+                "Tool này sẽ tạo ra một đề xuất để user xác nhận — KHÔNG áp dụng ngay. "
+                "Fields hỗ trợ: brief.brand, brief.objective, brief.kpi, brief.budget, brief.startDate, brief.endDate, brief.notes"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "field": {"type": "string", "description": "Dotted path. VD: 'brief.brand', 'brief.budget', 'brief.objective'"},
+                    "value": {"description": "Giá trị mới. Phải đúng kiểu dữ liệu (budget là số, objective là string enum)."},
+                    "reason": {"type": "string", "description": "Lý do thay đổi — giải thích ngắn cho user hiểu tại sao."},
+                },
+                "required": ["field", "value"],
             },
         },
     },
@@ -43,7 +92,7 @@ TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "step_name": {"type": "string", "enum": ["brief", "creative", "audience", "setup", "result"]},
+                    "step_name": {"type": "string", "enum": ["brief", "audience", "creative", "setup", "result"]},
                 },
                 "required": ["step_name"],
             },
@@ -74,11 +123,11 @@ TOOL_DEFINITIONS = [
 ]
 
 _STEP_EXPLANATIONS = {
-    "brief":    "Bước Brief: Điền brand, objective, KPI, ngân sách, thời gian, ghi chú. Agent phân tích và đề xuất audience.",
-    "creative": "Bước Creative: Upload hình/video. Agent kiểm tra format (PNG/JPG/MP4), kích thước (≥300px), dung lượng (≤10MB).",
-    "audience": "Bước Audience: Chọn DMP segments (310+ segments). Agent tính audience size theo overlap discount. Sau đó có thể thiết lập targeting nâng cao.",
-    "setup":    "Bước Setup 3 phase: (1) Em gợi ý top zone theo objective, (2) gán creative vào zone, (3) tạo 1 order với tất cả zones.",
-    "result":   "Bước Kết quả: Hiện tổng kết order đã tạo — trạng thái, ngân sách, links AdsPilot và Analytics.",
+    "brief":    "Bước Brief: Anh/chị điền brand, objective (awareness/consideration/conversion/retention), KPI, ngân sách, thời gian và ghi chú. Em phân tích và đề xuất audience phù hợp.",
+    "audience": "Bước Audience: Chọn DMP segments (310+ segments). Em tính audience size theo mô hình union (OR logic) với 30% overlap discount. Anh/Chị có thể tìm theo từ khoá hoặc để em gợi ý.",
+    "creative": "Bước Creative: Upload hình/video. Em kiểm tra format (PNG/JPG/MP4), kích thước (≥300px), dung lượng (≤10MB).",
+    "setup":    "Bước Setup 3 giai đoạn: (1) Em gợi ý top zone theo objective/KPI, (2) gán creative vào zone, (3) tạo order với tất cả zones đã chọn.",
+    "result":   "Bước Kết quả: Hiện tổng kết order đã tạo — trạng thái, ngân sách, links AdsPilot và test site.",
 }
 
 
@@ -88,14 +137,69 @@ async def execute_tool(name: str, args: dict) -> dict:
         obj = args.get("objective")
         if obj:
             zones = [z for z in zones if z.get("obj") == obj]
-        return {"zones": [{"id": z["id"], "format": z["format"], "size": z["size"],
-                           "reach": z["reach"], "vi": z["vi"], "ctr": z["ctr"],
-                           "cpm": z["cpm"], "obj": z["obj"]} for z in zones]}
+        return {"zones": [{
+            "id": z["id"], "format": z["format"], "size": z["size"],
+            "reach": z["reach"], "vi": z["vi"], "ctr": z["ctr"],
+            "cpm": z["cpm"], "obj": z["obj"],
+            "channel": z.get("channel", ""),
+        } for z in zones]}
+
+    elif name == "search_zones":
+        zones = await get_all_zones()
+        query = (args.get("query") or "").lower().strip()
+        obj = args.get("objective")
+
+        results = zones
+        if obj:
+            results = [z for z in results if z.get("obj") == obj]
+        if query:
+            results = [z for z in results if query in " ".join([
+                z.get("id", ""), z.get("channel", ""), z.get("format", ""),
+                z.get("size", ""), z.get("obj", ""),
+            ]).lower()]
+
+        return {
+            "zones": [{
+                "id": z["id"], "channel": z.get("channel", ""),
+                "format": z["format"], "size": z["size"],
+                "reach": z["reach"], "vi": z["vi"], "ctr": z["ctr"],
+                "cpm": z["cpm"], "obj": z["obj"],
+                "siteUrl": z.get("siteUrl", ""),
+            } for z in results[:15]],
+            "total": len(results),
+            "note": "Không tìm thấy zone nào." if not results else f"Tìm thấy {len(results)} zone.",
+        }
 
     elif name == "get_audience_list":
-        results = await search_audience(query=args.get("query", ""), type_filter=args.get("type"), limit=10)
-        return {"segments": [{"_id": r["_id"], "fullLabel": r.get("fullLabel", r.get("name", "")),
-                               "type": r.get("type", ""), "sizeRaw": r.get("sizeRaw", "")} for r in results]}
+        results = await search_audience(
+            query=args.get("query", ""),
+            type_filter=args.get("type"),
+            limit=10,
+        )
+        if not results:
+            return {
+                "segments": [],
+                "note": (
+                    f"Không tìm thấy segment nào với từ khoá '{args.get('query', '')}'. "
+                    "Thử lại với từ khoá tiếng Anh hoặc rộng hơn "
+                    "(VD: 'gaming', 'streaming', 'music', 'travel', 'food', 'finance')."
+                ),
+            }
+        return {"segments": [{
+            "_id": r.get("_id", ""), "fullLabel": r.get("fullLabel", r.get("name", "")),
+            "type": r.get("type", ""), "sizeRaw": r.get("sizeRaw", ""),
+            "category": r.get("category", ""),
+        } for r in results]}
+
+    elif name == "update_workspace":
+        # This is handled specially in freeform.py (proposal flow)
+        # Just return the proposed args so the second LLM call can explain it
+        return {
+            "proposed_field": args.get("field", ""),
+            "proposed_value": args.get("value"),
+            "reason": args.get("reason", ""),
+            "status": "pending_user_confirmation",
+        }
 
     elif name == "explain_step":
         step = args.get("step_name", "brief")
@@ -105,11 +209,15 @@ async def execute_tool(name: str, args: dict) -> dict:
         oid = args.get("order_id")
         if oid:
             order = await fetch_order(oid)
-            return {"order": {"id": order.get("id"), "status": order.get("status"),
-                               "brand": order.get("brand"), "placements": order.get("placements", [])}}
+            return {"order": {
+                "id": order.get("id"), "status": order.get("status"),
+                "brand": order.get("brand"), "placements": order.get("placements", []),
+            }}
         else:
             orders = await fetch_all_orders()
-            return {"orders": [{"id": o.get("id"), "status": o.get("status"), "brand": o.get("brand")} for o in orders[:5]]}
+            return {"orders": [{
+                "id": o.get("id"), "status": o.get("status"), "brand": o.get("brand"),
+            } for o in orders[:5]]}
 
     elif name == "get_targeting_options":
         return await get_targeting_options()

@@ -19,7 +19,7 @@ async def handle_creative(creative: CreativeData, session_id: str) -> AgentRespo
     files = creative.files
     if not files:
         return AgentResponse(
-            text="⚠ Anh chưa upload file nào.",
+            text="⚠ Anh/Chị chưa upload file nào.",
             blocks=[{"type": "info", "text": "Vui lòng upload ít nhất 1 file creative."}],
             meta=ResponseMeta(tool="creative_validate", model="none", step=1),
         )
@@ -71,7 +71,7 @@ async def handle_creative(creative: CreativeData, session_id: str) -> AgentRespo
 
     blocks.append({
         "type": "info",
-        "text": "✅ Anh tiếp tục chọn Audience ở bước tiếp theo!",
+        "text": "✅ Anh/Chị tiếp tục chọn Audience ở bước tiếp theo!",
     })
 
     text = (

@@ -63,8 +63,14 @@ export default function AudienceStep({ data, onChange, isDone, brief }) {
   useEffect(() => {
     if (!brief?.brand) return
     if (recoFetched.current) return  // prevent double call (React StrictMode)
+    // Skip recommend if audience already selected (e.g. populated via chat)
+    if (data?.attrs && data.attrs.length > 0) {
+      setRecoLoading(false)
+      return
+    }
     recoFetched.current = true
     setRecoLoading(true)
+
     fetchDmpRecommendations().then(recs => {
       const normalized = recs.map(r => ({
         _uid: r.segmentId || r._id || r.fullLabel,

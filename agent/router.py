@@ -12,7 +12,7 @@ agent_router = APIRouter()
 
 
 @agent_router.get("/logs/{session_id}")
-async def get_logs(session_id: str, limit: int = 100):
+async def get_logs(session_id: str, limit: int = 200):
     """Return session logs for debugging. Used by the frontend Export feature."""
     from session import _ensure_mongo, _logs_col, _mem_logs, _mem_sessions
     use_mongo = await _ensure_mongo()
@@ -23,28 +23,36 @@ async def get_logs(session_id: str, limit: int = 100):
             sort=[("ts", -1)],
         ).limit(limit)
         logs = await cursor.to_list(length=limit)
-        # Serialize datetime → str
         for entry in logs:
             if hasattr(entry.get("ts"), "isoformat"):
                 entry["ts"] = entry["ts"].isoformat()
-        session = await _mem_sessions.get(session_id) if not use_mongo else None
     else:
-        logs = [e for e in _mem_logs if e.get("session_id") == session_id][-limit:]
-        logs_out = []
-        for e in logs:
+        raw = [e for e in _mem_logs if e.get("session_id") == session_id][-limit:]
+        logs = []
+        for e in raw:
             out = dict(e)
             if hasattr(out.get("ts"), "isoformat"):
                 out["ts"] = out["ts"].isoformat()
-            logs_out.append(out)
-        logs = logs_out
-        session = _mem_sessions.get(session_id, {})
+            logs.append(out)
+
+    # Categorize logs for easier debugging
+    categorized = {
+        "llm_requests":  [l for l in logs if l.get("type") == "llm_request"],
+        "llm_responses": [l for l in logs if l.get("type") in ("llm_response_raw", "llm_sanitized")],
+        "tool_calls":    [l for l in logs if l.get("type") in ("tool_call", "tool_result")],
+        "errors":        [l for l in logs if l.get("type") == "error"],
+        "other":         [l for l in logs if l.get("type") not in (
+            "llm_request", "llm_response_raw", "llm_sanitized",
+            "tool_call", "tool_result", "error",
+        )],
+    }
 
     return {
         "session_id": session_id,
         "log_count": len(logs),
         "logs": logs,
+        "categorized": categorized,
     }
-
 
 
 @agent_router.post("/chat", response_model=AgentResponse)
@@ -62,11 +70,12 @@ async def chat(req: ChatRequest) -> AgentResponse:
         if req.step == 0 and fd.brief:
             return await handle_brief(fd.brief, sid)
 
-        if req.step == 1 and fd.creative:
-            return await handle_creative(fd.creative, sid)
-
-        if req.step == 2 and fd.segment:
+        # Step order: 0=brief, 1=audience, 2=creative, 3=setup, 4=result
+        if req.step == 1 and fd.segment:
             return await handle_audience(fd.segment, sid)
+
+        if req.step == 2 and fd.creative:
+            return await handle_creative(fd.creative, sid)
 
         if req.step == 3 and fd.setup:
             return await handle_setup(fd.setup, sid)
@@ -76,11 +85,18 @@ async def chat(req: ChatRequest) -> AgentResponse:
 
     # ── Free-form text → LLM + tools ─────────────────────────────────────────
     if req.message:
-        return await handle_freeform(req.message, req.step, sid)
+        return await handle_freeform(
+            req.message,
+            req.step,
+            sid,
+            workspace=req.workspace,
+            confirmed_steps=req.confirmed_steps,
+            workspace_events=req.workspace_events,
+        )
 
     # ── Fallback ──────────────────────────────────────────────────────────────
     return AgentResponse(
-        text="Em chưa hiểu yêu cầu. Anh thử mô tả rõ hơn hoặc tương tác với form ở panel phải nhé!",
+        text="Em chưa hiểu yêu cầu. Anh/Chị thử mô tả rõ hơn hoặc tương tác với form ở panel phải nhé!",
         blocks=[],
         meta={"tool": None, "model": "none", "step": req.step},
     )
