@@ -17,7 +17,7 @@ function EmptyState() {
   )
 }
 
-export default function ChatThread({ messages }) {
+export default function ChatThread({ messages, canRetry, onRetry }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -26,11 +26,21 @@ export default function ChatThread({ messages }) {
 
   if (messages.length === 0) return <EmptyState />
 
+  // Find ID of the last assistant message (not thinking) for retry icon placement
+  const lastAssistantId = [...messages].reverse().find(
+    m => m.role === 'assistant' && m.metadata?.tool
+  )?.id ?? null
+
   return (
     <ScrollArea className="flex-1">
       <div className="flex flex-col gap-4 p-4">
         {messages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            showRetry={canRetry && msg.id === lastAssistantId}
+            onRetry={onRetry}
+          />
         ))}
         <div ref={bottomRef} />
       </div>

@@ -10,16 +10,26 @@ from config import config
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-06-16.4"
+BUILD_VERSION = "2026-06-16.9"
 BUILD_FEATURES = [
-    "system-logs",                # stdout + MongoDB alog() at every agent decision point
-    "3-level-tool-fallback",      # deterministic fallback when all LLM calls return empty
-    "confirmation-detection",     # chat 'đồng ý' applies pending workspace proposal
-    "force-text-no-tools",        # force_text_completion called without tools
-    "empty-response-guard",       # frontend shows fallback instead of frozen UI
-    "frontend-console-log",       # color-coded DevTools logging
-    "gfm-tables",                 # markdown tables rendered properly
-    "workspace-proposal-ui",      # amber confirm/cancel block in chat
+    "system-logs",
+    "step-tool-rules",
+    "brief-rules",
+    "auto-confirm-apply",
+    "auto-step-advance",
+    "next-step-redirect",
+    "3-level-tool-fallback",
+    "confirmation-detection",
+    "force-text-no-tools",
+    "empty-response-guard",
+    "frontend-console-log",
+    "full-brief-update",
+    "skip-update-workspace-llm",
+    "dmp-recommend-fix",
+    "audience-entry-recommend",
+    "retry-last-chat",
+    "persist-workspace-on-confirm",   # brief persisted to MongoDB on auto-apply/pending confirm
+    "audience-entry-single-fire",     # removed double-fire of audience-entry trigger
 ]
 
 app = FastAPI(

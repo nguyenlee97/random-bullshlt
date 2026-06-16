@@ -15,6 +15,7 @@ from llm import chat_completion, force_text_completion, sanitize_response
 from session import (
     get_or_create_session, get_history, add_message, log_event,
     set_pending_proposal, get_pending_proposal, clear_pending_proposal,
+    update_form_state,
 )
 from prompts.system import SYSTEM_PROMPT, STEP_NAMES
 from agent_logger import alog
@@ -52,7 +53,17 @@ _CONFIRM_TRIGGERS = [
     "correct",
     "yes",
     "apply",
-    "tiếp tục",
+]
+
+# Intent keywords that mean "go to next step" — intercepted deterministically
+_NEXT_STEP_TRIGGERS = [
+    "sang bước tiếp",
+    "bước tiếp theo",
+    "next step",
+    "tiếp tục sang",
+    "chuyển sang bước",
+    "move to next",
+    "tiếp theo đi",
 ]
 
 # Step name mapping for lock warnings
@@ -71,6 +82,32 @@ def _field_to_step_index(field: str) -> int:
     """Map dotted field path (e.g. 'brief.brand') to step index."""
     prefix = field.split(".")[0] if "." in field else field
     return _FIELD_TO_STEP.get(prefix, -1)
+
+
+def _build_update_summary(field: str, value, reason: str) -> str:
+    """Build a deterministic summary message for update_workspace proposals."""
+    if field == "brief" and isinstance(value, dict):
+        parts = []
+        if value.get("brand"):
+            parts.append(f"Brand: **{value['brand']}**")
+        if value.get("objective"):
+            obj_vi = {"awareness": "Awareness", "consideration": "Consideration",
+                      "conversion": "Conversion", "retention": "Retention"}
+            parts.append(f"Objective: **{obj_vi.get(value['objective'], value['objective'])}**")
+        if value.get("budget") is not None and value.get("budget") != "":
+            parts.append(f"Budget: **{value['budget']:,} triệu VND**")
+        if value.get("kpi"):
+            parts.append(f"KPI: **{value['kpi']}**")
+        if value.get("startDate") and value.get("endDate"):
+            parts.append(f"Thời gian: **{value['startDate']} → {value['endDate']}**")
+        if parts:
+            summary = "\n".join(f"- {p}" for p in parts)
+            return f"Em đã tổng hợp thông tin brief. Anh/chị xác nhận để lưu:\n\n{summary}"
+        return "Em đề xuất cập nhật brief. Anh/Chị xem và xác nhận nhé!"
+
+    # Single field update
+    value_str = str(value)[:80]
+    return f"Em đề xuất cập nhật `{field}` → `{value_str}`. Anh/Chị xác nhận để lưu nhé!"
 
 
 def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int]) -> str:
@@ -172,6 +209,23 @@ async def handle_freeform(
         await alog(session_id, "info", {"intent": "autopick_targeting"})
         return await handle_targeting_autopick(session_id)
 
+    # ── Intercept "next step" intent — always defer to the button ───────────────
+    if any(kw in msg_lower for kw in _NEXT_STEP_TRIGGERS):
+        _STEP_NEXT_MSG = [
+            "Anh/Chị đấn nút **Đồng ý & Tiếp tục** ở cuối panel phải để em chuyển sang bước tiếp theo nhé! 👉",
+            "Tiếp tục bằng cách bấm **Đồng ý & Tiếp tục** ở cuối workspace bên phải à anh/chị.",
+        ]
+        reply_text = _STEP_NEXT_MSG[step % len(_STEP_NEXT_MSG)] if step >= 0 else _STEP_NEXT_MSG[0]
+        await alog(session_id, "info", {"intent": "next_step_redirect", "step": step})
+        return AgentResponse(
+            text=reply_text,
+            blocks=[{"type": "info", "text": "Nhấn nút Đồng ý ở panel phải để chuyển bước."}],
+            meta=ResponseMeta(tool="freeform_chat", model="none", step=step),
+        )
+
+    # Track if this message is a confirmation (affects update_workspace handling)
+    is_confirm_trigger = any(kw in msg_lower for kw in _CONFIRM_TRIGGERS)
+
     # ── Check for campaign reset intent ──────────────────────────────────────
     if any(kw in msg_lower for kw in _RESET_TRIGGERS):
         await alog(session_id, "info", {"intent": "reset_campaign"})
@@ -209,6 +263,8 @@ async def handle_freeform(
                 f"✅ Đã cập nhật `{field}`. Em sẽ tiếp tục bước tiếp theo."
             )
             await add_message(session_id, "assistant", confirm_text)
+            # ── Persist to MongoDB so downstream calls (audience-entry, dmp-recommend) see the data ──
+            await update_form_state(session_id, field, value)
 
             return AgentResponse(
                 text=confirm_text,
@@ -291,39 +347,40 @@ async def handle_freeform(
 
             # ── Handle update_workspace specially (proposal flow) ─────────────
             if used_tool == "update_workspace":
-                # Get the LLM's natural language explanation (second call with tool result)
-                messages.append({
-                    "role": "assistant",
-                    "tool_calls": [
-                        {"id": tc.id, "type": "function",
-                         "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
-                        for tc in msg.tool_calls
-                    ],
-                })
-                messages.extend(tool_results)
-                # Attempt 1: normal second call
-                await alog(session_id, "llm_call_start", {"attempt": 1, "purpose": "update_workspace_summary"})
-                t1 = time.time()
-                final = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
-                reply = sanitize_response(final.choices[0].message.content or "")
-                await alog(session_id, "llm_call_done", {"attempt": 1, "duration_ms": int((time.time()-t1)*1000), "reply_len": len(reply), "empty": not reply})
-                # Attempt 2: force text — no tools so model can't call them again
-                if not reply:
-                    await alog(session_id, "fallback", {"attempt": 2, "tool": used_tool, "reason": "attempt1_empty"})
-                    t2 = time.time()
-                    forced = force_text_completion(messages=messages)  # no tools!
-                    reply = sanitize_response(forced.choices[0].message.content or "")
-                    await alog(session_id, "llm_call_done", {"attempt": 2, "duration_ms": int((time.time()-t2)*1000), "reply_len": len(reply), "empty": not reply})
-                # Attempt 3: deterministic fallback
-                if not reply:
-                    reply = "Em đã xử lý xong. Anh/Chị xem đề xuất cập nhật bên dưới và xác nhận nhé!"
-                    await alog(session_id, "fallback", {"attempt": 3, "tool": used_tool, "using": "hardcoded"})
-
                 # Extract proposed changes from the first tool call
                 first_args = json.loads(msg.tool_calls[0].function.arguments)
                 field = first_args.get("field", "")
+                value = first_args.get("value")
+                if isinstance(value, str):
+                    try:
+                        value = json.loads(value)
+                    except Exception:
+                        pass
+
+                # Build a deterministic confirmation message — skip 2 LLM calls entirely
+                # (MiniMax consistently returns empty on the second call after update_workspace)
+                reply = _build_update_summary(field, value, first_args.get("reason", ""))
+                await alog(session_id, "info", {"update_workspace": "skipped_llm_summary", "field": field})
+
                 step_index = _field_to_step_index(field)
                 is_locked = step_index in (confirmed_steps or [])
+
+                # If the user already said 'xác nhận' / confirm keywords → auto-apply, skip proposal block
+                if is_confirm_trigger and not is_locked:
+                    await alog(session_id, "confirm", {"auto_apply": True, "field": field})
+                    await add_message(session_id, "user", message)
+                    await add_message(session_id, "assistant", reply)
+                    # ── Persist to MongoDB so audience-entry / dmp-recommend see the data immediately ──
+                    await update_form_state(session_id, field, value)
+                    return AgentResponse(
+                        text=reply,
+                        blocks=[{
+                            "type": "info",
+                            "text": f"Workspace đã được cập nhật: `{field}`. Chọn Audience ở panel phải hoặc hỏi em để tiếp tục.",
+                        }],
+                        meta=ResponseMeta(tool="update_workspace", model="minimax", step=step),
+                        workspace_update={"field": field, "value": value, "reason": first_args.get("reason", "")},
+                    )
 
                 # Build cascading reset warning
                 warning = ""
@@ -334,6 +391,7 @@ async def handle_freeform(
 
                 # Store pending proposal in session (for chat-based confirmation)
                 await set_pending_proposal(session_id, first_args)
+                await alog(session_id, "info", {"pending_proposal_stored": True, "field": field, "is_locked": is_locked})
 
                 await add_message(session_id, "user", message)
                 await add_message(session_id, "assistant", reply)
@@ -392,17 +450,15 @@ async def handle_freeform(
         else:
             reply = sanitize_response(raw_content)
             used_tool = "freeform_chat"
-
-        # Log sanitization if anything was stripped
-        sanitized_len = len(reply)
-        if sanitized_len != len(raw_content):
-            await alog(session_id, "warn", {
-                "event": "content_sanitized",
-                "original_len": len(raw_content),
-                "sanitized_len": sanitized_len,
-                "stripped_think": "<think>" in raw_content,
-                "stripped_xml": any(tag in raw_content for tag in ["minimax:tool_call", "<invoke", "</invoke"]),
-            })
+            # Warn if sanitization stripped significant content
+            if len(reply) != len(raw_content):
+                await alog(session_id, "warn", {
+                    "event": "content_sanitized",
+                    "original_len": len(raw_content),
+                    "sanitized_len": len(reply),
+                    "stripped_think": "<think>" in raw_content,
+                    "stripped_xml": any(tag in raw_content for tag in ["minimax:tool_call", "<invoke", "</invoke"]),
+                })
 
         await alog(session_id, "reply", {
             "tool": used_tool,

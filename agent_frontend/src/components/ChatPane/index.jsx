@@ -131,8 +131,8 @@ function exportChatLog(messages) {
   URL.revokeObjectURL(url)
 }
 
-// ─── ChatPane ─────────────────────────────────────────────────────────────────
-export default function ChatPane({ messages, busy, currentStep, onSend, onBack }) {
+// ─── ChatPane ───────────────────────────────────────────────────────────────────────────────
+export default function ChatPane({ messages, busy, currentStep, onSend, onBack, onRetry, canRetry }) {
   return (
     <div className="flex flex-col h-full">
       {/* Pane header */}
@@ -164,7 +164,7 @@ export default function ChatPane({ messages, busy, currentStep, onSend, onBack }
 
       {/* Thread */}
       <div className="flex flex-col flex-1 min-h-0 bg-gradient-to-b from-slate-50/50 to-white">
-        <ChatThread messages={messages} />
+        <ChatThread messages={messages} canRetry={canRetry} onRetry={onRetry} />
       </div>
 
       {/* Composer */}

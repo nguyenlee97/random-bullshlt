@@ -3,6 +3,8 @@ import { useChat } from '@/hooks/useChat'
 import TopBar from '@/components/TopBar'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
+import { AgentAPI } from '@/api/agentApi'
+import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
 
 // ─── Steps meta — NEW ORDER: Brief → Audience → Creative → Setup → Result ─────
@@ -219,7 +221,7 @@ export default function App() {
     })
   }, [setFormStateWithEvents])
 
-  const { messages, busy, boot, newChat, sendMessage, approveStep } = useChat({
+  const { messages, busy, boot, newChat, sendMessage, approveStep, retryLastMessage, canRetry } = useChat({
     currentStep,
     formState,
     stepStatuses,
@@ -228,9 +230,73 @@ export default function App() {
     onStepApproved: markStepDone,
     onAutoSelectAudience: handleAutoSelectAudience,
     onWorkspaceUpdate: handleWorkspaceUpdate,
+
+    // Full state snapshot for retry — capture formState+step BEFORE each send
+    onSnapshotRequest: useCallback(() => ({
+      formState: JSON.parse(JSON.stringify({
+        ...formState,
+        creative: { ...formState.creative, files: formState.creative.files.map(f => ({ ...f, dataUrl: null })) },  // strip heavy base64
+      })),
+      stepStatuses: [...stepStatuses],
+      currentStep,
+    }), [formState, stepStatuses, currentStep]),
+
+    // Full state restore for retry — revert formState+step to before the failed message
+    onRestoreSnapshot: useCallback((snapshot) => {
+      log.step('retryLastMessage → restoring snapshot', {
+        currentStep: snapshot.currentStep,
+        stepStatuses: snapshot.stepStatuses,
+        formState_brief_brand: snapshot.formState?.brief?.brand,
+      })
+      // Revert creative files (dataUrl was stripped during snapshot, restore originals from current state)
+      const restoredCreative = {
+        ...snapshot.formState.creative,
+        files: formState.creative.files.slice(0, snapshot.formState.creative.files.length),
+      }
+      setFormState({ ...snapshot.formState, creative: restoredCreative })
+      setStepStatuses(snapshot.stepStatuses)
+      setCurrentStep(snapshot.currentStep)
+    }, [formState.creative.files]),
   })
 
   useEffect(() => { boot() }, [boot])
+
+  // Audience-entry: when user reaches step 1 with brief done → proactive recommendation in chat
+  const audienceEntryFiredRef = useRef(false)
+  useEffect(() => {
+    if (
+      currentStep === 1 &&
+      stepStatuses[0] === 'done' &&
+      !audienceEntryFiredRef.current &&
+      formState.segment.attrs.length === 0  // skip if already has segments
+    ) {
+      audienceEntryFiredRef.current = true
+      ;(async () => {
+        log.step('audience-entry triggered — fetching recommendation')
+        try {
+          const data = await AgentAPI.getAudienceEntry()
+          if (data && !data.skip) {
+            const msg = {
+              id: generateId(),
+              role: 'assistant',
+              content: data.text || '',
+              blocks: data.blocks || [],
+              timestamp: new Date().toISOString(),
+              metadata: data.meta || { tool: 'audience_entry', model: 'minimax', step: 1 },
+            }
+            // Inject as assistant message (using the internal addMessage via a custom event)
+            window.dispatchEvent(new CustomEvent('agent:inject_message', { detail: msg }))
+          }
+        } catch (e) {
+          log.error('audience-entry fetch failed', e.message)
+        }
+      })()
+    }
+    // NOTE: do NOT reset the flag here on currentStep !== 1.
+    // Doing so causes a double-fire: stepStatuses[0] change fires the effect with currentStep=0
+    // (resets flag), then currentStep=1 fires again and re-triggers the call.
+    // Flag is reset only by handlePartialReset when the user explicitly resets the flow.
+  }, [currentStep, stepStatuses[0]])
 
   // Auto-advance when setup Phase 3 confirms
   useEffect(() => {
@@ -275,6 +341,8 @@ export default function App() {
   // Partial reset: wipe form data + statuses from fromStep onward
   const handlePartialReset = useCallback((fromStep) => {
     log.step(`handlePartialReset from step ${fromStep} (${STEP_NAMES_VI[fromStep]})`)
+    // Allow audience-entry to re-trigger if the brief step is being reset
+    if (fromStep <= 1) audienceEntryFiredRef.current = false
     // Emit a workspace event so the agent knows
     pushWorkspaceEvent(
       `Đã bấm 'Chỉnh sửa lại' ở bước ${STEP_NAMES_VI[fromStep]} — ` +
@@ -326,8 +394,8 @@ export default function App() {
   const canApprove = (() => {
     if (stepStatuses[currentStep] === 'done') return false
     switch (currentStep) {
-      case 2: return (formState.creative.files || []).length > 0  // Creative is now step 2
-      case 1: return formState.segment.attrs.length > 0           // Audience is now step 1
+      case 1: return formState.segment.attrs.length > 0   // Audience is step 1
+      case 2: return (formState.creative.files || []).length > 0  // Creative is step 2
       case 3: return false  // Setup: handled by internal button
       case 5: return formState.report.analyzed
       case 6: return formState.email.sent
@@ -348,6 +416,8 @@ export default function App() {
             currentStep={currentStep}
             onSend={sendMessage}
             onBack={() => !busy && currentStep > 0 && setCurrentStep(prev => prev - 1)}
+            onRetry={retryLastMessage}
+            canRetry={canRetry && !busy}
           />
         </div>
 

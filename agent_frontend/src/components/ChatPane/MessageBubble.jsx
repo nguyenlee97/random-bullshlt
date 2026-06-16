@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import BlockRenderer from '@/blocks/BlockRenderer'
-import { Bot, User, Wrench } from 'lucide-react'
+import { Bot, User, Wrench, RefreshCw } from 'lucide-react'
 
 // ─── Typing indicator ─────────────────────────────────────────────────────────
 function TypingIndicator() {
@@ -26,7 +26,7 @@ function TypingIndicator() {
 }
 
 // ─── Model badge ──────────────────────────────────────────────────────────────
-function ModelBadge({ tool, model }) {
+function ModelBadge({ tool, model, showRetry, onRetry }) {
   const displayModel = model === 'minimax' ? 'Minimax-M2.5'
     : model === 'none' ? null
     : model || 'Minimax-M2.5'
@@ -43,12 +43,23 @@ function ModelBadge({ tool, model }) {
           {displayModel}
         </Badge>
       )}
+      {/* Subtle ghost retry icon — only on the latest assistant message */}
+      {showRetry && (
+        <button
+          onClick={onRetry}
+          title="Gửi lại tin nhắn này"
+          id="retry-last-msg-btn"
+          className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground/50 hover:text-brand-500 hover:bg-brand-50 transition-colors"
+        >
+          <RefreshCw className="w-3 h-3" />
+        </button>
+      )}
     </div>
   )
 }
 
 // ─── Single message bubble ────────────────────────────────────────────────────
-function MessageBubble({ message }) {
+function MessageBubble({ message, showRetry, onRetry }) {
   const isUser = message.role === 'user'
   const isThinking = message.role === 'thinking'
 
@@ -106,9 +117,14 @@ function MessageBubble({ message }) {
           ))}
         </div>
 
-        {/* Tool/model metadata */}
+        {/* Tool/model metadata — with subtle retry icon on latest message */}
         {!isUser && message.metadata?.tool && (
-          <ModelBadge tool={message.metadata.tool} model={message.metadata.model} />
+          <ModelBadge
+            tool={message.metadata.tool}
+            model={message.metadata.model}
+            showRetry={showRetry}
+            onRetry={onRetry}
+          />
         )}
 
         {/* Timestamp */}

@@ -67,18 +67,19 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "update_workspace",
             "description": (
-                "Đề xuất cập nhật một field trên workspace. "
-                "CHỈ gọi tool này khi người dùng YÊU CẦU THAY ĐỔI RÕ RÀNG một thông tin nào đó. "
+                "Đề xuất cập nhật workspace. "
+                "CHỈ gọi khi người dùng YÊU CẦU THAY ĐỔI hoặc XÁC NHẬN thông tin rõ ràng. "
                 "KHÔNG gọi khi chỉ hỏi thông tin. "
-                "Tool này sẽ tạo ra một đề xuất để user xác nhận — KHÔNG áp dụng ngay. "
-                "Fields hỗ trợ: brief.brand, brief.objective, brief.kpi, brief.budget, brief.startDate, brief.endDate, brief.notes"
+                "Tool tạo đề xuất để user xác nhận — KHÔNG áp dụng ngay. "
+                "Khi xác nhận brief (nhiều field) → dùng field='brief' với value là object đầy đủ {brand, objective, kpi, budget, startDate, endDate, notes}. "
+                "Chỉ dùng dotted path (vd: 'brief.brand') khi user chỉ đổi đúng 1 field đó."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "field": {"type": "string", "description": "Dotted path. VD: 'brief.brand', 'brief.budget', 'brief.objective'"},
-                    "value": {"description": "Giá trị mới. Phải đúng kiểu dữ liệu (budget là số, objective là string enum)."},
-                    "reason": {"type": "string", "description": "Lý do thay đổi — giải thích ngắn cho user hiểu tại sao."},
+                    "field": {"type": "string", "description": "Section hoặc dotted path. VD: 'brief' (toàn bộ brief), 'brief.brand' (1 field). Khi có nhiều thay đổi ở cùng 1 bước → dùng 'brief' với object đầy đủ."},
+                    "value": {"description": "Giá trị mới. Nếu field='brief': value là object {brand, objective, kpi, budget (số, đơn vị triệu VND), startDate (YYYY-MM-DD), endDate (YYYY-MM-DD), notes}. Budget ghi bằng số nguyên triệu (VD: 600 = 600 triệu)."},
+                    "reason": {"type": "string", "description": "Lý do thay đổi — giải thích ngắn cho user."},
                 },
                 "required": ["field", "value"],
             },

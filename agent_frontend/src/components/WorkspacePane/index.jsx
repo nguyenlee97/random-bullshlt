@@ -15,8 +15,8 @@ import { LayoutDashboard } from 'lucide-react'
 
 const STEP_DESCS = [
   'Điền brief khách hàng — agent chuẩn hóa về JSON schema và đề xuất KPI.',
-  'Upload nhiều creative (ảnh / video) để lưu vào storage. Dùng ở bước Setup Camp.',
   'Chọn attributes từ DMP. Size = min(tệp) × discount overlap 22%/tệp.',
+  'Upload nhiều creative (ảnh / video) để lưu vào storage. Dùng ở bước Setup Camp.',
   '3 campaign draft theo zone tối ưu CPM. Tạo + pause/run từng campaign.',
   'Tổng kết campaigns vừa tạo. Xem chi tiết trước khi sang phân tích.',
   'Extract report · vẽ chart performance · LLM đánh giá · đề xuất hành động.',
@@ -59,8 +59,8 @@ const WorkspacePane = forwardRef(function WorkspacePane(
   const renderStep = () => {
     switch (currentStep) {
       case 0: return <BriefStep data={formState.brief} onChange={v => updateFormSlice('brief', v)} isDone={isDone} />
-      case 1: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isDone} />
-      case 2: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isDone} brief={formState.brief} />
+      case 1: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isDone} brief={formState.brief} />
+      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isDone} />
       case 3: return (
         <SetupStep
           data={formState.setup}

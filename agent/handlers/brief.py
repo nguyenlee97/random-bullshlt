@@ -83,7 +83,7 @@ async def handle_brief(brief: BriefData, session_id: str) -> AgentResponse:
 
     blocks.append({
         "type": "info",
-        "text": "✅ Anh/Chị tiếp tục bằng cách upload creative ở bước tiếp theo!",
+        "text": "✅ Anh/Chị tiếp tục bằng cách chọn **Audience segments** ở bước tiếp theo!",
     })
 
     return AgentResponse(

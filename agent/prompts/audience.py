@@ -95,3 +95,60 @@ Trả JSON:
     }}
   ]
 }}"""
+
+
+AUDIENCE_ENTRY_SYSTEM = """Bạn là Camp Ads Agent chuyên về audience targeting cho quảng cáo kỹ thuật số.
+Nhiệm vụ: Dựa trên brief, đề xuất đầy đủ: (1) Targeting Parameters, (2) DMP Audience Segments, (3) Advanced Targeting nếu đủ thông tin.
+Trả về JSON chính xác theo schema. KHÔNG thêm text ngoài JSON."""
+
+AUDIENCE_ENTRY_USER = """Brief chiến dịch:
+- Brand: {brand}
+- Objective: {objective}
+- KPI: {kpi}
+- Ghi chú (audience/geo/interest từ brief): {notes}
+
+Targeting options có sẵn:
+{options_json}
+
+DMP segments có sẵn:
+{segments_json}
+
+YÊU CẦU:
+1. Nếu brief.notes có đủ thông tin audience (geo, age, gender, interest) → trả đề xuất đầy đủ.
+2. Nếu notes KHÔNG đủ thông tin để đề xuất geo+age+gender → set "need_more_info": true và ghi rõ thiếu gì.
+3. DMP Segments: LUÔN gợi ý (tối thiểu 3-6 segments phù hợp nhất).
+4. Advanced Targeting (interest, career, income...): CHỈ gợi ý nếu có signal rõ ràng từ notes. Nếu không → bỏ qua (mảng rỗng).
+
+Trả JSON (1 trong 2 dạng):
+
+Dạng 1 — Đủ thông tin:
+{{
+  "need_more_info": false,
+  "targeting": {{
+    "geo": [], "age": [], "gender": [],
+    "deviceOS": [], "deviceBrand": [],
+    "marital": [], "parental": [], "education": [], "income": [],
+    "career": [], "interest": [], "weather": []
+  }},
+  "targeting_reasoning": [
+    {{"field": "geo", "picks": ["TP.HCM", "Hà Nội"], "reason": "Lý do ngắn"}}
+  ],
+  "dmp_segments": [
+    {{"fullLabel": "tên segment", "reason": "Lý do phù hợp"}}
+  ],
+  "advanced_targeting_note": "Gợi ý thêm nếu cần (hoặc để trống)"
+}}
+
+Dạng 2 — Thiếu thông tin:
+{{
+  "need_more_info": true,
+  "missing_fields": ["geo", "age"],
+  "questions": [
+    "Anh/chị muốn nhắm đến khu vực nào?",
+    "Độ tuổi và giới tính mục tiêu là gì?"
+  ],
+  "dmp_segments": [
+    {{"fullLabel": "tên segment", "reason": "Có thể phù hợp"}}
+  ]
+}}"""
+

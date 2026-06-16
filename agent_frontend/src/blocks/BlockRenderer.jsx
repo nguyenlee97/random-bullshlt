@@ -215,15 +215,35 @@ function ActionResetBlock({ block }) {
 
 // ─── Workspace Proposal Block ─────────────────────────────────────────────────
 function WorkspaceProposalBlock({ block }) {
-  const { changes = {}, is_locked, warning } = block
+  const { changes = {}, is_locked, warning, instruction } = block
   const field = changes.field || ''
   const rawValue = changes.value
   const reason = changes.reason || ''
 
-  // Format value for display — handle full section object OR primitive
+  // ── Smart display value ────────────────────────────────────────────────────
   const displayValue = (() => {
+    // AUDIENCE SEGMENT proposal — show human-friendly summary
+    if (field === 'segment' && typeof rawValue === 'object' && rawValue !== null) {
+      const attrs = rawValue.attrs || []
+      const size = rawValue.size
+      const targeting = rawValue.targeting || {}
+      const lines = []
+      lines.push(`📦 ${attrs.length} DMP segments`)
+      if (size) lines.push(`👥 Audience ước tính: ${size.toLocaleString('vi-VN')} người`)
+      const geoStr = (targeting.geo || []).slice(0, 3).join(', ')
+      if (geoStr) lines.push(`🗺 Geo: ${geoStr}`)
+      const ageStr = (targeting.age || []).slice(0, 3).join(', ')
+      if (ageStr) lines.push(`🎂 Tuổi: ${ageStr}`)
+      const genderStr = (targeting.gender || []).join(', ')
+      if (genderStr) lines.push(`⚥ Giới tính: ${genderStr}`)
+      // Show first 4 segment names
+      const segNames = attrs.slice(0, 4).map(a => a.fullLabel || a.name || '?')
+      if (segNames.length) lines.push(`\nSegments: ${segNames.join(' · ')}${attrs.length > 4 ? ` +${attrs.length - 4} khác` : ''}`)
+      return lines.join('\n')
+    }
+
+    // BRIEF / generic object — show key: value pairs
     if (typeof rawValue === 'string') {
-      // Might be a JSON-stringified object from the model
       try {
         const parsed = JSON.parse(rawValue)
         if (typeof parsed === 'object' && parsed !== null) {
@@ -236,15 +256,17 @@ function WorkspaceProposalBlock({ block }) {
     }
     if (typeof rawValue === 'object' && rawValue !== null) {
       return Object.entries(rawValue)
-        .filter(([, v]) => v !== null && v !== '')
+        .filter(([, v]) => v !== null && v !== '' && !Array.isArray(v))
         .map(([k, v]) => `${k}: ${v}`)
         .join('\n')
     }
     return String(rawValue ?? '')
   })()
 
+  const isAudience = field === 'segment'
+
   const handleConfirm = () => {
-    log.block('workspace_proposal CONFIRM', { field, value: rawValue })
+    log.block('workspace_proposal CONFIRM', { field, value_type: typeof rawValue })
     window.dispatchEvent(new CustomEvent('agent:workspace_confirm', {
       detail: { patch: changes }
     }))
@@ -260,7 +282,9 @@ function WorkspaceProposalBlock({ block }) {
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 bg-amber-100 border-b border-amber-200">
         <Pencil className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-        <p className="text-xs font-semibold text-amber-800">Đề xuất cập nhật workspace</p>
+        <p className="text-xs font-semibold text-amber-800">
+          {isAudience ? '👥 Đề xuất Audience' : 'Đề xuất cập nhật workspace'}
+        </p>
       </div>
 
       {/* Change details */}
@@ -270,13 +294,21 @@ function WorkspaceProposalBlock({ block }) {
           <code className="text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded font-mono text-[11px]">{field}</code>
         </div>
         <div className="flex gap-2 text-xs">
-          <span className="text-amber-700 font-medium w-14 flex-shrink-0">Giá trị:</span>
+          <span className="text-amber-700 font-medium w-14 flex-shrink-0">
+            {isAudience ? 'Tóm tắt:' : 'Giá trị:'}
+          </span>
           <pre className="text-amber-900 text-[11px] whitespace-pre-wrap font-sans flex-1 leading-relaxed">{displayValue}</pre>
         </div>
         {reason && (
           <div className="flex gap-2 text-xs">
             <span className="text-amber-700 font-medium w-14 flex-shrink-0">Lý do:</span>
             <span className="text-amber-800 italic">{reason}</span>
+          </div>
+        )}
+        {/* Instruction for audience proposals (guide to deselect) */}
+        {instruction && (
+          <div className="mt-1 text-[11px] text-amber-700 bg-amber-100 border border-amber-200 rounded px-2 py-1.5">
+            💡 {instruction}
           </div>
         )}
         {warning && (
@@ -297,13 +329,13 @@ function WorkspaceProposalBlock({ block }) {
           onClick={handleConfirm}
           className="flex-1 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
         >
-          ✅ Đồng ý, cập nhật
+          {isAudience ? '✅ Áp dụng tất cả segments' : '✅ Đồng ý, cập nhật'}
         </button>
         <button
           onClick={handleCancel}
           className="px-3 py-1.5 rounded-lg border border-border bg-white hover:bg-muted text-xs font-semibold text-muted-foreground transition-colors flex items-center gap-1"
         >
-          <X className="w-3 h-3" /> Hủy
+          <X className="w-3 h-3" /> {isAudience ? 'Tự chọn' : 'Hủy'}
         </button>
       </div>
     </div>

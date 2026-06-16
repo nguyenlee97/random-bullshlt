@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { AgentAPI, AGENT_SCENARIOS, fetchDmpAttributes, matchDmpByKeywords, extractTargetingKeywords, extractTargetingMap } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
@@ -33,6 +33,8 @@ export function useChat({
   onStepApproved,
   onAutoSelectAudience,
   onWorkspaceUpdate,
+  onSnapshotRequest,   // () => { formState, stepStatuses, currentStep } — called before each send
+  onRestoreSnapshot,  // (snapshot) => void — called on retry to revert external state
 }) {
 
   const [messages, setMessages] = useState([])
@@ -40,6 +42,8 @@ export function useChat({
   const thinkingIdRef = useRef(null)
   // Prevents double-boot from React StrictMode double-mount in dev
   const bootedRef = useRef(false)
+  // Snapshot for retry: stores { text, messagesBefore } of the last sent message
+  const lastSentRef = useRef(null)
 
   const addMessage = useCallback((msg) => {
     setMessages(prev => [...prev, msg])
@@ -74,6 +78,18 @@ export function useChat({
     setBusy(false)
   }, [])
 
+  // Listen for externally-injected assistant messages (e.g. audience-entry recommendation from App.jsx)
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail) {
+        log.chat('agent:inject_message received', { tool: e.detail.metadata?.tool })
+        setMessages(prev => [...prev, e.detail])
+      }
+    }
+    window.addEventListener('agent:inject_message', handler)
+    return () => window.removeEventListener('agent:inject_message', handler)
+  }, [])
+
   // Full reset: clear messages and re-run boot greeting
   const newChat = useCallback(async () => {
     bootedRef.current = false
@@ -85,9 +101,19 @@ export function useChat({
     setBusy(false)
   }, [])
 
-  const sendMessage = useCallback(async (text) => {
+  const sendMessage = useCallback(async (text, _isRetry = false) => {
     if (busy || !text.trim()) return
     setBusy(true)
+
+    // Snapshot FULL state BEFORE send (messages + external formState/step)
+    if (!_isRetry) {
+      const externalSnapshot = onSnapshotRequest?.() ?? null
+      setMessages(prev => {
+        lastSentRef.current = { text, messagesBefore: prev, externalSnapshot }
+        return prev
+      })
+    }
+
     addMessage(userMessage(text))
     startThinking()
 
@@ -140,6 +166,17 @@ export function useChat({
     if (response?.workspace_update && onWorkspaceUpdate) {
       log.workspace('applying workspace_update from response', response.workspace_update)
       onWorkspaceUpdate(response.workspace_update)
+
+      // Auto-advance step when the updated field belongs to the current step
+      // so the user doesn't have to press "Đồng ý & Tiếp tục" manually after chat confirm
+      const STEP_PRIMARY_FIELDS = { 0: 'brief', 1: 'segment', 2: 'creative', 3: 'setup' }
+      const updatedField = response.workspace_update.field?.split('.')?.[0]  // 'brief.brand' → 'brief'
+      const isCurrentStepField = STEP_PRIMARY_FIELDS[currentStep] === updatedField
+      const alreadyDone = (stepStatuses || [])[currentStep] === 'done'
+      if (isCurrentStepField && !alreadyDone) {
+        log.step(`workspace_update for step ${currentStep} field "${updatedField}" → auto-advance`)
+        setTimeout(() => onStepApproved?.(currentStep), 700)
+      }
     }
 
     // When AI returns targeting_autopick: extract the targeting map and store it.
@@ -155,6 +192,21 @@ export function useChat({
       }
     }
   }, [busy, currentStep, formState, stepStatuses, workspaceEvents, addMessage, startThinking, stopThinking, onClearWorkspaceEvents, onAutoSelectAudience, onWorkspaceUpdate])
+
+  // Retry: restore full state (messages + formState + step) to before last send, then re-send
+  const retryLastMessage = useCallback(() => {
+    if (!lastSentRef.current || busy) return
+    const { text, messagesBefore, externalSnapshot } = lastSentRef.current
+    lastSentRef.current = null
+    // 1. Revert messages to before the user sent
+    setMessages(messagesBefore)
+    // 2. Revert external state (formState, stepStatuses, currentStep) if snapshot available
+    if (externalSnapshot && onRestoreSnapshot) {
+      onRestoreSnapshot(externalSnapshot)
+    }
+    // 3. Re-send (small delay so state settles before send)
+    setTimeout(() => sendMessage(text, true), 50)
+  }, [busy, sendMessage, onRestoreSnapshot])
 
 
 
@@ -237,5 +289,6 @@ export function useChat({
     if (onStepApproved) onStepApproved(stepIndex)
   }, [busy, startThinking, stopThinking, onStepApproved])
 
-  return { messages, busy, boot, newChat, sendMessage, approveStep }
+  return { messages, busy, boot, newChat, sendMessage, approveStep, retryLastMessage, canRetry: !!lastSentRef.current }
 }
+

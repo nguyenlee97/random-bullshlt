@@ -11,9 +11,11 @@ from prompts.audience import (
     AUDIENCE_SYSTEM, AUDIENCE_USER,
     TARGETING_AUTOPICK_SYSTEM, TARGETING_AUTOPICK_USER,
     DMP_RECOMMEND_SYSTEM, DMP_RECOMMEND_USER,
+    AUDIENCE_ENTRY_SYSTEM, AUDIENCE_ENTRY_USER,
 )
 from tools.targeting_options import get_targeting_options
 from tools.audience_library import get_all_segments
+
 
 
 def _calc_audience_size(attrs: list[dict]) -> int:
@@ -50,7 +52,7 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
 
     # ── Get brief context ─────────────────────────────────────────────────────
     session = await get_or_create_session(session_id)
-    brief = session["form_state"].get("brief", {})
+    brief = session.get("form_state", {}).get("brief", {})
 
     # ── LLM reasoning ────────────────────────────────────────────────────────
     segments_json = json.dumps(
@@ -132,8 +134,8 @@ async def handle_targeting_autopick(session_id: str) -> AgentResponse:
     'Hãy tự động chọn targeting phù hợp nhất cho chiến dịch này'
     """
     session = await get_or_create_session(session_id)
-    brief = session["form_state"].get("brief", {})
-    segment = session["form_state"].get("segment", {})
+    brief = session.get("form_state", {}).get("brief", {})
+    segment = session.get("form_state", {}).get("segment", {})
 
     options = await get_targeting_options()
     seg_names = [a.get("fullLabel", a.get("name", "")) for a in segment.get("attrs", [])[:10]]
@@ -198,7 +200,11 @@ async def handle_dmp_recommend(session_id: str) -> dict:
     Response: { recommendations: [{fullLabel, reason}], segments: [{fullLabel, segmentId, ...}] }
     """
     session = await get_or_create_session(session_id)
-    brief = session["form_state"].get("brief", {})
+    brief = session.get("form_state", {}).get("brief", {})
+
+    # If brief not set yet, return empty gracefully
+    if not brief.get("brand"):
+        return {"recommendations": [], "total_segments": 0, "note": "brief_not_set"}
 
     # Fetch real DMP segments
     all_segs = await get_all_segments(limit=200)
@@ -235,3 +241,149 @@ async def handle_dmp_recommend(session_id: str) -> dict:
             enriched.append({**seg, "reason": rec.get("reason", "")})
 
     return {"recommendations": enriched, "total_segments": len(all_segs)}
+
+
+async def handle_audience_entry(session_id: str) -> dict:
+    """
+    GET /api/agent/audience-entry?session_id=xxx
+    Proactively generates full audience recommendation when user enters step 1.
+    Returns a chat-ready AgentResponse dict with blocks for Targeting + DMP Segments.
+    If brief lacks info → returns need_more_info questions instead.
+    """
+    session = await get_or_create_session(session_id)
+    brief = session.get("form_state", {}).get("brief", {})
+
+    if not brief.get("brand"):
+        return {"skip": True, "reason": "brief_not_set"}
+
+    # Check if audience already set (re-entry) → skip
+    existing_segment = session.get("form_state", {}).get("segment", {})
+    if existing_segment.get("attrs"):
+        return {"skip": True, "reason": "audience_already_set"}
+
+    # Fetch real targeting options + DMP segments
+    options = await get_targeting_options()
+    all_segs = await get_all_segments(limit=200)
+    seg_labels = [s.get("fullLabel") or s.get("name", "") for s in all_segs if s.get("fullLabel") or s.get("name")]
+
+    prompt = AUDIENCE_ENTRY_USER.format(
+        brand=brief.get("brand", "?"),
+        objective=brief.get("objective", "?"),
+        kpi=brief.get("kpi", "(chưa có)"),
+        notes=brief.get("notes", "(trống)"),
+        options_json=json.dumps(options, ensure_ascii=False),
+        segments_json=json.dumps(seg_labels[:120], ensure_ascii=False),  # limit context size
+    )
+
+    try:
+        raw = simple_generate(AUDIENCE_ENTRY_SYSTEM, prompt)
+        data = parse_json_response(raw)
+        await log_event(session_id, "llm_call", {"handler": "audience_entry", "response": raw[:500]})
+    except Exception as e:
+        await log_event(session_id, "error", {"handler": "audience_entry", "error": str(e)})
+        return {"skip": True, "reason": f"llm_error: {str(e)}"}
+
+    need_more = data.get("need_more_info", False)
+
+    # ── Case 1: Need more info from user ──────────────────────────────────────
+    if need_more:
+        questions = data.get("questions", [
+            "Anh/chị muốn nhắm đến độ tuổi và giới tính nào?",
+            "Khu vực tập trung (TP.HCM, Hà Nội, toàn quốc...)?",
+        ])
+        dmp_recs = data.get("dmp_segments", [])
+        label_map = {(s.get("fullLabel") or s.get("name", "")): s for s in all_segs}
+        enriched_dmp = [
+            {**label_map[r["fullLabel"]], "reason": r.get("reason", "")}
+            for r in dmp_recs if r.get("fullLabel") in label_map
+        ]
+        blocks = [{"type": "info", "text": "Em cần thêm thông tin để gợi ý targeting chính xác:\n\n" + "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))}]
+        if enriched_dmp:
+            rows = [[s.get("fullLabel", "?"), s.get("type", ""), s.get("sizeRaw", ""), s.get("reason", "")] for s in enriched_dmp[:6]]
+            blocks.append({"type": "table", "title": "💡 DMP Segments sơ bộ gợi ý", "columns": ["Segment", "Loại", "Size ước tính", "Lý do"], "rows": rows})
+        return {
+            "skip": False,
+            "need_more_info": True,
+            "text": f"Dựa trên brief **{brief.get('brand')}**, em cần thêm vài thông tin để gợi ý audience chính xác hơn:",
+            "blocks": blocks,
+            "meta": {"tool": "audience_entry", "model": "minimax", "step": 1},
+        }
+
+    # ── Case 2: Full recommendation ───────────────────────────────────────────
+    targeting = data.get("targeting", {})
+    targeting_reasoning = data.get("targeting_reasoning", [])
+    dmp_recs = data.get("dmp_segments", [])
+    advanced_note = data.get("advanced_targeting_note", "")
+
+    label_map = {(s.get("fullLabel") or s.get("name", "")): s for s in all_segs}
+    enriched_dmp = [
+        {**label_map[r["fullLabel"]], "reason": r.get("reason", "")}
+        for r in dmp_recs if r.get("fullLabel") in label_map
+    ]
+
+    blocks = []
+
+    # Block 1: Targeting Parameters table
+    target_rows = [
+        [r["field"].capitalize(), ", ".join(r.get("picks", [])), r.get("reason", "")]
+        for r in targeting_reasoning if r.get("picks")
+    ]
+    if target_rows:
+        blocks.append({
+            "type": "table",
+            "title": "🎯 Targeting Parameters gợi ý",
+            "columns": ["Nhóm", "Giá trị đề xuất", "Lý do"],
+            "rows": target_rows,
+        })
+
+    # Block 2: DMP Segments table
+    if enriched_dmp:
+        dmp_rows = [
+            [s.get("fullLabel", "?"), s.get("type", ""), s.get("sizeRaw", "—"), s.get("reason", "")]
+            for s in enriched_dmp
+        ]
+        blocks.append({
+            "type": "table",
+            "title": "👥 DMP Audience Segments gợi ý",
+            "columns": ["Segment", "Loại", "Size ước tính", "Lý do phù hợp"],
+            "rows": dmp_rows,
+        })
+
+    # Block 3: Advanced targeting note (optional)
+    if advanced_note:
+        blocks.append({"type": "info", "text": f"💡 Advanced Targeting: {advanced_note}"})
+
+    # Block 4: Workspace proposal — renders Đồng ý / Bỏ qua buttons in chat
+    # Compute audience size using same union-discount model as handle_audience
+    audience_size = _calc_audience_size(enriched_dmp)
+    blocks.append({
+        "type": "workspace_proposal",
+        "changes": {
+            "field": "segment",
+            "value": {
+                "attrs": enriched_dmp,
+                "targeting": targeting,
+                "size": audience_size,
+            },
+            "reason": f"AI gợi ý {len(enriched_dmp)} segments phù hợp với brief {brief.get('brand', '')}",
+        },
+        "is_locked": False,
+        "warning": "",
+        "instruction": "Anh/chị bấm **Đồng ý** để áp dụng tất cả segments, hoặc vào panel phải để chọn/bỏ chọn từng segment trước khi xác nhận.",
+    })
+
+    await log_event(session_id, "audience_entry", {
+        "brand": brief.get("brand"),
+        "dmp_count": len(enriched_dmp),
+        "audience_size": audience_size,
+    })
+
+    return {
+        "skip": False,
+        "need_more_info": False,
+        "text": f"Dựa trên brief **{brief.get('brand')}** ({brief.get('objective', 'awareness')}), em gợi ý audience như sau:",
+        "blocks": blocks,
+        "meta": {"tool": "audience_entry", "model": "minimax", "step": 1},
+    }
+
+

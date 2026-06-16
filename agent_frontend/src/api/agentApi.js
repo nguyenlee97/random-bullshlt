@@ -860,6 +860,25 @@ export const AgentAPI = {
     // For true reset, reload the page or call with a new session_id.
     _agentReachable = null
   },
+
+  /**
+   * Proactive audience recommendation when user enters step 1.
+   * Returns { skip, text, blocks, meta, workspace_proposal } or { skip: true }.
+   * Called automatically by App.jsx when currentStep becomes 1 with brief done.
+   */
+  async getAudienceEntry() {
+    try {
+      const res = await fetch(
+        `${AGENT_URL}/api/agent/audience-entry?session_id=${SESSION_ID}`,
+        { signal: AbortSignal.timeout(35000) }
+      )
+      if (!res.ok) return null
+      return await res.json()
+    } catch (e) {
+      console.warn('[getAudienceEntry] failed:', e.message)
+      return null
+    }
+  },
 }
 
 export { generateMockCampaigns }

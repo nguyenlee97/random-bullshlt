@@ -3,7 +3,7 @@ from models import ChatRequest, AgentResponse
 from handlers.boot import handle_boot
 from handlers.brief import handle_brief
 from handlers.creative import handle_creative
-from handlers.audience import handle_audience, handle_dmp_recommend
+from handlers.audience import handle_audience, handle_dmp_recommend, handle_audience_entry
 from handlers.setup import handle_setup, handle_zone_recommend_api
 from handlers.result import handle_result
 from handlers.freeform import handle_freeform
@@ -14,7 +14,7 @@ agent_router = APIRouter()
 @agent_router.get("/logs/{session_id}")
 async def get_logs(session_id: str, limit: int = 200):
     """Return session logs for debugging. Used by the frontend Export feature."""
-    from session import _ensure_mongo, _logs_col, _mem_logs, _mem_sessions
+    from session import _ensure_mongo, _logs_col, _mem_logs
     use_mongo = await _ensure_mongo()
     if use_mongo:
         cursor = _logs_col.find(
@@ -112,3 +112,13 @@ async def dmp_recommend(session_id: str = "default"):
 async def zones_recommend(session_id: str = "default"):
     """AI ranks real zones based on brief objective/budget/KPI + creative files."""
     return await handle_zone_recommend_api(session_id)
+
+
+@agent_router.get("/audience-entry")
+async def audience_entry(session_id: str = "default"):
+    """
+    Proactive audience recommendation when user enters step 1.
+    Returns Targeting Parameters + DMP Segments (+ optional Advanced Targeting) as chat blocks.
+    Returns {skip: true} if brief not set or audience already selected.
+    """
+    return await handle_audience_entry(session_id)

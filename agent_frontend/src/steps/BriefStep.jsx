@@ -4,7 +4,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { Check, FileText, X } from 'lucide-react'
+import { Check, FileText, PenLine } from 'lucide-react'
 
 const OBJECTIVES = [
   { value: 'awareness',     label: 'Awareness — Tăng nhận biết' },
@@ -13,19 +13,48 @@ const OBJECTIVES = [
   { value: 'retention',     label: 'Retention — Giữ chân' },
 ]
 
-const KPI_OPTIONS = ['Reach','VTR','CTR','Impressions','CPM','CPA','ROAS','VI%','Engagement','CVR','Frequency','Return Visit']
+const VALID_OBJECTIVES = OBJECTIVES.map(o => o.value)
+
+// Predefined KPI chips (quick-select)
+const KPI_CHIPS = ['Reach', 'VTR', 'CTR', 'Impressions', 'CPM', 'CPA', 'ROAS', 'VI%', 'Engagement', 'CVR', 'Frequency', 'Return Visit']
 
 function KpiChips({ value, onChange }) {
+  // Check if current value contains custom text (not just comma-joined chips)
   const selected = value ? value.split(',').map(s => s.trim()).filter(Boolean) : []
+  const knownSelected = selected.filter(k => KPI_CHIPS.includes(k))
+  const customText = selected.filter(k => !KPI_CHIPS.includes(k)).join(', ')
+  const hasCustom = selected.some(k => !KPI_CHIPS.includes(k))
+
+  // The raw string may be a free-text from agent (e.g. "Reach ~5M, VTR > 25%, CTR > 1.2%")
+  // If none of the selected tokens match KPI_CHIPS, treat the whole value as custom text
+  const isFullyCustom = value && knownSelected.length === 0
+
   const toggle = (kpi) => {
+    if (isFullyCustom) {
+      // Replace custom text with chip selection
+      onChange(kpi)
+      return
+    }
     const next = selected.includes(kpi) ? selected.filter(k => k !== kpi) : [...selected, kpi]
     onChange(next.join(', '))
   }
+
+  const handleCustomChange = (e) => {
+    const custom = e.target.value
+    if (!custom.trim()) {
+      onChange(knownSelected.join(', '))
+    } else {
+      // Merge chips + custom
+      const merged = [...knownSelected, custom].join(', ')
+      onChange(merged)
+    }
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        {KPI_OPTIONS.map(k => {
-          const sel = selected.includes(k)
+        {KPI_CHIPS.map(k => {
+          const sel = !isFullyCustom && selected.includes(k)
           return (
             <button key={k} type="button" onClick={() => toggle(k)}
               className={cn('flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all',
@@ -35,8 +64,26 @@ function KpiChips({ value, onChange }) {
           )
         })}
       </div>
-      {selected.length === 0 && <p className="text-xs text-amber-600">Chọn ít nhất 1 KPI</p>}
-      {selected.length > 0 && <p className="text-xs text-brand-600 font-medium">Đã chọn: {selected.join(' · ')}</p>}
+
+      {/* Custom / free-text KPI from agent */}
+      <div className="relative">
+        <PenLine className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
+        <Input
+          id="brief-kpi-custom"
+          className="pl-7 text-sm"
+          placeholder="Hoặc nhập KPI cụ thể... (VD: Reach ~5M, VTR > 25%)"
+          value={isFullyCustom ? value : customText}
+          onChange={handleCustomChange}
+        />
+        {isFullyCustom && (
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] bg-brand-100 text-brand-700 font-semibold px-1.5 py-0.5 rounded">
+            Cụ thể
+          </span>
+        )}
+      </div>
+
+      {!value && <p className="text-xs text-amber-600">Chọn ít nhất 1 KPI hoặc nhập KPI cụ thể</p>}
+      {value && !isFullyCustom && <p className="text-xs text-brand-600 font-medium">Đã chọn: {selected.join(' · ')}</p>}
     </div>
   )
 }
@@ -51,6 +98,10 @@ export default function BriefStep({ data, onChange, isDone }) {
     return diff > 0 ? `${Math.round(diff)} tuần` : ''
   }
 
+  // Objective may be non-standard (e.g. agent saved a compound string)
+  const objectiveLabel = OBJECTIVES.find(o => o.value === data.objective)?.label
+  const isCustomObjective = data.objective && !VALID_OBJECTIVES.includes(data.objective)
+
   if (isDone) {
     return (
       <Card className="border-brand-200 bg-brand-50">
@@ -64,7 +115,7 @@ export default function BriefStep({ data, onChange, isDone }) {
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
             {[
               ['Thương hiệu', data.brand],
-              ['Mục tiêu', OBJECTIVES.find(o => o.value === data.objective)?.label],
+              ['Mục tiêu', objectiveLabel || data.objective],
               ['KPI', data.kpi],
               ['Ngân sách', `${data.budget} triệu`],
               ['Thời gian', data.startDate && data.endDate ? `${data.startDate} → ${data.endDate}` : data.startDate || '—'],
@@ -87,12 +138,18 @@ export default function BriefStep({ data, onChange, isDone }) {
 
       <div>
         <Label className="mb-1.5 block">Mục tiêu chiến dịch</Label>
-        <Select value={data.objective} onValueChange={val => update('objective', val)}>
-          <SelectTrigger id="brief-objective"><SelectValue /></SelectTrigger>
+        <Select value={VALID_OBJECTIVES.includes(data.objective) ? data.objective : ''} onValueChange={val => update('objective', val)}>
+          <SelectTrigger id="brief-objective"><SelectValue placeholder="Chọn mục tiêu..." /></SelectTrigger>
           <SelectContent>
             {OBJECTIVES.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
+        {isCustomObjective && (
+          <p className="mt-1 text-xs text-brand-600 flex items-center gap-1">
+            <span className="bg-brand-100 text-brand-700 font-semibold px-1.5 py-0.5 rounded text-[10px]">Cụ thể</span>
+            {data.objective}
+          </p>
+        )}
       </div>
 
       <div>
@@ -133,8 +190,11 @@ export default function BriefStep({ data, onChange, isDone }) {
 
       <div>
         <Label className="mb-1.5 block">Yêu cầu / Brief khách hàng</Label>
+        <p className="text-xs text-muted-foreground mb-1.5">
+          Mô tả đối tượng mục tiêu, khu vực, sở thích, hành vi — agent dùng để đề xuất DMP segments.
+        </p>
         <Textarea id="brief-notes" value={data.notes} onChange={e => update('notes', e.target.value)}
-          placeholder="Ghi chú thêm về mục tiêu, đối tượng, kênh ưu tiên..." rows={3} />
+          placeholder="VD: Audience: Nam 18-28, gamer&#10;Geo: 65% HCM, HN, Đà Nẵng&#10;Interest: esports, energy drinks" rows={4} />
       </div>
 
       <Card className="border-blue-100 bg-blue-50">
