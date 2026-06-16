@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn, fmt } from '@/lib/utils'
-import { fetchDmpAttributes, fetchDmpRecommendations, calcAudienceSize } from '@/api/agentApi'
+import { fetchDmpAttributes, calcAudienceSize } from '@/api/agentApi'
 import { Users, Check, Search, Loader2, Sparkles, ChevronDown, ChevronUp, BrainCircuit } from 'lucide-react'
 import TargetingPanel from '@/components/TargetingPanel'
 
@@ -39,7 +39,7 @@ function AttrCard({ attr, selected, onToggle, reason, isReco }) {
   )
 }
 
-export default function AudienceStep({ data, onChange, isDone, brief }) {
+export default function AudienceStep({ data, onChange, isDone, brief, recoFromChat }) {
 
   const [allAttrs, setAllAttrs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -58,36 +58,17 @@ export default function AudienceStep({ data, onChange, isDone, brief }) {
     })
   }, [])
 
-  // Fetch AI recommendations from backend (runs once brief is available)
-  const recoFetched = useRef(false)
+  // Use audience-entry recommendation from chat — no fallback to dmp-recommend.
+  // Per design: audience-entry is the single source of truth for recommendations.
+  // If recoFromChat is null (still loading), show spinner until it arrives.
   useEffect(() => {
-    if (!brief?.brand) return
-    if (recoFetched.current) return  // prevent double call (React StrictMode)
-    // Skip recommend if audience already selected (e.g. populated via chat)
-    if (data?.attrs && data.attrs.length > 0) {
+    if (recoFromChat && recoFromChat.length > 0) {
+      setRecoAttrs(recoFromChat)
       setRecoLoading(false)
-      return
     }
-    recoFetched.current = true
-    setRecoLoading(true)
-
-    fetchDmpRecommendations().then(recs => {
-      const normalized = recs.map(r => ({
-        _uid: r.segmentId || r._id || r.fullLabel,
-        code: r.segmentId || '',
-        name: r.fullLabel || r.name || '',
-        category: r.category || '',
-        type: (r.type || '').toLowerCase(),
-        est_size: r.sizeMin && r.sizeMax ? Math.round((r.sizeMin + r.sizeMax) / 2) : (r.sizeMin || r.sizeMax || 0),
-        sizeMin: r.sizeMin,
-        sizeMax: r.sizeMax,
-        reason: r.reason || '',
-        _id: r._id,
-      }))
-      setRecoAttrs(normalized)
-      setRecoLoading(false)
-    }).catch(() => setRecoLoading(false))
-  }, [brief?.brand, brief?.objective])
+    // If recoFromChat is null/empty, keep recoLoading=true (spinner shown)
+    // It will arrive shortly via audience-entry API
+  }, [recoFromChat])
 
   const recoUids = useMemo(() => new Set(recoAttrs.map(a => a._uid)), [recoAttrs])
 

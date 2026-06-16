@@ -153,6 +153,24 @@ export default function App() {
       try { value = JSON.parse(value) } catch {}
     }
 
+    // Normalize segment attrs so AudienceStep getUid() can match them
+    // audience-entry returns {fullLabel, _id} but AudienceStep needs {_uid, name, code}
+    if (field === 'segment' && value?.attrs) {
+      value = {
+        ...value,
+        attrs: value.attrs.map(a => ({
+          ...a,
+          _uid: a._uid || (a._id ? String(a._id) : null) || a.fullLabel || a.name || '',
+          name: a.name || a.fullLabel || '',
+          code: a.code || '',
+          category: a.category || a.type || '',
+          est_size: a.est_size ?? (
+            a.sizeMin && a.sizeMax ? Math.round((a.sizeMin + a.sizeMax) / 2) : (a.sizeMin || a.sizeMax || 0)
+          ),
+        })),
+      }
+    }
+
     log.workspace('handleWorkspaceUpdate → applying', {
       field,
       value_type: typeof value,
@@ -263,6 +281,7 @@ export default function App() {
 
   // Audience-entry: when user reaches step 1 with brief done → proactive recommendation in chat
   const audienceEntryFiredRef = useRef(false)
+  const [audienceRecommendation, setAudienceRecommendation] = useState(null)
   useEffect(() => {
     if (
       currentStep === 1 &&
@@ -276,6 +295,19 @@ export default function App() {
         try {
           const data = await AgentAPI.getAudienceEntry()
           if (data && !data.skip) {
+            // Extract workspace_proposal block
+            const proposalBlock = (data.blocks || []).find(b => b.type === 'workspace_proposal' && b.changes?.field === 'segment')
+            if (proposalBlock?.changes?.value?.attrs?.length) {
+              // Store for AudienceStep recoFromChat (shows in AI Gợi ý section)
+              setAudienceRecommendation(proposalBlock.changes.value.attrs)
+              log.step('audience-entry — stored recommendation', { count: proposalBlock.changes.value.attrs.length })
+              // ── Auto-apply: pre-populate segment form (attrs + targeting + size) ──
+              // Same as brief: audience is populated immediately so user can edit via
+              // workspace panel or chat (bidirectional). Injected messages bypass
+              // useChat.js sendMessage, so we explicitly apply the workspace update here.
+              handleWorkspaceUpdate(proposalBlock.changes)
+              log.workspace('audience-entry → auto-applied segment proposal to formState')
+            }
             const msg = {
               id: generateId(),
               role: 'assistant',
@@ -284,7 +316,6 @@ export default function App() {
               timestamp: new Date().toISOString(),
               metadata: data.meta || { tool: 'audience_entry', model: 'minimax', step: 1 },
             }
-            // Inject as assistant message (using the internal addMessage via a custom event)
             window.dispatchEvent(new CustomEvent('agent:inject_message', { detail: msg }))
           }
         } catch (e) {
@@ -296,7 +327,7 @@ export default function App() {
     // Doing so causes a double-fire: stepStatuses[0] change fires the effect with currentStep=0
     // (resets flag), then currentStep=1 fires again and re-triggers the call.
     // Flag is reset only by handlePartialReset when the user explicitly resets the flow.
-  }, [currentStep, stepStatuses[0]])
+  }, [currentStep, stepStatuses[0], handleWorkspaceUpdate])
 
   // Auto-advance when setup Phase 3 confirms
   useEffect(() => {
@@ -435,6 +466,7 @@ export default function App() {
             canApprove={canApprove}
             busy={busy}
             onPartialReset={handlePartialReset}
+            recoFromChat={audienceRecommendation}
           />
         </div>
       </main>

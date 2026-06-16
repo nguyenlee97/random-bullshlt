@@ -30,6 +30,7 @@ _AUTOPICK_TRIGGERS = [
     "chọn targeting giúp",
     "chọn giúp targeting",
     "targeting phù hợp",
+    "set targeting giúp",
 ]
 
 # Intent keywords that trigger full campaign reset
@@ -53,6 +54,15 @@ _CONFIRM_TRIGGERS = [
     "correct",
     "yes",
     "apply",
+    "chốt luôn",
+    "nhất trí",
+    "chính xác",
+    "tiến hành đi",
+    "triển đi",
+    "triển luôn",
+    "yep",
+    "sure",
+    "accept",
 ]
 
 # Intent keywords that mean "go to next step" — intercepted deterministically
@@ -64,6 +74,14 @@ _NEXT_STEP_TRIGGERS = [
     "chuyển sang bước",
     "move to next",
     "tiếp theo đi",
+    "tiếp tục",
+    "tiếp đi",
+    "sang phần tiếp",
+    "chuyển bước",
+    "bước sau",
+    "continue",
+    "go next",
+    "next đi",
 ]
 
 # Step name mapping for lock warnings
@@ -209,8 +227,11 @@ async def handle_freeform(
         await alog(session_id, "info", {"intent": "autopick_targeting"})
         return await handle_targeting_autopick(session_id)
 
-    # ── Intercept "next step" intent — always defer to the button ───────────────
-    if any(kw in msg_lower for kw in _NEXT_STEP_TRIGGERS):
+    # ── Intercept "next step" intent — only when message is PURELY a step-nav request ──
+    # Guard: long messages (>80 chars) likely contain substantive data + a casual "tiếp tục"
+    # → let LLM handle them instead of swallowing the data with this shortcut.
+    is_pure_step_nav = len(msg_lower) <= 80 and any(kw in msg_lower for kw in _NEXT_STEP_TRIGGERS)
+    if is_pure_step_nav:
         _STEP_NEXT_MSG = [
             "Anh/Chị đấn nút **Đồng ý & Tiếp tục** ở cuối panel phải để em chuyển sang bước tiếp theo nhé! 👉",
             "Tiếp tục bằng cách bấm **Đồng ý & Tiếp tục** ở cuối workspace bên phải à anh/chị.",
@@ -459,6 +480,11 @@ async def handle_freeform(
                     "stripped_think": "<think>" in raw_content,
                     "stripped_xml": any(tag in raw_content for tag in ["minimax:tool_call", "<invoke", "</invoke"]),
                 })
+            # ── Clear stale pending_proposal ──────────────────────────────────
+            # After a freeform discussion (no update_workspace call), the old pending
+            # may be outdated. Clear it so user confirming later always goes back
+            # through the LLM which will re-call update_workspace with fresh values.
+            await clear_pending_proposal(session_id)
 
         await alog(session_id, "reply", {
             "tool": used_tool,

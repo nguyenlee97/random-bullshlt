@@ -113,15 +113,13 @@ Targeting options có sẵn:
 DMP segments có sẵn:
 {segments_json}
 
-YÊU CẦU:
-1. Nếu brief.notes có đủ thông tin audience (geo, age, gender, interest) → trả đề xuất đầy đủ.
-2. Nếu notes KHÔNG đủ thông tin để đề xuất geo+age+gender → set "need_more_info": true và ghi rõ thiếu gì.
-3. DMP Segments: LUÔN gợi ý (tối thiểu 3-6 segments phù hợp nhất).
-4. Advanced Targeting (interest, career, income...): CHỈ gợi ý nếu có signal rõ ràng từ notes. Nếu không → bỏ qua (mảng rỗng).
+YÊU CẦU — ĐỌC KỸ:
+1. DMP Segments: LUÔN LUÔN gợi ý 5-8 segments PHÙ HỢP NHẤT, BẤT KỂ brief có đủ thông tin hay không. Đây là bắt buộc, không được để mảng rỗng.
+2. Targeting Parameters (geo/age/gender): Nếu đủ thông tin → trả đề xuất cụ thể. Nếu thiếu geo/age/gender → vẫn trả dạng 1 (need_more_info: false) với các field đó để trống [].
+3. KHÔNG BAO GIỜ trả need_more_info: true. Luôn trả dạng 1 và gợi ý DMP segments từ những gì đã có trong brief.notes.
+4. Advanced Targeting (interest, career, income...): Chỉ gợi ý nếu có signal từ notes. Nếu không → mảng rỗng.
 
-Trả JSON (1 trong 2 dạng):
-
-Dạng 1 — Đủ thông tin:
+Trả JSON dạng DUY NHẤT:
 {{
   "need_more_info": false,
   "targeting": {{
@@ -134,21 +132,8 @@ Dạng 1 — Đủ thông tin:
     {{"field": "geo", "picks": ["TP.HCM", "Hà Nội"], "reason": "Lý do ngắn"}}
   ],
   "dmp_segments": [
-    {{"fullLabel": "tên segment", "reason": "Lý do phù hợp"}}
+    {{"fullLabel": "tên segment CHÍNH XÁC (KHÔNG bao gồm [Type] ở cuối)", "reason": "Lý do phù hợp"}}
   ],
   "advanced_targeting_note": "Gợi ý thêm nếu cần (hoặc để trống)"
-}}
-
-Dạng 2 — Thiếu thông tin:
-{{
-  "need_more_info": true,
-  "missing_fields": ["geo", "age"],
-  "questions": [
-    "Anh/chị muốn nhắm đến khu vực nào?",
-    "Độ tuổi và giới tính mục tiêu là gì?"
-  ],
-  "dmp_segments": [
-    {{"fullLabel": "tên segment", "reason": "Có thể phù hợp"}}
-  ]
 }}"""
 

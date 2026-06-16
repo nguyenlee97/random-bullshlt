@@ -34,6 +34,30 @@ def _calc_audience_size(attrs: list[dict]) -> int:
     return round(total)
 
 
+def _normalize_dmp_attr(seg: dict) -> dict:
+    """Normalize a raw MongoDB segment doc into the shape AudienceStep.jsx expects.
+    
+    AudienceStep needs: _uid, code, name, category, type, est_size, sizeMin, sizeMax, reason.
+    Raw docs have: fullLabel, _id, type, sizeMin, sizeMax, sizeRaw, reason.
+    """
+    s_min = seg.get("sizeMin") or 0
+    s_max = seg.get("sizeMax") or 0
+    est_size = (s_min + s_max) // 2 if (s_min and s_max) else (s_min or s_max)
+    full_label = seg.get("fullLabel") or seg.get("name", "")
+    raw_id = seg.get("_id")
+    return {
+        **seg,
+        # Fields required by AudienceStep getUid() and isSelected()
+        "_uid": str(raw_id) if raw_id else full_label,
+        "name": full_label,
+        "code": seg.get("code", ""),
+        "category": seg.get("category", seg.get("type", "")),
+        "est_size": est_size,
+        # Keep originals for compatibility
+        "fullLabel": full_label,
+    }
+
+
 async def handle_audience(segment: SegmentData, session_id: str) -> AgentResponse:
     attrs = segment.attrs  # list of raw DMP attribute dicts (with _id)
 
@@ -264,7 +288,13 @@ async def handle_audience_entry(session_id: str) -> dict:
     # Fetch real targeting options + DMP segments
     options = await get_targeting_options()
     all_segs = await get_all_segments(limit=200)
-    seg_labels = [s.get("fullLabel") or s.get("name", "") for s in all_segs if s.get("fullLabel") or s.get("name")]
+    # Build enriched segment list for LLM: "fullLabel [Type]" format
+    # Helps LLM match Vietnamese brief keywords to English segment names
+    seg_labels = [
+        f"{s.get('fullLabel') or s.get('name', '')} [{s.get('type', '')}]"
+        for s in all_segs
+        if s.get("fullLabel") or s.get("name")
+    ]
 
     prompt = AUDIENCE_ENTRY_USER.format(
         brand=brief.get("brand", "?"),
@@ -272,7 +302,7 @@ async def handle_audience_entry(session_id: str) -> dict:
         kpi=brief.get("kpi", "(chưa có)"),
         notes=brief.get("notes", "(trống)"),
         options_json=json.dumps(options, ensure_ascii=False),
-        segments_json=json.dumps(seg_labels[:120], ensure_ascii=False),  # limit context size
+        segments_json=json.dumps(seg_labels[:200], ensure_ascii=False),  # send up to 200
     )
 
     try:
@@ -285,6 +315,37 @@ async def handle_audience_entry(session_id: str) -> dict:
 
     need_more = data.get("need_more_info", False)
 
+    # Build label maps (exact + case-insensitive fallback for LLM output variation)
+    label_map = {}
+    label_map_lower = {}
+    for s in all_segs:
+        lbl = s.get("fullLabel") or s.get("name", "")
+        if lbl:
+            label_map[lbl] = s
+            label_map_lower[lbl.lower().strip()] = s
+
+    def _lookup_seg(full_label: str) -> dict | None:
+        # 1. Exact match
+        if full_label in label_map:
+            return label_map[full_label]
+        # 2. Case-insensitive match
+        low = full_label.lower().strip()
+        if low in label_map_lower:
+            return label_map_lower[low]
+        # 3. Substring match — DB label contains LLM label (e.g. "Real estate" in "Real estate (industry)")
+        for db_label_low, seg in label_map_lower.items():
+            if low in db_label_low or db_label_low.startswith(low):
+                return seg
+        # 4. Word-overlap match (>= 2 words in common)
+        llm_words = set(low.split())
+        best_seg, best_score = None, 0
+        for db_label_low, seg in label_map_lower.items():
+            db_words = set(db_label_low.split())
+            score = len(llm_words & db_words)
+            if score >= 2 and score > best_score:
+                best_seg, best_score = seg, score
+        return best_seg
+
     # ── Case 1: Need more info from user ──────────────────────────────────────
     if need_more:
         questions = data.get("questions", [
@@ -292,10 +353,9 @@ async def handle_audience_entry(session_id: str) -> dict:
             "Khu vực tập trung (TP.HCM, Hà Nội, toàn quốc...)?",
         ])
         dmp_recs = data.get("dmp_segments", [])
-        label_map = {(s.get("fullLabel") or s.get("name", "")): s for s in all_segs}
         enriched_dmp = [
-            {**label_map[r["fullLabel"]], "reason": r.get("reason", "")}
-            for r in dmp_recs if r.get("fullLabel") in label_map
+            _normalize_dmp_attr({**_lookup_seg(r["fullLabel"]), "reason": r.get("reason", "")})
+            for r in dmp_recs if r.get("fullLabel") and _lookup_seg(r["fullLabel"])
         ]
         blocks = [{"type": "info", "text": "Em cần thêm thông tin để gợi ý targeting chính xác:\n\n" + "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))}]
         if enriched_dmp:
@@ -315,11 +375,40 @@ async def handle_audience_entry(session_id: str) -> dict:
     dmp_recs = data.get("dmp_segments", [])
     advanced_note = data.get("advanced_targeting_note", "")
 
-    label_map = {(s.get("fullLabel") or s.get("name", "")): s for s in all_segs}
+    label_map = label_map  # already built above
     enriched_dmp = [
-        {**label_map[r["fullLabel"]], "reason": r.get("reason", "")}
-        for r in dmp_recs if r.get("fullLabel") in label_map
+        _normalize_dmp_attr({**_lookup_seg(r["fullLabel"]), "reason": r.get("reason", "")})
+        for r in dmp_recs if r.get("fullLabel") and _lookup_seg(r["fullLabel"])
     ]
+
+    # ── Keyword fallback when LLM segment names don't match DB ────────────────
+    # Score all_segs by word overlap with brief notes+brand and pick top 6.
+    if not enriched_dmp:
+        await log_event(session_id, "warn", {
+            "handler": "audience_entry",
+            "event": "enriched_dmp_empty",
+            "llm_recs": [r.get("fullLabel", "") for r in dmp_recs],
+            "note": "Using keyword fallback"
+        })
+        # Build keyword set from brief
+        search_text = " ".join([
+            brief.get("brand", ""),
+            brief.get("notes", ""),
+            brief.get("objective", ""),
+        ]).lower()
+        kw_set = set(w for w in search_text.split() if len(w) > 3)
+
+        def _score_seg(seg: dict) -> int:
+            lbl = (seg.get("fullLabel") or seg.get("name", "")).lower()
+            return sum(1 for kw in kw_set if kw in lbl)
+
+        # Sort by keyword overlap, then by size (sizeMax) as tiebreaker
+        scored = sorted(all_segs, key=lambda s: (_score_seg(s), s.get("sizeMax", 0) or 0), reverse=True)
+        fallback_segs = scored[:6]
+        enriched_dmp = [
+            _normalize_dmp_attr({**s, "reason": "Được chọn tự động dựa trên brief (fallback)"})
+            for s in fallback_segs
+        ]
 
     blocks = []
 

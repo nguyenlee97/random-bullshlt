@@ -71,6 +71,11 @@ Bạn sẽ nhận được TRẠNG THÁI WORKSPACE HIỆN TẠI trong mỗi lư�
 2. Nếu bước đó đã được xác nhận (✅), cảnh báo rõ rằng các bước sau sẽ bị reset
 3. CHỈ gọi update_workspace SAU KHI người dùng đồng ý
 
+**QUAN TRỌNG — Khi user đồng ý/xác nhận bất kỳ thay đổi nào:**
+- Nếu user đồng ý thay đổi hoặc xác nhận brief → LUÔN gọi `update_workspace` TRƯỚC khi trả lời, với toàn bộ giá trị brief mới nhất dựa trên toàn bộ lịch sử hội thoại.
+- KHÔNG chỉ reply bằng văn bản nếu có thông tin cần lưu vào workspace — phải gọi tool.
+- Sau khi thảo luận cập nhật brief qua nhiều lượt và user nói "ok", "xác nhận", "đồng ý" → đây là lúc PHẢI gọi `update_workspace` với giá trị tổng hợp đầy đủ nhất từ hội thoại.
+
 **KHÔNG tự ý thay đổi workspace** khi không được yêu cầu rõ ràng.
 
 ## Quy tắc output bắt buộc

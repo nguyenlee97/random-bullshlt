@@ -14,14 +14,14 @@ const STEP_CHIPS = {
     'Budget tối thiểu là bao nhiêu?',
   ],
   1: [
+    'Hãy tự động chọn targeting phù hợp nhất cho chiến dịch này',
+    'DMP segment nào phù hợp với brief?',
+    'Audience size bao nhiêu là đủ?',
+  ],
+  2: [
     'Creative size nào phù hợp cho Banner?',
     'Skin zone cần creative như thế nào?',
     'Format nào được hỗ trợ?',
-  ],
-  2: [
-    'Hãy tự động chọn targeting phù hợp nhất cho chiến dịch này',
-    'DMP là gì và cách chọn segment?',
-    'Audience size bao nhiêu là đủ?',
   ],
   3: [
     'Zone nào tốt nhất cho objective của tôi?',

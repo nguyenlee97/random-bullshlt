@@ -162,7 +162,19 @@ export function useChat({
     onClearWorkspaceEvents?.()
     log.workspace('workspace_events drained (sent to backend)')
 
-    // Handle workspace_update — agent confirmed a change
+    // ── Pre-populate workspace form when agent proposes a change ─────────────
+    // When a workspace_proposal block appears, apply the value immediately so
+    // the user sees the form populated right away and can edit before confirming.
+    // The "Đồng ý" button will only advance the step (data is already in formState).
+    if (onWorkspaceUpdate) {
+      const proposals = (response?.blocks || []).filter(b => b.type === 'workspace_proposal' && b.changes?.field)
+      for (const block of proposals) {
+        log.workspace('workspace_proposal block → pre-populating form', block.changes)
+        onWorkspaceUpdate(block.changes)
+      }
+    }
+
+    // Handle workspace_update — agent confirmed a change (pending proposal applied by backend)
     if (response?.workspace_update && onWorkspaceUpdate) {
       log.workspace('applying workspace_update from response', response.workspace_update)
       onWorkspaceUpdate(response.workspace_update)

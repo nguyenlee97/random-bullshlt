@@ -16,33 +16,56 @@ async def _fetch_all_segments() -> list[dict]:
 
     segments: list[dict] = []
     try:
-        # Try paginated fetch first
-        for page in range(1, 15):  # max 14 pages × 100 = 1400 segments
-            resp = await _client.get(
-                "/api/dmp/attributes",
-                params={"limit": "100", "page": str(page)},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            items = data if isinstance(data, list) else data.get("data", [])
-            if not items:
-                break
-            segments.extend(items)
-            if len(items) < 100:
-                break  # Last page
+        # Primary: bulk fetch with high limit (avoids broken pagination)
+        resp = await _client.get("/api/dmp/attributes", params={"limit": "500"})
+        resp.raise_for_status()
+        data = resp.json()
+        bulk = data if isinstance(data, list) else data.get("data", [])
+        if bulk:
+            segments = bulk
 
-        # Fallback: single bulk fetch
-        if not segments:
-            resp = await _client.get("/api/dmp/attributes", params={"limit": "500"})
-            resp.raise_for_status()
-            data = resp.json()
-            segments = data if isinstance(data, list) else data.get("data", [])
+        # Fallback: paginated fetch if bulk returned nothing or very few
+        if len(segments) < 50:
+            segments = []
+            seen_ids: set = set()
+            for page in range(1, 15):  # max 14 pages × 100 = 1400 segments
+                resp = await _client.get(
+                    "/api/dmp/attributes",
+                    params={"limit": "100", "page": str(page)},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                items = data if isinstance(data, list) else data.get("data", [])
+                if not items:
+                    break
+                # Deduplication by _id to detect broken pagination
+                new_items = []
+                for item in items:
+                    uid = str(item.get("_id") or item.get("segmentId") or item.get("fullLabel", ""))
+                    if uid not in seen_ids:
+                        seen_ids.add(uid)
+                        new_items.append(item)
+                if not new_items:
+                    break  # All items already seen — pagination is broken, stop
+                segments.extend(new_items)
+                if len(items) < 100:
+                    break  # Last page
 
     except Exception as e:
         print(f"[audience_library] Failed to fetch all segments: {e}")
 
-    _all_segments_cache = segments
-    return segments
+    # Final deduplication by _id
+    seen: set = set()
+    deduped: list[dict] = []
+    for s in segments:
+        uid = str(s.get("_id") or s.get("segmentId") or s.get("fullLabel", ""))
+        if uid not in seen:
+            seen.add(uid)
+            deduped.append(s)
+
+    _all_segments_cache = deduped
+    print(f"[audience_library] Loaded {len(deduped)} unique segments")
+    return deduped
 
 
 def _fuzzy_match(query: str, segments: list[dict], limit: int = 10) -> list[dict]:
