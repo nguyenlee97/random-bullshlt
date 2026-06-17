@@ -9,6 +9,7 @@ from handlers.setup import handle_setup, handle_zone_recommend_api, handle_setup
 from handlers.result import handle_result
 from handlers.freeform import handle_freeform
 from handlers.report import handle_report_entry, handle_report_chat
+from handlers.email import handle_email_entry, handle_email_send
 from handlers.image_gen import handle_generate_image, get_remaining, AD_FORMATS
 
 agent_router = APIRouter()
@@ -89,12 +90,29 @@ async def chat(req: ChatRequest) -> AgentResponse:
         if req.step == 5:
             return await handle_report_entry(sid)
 
+        if req.step == 6:
+            fd = req.formData
+            email = fd.get("email", "") if fd else ""
+            if email:
+                return await handle_email_send(
+                    sid,
+                    email=email,
+                    cc=fd.get("cc", ""),
+                    attach_csv=fd.get("attachCsv", False),
+                    attach_json=fd.get("attachJson", False),
+                )
+            return await handle_email_entry(sid)
+
     # ── Free-form text → LLM + tools ─────────────────────────────────────────
     if req.message:
         # Step 5 (Report): route to report chat handler with context isolation
         if req.step == 5:
-            active_tab = (req.formData or {}).get("activeReportTab", "all") if req.formData else "all"
+            active_tab = (req.formData or {}).get("activeReportTab", "daily_ops") if req.formData else "daily_ops"
             return await handle_report_chat(req.message, sid, active_tab)
+
+        # Step 6 (Email): pass to email entry for freeform chat
+        if req.step == 6:
+            return await handle_email_entry(sid)
 
         return await handle_freeform(
             req.message,
@@ -161,6 +179,14 @@ async def report_entry_endpoint(session_id: str = "default"):
     """
     return await handle_report_entry(session_id)
 
+
+@agent_router.get("/email-entry")
+async def email_entry_endpoint(session_id: str = "default"):
+    """
+    Called when user enters Email step (step 6).
+    Returns intro message with pre-filled email suggestion.
+    """
+    return await handle_email_entry(session_id)
 
 @agent_router.post("/commit-workspace")
 async def commit_workspace(request: dict):

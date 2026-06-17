@@ -90,12 +90,13 @@ const WorkspacePane = forwardRef(function WorkspacePane(
       case 6: return (
         <EmailStep
           brief={formState.brief}
-          zones={formState.setup.recoZones || []}
-          selectedZoneIds={formState.setup.selectedZoneIds || []}
+          zones={formState.setup?.recoZones || []}
+          selectedZoneIds={formState.setup?.selectedZoneIds || []}
           audiences={formState.segment}
-          data={formState.email}
+          data={formState.email || {}}
           onChange={v => updateFormSlice('email', v)}
           isDone={isDone}
+          formState={formState}
         />
       )
       default: return null

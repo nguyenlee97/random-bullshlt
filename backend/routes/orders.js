@@ -11,7 +11,7 @@ function nextOrderId(seq) {
 }
 
 async function getSeq() {
-  // Use the highest existing orderId numeric part + 1
+  // Scan ALL docs including soft-deleted so orderId sequence never reuses a number.
   const last = await Campaign.findOne({}, { orderId: 1 })
     .sort({ createdAt: -1 })
     .lean();
@@ -35,6 +35,7 @@ async function checkZoneConflicts(placements, startDate, endDate, excludeOrderId
   const query = {
     status: { $in: ['active', 'pending'] },
     placements: { $in: placements },
+    deletedAt: null,  // exclude soft-deleted campaigns from conflict checks
   };
   if (excludeOrderId) query.orderId = { $ne: excludeOrderId };
 
@@ -90,7 +91,7 @@ function formatOrder(doc) {
 // Query params: ?status=active&brand=Nike
 router.get('/', async (req, res) => {
   try {
-    const filter = {};
+    const filter = { deletedAt: null };  // exclude soft-deleted orders
     if (req.query.status) filter.status = req.query.status;
     if (req.query.brand)  filter.brand  = new RegExp(req.query.brand, 'i');
 
@@ -104,7 +105,7 @@ router.get('/', async (req, res) => {
 // ── GET /api/orders/:id ───────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
-    const order = await Campaign.findOne({ orderId: req.params.id }).lean();
+    const order = await Campaign.findOne({ orderId: req.params.id, deletedAt: null }).lean();
     if (!order) return res.status(404).json({ error: `Order "${req.params.id}" not found` });
     res.json(formatOrder(order));
   } catch (err) {
@@ -256,12 +257,15 @@ router.post('/:id/archive', async (req, res) => {
 });
 
 // ── DELETE /api/orders/:id ────────────────────────────────────────────────────
+// Soft delete: sets deletedAt timestamp. Document is retained so the orderId
+// is never reused and analytic_records / report_analyses refs stay valid.
 router.delete('/:id', async (req, res) => {
   try {
-    const result = await Campaign.deleteOne({ orderId: req.params.id });
-    if (result.deletedCount === 0)
-      return res.status(404).json({ error: `Order "${req.params.id}" not found` });
-    res.json({ ok: true, deleted: req.params.id });
+    const order = await Campaign.findOne({ orderId: req.params.id, deletedAt: null });
+    if (!order) return res.status(404).json({ error: `Order "${req.params.id}" not found` });
+    order.deletedAt = new Date();
+    await order.save();
+    res.json({ ok: true, deleted: req.params.id, deletedAt: order.deletedAt });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

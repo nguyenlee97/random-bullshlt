@@ -5,7 +5,7 @@ import { fmt } from '@/lib/utils'
 import {
   CheckCircle2, TrendingUp, Users, DollarSign, LayoutGrid,
   BarChart2, Eye, MousePointerClick, ExternalLink, Film,
-  Camera, Loader2, Globe, Monitor,
+  Globe, Monitor,
 } from 'lucide-react'
 import { getSelectedZones, fmtVnd, fmtImp, estImpressions, checkMismatch } from './setup/setupUtils'
 import { ALL_ZONES } from '@/data/zones'
@@ -14,56 +14,6 @@ import { ALL_ZONES } from '@/data/zones'
 function isLive(brief) {
   if (!brief?.startDate) return false
   return new Date(brief.startDate) <= new Date()
-}
-
-// ─── Mock screenshot capture (simulate agent puppeteer call) ──────────────────
-function ScreenshotCapture({ zone, brief }) {
-  const [state, setState] = useState('idle') // idle | loading | done
-  const [mockImg, setMockImg] = useState(null)
-
-  const capture = async () => {
-    setState('loading')
-    await new Promise(r => setTimeout(r, 2500))
-    // Use a placeholder image from picsum with zone-specific seed
-    const seed = zone.id.split('.').join('')
-    setMockImg(`https://picsum.photos/seed/${seed}/400/200`)
-    setState('done')
-  }
-
-  if (!zone.siteUrl) return (
-    <div className="text-[10px] text-muted-foreground italic">Platform không có test site URL</div>
-  )
-
-  return (
-    <div className="space-y-1.5">
-      {state === 'idle' && (
-        <button onClick={capture}
-          className="flex items-center gap-1.5 text-[10px] font-semibold text-violet-600 hover:text-violet-700 hover:underline">
-          <Camera className="w-3 h-3" />
-          Chụp screenshot quảng cáo đang live
-        </button>
-      )}
-      {state === 'loading' && (
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          Agent đang chụp screenshot {zone.siteUrl}...
-        </div>
-      )}
-      {state === 'done' && mockImg && (
-        <div className="space-y-1">
-          <p className="text-[10px] text-brand-600 font-semibold flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3" /> Screenshot captured
-          </p>
-          <img
-            src={mockImg}
-            alt={`Screenshot ${zone.name}`}
-            className="rounded-md border border-border w-full max-w-[200px] object-cover"
-            onError={e => { e.target.style.display = 'none' }}
-          />
-        </div>
-      )}
-    </div>
-  )
 }
 
 function KpiCard({ icon: Icon, label, value, sub, color, bg }) {
@@ -268,8 +218,6 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
                     )}
                   </div>
 
-                   {/* Screenshot capture — shown always so user can preview the ad slot */}
-                   <ScreenshotCapture zone={zone} brief={brief} />
                 </div>
               </div>
             )

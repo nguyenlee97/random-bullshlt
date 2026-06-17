@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.git/
+README.md
+check_syntax.py
+setup_mongo_for_agent.sh

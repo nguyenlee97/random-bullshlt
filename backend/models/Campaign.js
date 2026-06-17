@@ -73,6 +73,11 @@ const campaignSchema = new mongoose.Schema(
 
     // Zone validation warnings (populated at create/update time)
     warnings:   [{ type: String }],
+
+    // Soft delete — set to a Date when deleted; null = not deleted.
+    // The document is kept in MongoDB so orderId is never reused and
+    // analytic_records / report_analyses references remain valid.
+    deletedAt:  { type: Date, default: null, index: true },
   },
   {
     collection: 'campaigns',

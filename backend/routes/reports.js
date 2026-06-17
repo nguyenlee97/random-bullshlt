@@ -163,4 +163,102 @@ router.get('/debug/:campaignId', async (req, res) => {
   }
 });
 
+
+// ── POST /api/reports/send-email/:campaignId ─────────────────────────────────
+// Generate PDF + send via Resend. Body: { email, cc?, attachCsv?, attachJson? }
+router.post('/send-email/:campaignId', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const { email, cc, attachCsv = false, attachJson = false } = req.body;
+
+    if (!email) return res.status(400).json({ error: 'email required' });
+
+    const { generatePDF } = require('../services/reportPDFGenerator');
+    const { sendCampaignReport } = require('../services/emailService');
+
+    // Fetch raw records for CSV/JSON (and totals)
+    const records = await AnalyticsRecord.find({ campaignId }).lean();
+    const totals = records.reduce((acc, r) => {
+      acc.impressions  += r.impressions  || 0;
+      acc.clicks       += r.clicks       || 0;
+      acc.spend        += r.spend        || 0;
+      acc.conversions  += r.conversions  || 0;
+      acc.reach        += r.reach        || 0;
+      return acc;
+    }, { impressions: 0, clicks: 0, spend: 0, conversions: 0, reach: 0 });
+
+    // Fetch executive summary text for email body
+    const execAnalysis = await ReportAnalysis.findOne({ campaignId, reportType: 'executive', status: 'ready' }).lean();
+    const overallText = execAnalysis?.overall || '';
+    const brand     = execAnalysis?.brand     || campaignId;
+    const objective = execAnalysis?.objective || 'awareness';
+
+    // Generate PDF
+    console.log(`[send-email] Generating PDF for ${campaignId}...`);
+    const pdfBuffer = await generatePDF(campaignId);
+
+    // Send email
+    const result = await sendCampaignReport({
+      to: email, cc,
+      campaignId, brand, objective,
+      totals, overallText,
+      pdfBuffer,
+      attachCsv, attachJson,
+      records: (attachCsv || attachJson) ? records : [],
+    });
+
+    res.json({ ok: true, messageId: result.messageId, to: email });
+  } catch (err) {
+    console.error('[send-email] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/reports/export/:campaignId/pdf ───────────────────────────────────
+// Download PDF directly from browser (no email)
+router.get('/export/:campaignId/pdf', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const { generatePDF } = require('../services/reportPDFGenerator');
+    const buf = await generatePDF(campaignId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="report_${campaignId}.pdf"`);
+    res.send(buf);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/reports/export/:campaignId/csv ───────────────────────────────────
+router.get('/export/:campaignId/csv', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const records = await AnalyticsRecord.find({ campaignId }).lean();
+    const cols = ['campaignId','placementId','channel','format','date',
+      'impressions','clicks','reach','spend','conversions','vi','ctr','cpm'];
+    const rows = records.map(r => cols.map(h => {
+      const v = r[h] ?? '';
+      return typeof v === 'string' && v.includes(',') ? `"${v}"` : v;
+    }).join(','));
+    const csv = [cols.join(','), ...rows].join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="analytics_${campaignId}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/reports/export/:campaignId/json ──────────────────────────────────
+router.get('/export/:campaignId/json', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const records = await AnalyticsRecord.find({ campaignId }).lean();
+    res.setHeader('Content-Disposition', `attachment; filename="analytics_${campaignId}.json"`);
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -211,6 +211,10 @@ async def handle_report_chat(
             meta=ResponseMeta(tool="report_chat", model="none", step=5),
         )
 
+    # Variables populated inside try block, used by matching logic after
+    preferred_type = "daily_ops"
+    all_analyses: dict = {}
+
     # Try to fetch pre-generated analysis
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -227,36 +231,36 @@ async def handle_report_chat(
                     meta=ResponseMeta(tool="report_chat", model="none", step=5),
                 )
 
-    # Determine which report type to query based on active tab
-    tab_to_type = {
-        "all": "daily_ops",
-        "daily_ops": "daily_ops",
-        "awareness": "awareness",
-        "consideration": "consideration",
-        "conversion": "conversion",
-        "retention": "retention",
-        "executive": "executive",
-    }
-    preferred_type = tab_to_type.get(active_report_tab, "daily_ops")
+            # Determine which report type to query based on active tab
+            tab_to_type = {
+                "all": "daily_ops",
+                "daily_ops": "daily_ops",
+                "awareness": "awareness",
+                "consideration": "consideration",
+                "conversion": "conversion",
+                "retention": "retention",
+                "executive": "executive",
+            }
+            preferred_type = tab_to_type.get(active_report_tab, "daily_ops")
 
-    # Fetch ALL analyses — search across all 6 for best match
-    all_analyses = {}
-    for rtype in ["daily_ops", "awareness", "consideration", "conversion", "retention", "executive"]:
-        try:
-            r = await client.get(
-                f"{config.BACKEND_URL}/api/reports/analysis/{campaign_id}/{rtype}"
-            )
-            if r.status_code == 200:
-                all_analyses[rtype] = r.json()
-        except Exception:
-            pass
+            # Fetch ALL analyses — search across all 6 for best match
+            all_analyses = {}
+            for rtype in ["daily_ops", "awareness", "consideration", "conversion", "retention", "executive"]:
+                try:
+                    r = await client.get(
+                        f"{config.BACKEND_URL}/api/reports/analysis/{campaign_id}/{rtype}"
+                    )
+                    if r.status_code == 200:
+                        all_analyses[rtype] = r.json()
+                except Exception:
+                    pass
 
-    if not all_analyses:
-        return AgentResponse(
-            text=f"⚠ Chưa có phân tích nào. Vui lòng đợi báo cáo hoàn tất.",
-            blocks=[],
-            meta=ResponseMeta(tool="report_chat", model="none", step=5),
-        )
+            if not all_analyses:
+                return AgentResponse(
+                    text="⚠ Chưa có phân tích nào. Vui lòng đợi báo cáo hoàn tất.",
+                    blocks=[],
+                    meta=ResponseMeta(tool="report_chat", model="none", step=5),
+                )
 
     except Exception as e:
         await log_event(session_id, "error", {"handler": "report_chat", "error": str(e)})

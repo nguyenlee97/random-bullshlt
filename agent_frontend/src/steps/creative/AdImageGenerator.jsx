@@ -10,9 +10,14 @@ import {
 import { AgentAPI } from '@/api/agentApi'
 import { AD_FORMATS, AD_FORMATS_MAP } from '@/data/adFormats'
 
-// ─── Canvas crop+resize ────────────────────────────────────────────────────────
-// Called after every generation to ensure exact pixel dimensions.
-// Uses format-specific cropAnchor to align with where the model placed content.
+// ─── Canvas resize (with optional crop) ──────────────────────────────────────
+// Strategy:
+//   1. If src aspect ratio is within RATIO_TOLERANCE of target → skip crop, just scale.
+//   2. If ratio mismatch is too large → crop to the correct ratio (using anchor),
+//      then scale to exact target dimensions.
+// This preserves more image content when gpt-image-1 returns a close-enough ratio.
+const RATIO_TOLERANCE = 0.15  // allow 15% ratio difference before cropping
+
 function cropAndResize(base64, targetW, targetH, anchor = 'center') {
   return new Promise((resolve) => {
     const img = new window.Image()
@@ -21,33 +26,42 @@ function cropAndResize(base64, targetW, targetH, anchor = 'center') {
       canvas.width = targetW
       canvas.height = targetH
       const ctx = canvas.getContext('2d')
+
       const srcRatio = img.width / img.height
       const dstRatio = targetW / targetH
-      let sx, sy, sw, sh
+      const ratioDiff = Math.abs(srcRatio - dstRatio) / dstRatio
 
-      if (srcRatio > dstRatio) {
-        // Source is wider → crop left/right sides
-        sh = img.height
-        sw = sh * dstRatio
-        sx = anchor === 'left'  ? 0
-           : anchor === 'right' ? img.width - sw
-           : (img.width - sw) / 2  // center
-        sy = 0
+      if (ratioDiff <= RATIO_TOLERANCE) {
+        // ✅ Ratio is close enough — scale the entire image, no crop
+        ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, targetW, targetH)
       } else {
-        // Source is taller → crop top/bottom
-        sw = img.width
-        sh = sw / dstRatio
-        sx = 0
-        sy = anchor === 'top' ? 0 : (img.height - sh) / 2  // top or center
+        // ✂️ Ratio too different — crop to target ratio first, then scale
+        let sx, sy, sw, sh
+        if (srcRatio > dstRatio) {
+          // Source is wider → crop left/right sides using anchor
+          sh = img.height
+          sw = sh * dstRatio
+          sx = anchor === 'left'  ? 0
+             : anchor === 'right' ? img.width - sw
+             : (img.width - sw) / 2   // center
+          sy = 0
+        } else {
+          // Source is taller → crop top/bottom using anchor
+          sw = img.width
+          sh = sw / dstRatio
+          sx = 0
+          sy = anchor === 'top' ? 0 : (img.height - sh) / 2   // top or center
+        }
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH)
       }
 
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH)
       resolve(canvas.toDataURL('image/png'))
     }
     img.onerror = () => resolve(`data:image/png;base64,${base64}`)  // fallback: raw
     img.src = `data:image/png;base64,${base64}`
   })
 }
+
 
 // ─── Format Card ──────────────────────────────────────────────────────────────
 function FormatCard({ fmt, selected, onClick }) {

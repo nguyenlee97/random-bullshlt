@@ -10,7 +10,7 @@ from config import config
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-06-17.37"
+BUILD_VERSION = "2026-06-17.39"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -38,6 +38,15 @@ BUILD_FEATURES = [
     "report-zero-data-guard",         # regenerates if existing records are all zeros
     "report-debug-endpoint",          # GET /api/reports/debug/:campaignId for diagnostics
     "image-gen",                      # POST /api/agent/generate-image via gpt-image-1
+    "image-gen-safe-zone",            # per-format safe-zone prompt constraints for correct crop
+    "image-gen-canvas-crop",          # frontend canvas crop+resize to exact pixel dimensions
+    "image-gen-quota",                # 10-image per-session limit tracked server-side
+    "image-gen-lightbox",             # click-to-zoom lightbox in AI image gallery
+    "image-gen-brief-preview",        # collapsible brief+audience preview in generator UI
+    "email-step",                     # Step 6: PDF generation + Resend email delivery
+    "email-pdf-pdfkit",               # PDF generated server-side via pdfkit (no puppeteer)
+    "email-raw-export",               # CSV + JSON download endpoints for analytics records
+    "email-resend",                   # email sent via Resend API (onboarding@resend.dev)
 ]
 
 app = FastAPI(
@@ -68,6 +77,12 @@ async def health():
     }
 
 
+# GreenNode AgentBase Runtime Contract: /health must return HTTP 200
+@app.get("/health")
+async def health_root():
+    return {"status": "ok", "version": BUILD_VERSION}
+
+
 @app.get("/api/version")
 async def version():
     """Quick version check — curl https://agent-api.pawgrammers.io.vn/api/version"""
@@ -79,6 +94,7 @@ from router import agent_router  # noqa: E402
 app.include_router(agent_router, prefix="/api/agent")
 
 print(f"\n🚀 Camp Ads Agent v{BUILD_VERSION} starting on port {config.AGENT_PORT}")
+print(f"   GreenNode AgentBase: listening on 0.0.0.0:{config.AGENT_PORT}, health at /health")
 print(f"   Features: {', '.join(BUILD_FEATURES)}\n")
 
 if __name__ == "__main__":

@@ -9,11 +9,11 @@
  *   - report_analyses: 6 documents with pre-generated Q&A
  */
 const AnalyticsRecord = require('../models/AnalyticsRecord');
-const ReportAnalysis  = require('../models/ReportAnalysis');
+const ReportAnalysis = require('../models/ReportAnalysis');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL   = process.env.OPENAI_MODEL   || 'gpt-4o-mini';
-const OPENAI_URL     = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 
 // ─── Report types ────────────────────────────────────────────────────────────
 const REPORT_TYPES = [
