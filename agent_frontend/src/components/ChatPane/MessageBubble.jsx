@@ -58,8 +58,56 @@ function ModelBadge({ tool, model, showRetry, onRetry }) {
   )
 }
 
+// ─── Quick-reply suggestion chips ─────────────────────────────────────────────
+// Rendered below bot messages that carry a `suggestions` array.
+// action="send"    → immediately calls onSend(text) (goes through _is_confirm or LLM)
+// action="prefill" → dispatches agent:prefill_composer so ChatComposer sets & focuses input
+function SuggestionChips({ suggestions, onSend, busy }) {
+  if (!suggestions?.length) return null
+
+  // Normalize: accept both strings and { label, text, action } objects
+  const chips = suggestions.map(s =>
+    typeof s === 'string' ? { label: s, text: s, action: 'send' } : s
+  )
+
+  const handleChip = (chip) => {
+    if (busy) return
+    if (chip.action === 'send') {
+      onSend?.(chip.text)
+    } else {
+      // prefill — set the composer input so user can complete the request naturally
+      window.dispatchEvent(new CustomEvent('agent:prefill_composer', { detail: { text: chip.text } }))
+    }
+  }
+
+  return (
+    <div className="flex gap-1.5 flex-wrap mt-2.5 max-w-[85%]">
+      {chips.map((chip, i) => (
+        <button
+          key={i}
+          onClick={() => handleChip(chip)}
+          disabled={busy}
+          title={
+            chip.action === 'prefill'
+              ? `Điền vào ô chat: "${chip.text}"`
+              : `Gửi: "${chip.text}"`
+          }
+          className={cn(
+            'text-[11px] font-semibold rounded-full px-2.5 py-1 border transition-all duration-150 disabled:opacity-40 active:scale-95',
+            chip.action === 'send'
+              ? 'bg-brand-50 text-brand-700 border-brand-200 hover:bg-brand-100 hover:border-brand-300'
+              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+          )}
+        >
+          {chip.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ─── Single message bubble ────────────────────────────────────────────────────
-function MessageBubble({ message, showRetry, onRetry }) {
+function MessageBubble({ message, showRetry, onRetry, onSend, busy }) {
   const isUser = message.role === 'user'
   const isThinking = message.role === 'thinking'
 
@@ -77,7 +125,7 @@ function MessageBubble({ message, showRetry, onRetry }) {
         </AvatarFallback>
       </Avatar>
 
-      {/* Bubble */}
+      {/* Bubble + chips below */}
       <div className={cn('max-w-[85%] min-w-0', isUser && 'flex flex-col items-end')}>
         <div className={cn(
           'rounded-2xl px-4 py-3 shadow-chat',
@@ -116,6 +164,11 @@ function MessageBubble({ message, showRetry, onRetry }) {
             <BlockRenderer key={i} block={block} />
           ))}
         </div>
+
+        {/* Quick-reply suggestion chips — only on bot messages with suggestions */}
+        {!isUser && (
+          <SuggestionChips suggestions={message.suggestions} onSend={onSend} busy={busy} />
+        )}
 
         {/* Tool/model metadata — with subtle retry icon on latest message */}
         {!isUser && message.metadata?.tool && (

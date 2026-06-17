@@ -1,50 +1,34 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
 import { Send, Loader2, ChevronLeft } from 'lucide-react'
 
 // ─── Step-specific quick chips ────────────────────────────────────────────────
-// Goal: each chip triggers a genuinely useful, context-specific question
 const STEP_CHIPS = {
-  // Step -1: boot (not shown, handled by step 0)
-  0: [
-    'Objective nào phù hợp với tôi?',
-    'KPI nào nên chọn cho Awareness?',
-    'Budget tối thiểu là bao nhiêu?',
-  ],
-  1: [
-    'Hãy tự động chọn targeting phù hợp nhất cho chiến dịch này',
-    'DMP segment nào phù hợp với brief?',
-    'Audience size bao nhiêu là đủ?',
-  ],
-  2: [
-    'Creative size nào phù hợp cho Banner?',
-    'Skin zone cần creative như thế nào?',
-    'Format nào được hỗ trợ?',
-  ],
-  3: [
-    'Zone nào tốt nhất cho objective của tôi?',
-    'VI% và CTR có nghĩa là gì?',
-    'CPM bao nhiêu là hợp lý?',
-  ],
-  4: [
-    'Tổng kết chiến dịch',
-    'Xem link AdsPilot',
-    'Tạo chiến dịch mới',
-  ],
-  5: [
-    'Campaign nào hiệu quả nhất?',
-    'Đề xuất tối ưu tiếp theo',
-  ],
-  6: [
-    'Thêm người nhận',
-    'Chỉnh sửa nội dung email',
-  ],
+  0: ['Objective nào phù hợp với tôi?', 'KPI nào nên chọn cho Awareness?', 'Budget tối thiểu là bao nhiêu?'],
+  1: ['Hãy tự động chọn targeting phù hợp nhất cho chiến dịch này', 'DMP segment nào phù hợp với brief?', 'Audience size bao nhiêu là đủ?'],
+  2: ['Creative size nào phù hợp cho Banner?', 'Skin zone cần creative như thế nào?', 'Format nào được hỗ trợ?'],
+  3: ['Zone nào tốt nhất cho objective của tôi?', 'VI% và CTR có nghĩa là gì?', 'CPM bao nhiêu là hợp lý?'],
+  4: ['Tổng kết chiến dịch', 'Xem link AdsPilot', 'Tạo chiến dịch mới'],
+  5: ['Campaign nào hiệu quả nhất?', 'Đề xuất tối ưu tiếp theo'],
+  6: ['Thêm người nhận', 'Chỉnh sửa nội dung email'],
 }
 
 export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
   const [text, setText] = useState('')
+  const inputRef = useRef(null)
+
+  // Listen for prefill events dispatched by suggestion chips (action="prefill")
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.text !== undefined) {
+        setText(e.detail.text)
+        setTimeout(() => inputRef.current?.focus(), 50)
+      }
+    }
+    window.addEventListener('agent:prefill_composer', handler)
+    return () => window.removeEventListener('agent:prefill_composer', handler)
+  }, [])
 
   const handleSend = () => {
     if (!text.trim() || busy) return
@@ -89,6 +73,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
       {/* Input row */}
       <div className="flex gap-2">
         <Input
+          ref={inputRef}
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -97,6 +82,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
           className="flex-1 h-10 text-sm"
           id="chat-input"
         />
+
         <Button
           onClick={handleSend}
           disabled={busy || !text.trim()}

@@ -164,7 +164,8 @@ export default function ChatPane({ messages, busy, currentStep, onSend, onBack, 
 
       {/* Thread */}
       <div className="flex flex-col flex-1 min-h-0 bg-gradient-to-b from-slate-50/50 to-white">
-        <ChatThread messages={messages} canRetry={canRetry} onRetry={onRetry} />
+        <ChatThread messages={messages} canRetry={canRetry} onRetry={onRetry} onSend={onSend} />
+
       </div>
 
       {/* Composer */}

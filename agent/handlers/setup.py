@@ -27,6 +27,147 @@ async def handle_setup(setup: SetupData, session_id: str) -> AgentResponse:
     )
 
 
+async def handle_setup_entry(session_id: str) -> dict:
+    """
+    GET /api/agent/setup-entry
+    Proactive zone recommendation when user enters Step 3 (Setup).
+    Like handle_audience_entry() but for ad zones:
+    - Ranks all real zones based on brief objective/KPI/budget/creative
+    - Annotates booking conflicts
+    - Generates a chat explanation of WHY each zone was recommended
+    - Returns a workspace_proposal so the frontend pre-populates selectedZoneIds
+    Returns {skip: True} if zones already selected.
+    """
+    import asyncio
+    from tools.zone_catalog import get_all_zones
+    from tools.order_api import fetch_zone_conflicts
+
+    session = await get_or_create_session(session_id)
+    brief = session["form_state"].get("brief", {})
+    creative = session["form_state"].get("creative", {})
+    segment = session["form_state"].get("segment", {})
+
+    # Skip if zones already selected
+    existing_zones = session["form_state"].get("setup", {}).get("selectedZoneIds", [])
+    if existing_zones:
+        return {"skip": True}
+
+    # Also skip if no brief
+    if not brief.get("brand"):
+        return {"skip": True}
+
+    start_date = brief.get("startDate", "")
+    end_date = brief.get("endDate", "")
+
+    # Fetch all zones + conflict map in parallel
+    all_zones_raw, conflict_map = await asyncio.gather(
+        get_all_zones(),
+        fetch_zone_conflicts(start_date, end_date),
+    )
+
+    # Rank all zones by brief metrics
+    ranked = await rank_zones(
+        objective=brief.get("objective", "awareness"),
+        budget=brief.get("budget", 0),
+        kpi=brief.get("kpi", ""),
+        creative_files=creative.get("files", []),
+        limit=len(all_zones_raw),
+    )
+
+    # Annotate conflicts and mark recommendations
+    top_set: set[str] = set()
+    available = [z for z in ranked if not conflict_map.get(z["id"])]
+    for z in available[:6]:
+        top_set.add(z["id"])
+    top_zones = [z for z in ranked if z["id"] in top_set]
+
+    for z in ranked:
+        z["conflict"] = conflict_map.get(z["id"])
+        z["recommended"] = z["id"] in top_set
+
+    await update_form_state(session_id, "reco_zones", top_zones)
+
+    # ── Build explanation text ──────────────────────────────────────────────────
+    objective = brief.get("objective", "awareness")
+    budget = brief.get("budget", 0)
+    brand = brief.get("brand", "Brand")
+    kpi = brief.get("kpi", "")
+    segment_count = len(segment.get("attrs", []))
+
+    OBJECTIVE_VI = {
+        "awareness": "Nhận diện thương hiệu",
+        "consideration": "Cân nhắc mua hàng",
+        "conversion": "Chuyển đổi / Mua hàng",
+        "retention": "Giữ chân khách hàng",
+    }
+    obj_vi = OBJECTIVE_VI.get(objective, objective)
+
+    zone_lines = []
+    for z in top_zones:
+        reach_m = f"{z['reach'] / 1_000_000:.1f}M" if z.get("reach", 0) > 0 else "—"
+        vi = z.get("vi", 0)
+        ctr = z.get("ctr", 0)
+        cpm = z.get("cpm", 0)
+        reason = z.get("reason", "phù hợp với objective")
+        zone_lines.append(
+            f"- **{z['id']}** — Reach {reach_m}, VI {vi}%, CTR {ctr}%, CPM {cpm:,}đ\n"
+            f"  💡 {reason}"
+        )
+
+    zones_text = "\n".join(zone_lines)
+
+    reply_text = (
+        f"🎯 Dựa trên brief **{brand}** (Objective: **{obj_vi}**, KPI: **{kpi}**, "
+        f"Budget: **{budget:,.0f}M VND**, {segment_count} audience segments), "
+        f"em đề xuất **{len(top_zones)} ad zones** tối ưu:\n\n"
+        f"{zones_text}\n\n"
+        f"Anh/chị có thể xem chi tiết ở panel phải. "
+        f"Muốn **bỏ zone** nào hoặc **thêm** zone khác, cứ nhắn em nhé!"
+    )
+
+    # ── Workspace proposal value ────────────────────────────────────────────────
+    # Includes ALL zones so SetupStep doesn't need a separate fetch
+    proposal_value = {
+        "selectedZoneIds": list(top_set),
+        "recoZones": top_zones,
+        "allZones": ranked,
+        "initialized": True,
+        "phase": "zones",
+        "assignments": {},
+        "submitted": False,
+        "created": False,
+    }
+
+    blocks = [
+        {
+            "type": "workspace_proposal",
+            "changes": {
+                "field": "setup",
+                "value": proposal_value,
+                "reason": f"Gợi ý {len(top_zones)} zones tối ưu cho {brand} — {obj_vi}",
+            },
+            "is_locked": False,
+            "warning": "",
+        }
+    ]
+
+    suggestions = [
+        {"label": "✅ Duyệt các zones này", "action": "send",    "text": "đồng ý, duyệt các zones này"},
+        {"label": "➕ Thêm zone",           "action": "prefill", "text": "Thêm zone "},
+        {"label": "🗑️ Bỏ zone",             "action": "prefill", "text": "Bỏ zone "},
+    ]
+
+    return {
+        "skip": False,
+        "text": reply_text,
+        "blocks": blocks,
+        "meta": {"tool": "setup_entry", "model": "none", "step": 3},
+        "suggestions": suggestions,
+    }
+
+
+
+
 async def _zone_recommend(setup: SetupData, session_id: str) -> AgentResponse:
     session = await get_or_create_session(session_id)
     brief = session["form_state"].get("brief", {})

@@ -94,6 +94,7 @@ async function callAgent(payload) {
         step: data.meta?.step ?? null,
       },
       workspace_update: data.workspace_update || null,
+      suggestions: data.suggestions || [],
     }
   } catch (err) {
     log.error('callAgent failed', { error: err.message, duration_ms: Date.now() - t0 })
@@ -620,10 +621,12 @@ export function extractTargetingMap(blocks) {
 }
 
 /**
- * Session ID — persists for the browser tab lifetime.
- * Reset on page refresh (acceptable for hackathon).
+ * Session ID — regenerated on newChat/reset so backend history is always clean.
  */
-const SESSION_ID = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+function _genSessionId() {
+  return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+}
+let SESSION_ID = _genSessionId()
 
 // Expose to window so ChatPane export can reference it
 if (typeof window !== 'undefined') window.__AGENT_SESSION_ID__ = SESSION_ID
@@ -654,6 +657,7 @@ export async function fetchDmpRecommendations() {
  * Fetch real zone data + AI-ranked recommendations for the current brief.
  * Calls GET /api/agent/zones-recommend?session_id=xxx
  * Returns { zones: [...], recommended_ids: [...] }
+ * NOTE: kept for fallback; primary flow now uses getSetupEntry().
  */
 export async function fetchZonesFromAgent() {
   try {
@@ -668,6 +672,27 @@ export async function fetchZonesFromAgent() {
     return null
   }
 }
+
+/**
+ * Proactive zone recommendation for Step 3 (like getAudienceEntry for Step 1).
+ * Calls GET /api/agent/setup-entry?session_id=xxx
+ * Returns { skip, text, blocks, meta, suggestions } where blocks contains a
+ * workspace_proposal with field="setup" and the full allZones + selectedZoneIds.
+ */
+export async function getSetupEntry() {
+  try {
+    const res = await fetch(
+      `${AGENT_URL}/api/agent/setup-entry?session_id=${SESSION_ID}`,
+      { signal: AbortSignal.timeout(30000) }
+    )
+    if (!res.ok) return null
+    return await res.json()
+  } catch (e) {
+    console.warn('[setupEntry] failed:', e.message)
+    return null
+  }
+}
+
 
 /**
  * Upload a creative file (base64 dataUrl) to the AdsPilot VPS.
@@ -853,30 +878,174 @@ export const AgentAPI = {
     return probeAgent()
   },
 
-  /** Reset session (used by "Tư vấn lại" button) */
+  /** Generate a fresh session ID — call before newChat() to get a clean backend context. */
+  newSession() {
+    SESSION_ID = _genSessionId()
+    if (typeof window !== 'undefined') window.__AGENT_SESSION_ID__ = SESSION_ID
+    _agentReachable = null   // re-probe health on next call
+    return SESSION_ID
+  },
+
+  /** @deprecated use newSession() + boot() */
   resetSession() {
-    // Force new session ID on next call by reassigning constant isn't possible,
-    // but the server's in-memory fallback handles fresh state per session_id.
-    // For true reset, reload the page or call with a new session_id.
-    _agentReachable = null
+    return this.newSession()
   },
 
   /**
    * Proactive audience recommendation when user enters step 1.
    * Returns { skip, text, blocks, meta, workspace_proposal } or { skip: true }.
    * Called automatically by App.jsx when currentStep becomes 1 with brief done.
+   * @param {object} brief - Current formState.brief (used as fallback if backend pending_proposal not committed)
    */
-  async getAudienceEntry() {
+  async getAudienceEntry(brief = null) {
     try {
-      const res = await fetch(
-        `${AGENT_URL}/api/agent/audience-entry?session_id=${SESSION_ID}`,
-        { signal: AbortSignal.timeout(35000) }
-      )
+      let url = `${AGENT_URL}/api/agent/audience-entry?session_id=${SESSION_ID}`
+      if (brief && brief.brand) {
+        url += `&brief_hint=${encodeURIComponent(JSON.stringify(brief))}`
+      }
+      const res = await fetch(url, { signal: AbortSignal.timeout(35000) })
       if (!res.ok) return null
       return await res.json()
     } catch (e) {
       console.warn('[getAudienceEntry] failed:', e.message)
       return null
+    }
+  },
+
+  /**
+   * Commit a workspace field directly to backend session (MongoDB).
+   * Called when user clicks 'Đồng ý' proposal button or footer 'Đồng ý & Tiếp tục',
+   * bypassing the chat confirm round-trip. Also clears any pending_proposal for the field.
+   * @param {string} field - e.g. 'brief', 'segment'
+   * @param {any} value - The value to persist
+   */
+  async commitWorkspace(field, value) {
+    try {
+      const res = await fetch(`${AGENT_URL}/api/agent/commit-workspace`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: SESSION_ID, field, value }),
+        signal: AbortSignal.timeout(5000),
+      })
+      return res.ok ? await res.json() : { ok: false }
+    } catch (e) {
+      console.warn('[commitWorkspace] failed:', e.message)
+      return { ok: false }
+    }
+  },
+
+  /**
+   * Report entry: trigger background report generation.
+   * Called when user enters step 5 (Report).
+   */
+  async reportEntry() {
+    try {
+      const res = await fetch(
+        `${AGENT_URL}/api/agent/report-entry?session_id=${SESSION_ID}`,
+        { signal: AbortSignal.timeout(15000) }
+      )
+      if (!res.ok) return null
+      return await res.json()
+    } catch (e) {
+      console.warn('[reportEntry] failed:', e.message)
+      return null
+    }
+  },
+
+  /**
+   * Poll report generation status.
+   * Returns { campaignId, total, ready, errors, types: { daily_ops: 'ready', ... } }
+   */
+  async getReportStatus(campaignId) {
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/api/reports/status/${campaignId}`,
+        { signal: AbortSignal.timeout(5000) }
+      )
+      if (!res.ok) return null
+      return await res.json()
+    } catch (e) {
+      console.warn('[getReportStatus] failed:', e.message)
+      return null
+    }
+  },
+
+  /**
+   * Fetch all pre-generated analyses for a campaign.
+   * Returns array of { campaignId, reportType, status, overall, questions: [...] }
+   */
+  async getReportAnalyses(campaignId) {
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/api/reports/analysis/${campaignId}`,
+        { signal: AbortSignal.timeout(10000) }
+      )
+      if (!res.ok) return []
+      return await res.json()
+    } catch (e) {
+      console.warn('[getReportAnalyses] failed:', e.message)
+      return []
+    }
+  },
+
+  /**
+   * Fetch raw analytics records for a campaign (for charts).
+   * Returns array of { campaignId, placementId, date, impressions, clicks, ... }
+   */
+  async getReportData(campaignId) {
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/api/reports/data/${campaignId}`,
+        { signal: AbortSignal.timeout(10000) }
+      )
+      if (!res.ok) return []
+      return await res.json()
+    } catch (e) {
+      console.warn('[getReportData] failed:', e.message)
+      return []
+    }
+  },
+
+  /**
+   * Generate an ad image using gpt-image-1 via VNG Cloud.
+   * @param {Object} briefObj   - formState.brief
+   * @param {string} formatId   - one of the AD_FORMATS ids
+   * @returns {Promise<{ok, imageB64, formatId, width, height, remaining} | {ok: false, error}>}
+   */
+  async generateAdImage(briefObj, formatId) {
+    try {
+      const res = await fetch(`${AGENT_URL}/api/agent/generate-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: SESSION_ID,
+          brief: briefObj || {},
+          format_id: formatId,
+        }),
+        signal: AbortSignal.timeout(120000),  // image gen can be slow
+      })
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
+      return await res.json()
+    } catch (e) {
+      console.warn('[generateAdImage] failed:', e.message)
+      return { ok: false, error: e.message }
+    }
+  },
+
+  /**
+   * Get remaining image generation quota for the current session.
+   * Returns { remaining: N, max: 10 }
+   */
+  async getImageGenStatus() {
+    try {
+      const res = await fetch(
+        `${AGENT_URL}/api/agent/image-gen-status?session_id=${SESSION_ID}`,
+        { signal: AbortSignal.timeout(5000) }
+      )
+      if (!res.ok) return { remaining: 10, max: 10 }
+      return await res.json()
+    } catch {
+      return { remaining: 10, max: 10 }
     }
   },
 }

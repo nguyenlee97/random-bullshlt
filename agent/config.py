@@ -34,6 +34,10 @@ class Config:
     AGENT_HOST: str = os.getenv("AGENT_HOST", "0.0.0.0")
     AGENT_PORT: int = int(os.getenv("AGENT_PORT", "8000"))
 
+    # ── OpenAI (for Report generation) ────────────────────────────────────────
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
     # ── CORS origins ──────────────────────────────────────────────────────────
     CORS_ORIGINS: list[str] = os.getenv(
         "CORS_ORIGINS",

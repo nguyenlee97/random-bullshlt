@@ -44,7 +44,9 @@ function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-bold">{zone.name}</span>
+            <span className="text-xs font-bold">
+              {zone.name || zone.id.replace(/_/g, ' ')}
+            </span>
             {isReco && !conflict && (
               <Badge className="text-[9px] h-4 px-1 bg-amber-100 text-amber-700 border-amber-300">⭐ Gợi ý</Badge>
             )}
@@ -56,7 +58,7 @@ function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
             )}
           </div>
           <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-            {[zone.platform, zone.format, zone.size].map(t => (
+            {[zone.platform || zone.channel || zone.id.split('_')[0], zone.format, zone.size].filter(Boolean).map(t => (
               <Badge key={t} variant="muted" className="text-[10px] h-4 px-1.5">{t}</Badge>
             ))}
           </div>
@@ -64,7 +66,7 @@ function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
       </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 pl-6">
-        <Stat icon={Eye} value={`${zone.reach}M`} color="text-blue-600" />
+        <Stat icon={Eye} value={zone.reach >= 1_000_000 ? `${(zone.reach / 1_000_000).toFixed(0)}M` : `${zone.reach}M`} color="text-blue-600" />
         <Stat icon={BarChart2} value={`VI ${zone.vi}%`} color="text-violet-600" />
         <Stat icon={MousePointerClick} value={`CTR ${zone.ctr}%`} color="text-green-600" />
         <Stat icon={DollarSign} value={`CPM ${fmtVnd(zone.cpm)}đ`} color="text-amber-600" />

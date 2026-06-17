@@ -267,18 +267,49 @@ async def handle_dmp_recommend(session_id: str) -> dict:
     return {"recommendations": enriched, "total_segments": len(all_segs)}
 
 
-async def handle_audience_entry(session_id: str) -> dict:
+async def handle_audience_entry(session_id: str, brief_hint: dict | None = None) -> dict:
     """
-    GET /api/agent/audience-entry?session_id=xxx
+    GET /api/agent/audience-entry?session_id=xxx[&brief_hint=...]
     Proactively generates full audience recommendation when user enters step 1.
     Returns a chat-ready AgentResponse dict with blocks for Targeting + DMP Segments.
-    If brief lacks info → returns need_more_info questions instead.
+    brief_hint: optional brief dict from frontend (used when pending_proposal hasn't committed yet).
     """
+    from session import get_pending_proposal, update_form_state, clear_pending_proposal
     session = await get_or_create_session(session_id)
     brief = session.get("form_state", {}).get("brief", {})
 
+    # ── Brief resolution with fallback chain ──────────────────────────────────
+    brief_source = "form_state"
     if not brief.get("brand"):
+        # Fallback 1: check pending_proposal (user clicked 'Đồng ý' but didn't type 'oke')
+        pending = await get_pending_proposal(session_id)
+        if pending and pending.get("field") == "brief" and pending.get("value"):
+            raw_val = pending["value"]
+            if isinstance(raw_val, str):
+                try:
+                    import json as _j; raw_val = _j.loads(raw_val)
+                except Exception:
+                    pass
+            if isinstance(raw_val, dict) and raw_val.get("brand"):
+                brief = raw_val
+                brief_source = "pending_proposal"
+                # Auto-commit: persist so downstream calls also have it
+                await update_form_state(session_id, "brief", brief)
+                await clear_pending_proposal(session_id)
+                await log_event(session_id, "audience_entry", {"auto_committed_pending_brief": True})
+
+        # Fallback 2: use brief_hint passed directly from frontend
+        if not brief.get("brand") and brief_hint and brief_hint.get("brand"):
+            brief = brief_hint
+            brief_source = "frontend_hint"
+            # Also persist so backend session is consistent
+            await update_form_state(session_id, "brief", brief)
+
+    if not brief.get("brand"):
+        await log_event(session_id, "warn", {"handler": "audience_entry", "skip": True, "reason": "brief_not_set", "source_tried": brief_source})
         return {"skip": True, "reason": "brief_not_set"}
+
+    await log_event(session_id, "audience_entry", {"brief_source": brief_source, "brand": brief.get("brand")})
 
     # Check if audience already set (re-entry) → skip
     existing_segment = session.get("form_state", {}).get("segment", {})
@@ -467,12 +498,30 @@ async def handle_audience_entry(session_id: str) -> dict:
         "audience_size": audience_size,
     })
 
+    reply_text = f"Dựa trên brief **{brief.get('brand')}** ({brief.get('objective', 'awareness')}), em gợi ý audience như sau:"
+
+    # ── Persist to session history so LLM knows about this on the NEXT user message ─────
+    # Without this, the LLM sees no record of the audience recommendation and thinks
+    # it's still waiting for brief confirmation → causes wrong responses.
+    from session import add_message as _add_message
+    await _add_message(
+        session_id,
+        "assistant",
+        reply_text + f"\n\n(Em đã gợi ý {len(enriched_dmp)} DMP segments và targeting params. Anh/chị có thể chỉnh sửa trực tiếp trên workspace bên phải hoặc nhắn em để điều chỉnh.)"
+    )
+
     return {
         "skip": False,
         "need_more_info": False,
-        "text": f"Dựa trên brief **{brief.get('brand')}** ({brief.get('objective', 'awareness')}), em gợi ý audience như sau:",
+        "text": reply_text,
         "blocks": blocks,
         "meta": {"tool": "audience_entry", "model": "minimax", "step": 1},
+        "suggestions": [
+            {"label": "✅ Áp dụng tất cả",    "action": "send",    "text": "đồng ý, áp dụng tất cả segments này"},
+            {"label": "🗑️ Bỏ bớt segment",     "action": "prefill", "text": "Bỏ segment "},
+            {"label": "🔍 Tìm thêm segments",   "action": "prefill", "text": "Tìm thêm segments liên quan đến "},
+        ],
     }
+
 
 

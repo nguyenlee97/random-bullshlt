@@ -90,16 +90,20 @@ export function useChat({
     return () => window.removeEventListener('agent:inject_message', handler)
   }, [])
 
-  // Full reset: clear messages and re-run boot greeting
+  // Full reset: generate NEW session ID then re-run boot greeting
+  // Without newSession(), the old session_id is reused and the backend
+  // still has the old conversation history / workspace context.
   const newChat = useCallback(async () => {
+    AgentAPI.newSession()   // ← fresh session ID; backend starts clean
     bootedRef.current = false
     setMessages([])
     setBusy(true)
-    log.chat('newChat → reset and re-boot')
+    log.chat('newChat → new session + re-boot')
     const response = await AgentAPI.boot()
     setMessages([response])
     setBusy(false)
   }, [])
+
 
   const sendMessage = useCallback(async (text, _isRetry = false) => {
     if (busy || !text.trim()) return
@@ -130,6 +134,41 @@ export function useChat({
     })
 
     // Send workspace state + pending events with every chat message
+    // For step 5 (Report), include the active report tab in formData
+    const chatPayload = {
+      session_id: window.__AGENT_SESSION_ID__,
+      step: currentStep,
+      message: text,
+      workspace: {
+        brief: formState?.brief || {},
+        segment: {
+          attrs: (formState?.segment?.attrs || []).map(a => ({
+            name: a.name || a.fullLabel || '',
+            type: a.type || '',
+            category: a.category || '',
+            est_size: a.est_size || 0,
+          })),
+          size: formState?.segment?.size || 0,
+        },
+        creative: {
+          files: (formState?.creative?.files || []).map(f => ({
+            name: f.name, type: f.type, size: f.size,
+          })),
+        },
+        setup: {
+          selectedZoneIds: formState?.setup?.selectedZoneIds || [],
+          phase: formState?.setup?.phase || 'zones',
+        },
+      },
+      confirmed_steps: (stepStatuses || []).reduce((a, s, i) => { if (s === 'done') a.push(i); return a }, []),
+      workspace_events: workspaceEvents || [],
+    }
+
+    // Include activeReportTab for step 5 so backend routes to correct analysis
+    if (currentStep === 5 && formState?.report?.activeTab) {
+      chatPayload.formData = { activeReportTab: formState.report.activeTab }
+    }
+
     let response = await AgentAPI.chat(
       text,
       currentStep,
@@ -250,10 +289,23 @@ export function useChat({
         })
         break
 
-      // Step 2 — Creative (NEW: was step 1)
-      case 2:
-        response = await AgentAPI.approveCreative(stepData.creative)
+      // Step 2 — Creative: pure upload step — no agent action needed.
+      // The files are already on the CDN; sending them to the agent would be
+      // a no-op and causes 413 if dataUrls are included in the payload.
+      case 2: {
+        const fileCount = stepData.creative?.files?.length || 0
+        response = {
+          id: generateId(),
+          role: 'assistant',
+          content: `✅ **${fileCount} creative** đã upload thành công! Chuyển sang bước **Setup** để chọn ad zones và gán creative nhé.`,
+          blocks: [],
+          timestamp: new Date().toISOString(),
+          metadata: { tool: 'creative_confirm', model: 'none', step: 2 },
+          suggestions: [],
+        }
         break
+      }
+
 
       // Step 3 — Setup: order was already created by ConfirmPhase.handleCreate (phase=2).
       case 3:
@@ -272,10 +324,22 @@ export function useChat({
         response = await AgentAPI.getResult()
         break
 
-      // Steps 5-6 — Report / Email (mock)
-      case 5:
-        response = await AGENT_SCENARIOS.runReport(stepData.brief)
+      // Steps 5-6 — Report / Email
+      case 5: {
+        // Report: use the real backend (report_entry triggers generation)
+        response = await AgentAPI.reportEntry()
+        if (!response) {
+          response = {
+            id: generateId(),
+            role: 'assistant',
+            content: '📊 Đang chuẩn bị báo cáo... Vui lòng xem panel phải.',
+            blocks: [],
+            timestamp: new Date().toISOString(),
+            metadata: { tool: 'report_entry', model: 'none', step: 5 },
+          }
+        }
         break
+      }
       case 6:
         response = await AGENT_SCENARIOS.sendEmail(stepData.brief, stepData.campaigns)
         break

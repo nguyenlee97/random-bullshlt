@@ -3,14 +3,15 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { Upload, Image, Film, FileText, X, ZoomIn, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Upload, FileText, X, ZoomIn, CheckCircle2, AlertCircle, Sparkles, Wand2 } from 'lucide-react'
+import AdImageGenerator from './creative/AdImageGenerator'
 
 function fmtSize(bytes) {
   if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
   return (bytes / 1024).toFixed(0) + ' KB'
 }
 
-// ─── Read image/video resolution on frontend (no server needed) ───────────────
+// ─── Read image/video resolution on frontend ──────────────────────────────────
 function readResolution(file, dataUrl) {
   return new Promise((resolve) => {
     if (file.type.startsWith('image/')) {
@@ -29,6 +30,7 @@ function readResolution(file, dataUrl) {
   })
 }
 
+// ─── File card (shared between upload + AI gallery) ───────────────────────────
 function FileCard({ file, onRemove, onPreview }) {
   const isImage = file.type?.startsWith('image/')
   const isVideo = file.type?.startsWith('video/')
@@ -57,6 +59,14 @@ function FileCard({ file, onRemove, onPreview }) {
           className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
           <X className="w-3 h-3" />
         </button>
+        {/* AI badge */}
+        {file.aiGenerated && (
+          <div className="absolute top-1.5 left-1.5">
+            <Badge className="text-[8px] h-4 px-1 bg-violet-500 text-white gap-0.5">
+              <Sparkles className="w-2 h-2" />AI
+            </Badge>
+          </div>
+        )}
       </div>
       <div className="px-2.5 py-2">
         <p className="text-xs font-semibold text-foreground truncate" title={file.name}>{file.name}</p>
@@ -64,7 +74,6 @@ function FileCard({ file, onRemove, onPreview }) {
           <Badge variant="muted" className="text-[10px] h-4 px-1.5">
             {file.type?.split('/')[1]?.toUpperCase() || 'FILE'}
           </Badge>
-          {/* Fix #2: show image resolution instead of file size */}
           {res ? (
             <span className="text-[10px] text-brand-600 font-semibold">{res}</span>
           ) : (
@@ -76,6 +85,7 @@ function FileCard({ file, onRemove, onPreview }) {
   )
 }
 
+// ─── Lightbox ─────────────────────────────────────────────────────────────────
 function Lightbox({ file, onClose }) {
   if (!file) return null
   return (
@@ -95,10 +105,43 @@ function Lightbox({ file, onClose }) {
   )
 }
 
-export default function CreativeStep({ data, onChange, isDone }) {
+// ─── Tab bar ──────────────────────────────────────────────────────────────────
+function TabBar({ tab, setTab }) {
+  return (
+    <div className="flex gap-1 p-1 rounded-xl bg-muted/50 border border-border mb-4">
+      {[
+        { id: 'upload', label: '📎 Upload' },
+        { id: 'ai',     label: 'AI Tạo Ảnh', icon: true, badge: true },
+      ].map(t => (
+        <button
+          key={t.id}
+          onClick={() => setTab(t.id)}
+          className={cn(
+            'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-150',
+            tab === t.id
+              ? 'bg-white shadow-sm text-foreground'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+          id={`creative-tab-${t.id}`}
+        >
+          {t.icon ? (
+            <span className="flex items-center gap-1"><Wand2 className="w-3.5 h-3.5" />{t.label}</span>
+          ) : t.label}
+          {t.badge && (
+            <Badge className="text-[8px] h-4 px-1 bg-violet-100 text-violet-700 border-violet-200">Beta</Badge>
+          )}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+export default function CreativeStep({ data, onChange, isDone, brief, segment }) {
   const fileInputRef = useRef(null)
   const [lightboxFile, setLightboxFile] = useState(null)
   const [dragging, setDragging] = useState(false)
+  const [tab, setTab] = useState('upload')
   const files = data.files || []
 
   const processFiles = async (rawFiles) => {
@@ -107,7 +150,6 @@ export default function CreativeStep({ data, onChange, isDone }) {
       await new Promise((resolve) => {
         const reader = new FileReader()
         reader.onload = async () => {
-          // Read resolution on frontend — no server needed
           const { width, height } = await readResolution(file, reader.result)
           const newFile = {
             id: `${file.name}-${file.size}-${Date.now()}`,
@@ -121,8 +163,7 @@ export default function CreativeStep({ data, onChange, isDone }) {
           onChange(prev => {
             const prevFiles = prev.files || []
             if (prevFiles.some(f => f.id === newFile.id)) return prev
-            const updated = [...prevFiles, newFile]
-            return { ...prev, files: updated, uploaded: true }
+            return { ...prev, files: [...prevFiles, newFile], uploaded: true }
           })
           resolve()
         }
@@ -138,6 +179,16 @@ export default function CreativeStep({ data, onChange, isDone }) {
     return { ...prev, files: updated, uploaded: updated.length > 0 }
   })
 
+  // Merge AI-generated images into the files pool, then flip to upload tab
+  const handleAddAiImages = (aiImages) => {
+    onChange(prev => {
+      const existing = prev.files || []
+      const toAdd = aiImages.filter(img => !existing.some(f => f.id === img.id))
+      return { ...prev, files: [...existing, ...toAdd], uploaded: true }
+    })
+    setTab('upload')
+  }
+
   if (isDone) {
     return (
       <Card className="border-brand-200 bg-brand-50">
@@ -145,7 +196,10 @@ export default function CreativeStep({ data, onChange, isDone }) {
           <CheckCircle2 className="w-5 h-5 text-brand-500 flex-shrink-0" />
           <div>
             <p className="text-sm font-semibold text-brand-700">Creative đã được duyệt</p>
-            <p className="text-xs text-brand-600 mt-0.5">{files.length} file(s) đã upload</p>
+            <p className="text-xs text-brand-600 mt-0.5">
+              {files.length} file(s) đã upload
+              {files.some(f => f.aiGenerated) && ' (bao gồm ảnh AI)'}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -154,55 +208,75 @@ export default function CreativeStep({ data, onChange, isDone }) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <Label className="mb-2 block">Upload Creative</Label>
-        <div
-          onDragOver={e => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={cn('border-2 border-dashed rounded-xl p-6 cursor-pointer transition-all text-center',
-            dragging ? 'border-brand-500 bg-brand-50 scale-[1.01]' : 'border-border hover:border-brand-400 hover:bg-brand-50/40')}
-          id="creative-drop-zone"
-        >
-          <div className="flex flex-col items-center gap-2 text-muted-foreground">
-            <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center transition-all', dragging ? 'bg-brand-100' : 'bg-muted/60')}>
-              <Upload className={cn('w-6 h-6', dragging ? 'text-brand-500' : 'text-muted-foreground')} />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">{dragging ? 'Thả file vào đây' : 'Kéo thả hoặc bấm để chọn'}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">PNG · JPG · MP4 — Nhiều file cùng lúc · Resolution tự động đọc</p>
-            </div>
-            {files.length > 0 && <Badge variant="green" className="mt-1">{files.length} file đã chọn · Thêm nữa</Badge>}
-          </div>
-        </div>
-        <input ref={fileInputRef} id="creative-file-input" type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFileChange} />
-      </div>
+      <TabBar tab={tab} setTab={setTab} />
 
-      {files.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <Label>{files.length} file đã upload</Label>
-            <button onClick={() => onChange(prev => ({ ...prev, files: [], uploaded: false }))}
-              className="text-xs text-red-500 hover:text-red-600 font-medium flex items-center gap-1">
-              <X className="w-3 h-3" /> Xoá tất cả
-            </button>
+      {/* ── Upload tab ── */}
+      {tab === 'upload' && (
+        <div className="space-y-4">
+          <div>
+            <Label className="mb-2 block">Upload Creative</Label>
+            <div
+              onDragOver={e => { e.preventDefault(); setDragging(true) }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={cn(
+                'border-2 border-dashed rounded-xl p-6 cursor-pointer transition-all text-center',
+                dragging ? 'border-brand-500 bg-brand-50 scale-[1.01]' : 'border-border hover:border-brand-400 hover:bg-brand-50/40'
+              )}
+              id="creative-drop-zone"
+            >
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center transition-all', dragging ? 'bg-brand-100' : 'bg-muted/60')}>
+                  <Upload className={cn('w-6 h-6', dragging ? 'text-brand-500' : 'text-muted-foreground')} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{dragging ? 'Thả file vào đây' : 'Kéo thả hoặc bấm để chọn'}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">PNG · JPG · MP4 — Nhiều file cùng lúc · Resolution tự động đọc</p>
+                </div>
+                {files.length > 0 && <Badge variant="green" className="mt-1">{files.length} file đã chọn · Thêm nữa</Badge>}
+              </div>
+            </div>
+            <input ref={fileInputRef} id="creative-file-input" type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFileChange} />
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            {files.map(file => (
-              <FileCard key={file.id} file={file} onRemove={removeFile} onPreview={setLightboxFile} />
-            ))}
-          </div>
+
+          {files.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label>{files.length} file đã upload</Label>
+                <button onClick={() => onChange(prev => ({ ...prev, files: [], uploaded: false }))}
+                  className="text-xs text-red-500 hover:text-red-600 font-medium flex items-center gap-1">
+                  <X className="w-3 h-3" /> Xoá tất cả
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {files.map(file => (
+                  <FileCard key={file.id} file={file} onRemove={removeFile} onPreview={setLightboxFile} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {files.length === 0 && (
+            <Card className="border-amber-100 bg-amber-50">
+              <CardContent className="py-3 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700">
+                  Upload ít nhất 1 creative để tiếp tục, hoặc dùng tab{' '}
+                  <button onClick={() => setTab('ai')} className="font-semibold underline inline-flex items-center gap-0.5">
+                    <Wand2 className="w-3 h-3" />AI Tạo Ảnh
+                  </button>{' '}
+                  để tạo ảnh tự động từ brief.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
-      {files.length === 0 && (
-        <Card className="border-amber-100 bg-amber-50">
-          <CardContent className="py-3 flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-700">Upload ít nhất 1 creative để tiếp tục. Resolution ảnh/video được đọc tự động trên browser.</p>
-          </CardContent>
-        </Card>
+      {/* ── AI Tạo Ảnh tab ── */}
+      {tab === 'ai' && (
+        <AdImageGenerator brief={brief} segment={segment} onAddToCreative={handleAddAiImages} />
       )}
 
       <Lightbox file={lightboxFile} onClose={() => setLightboxFile(null)} />

@@ -17,7 +17,7 @@ function EmptyState() {
   )
 }
 
-export default function ChatThread({ messages, canRetry, onRetry }) {
+export default function ChatThread({ messages, canRetry, onRetry, onSend }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -40,6 +40,7 @@ export default function ChatThread({ messages, canRetry, onRetry }) {
             message={msg}
             showRetry={canRetry && msg.id === lastAssistantId}
             onRetry={onRetry}
+            onSend={onSend}
           />
         ))}
         <div ref={bottomRef} />
@@ -47,3 +48,4 @@ export default function ChatThread({ messages, canRetry, onRetry }) {
     </ScrollArea>
   )
 }
+

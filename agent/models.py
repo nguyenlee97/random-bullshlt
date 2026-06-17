@@ -106,3 +106,4 @@ class AgentResponse(BaseModel):
     blocks: list[dict] = []
     meta: ResponseMeta | dict = {}
     workspace_update: dict | None = None   # Patch to apply to formState after user confirms
+    suggestions: list = []           # Quick-reply chips — strings or {label, action, text}

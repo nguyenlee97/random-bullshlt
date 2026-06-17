@@ -3,7 +3,7 @@ import { useChat } from '@/hooks/useChat'
 import TopBar from '@/components/TopBar'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
-import { AgentAPI } from '@/api/agentApi'
+import { AgentAPI, getSetupEntry } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
 
@@ -145,8 +145,15 @@ export default function App() {
   const handleWorkspaceUpdate = useCallback((patch) => {
     // patch = { field, value, reason }
     if (!patch?.field) return
-    const field = patch.field
+    let field = patch.field
     let value = patch.value
+
+    // Normalize field aliases — LLM sometimes uses "audience" instead of "segment"
+    const FIELD_ALIASES = { audience: 'segment', targeting: 'segment', dmp: 'segment' }
+    if (FIELD_ALIASES[field]) {
+      log.workspace(`field alias: "${field}" → "${FIELD_ALIASES[field]}"`)
+      field = FIELD_ALIASES[field]
+    }
 
     // The model sometimes JSON-stringifies the value — parse it back
     if (typeof value === 'string') {
@@ -196,7 +203,15 @@ export default function App() {
         const section = parts[0]
         if (section in next && typeof value === 'object' && value !== null) {
           log.workspace(`  section merge: ${section} ← ${Object.keys(value).join(', ')}`)
-          next[section] = { ...next[section], ...value }
+          // Special: setup.action="auto_assign" → fire event, don't store action flag
+          if (section === 'setup' && value.action === 'auto_assign') {
+            log.step('handleWorkspaceUpdate: auto_assign action → dispatching agent:trigger_auto_assign')
+            setTimeout(() => window.dispatchEvent(new CustomEvent('agent:trigger_auto_assign')), 200)
+            const { action: _action, ...valueWithoutAction } = value
+            next[section] = { ...next[section], ...valueWithoutAction }
+          } else {
+            next[section] = { ...next[section], ...value }
+          }
         } else if (section in next) {
           next[section] = value
         } else {
@@ -293,7 +308,9 @@ export default function App() {
       ;(async () => {
         log.step('audience-entry triggered — fetching recommendation')
         try {
-          const data = await AgentAPI.getAudienceEntry()
+          // Pass current formState.brief as hint — backend uses it when pending_proposal
+          // hasn't been committed yet (e.g. user clicked '✅ Đồng ý, cập nhật' button)
+          const data = await AgentAPI.getAudienceEntry(formState.brief)
           if (data && !data.skip) {
             // Extract workspace_proposal block
             const proposalBlock = (data.blocks || []).find(b => b.type === 'workspace_proposal' && b.changes?.field === 'segment')
@@ -315,8 +332,10 @@ export default function App() {
               blocks: data.blocks || [],
               timestamp: new Date().toISOString(),
               metadata: data.meta || { tool: 'audience_entry', model: 'minimax', step: 1 },
+              suggestions: data.suggestions || [],
             }
             window.dispatchEvent(new CustomEvent('agent:inject_message', { detail: msg }))
+
           }
         } catch (e) {
           log.error('audience-entry fetch failed', e.message)
@@ -328,6 +347,92 @@ export default function App() {
     // (resets flag), then currentStep=1 fires again and re-triggers the call.
     // Flag is reset only by handlePartialReset when the user explicitly resets the flow.
   }, [currentStep, stepStatuses[0], handleWorkspaceUpdate])
+
+  // Setup-entry: when user reaches step 3 with creative done → proactive zone recommendation in chat
+  const setupEntryFiredRef = useRef(false)
+  useEffect(() => {
+    if (
+      currentStep === 3 &&
+      stepStatuses[2] === 'done' &&
+      !setupEntryFiredRef.current &&
+      !formState.setup.initialized   // skip if zones already loaded
+    ) {
+      setupEntryFiredRef.current = true
+      ;(async () => {
+        log.step('setup-entry triggered — fetching zone recommendation')
+        try {
+          const data = await getSetupEntry()
+          if (data && !data.skip) {
+            // Auto-apply workspace_proposal so SetupStep reads zones from formState
+            const proposalBlock = (data.blocks || []).find(
+              b => b.type === 'workspace_proposal' && b.changes?.field === 'setup'
+            )
+            if (proposalBlock?.changes?.value) {
+              handleWorkspaceUpdate(proposalBlock.changes)
+              log.workspace('setup-entry → auto-applied zone proposal to formState')
+            }
+            const msg = {
+              id: generateId(),
+              role: 'assistant',
+              content: data.text || '',
+              blocks: data.blocks || [],
+              timestamp: new Date().toISOString(),
+              metadata: data.meta || { tool: 'setup_entry', model: 'none', step: 3 },
+              suggestions: data.suggestions || [],
+            }
+            window.dispatchEvent(new CustomEvent('agent:inject_message', { detail: msg }))
+          }
+        } catch (e) {
+          log.error('setup-entry fetch failed', e.message)
+        }
+      })()
+    }
+  }, [currentStep, stepStatuses[2], handleWorkspaceUpdate])
+
+  // Report-entry: when user reaches step 5 with step 4 done → trigger report generation
+  const reportEntryFiredRef = useRef(false)
+  useEffect(() => {
+    if (
+      currentStep === 5 &&
+      stepStatuses[4] === 'done' &&
+      !reportEntryFiredRef.current
+    ) {
+      reportEntryFiredRef.current = true
+      ;(async () => {
+        log.step('report-entry triggered — calling AgentAPI.reportEntry')
+        try {
+          const data = await AgentAPI.reportEntry()
+          if (data) {
+            // Extract campaignId from workspace_update
+            const campaignId = data.workspace_update?.value?.campaignId || ''
+
+            // Store report context in formState
+            setFormState(prev => ({
+              ...prev,
+              report: {
+                ...prev.report,
+                campaignId: campaignId || prev.report?.campaignId || '',
+              },
+            }))
+
+            // Inject intro message into chat
+            const msg = {
+              id: generateId(),
+              role: 'assistant',
+              content: data.text || '',
+              blocks: data.blocks || [],
+              timestamp: new Date().toISOString(),
+              metadata: data.meta || { tool: 'report_entry', model: 'none', step: 5 },
+              suggestions: data.suggestions || [],
+            }
+            window.dispatchEvent(new CustomEvent('agent:inject_message', { detail: msg }))
+          }
+        } catch (e) {
+          log.error('report-entry failed', e.message)
+        }
+      })()
+    }
+  }, [currentStep, stepStatuses[4]])
 
   // Auto-advance when setup Phase 3 confirms
   useEffect(() => {
@@ -372,8 +477,10 @@ export default function App() {
   // Partial reset: wipe form data + statuses from fromStep onward
   const handlePartialReset = useCallback((fromStep) => {
     log.step(`handlePartialReset from step ${fromStep} (${STEP_NAMES_VI[fromStep]})`)
-    // Allow audience-entry to re-trigger if the brief step is being reset
+    // Allow entry probes to re-trigger when their steps are reset
     if (fromStep <= 1) audienceEntryFiredRef.current = false
+    if (fromStep <= 3) setupEntryFiredRef.current = false
+    if (fromStep <= 5) reportEntryFiredRef.current = false
     // Emit a workspace event so the agent knows
     pushWorkspaceEvent(
       `Đã bấm 'Chỉnh sửa lại' ở bước ${STEP_NAMES_VI[fromStep]} — ` +
@@ -406,18 +513,106 @@ export default function App() {
 
   // Listen for agent:workspace_confirm — user clicked Đồng ý on a proposal block
   useEffect(() => {
+    const STEP_PRIMARY_FIELDS = { 0: 'brief', 1: 'segment', 2: 'creative', 3: 'setup' }
     const handler = (e) => {
       log.event('agent:workspace_confirm received', e.detail)
       if (e.detail?.patch) {
         handleWorkspaceUpdate(e.detail.patch)
+        const topField = (e.detail.patch.field || '').split('.')[0]
+        const stepEntry = Object.entries(STEP_PRIMARY_FIELDS).find(([, v]) => v === topField)
+        if (stepEntry) {
+          const stepNum = Number(stepEntry[0])
+          // ── Persist to MongoDB so audience-entry (and other downstream calls)
+          // can read the confirmed value immediately. Without this, the button only
+          // updates frontend state — backend session stays empty → brief_not_set.
+          AgentAPI.commitWorkspace(topField, e.detail.patch.value)
+            .then(r => log.workspace(`commitWorkspace(${topField}) →`, r?.ok ? 'ok' : 'failed'))
+            .catch(err => log.error('commitWorkspace failed', err?.message))
+          if (stepStatuses[stepNum] !== 'done') {
+            log.step(`workspace_confirm → marking step ${stepNum} done for field "${topField}"`)
+            // Setup step is special — it has 3 sub-phases (zones→assign→confirm).
+            // It must NOT be marked done here; it advances only when formState.setup.submitted
+            // becomes true (handled by the dedicated useEffect below).
+            if (topField === 'setup') {
+              log.step('workspace_confirm(setup) — skipping markStepDone; sub-phase flow handles advance')
+              return
+            }
+            // Inject a confirmation message into chat so user sees the agent acknowledge
+            const confirmMessages = {
+              brief: '✅ Brief đã được lưu! Em sẽ chuyển sang bước **Audience** để gợi ý segments phù hợp.',
+              segment: `✅ Audience đã xác nhận! ${(e.detail.patch.value?.attrs || []).length} segments được áp dụng — em sẽ chuyển sang bước **Creative**.`,
+              creative: '✅ Creative đã xác nhận! Em sẽ chuyển sang bước **Setup Camp**.',
+            }
+            const confirmText = confirmMessages[topField] || `✅ Bước ${topField} đã xác nhận.`
+            window.dispatchEvent(new CustomEvent('agent:inject_message', {
+              detail: {
+                id: `confirm_${topField}_${Date.now()}`,
+                role: 'assistant',
+                content: confirmText,
+                blocks: [],
+                timestamp: new Date().toISOString(),
+                metadata: { tool: 'workspace_confirmed', model: 'none', step: stepNum },
+              }
+            }))
+            setTimeout(() => markStepDone(stepNum), 700)
+          }
+        }
       }
     }
     window.addEventListener('agent:workspace_confirm', handler)
     return () => window.removeEventListener('agent:workspace_confirm', handler)
-  }, [handleWorkspaceUpdate])
+  }, [handleWorkspaceUpdate, stepStatuses, markStepDone])
+
+  // Listen for agent:setup_zones_confirmed — fired by WorkspaceProposalBlock when user
+  // clicks "✅ Duyệt các zones này". This advances the setup sub-phase to 'assign' using
+  // the CURRENT formState.setup selection (not the stale proposal value).
+  useEffect(() => {
+    const handler = () => {
+      setFormState(prev => {
+        const currentSetup = prev.setup
+        const selectedIds = currentSetup.selectedZoneIds || []
+        if (!selectedIds.length) {
+          log.step('setup_zones_confirmed: no zones selected — ignoring')
+          return prev
+        }
+        log.step(`setup_zones_confirmed → advancing to assign phase (${selectedIds.length} zones)`)
+        // Persist current selection to backend
+        AgentAPI.commitWorkspace('setup', { ...currentSetup, phase: 'assign' })
+          .then(r => log.workspace('commitWorkspace(setup/zones) ->', r?.ok ? 'ok' : 'failed'))
+          .catch(err => log.error('commitWorkspace(setup) failed', err?.message))
+        // Inject acknowledgment message into chat
+        const confirmText = `✅ Đã xác nhận **${selectedIds.length} zones**! Anh/chị chuyển sang bước **Gắn creative** trong panel bên phải để gán creative vào từng zone nhé.`
+        window.dispatchEvent(new CustomEvent('agent:inject_message', {
+          detail: {
+            id: `setup_zones_confirm_${Date.now()}`,
+            role: 'assistant',
+            content: confirmText,
+            blocks: [],
+            timestamp: new Date().toISOString(),
+            metadata: { tool: 'workspace_confirmed', model: 'none', step: 3 },
+          }
+        }))
+        return { ...prev, setup: { ...currentSetup, phase: 'assign' } }
+      })
+    }
+    window.addEventListener('agent:setup_zones_confirmed', handler)
+    return () => window.removeEventListener('agent:setup_zones_confirmed', handler)
+  }, [])
 
   useEffect(() => {
-    const handler = (e) => log.event('agent:workspace_cancel received', e.detail)
+    const handler = (e) => {
+      log.event('agent:workspace_cancel received', e.detail)
+      const field = e.detail?.field
+      // For audience proposals: "Tự chọn" should clear the AI-applied segments
+      // so the user starts with an empty selection and picks manually.
+      if (field === 'segment') {
+        log.step('workspace_cancel(segment) → clearing attrs + targeting')
+        setFormState(prev => ({
+          ...prev,
+          segment: { attrs: [], size: 0, targeting: {} },
+        }))
+      }
+    }
     window.addEventListener('agent:workspace_cancel', handler)
     return () => window.removeEventListener('agent:workspace_cancel', handler)
   }, [])
@@ -467,6 +662,7 @@ export default function App() {
             busy={busy}
             onPartialReset={handlePartialReset}
             recoFromChat={audienceRecommendation}
+            onSendChat={sendMessage}
           />
         </div>
       </main>

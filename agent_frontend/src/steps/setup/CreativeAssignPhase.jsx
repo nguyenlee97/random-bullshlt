@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -142,8 +143,8 @@ function AssignRow({ zone, files, assignedFileId, onAssign, onGroupSameSize, gro
 }
 
 // ─── Phase 2 component ─────────────────────────────────────────────────────────
-export default function CreativeAssignPhase({ data, onChange, files, allZones }) {
-  const selectedZones = getSelectedZones(data.selectedZoneIds || [], allZones || null)
+export default function CreativeAssignPhase({ data, onChange, files, allZones, recoZones }) {
+  const selectedZones = getSelectedZones(data.selectedZoneIds || [], allZones || null, recoZones || null)
   const assignments = data.assignments || {}
 
   const handleAssign = (zoneId, fileId) => {
@@ -162,6 +163,17 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones })
     })
     onChange({ ...data, assignments: newAssignments })
   }
+
+  // Listen for auto-assign trigger from chat (agent fires agent:trigger_auto_assign)
+  useEffect(() => {
+    const handler = () => {
+      if (files.length === 0) return
+      handleAutoAssign()
+    }
+    window.addEventListener('agent:trigger_auto_assign', handler)
+    return () => window.removeEventListener('agent:trigger_auto_assign', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, selectedZones])
 
   const handleGroupSameSize = (sourceZone, fileId) => {
     const [sw, sh] = sourceZone.size.split('×').map(Number)

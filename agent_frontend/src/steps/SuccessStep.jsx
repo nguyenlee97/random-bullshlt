@@ -81,11 +81,22 @@ function KpiCard({ icon: Icon, label, value, sub, color, bg }) {
   )
 }
 
-export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSize, setup, allZones }) {
+export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSize, setup, allZones, recoZones }) {
   const ids = selectedZoneIds || []
-  // Use real API zones (from setup state) — fall back to static ALL_ZONES
-  const catalog = allZones?.length ? allZones : ALL_ZONES
-  const selectedZones = catalog.filter(z => ids.includes(z.id))
+  // Merge: recoZones (backend, matching IDs) → allZones → static ALL_ZONES (display fields).
+  const dynamicPool = [...(recoZones || []), ...(allZones || [])]
+  const selectedZones = ids.map(id => {
+    const dynamic = dynamicPool.find(z => z.id === id)
+    const staticZ  = ALL_ZONES.find(z => z.id === id)
+    if (staticZ && dynamic) return { ...staticZ, ...dynamic }
+    if (dynamic) return {
+      ...dynamic,
+      name:     dynamic.name     || dynamic.id.replace(/_/g, ' '),
+      platform: dynamic.platform || dynamic.channel || dynamic.id.split('_')[0],
+    }
+    return staticZ
+  }).filter(Boolean)
+
   const assignments = setup?.assignments || {}
   const files = setup?.creativeFiles || []
   const live = isLive(brief)
@@ -257,8 +268,8 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
                     )}
                   </div>
 
-                  {/* Screenshot capture for live ads */}
-                  {live && <ScreenshotCapture zone={zone} brief={brief} />}
+                   {/* Screenshot capture — shown always so user can preview the ad slot */}
+                   <ScreenshotCapture zone={zone} brief={brief} />
                 </div>
               </div>
             )

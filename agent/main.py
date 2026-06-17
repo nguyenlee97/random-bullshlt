@@ -10,7 +10,8 @@ from config import config
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-06-16.14"
+BUILD_VERSION = "2026-06-17.37"
+
 BUILD_FEATURES = [
     "system-logs",
     "step-tool-rules",
@@ -30,6 +31,13 @@ BUILD_FEATURES = [
     "retry-last-chat",
     "persist-workspace-on-confirm",   # brief persisted to MongoDB on auto-apply/pending confirm
     "audience-entry-single-fire",     # removed double-fire of audience-entry trigger
+    "report-step",                    # Step 5: AI-generated analytics + tabbed report UI
+    "report-context-isolation",       # separate chat context for report step
+    "report-polling",                 # frontend polls /api/reports/status every 3s
+    "report-order-fetch",             # report-entry fetches real order from backend API for zones
+    "report-zero-data-guard",         # regenerates if existing records are all zeros
+    "report-debug-endpoint",          # GET /api/reports/debug/:campaignId for diagnostics
+    "image-gen",                      # POST /api/agent/generate-image via gpt-image-1
 ]
 
 app = FastAPI(

@@ -24,7 +24,7 @@ const STEP_DESCS = [
 ]
 
 const WorkspacePane = forwardRef(function WorkspacePane(
-  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat },
+  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat },
   ref
 ) {
   const bodyRef = useRef(null)
@@ -60,7 +60,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
     switch (currentStep) {
       case 0: return <BriefStep data={formState.brief} onChange={v => updateFormSlice('brief', v)} isDone={isDone} />
       case 1: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isDone} brief={formState.brief} recoFromChat={recoFromChat} />
-      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isDone} />
+      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isDone} brief={formState.brief} segment={formState.segment} />
       case 3: return (
         <SetupStep
           data={formState.setup}
@@ -79,13 +79,14 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           selectedZoneIds={formState.setup.selectedZoneIds || []}
           audienceSize={formState.segment.size}
           allZones={formState.setup.allZones || []}
+          recoZones={formState.setup.recoZones || []}
           setup={{
             ...formState.setup,
             creativeFiles: formState.creative.files || [],
           }}
         />
       )
-      case 5: return <ReportStep data={formState.report} onChange={v => updateFormSlice('report', v)} isDone={isDone} />
+      case 5: return <ReportStep data={formState.report} onChange={v => updateFormSlice('report', v)} isDone={isDone} formState={formState} onSendChat={onSendChat} />
       case 6: return (
         <EmailStep
           brief={formState.brief}

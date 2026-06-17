@@ -47,10 +47,25 @@ export function scoreFile(file, zone) {
 }
 
 // ─── Get selectedZones array from IDs ─────────────────────────────────────────
-// Accepts optional allZones array (e.g., real API zones) — falls back to static ALL_ZONES
-export function getSelectedZones(selectedIds = [], allZones = null) {
-  const catalog = allZones?.length ? allZones : ALL_ZONES
-  return catalog.filter(z => selectedIds.includes(z.id))
+// Merges three sources, in priority order for display fields:
+//   1. recoZones  — backend zones (have matching backend IDs + fresh metrics)
+//   2. allZones   — extended catalog passed by parent (may be static or fallback zones)
+//   3. ALL_ZONES  — static frontend catalog (dot-notation IDs, rich display fields)
+// Merge strategy: static ALL_ZONES provides display fields (name, platform, siteUrl);
+// backend zone overrides metrics (reach, vi, ctr, cpm) if IDs match.
+export function getSelectedZones(selectedIds = [], allZones = null, recoZones = null) {
+  const dynamicPool = [...(recoZones || []), ...(allZones || [])]
+  return selectedIds.map(id => {
+    const dynamic = dynamicPool.find(z => z.id === id)  // backend zone (matching ID)
+    const staticZ  = ALL_ZONES.find(z => z.id === id)   // static zone (dot-notation ID)
+    if (staticZ && dynamic) return { ...staticZ, ...dynamic }   // static fields + dynamic metrics
+    if (dynamic) return {                                        // backend only — derive display fields
+      ...dynamic,
+      name:     dynamic.name     || dynamic.id.replace(/_/g, ' '),
+      platform: dynamic.platform || dynamic.channel || dynamic.id.split('_')[0],
+    }
+    return staticZ   // static-only fallback
+  }).filter(Boolean)
 }
 
 // ─── Format VND ───────────────────────────────────────────────────────────────

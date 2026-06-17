@@ -1,0 +1,166 @@
+const express = require('express');
+const router = express.Router();
+const { generateReports, getReportStatus } = require('../services/reportGenerator');
+const ReportAnalysis = require('../models/ReportAnalysis');
+const AnalyticsRecord = require('../models/AnalyticsRecord');
+
+// ── POST /api/reports/generate ───────────────────────────────────────────────
+// Trigger report generation for a campaign. Idempotent — skips if already generating/ready.
+// Body: { campaignId, brand, objective, budget, startDate, zones, audience }
+router.post('/generate', async (req, res) => {
+  try {
+    const { campaignId, brand, objective, budget, startDate, zones, audience } = req.body;
+    if (!campaignId) return res.status(400).json({ error: 'campaignId required' });
+
+    // Check if already generating or ready
+    const existing = await ReportAnalysis.findOne({ campaignId });
+    if (existing && existing.status === 'ready') {
+      return res.json({ status: 'already_ready', campaignId });
+    }
+    if (existing && existing.status === 'generating') {
+      return res.json({ status: 'already_generating', campaignId });
+    }
+
+    // Return immediately, generate in background
+    res.json({ status: 'generating', campaignId });
+
+    // Fire and forget — generate in background
+    setImmediate(async () => {
+      try {
+        await generateReports({
+          campaignId,
+          brand: brand || 'Unknown Brand',
+          objective: objective || 'awareness',
+          budget: budget || 100000000,
+          startDate: startDate || new Date().toISOString().slice(0, 10),
+          zones: zones || [],
+          audience: audience || [],
+        });
+      } catch (err) {
+        console.error('[reports/generate] Background generation failed:', err.message);
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/reports/status/:campaignId ──────────────────────────────────────
+// Poll generation status
+router.get('/status/:campaignId', async (req, res) => {
+  try {
+    const status = await getReportStatus(req.params.campaignId);
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/reports/analysis/:campaignId ────────────────────────────────────
+// Fetch all analyses for a campaign
+router.get('/analysis/:campaignId', async (req, res) => {
+  try {
+    const docs = await ReportAnalysis.find(
+      { campaignId: req.params.campaignId, status: 'ready' },
+      { _id: 0, __v: 0 }
+    ).lean();
+    res.json(docs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/reports/analysis/:campaignId/:reportType ────────────────────────
+// Fetch single report type analysis
+router.get('/analysis/:campaignId/:reportType', async (req, res) => {
+  try {
+    const doc = await ReportAnalysis.findOne(
+      { campaignId: req.params.campaignId, reportType: req.params.reportType },
+      { _id: 0, __v: 0 }
+    ).lean();
+    if (!doc) return res.status(404).json({ error: 'not found' });
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/reports/data/:campaignId ────────────────────────────────────────
+// Fetch raw analytics records for a campaign (convenience wrapper)
+router.get('/data/:campaignId', async (req, res) => {
+  try {
+    const records = await AnalyticsRecord.find(
+      { campaignId: req.params.campaignId }
+    ).sort({ date: 1 }).lean();
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/reports/debug/:campaignId ───────────────────────────────────────
+// Debug endpoint: shows record count, samples, and analysis errors
+router.get('/debug/:campaignId', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+
+    // Records summary
+    const recordCount = await AnalyticsRecord.countDocuments({ campaignId });
+    const sampleRecords = await AnalyticsRecord.find({ campaignId })
+      .sort({ date: 1 }).limit(3).lean();
+
+    // Check if any records have real data
+    const nonZeroRecords = await AnalyticsRecord.countDocuments({
+      campaignId,
+      impressions: { $gt: 0 },
+    });
+
+    // Totals
+    const agg = await AnalyticsRecord.aggregate([
+      { $match: { campaignId } },
+      { $group: {
+        _id: null,
+        totalImpressions: { $sum: '$impressions' },
+        totalClicks: { $sum: '$clicks' },
+        totalSpend: { $sum: '$spend' },
+        totalConversions: { $sum: '$conversions' },
+      }},
+    ]);
+
+    // Analysis docs with error info
+    const analyses = await ReportAnalysis.find(
+      { campaignId },
+      { _id: 0, reportType: 1, status: 1, error: 1, generatedAt: 1, 'questions.0': 1 }
+    ).lean();
+
+    res.json({
+      campaignId,
+      records: {
+        total: recordCount,
+        withData: nonZeroRecords,
+        withZeros: recordCount - nonZeroRecords,
+        totals: agg[0] || { totalImpressions: 0, totalClicks: 0, totalSpend: 0, totalConversions: 0 },
+        samples: sampleRecords.map(r => ({
+          date: r.date, placementId: r.placementId,
+          impressions: r.impressions, clicks: r.clicks, spend: r.spend,
+        })),
+      },
+      analyses: analyses.map(a => ({
+        reportType: a.reportType,
+        status: a.status,
+        error: a.error || null,
+        generatedAt: a.generatedAt,
+        hasFirstQuestion: !!(a.questions?.[0]),
+      })),
+      diagnosis: recordCount === 0
+        ? '❌ No records — Phase 1 (data generation) failed or never ran'
+        : nonZeroRecords === 0
+        ? '❌ Records exist but all zeros — OpenAI returned empty/zero data'
+        : '✅ Records look healthy',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+module.exports = router;

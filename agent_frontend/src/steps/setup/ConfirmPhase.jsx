@@ -33,11 +33,11 @@ function SectionCard({ icon: Icon, title, iconClass, children }) {
   )
 }
 
-export default function ConfirmPhase({ data, onChange, brief, segment, files, allZones }) {
+export default function ConfirmPhase({ data, onChange, brief, segment, files, allZones, recoZones }) {
   const [submitting, setSubmitting] = useState(false)
   const [uploadStatus, setUploadStatus] = useState('')  // upload progress label
 
-  const selectedZones = getSelectedZones(data.selectedZoneIds || [], allZones || null)
+  const selectedZones = getSelectedZones(data.selectedZoneIds || [], allZones || null, recoZones || null)
   const assignments = data.assignments || {}
   const budgetPerZone = selectedZones.length > 0 ? (brief?.budget || 0) / selectedZones.length : 0
 

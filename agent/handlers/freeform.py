@@ -43,27 +43,84 @@ _RESET_TRIGGERS = [
     "thử lại từ đầu",
 ]
 
-# Intent keywords that confirm a pending workspace proposal
+# Intent keywords that confirm a pending workspace proposal.
+# ONLY long, unambiguous Vietnamese phrases that CANNOT appear in questions or
+# negative sentences. Short words (ok, yes, sure, được...) are excluded — they
+# are too risky and can be part of "không ok", "được không", etc.
 _CONFIRM_TRIGGERS = [
     "đồng ý",
     "xác nhận",
-    "ok",
     "đúng rồi",
     "chuẩn rồi",
-    "được",
-    "correct",
-    "yes",
-    "apply",
     "chốt luôn",
     "nhất trí",
-    "chính xác",
     "tiến hành đi",
     "triển đi",
     "triển luôn",
-    "yep",
-    "sure",
-    "accept",
+    "áp dụng đi",
+    "chấp nhận",
+    "xác nhận đi",
+    "lưu lại đi",
+    "ok luôn",
+    "oke luôn",
+    "oke nhé",
+    "duyệt nhé"
 ]
+
+# Negation prefixes: only 3 roots, but they are checked by building the FULL
+# phrase "negation + trigger" (e.g. "không đồng ý"), not as bare substrings.
+# This avoids "không sao, đồng ý" being incorrectly blocked.
+_NEGATION_ROOTS = ["không", "chưa", "chẳng"]
+
+# ── Quick-reply suggestions per workspace field ────────────────────────────────
+# Shown as clickable chips below the agent message after a workspace_proposal.
+# "send"    → immediately sends text as a chat message (goes through _is_confirm or LLM)
+# "prefill" → puts text into the composer input so user can complete the thought
+_WORKSPACE_SUGGESTIONS: dict[str, list[dict]] = {
+    "brief": [
+        {"label": "✅ Xác nhận brief",    "action": "send",    "text": "đồng ý, lưu brief lại nhé"},
+        {"label": "✏️ Chỉnh sửa thêm",     "action": "prefill", "text": "Tôi muốn chỉnh sửa: "},
+        {"label": "🔄 Nhập lại từ đầu",   "action": "send",    "text": "Tôi muốn nhập lại thông tin brief từ đầu"},
+    ],
+    "segment": [
+        {"label": "✅ Áp dụng segments",  "action": "send",    "text": "đồng ý, áp dụng các segments này"},
+        {"label": "🗑️ Bỏ bớt segment",    "action": "prefill", "text": "Bỏ segment "},
+        {"label": "🔍 Tìm thêm segments",  "action": "prefill", "text": "Tìm thêm segments liên quan đến "},
+    ],
+    "creative": [
+        {"label": "✅ Xác nhận creative",  "action": "send",    "text": "đồng ý, xác nhận creative"},
+        {"label": "🔄 Upload file khác",  "action": "prefill", "text": "Tôi muốn đổi file: "},
+    ],
+    "setup": [
+        {"label": "✅ Duyệt các zones",    "action": "send",    "text": "đồng ý, duyệt các zones này"},
+        {"label": "➕ Thêm zone",           "action": "prefill", "text": "Thêm zone "},
+        {"label": "🗑️ Bỏ zone",             "action": "prefill", "text": "Bỏ zone "},
+    ],
+}
+
+
+def _is_confirm(msg_lower: str) -> bool:
+    """Return True only if message contains an unambiguous confirmation phrase
+    that is NOT directly negated (e.g. 'không đồng ý', 'chưa xác nhận').
+
+    Negation is detected by checking if the FULL phrase '<root> <trigger>'
+    (e.g. 'không đồng ý') appears in the message — NOT by checking the
+    negation root as a bare substring. This prevents 'không sao, đồng ý'
+    from being falsely blocked.
+    """
+    for kw in _CONFIRM_TRIGGERS:
+        if kw not in msg_lower:
+            continue
+        # Is this specific trigger directly negated? ("không đồng ý", "chưa xác nhận" ...)
+        is_negated = any(f"{neg} {kw}" in msg_lower for neg in _NEGATION_ROOTS)
+        if not is_negated:
+            return True  # trigger present and not negated
+    return False
+
+
+
+
+
 
 # Intent keywords that mean "go to next step" — intercepted deterministically
 _NEXT_STEP_TRIGGERS = [
@@ -128,10 +185,18 @@ def _build_update_summary(field: str, value, reason: str) -> str:
     return f"Em đề xuất cập nhật `{field}` → `{value_str}`. Anh/Chị xác nhận để lưu nhé!"
 
 
-def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int]) -> str:
+def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int], current_step: int = -1) -> str:
     """Build a compact workspace context string injected as system message each call."""
     confirmed = set(confirmed_steps or [])
     lines = ["=== TRẠNG THÁI WORKSPACE HIỆN TẠI ==="]
+
+    # Tell LLM explicitly which step the user is CURRENTLY ON
+    # (prevents hallucinating step numbering: 0-indexed step != 1-based "bước N")
+    if 0 <= current_step < len(_STEP_NAMES_VI):
+        step_ordinal = current_step + 1
+        step_name_cur = _STEP_NAMES_VI[current_step]
+        lines.append(f">>> NGƯỜI DÙNG ĐANG Ở BƯỚC {step_ordinal}/{len(_STEP_NAMES_VI)}: {step_name_cur} (index {current_step}) <<<")
+        lines.append("")
 
     # Step lock status
     for i, name in enumerate(_STEP_NAMES_VI):
@@ -162,12 +227,17 @@ def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int]) -> st
     segment = workspace.get("segment", {})
     attrs = segment.get("attrs", [])
     if attrs:
+        import json as _json
         lines.append("--- Audience ---")
-        lines.append(f"Segments  : {len(attrs)} đã chọn")
+        lines.append(f"Segments hiện tại: {len(attrs)} đã chọn")
         lines.append(f"Size ước tính: {segment.get('size', 0):,} người dùng")
-        names = [a.get("name") or a.get("fullLabel", "") for a in attrs[:6] if a.get("name") or a.get("fullLabel")]
-        if names:
-            lines.append(f"Tên       : {', '.join(names)}" + (" ..." if len(attrs) > 6 else ""))
+        # ─ Provide FULL segment data so LLM can modify without hallucinating ─
+        # LLM must use this exact JSON as the base when calling update_workspace
+        lines.append("CURRENT_SEGMENT_DATA (dùng làm base khi gọi update_workspace):")
+        lines.append(_json.dumps(
+            {"attrs": attrs, "targeting": segment.get("targeting", {}), "size": segment.get("size", 0)},
+            ensure_ascii=False, separators=(',', ':')
+        ))
         lines.append("")
 
     # Creative
@@ -182,15 +252,28 @@ def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int]) -> st
 
     # Setup
     setup = workspace.get("setup", {})
-    if setup.get("selectedZoneIds"):
-        lines.append("--- Setup ---")
-        lines.append(f"Zones đã chọn: {len(setup['selectedZoneIds'])}")
+    selected_zone_ids = setup.get("selectedZoneIds", [])
+    setup_phase = setup.get("phase", "zones")
+    _PHASE_LABELS = {
+        "zones":  "1/3 — Chọn Ad Zones (user đang chọn zones)",
+        "assign": "2/3 — Gắn Creative (user đang gán creative vào zones)",
+        "confirm":"3/3 — Xác nhận & Tạo chiến dịch",
+    }
+    if selected_zone_ids or setup_phase != "zones":
+        import json as _json2
+        lines.append("--- Setup Camp ---")
+        lines.append(f"Sub-step hiện tại: {_PHASE_LABELS.get(setup_phase, setup_phase)}")
+        lines.append(f"Zones đã chọn: {len(selected_zone_ids)}")
+        # Provide full list so LLM can modify without hallucinating zone IDs
+        lines.append("CURRENT_SELECTED_ZONES (dùng làm base khi gọi update_workspace field=setup):")
+        lines.append(_json2.dumps(selected_zone_ids, ensure_ascii=False))
         lines.append("")
 
     lines.append("QUY TẮC QUAN TRỌNG:")
     lines.append("- Dùng thông tin trên để trả lời. KHÔNG hỏi lại thông tin đã có.")
     lines.append("- Nếu bước ✅ LOCKED, hỏi xác nhận user trước khi thay đổi và cảnh báo reset downstream.")
     lines.append("- User có thể thao tác bước sau ngay cả khi đang ở bước trước — luôn hỗ trợ.")
+    lines.append("- Khi sửa segment (bước 1): LUÔN lấy CURRENT_SEGMENT_DATA làm base, chỉ sửa entry cần thiết. KHÔNG tự tạo mới attrs.")
     return "\n".join(lines)
 
 
@@ -245,7 +328,8 @@ async def handle_freeform(
         )
 
     # Track if this message is a confirmation (affects update_workspace handling)
-    is_confirm_trigger = any(kw in msg_lower for kw in _CONFIRM_TRIGGERS)
+    # Uses two-tier system + negation guard (see _is_confirm() above)
+    is_confirm_trigger = _is_confirm(msg_lower)
 
     # ── Check for campaign reset intent ──────────────────────────────────────
     if any(kw in msg_lower for kw in _RESET_TRIGGERS):
@@ -260,8 +344,9 @@ async def handle_freeform(
         )
 
     # ── Check if this message confirms a pending proposal ─────────────────────
-    if any(kw in msg_lower for kw in _CONFIRM_TRIGGERS):
-        pending = await get_pending_proposal(session_id)
+    # NOTE: pending must be loaded BEFORE the step-1 auto-confirm block below
+    pending = await get_pending_proposal(session_id)
+    if is_confirm_trigger:
         await alog(session_id, "confirm", {"has_pending": bool(pending), "trigger_word": msg_lower[:20]})
         if pending:
             await clear_pending_proposal(session_id)
@@ -278,27 +363,99 @@ async def handle_freeform(
                 except Exception:
                     pass
 
-            confirm_text = (
-                f"✅ Đã cập nhật workspace! Brief đã được lưu — em sẽ tiến hành bước tiếp theo."
-                if field == "brief" else
-                f"✅ Đã cập nhật `{field}`. Em sẽ tiếp tục bước tiếp theo."
-            )
+    # ── Step 1 (Audience) auto-confirm ───────────────────────────────────────
+    # No pending_proposal for segment (audience-entry doesn't use pending_proposal).
+    # When user confirms at step 1 with non-empty segment in workspace, persist it
+    # and return workspace_update so the frontend auto-advances to Creative.
+    if step == 1 and is_confirm_trigger and not pending:
+        seg = (workspace or {}).get("segment", {})
+        if seg.get("attrs"):
+            await add_message(session_id, "user", message)
+            confirm_text = f"✅ Audience đã xác nhận! {len(seg['attrs'])} segments được chọn — em sẽ chuyển sang bước **Creative**."
             await add_message(session_id, "assistant", confirm_text)
-            # ── Persist to MongoDB so downstream calls (audience-entry, dmp-recommend) see the data ──
-            await update_form_state(session_id, field, value)
-
+            await update_form_state(session_id, "segment", seg)
+            await alog(session_id, "confirm", {"auto_apply": True, "field": "segment", "attrs_count": len(seg["attrs"])})
             return AgentResponse(
                 text=confirm_text,
-                blocks=[{
-                    "type": "info",
-                    "text": f"Workspace đã được cập nhật: `{field}`. Chọn Audience ở panel phải hoặc hỏi em để tiếp tục.",
-                }],
+                blocks=[{"type": "info", "text": "Workspace đã cập nhật: `segment`. Upload creative ở panel phải hoặc hỏi em để tiếp tục."}],
                 meta=ResponseMeta(tool="workspace_confirmed", model="none", step=step),
-                workspace_update={"field": field, "value": value, "reason": pending.get("reason", "")},
+                workspace_update={"field": "segment", "value": seg},
             )
 
-    # ── Use live workspace if provided, else fall back to session ─────────────
+    # ── Step 3 (Setup) auto-confirm ───────────────────────────────────────
+    # setup-entry auto-applies zones to formState but does NOT set pending_proposal.
+    # When user says "đồng ý/duyệt" at step 3 with zones already in workspace,
+    # return deterministic confirm — do NOT let LLM handle it (it hallucinates step names).
+    if step == 3 and is_confirm_trigger and not pending:
+        setup_ws = (workspace or {}).get("setup", {})
+        zone_ids = setup_ws.get("selectedZoneIds", [])
+        if zone_ids:
+            await add_message(session_id, "user", message)
+            confirm_text = (
+                f"✅ Zones đã được xác nhận! Em đã lưu **{len(zone_ids)} zones** vào chiến dịch. "
+                f"Anh/chị bấm **Tiếp tục gắn creative** trong panel bên phải để chuyển sang bước gắn creative vào từng zone."
+            )
+            await add_message(session_id, "assistant", confirm_text)
+            await update_form_state(session_id, "setup", setup_ws)
+            await alog(session_id, "confirm", {"auto_apply": True, "field": "setup", "zone_count": len(zone_ids)})
+            return AgentResponse(
+                text=confirm_text,
+                blocks=[{"type": "info", "text": f"Đã chọn {len(zone_ids)} zones. Bấm 'Tiếp tục gắn creative' ở bên phải để chuyển sang bước gán creative."}],
+                meta=ResponseMeta(tool="workspace_confirmed", model="none", step=step),
+                workspace_update={"field": "setup", "value": setup_ws},
+                suggestions=[
+                    {"label": "➕ Chọn thêm zone", "action": "prefill", "text": "Thêm zone "},
+                    {"label": "🗑️ Bỏ zone",          "action": "prefill", "text": "Bỏ zone "},
+                ],
+            )
+
+
+    # ── Step 1 segment REMOVE intercept ──────────────────────────────────────
+    # When user asks to remove a segment, filter programmatically using the REAL
+    # workspace attrs. NEVER let the LLM reconstruct segment objects — it will
+    # hallucinate fake IDs, names, and structure.
+    if step == 1:
+        current_attrs = (workspace or {}).get("segment", {}).get("attrs", [])
+        _REMOVE_PATTERNS = ["bỏ", "xóa", "loại", "remove", "không chọn", "bỏ đi", "bỏ ra", "loại bỏ", "loại ra"]
+        if current_attrs and any(pat in msg_lower for pat in _REMOVE_PATTERNS):
+            kept, removed_names = [], []
+            for attr in current_attrs:
+                label = (attr.get("fullLabel") or attr.get("name") or "").lower()
+                # Match: any meaningful word (>3 chars) from the label appears in the user message
+                label_words = {w for w in label.replace("(", " ").replace(")", " ").replace("&", " ").split() if len(w) > 3}
+                if label_words and any(w in msg_lower for w in label_words):
+                    removed_names.append(attr.get("fullLabel") or attr.get("name", "?"))
+                else:
+                    kept.append(attr)
+
+            if removed_names and len(kept) < len(current_attrs):
+                await add_message(session_id, "user", message)
+                current_seg = (workspace or {}).get("segment", {})
+                new_seg = {**current_seg, "attrs": kept}
+                confirm_text = (
+                    f"✅ Đã bỏ {len(removed_names)} segment: **{', '.join(removed_names)}**. "
+                    f"Còn {len(kept)} segments. Anh/chị xác nhận để lưu nhé!"
+                )
+                await add_message(session_id, "assistant", confirm_text)
+                await alog(session_id, "segment_filter", {"removed": removed_names, "kept_count": len(kept)})
+                return AgentResponse(
+                    text=confirm_text,
+                    blocks=[{
+                        "type": "workspace_proposal",
+                        "changes": {
+                            "field": "segment",
+                            "value": new_seg,
+                            "reason": f"Bỏ theo yêu cầu: {', '.join(removed_names)}",
+                        },
+                        "is_locked": False,
+                        "warning": "",
+                        "instruction": "Anh/chị bấm **Đồng ý** để xác nhận bỏ các segment trên.",
+                    }],
+                    meta=ResponseMeta(tool="segment_filter", model="none", step=step),
+                )
+
     effective_workspace = workspace or {}
+
     if not effective_workspace:
         session = await get_or_create_session(session_id)
         effective_workspace = session.get("form_state", {})
@@ -308,7 +465,7 @@ async def handle_freeform(
     # ── Build message array ───────────────────────────────────────────────────
     messages: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "system", "content": _build_workspace_snapshot(effective_workspace, confirmed_steps or [])},
+        {"role": "system", "content": _build_workspace_snapshot(effective_workspace, confirmed_steps or [], current_step=step)},
     ]
 
     workspace_diff = _build_workspace_diff(workspace_events or [])
@@ -427,6 +584,7 @@ async def handle_freeform(
                     }],
                     meta=ResponseMeta(tool="update_workspace", model="minimax", step=step),
                     workspace_update=None,  # Not applied yet — waiting for user confirmation
+                    suggestions=_WORKSPACE_SUGGESTIONS.get(field, []),
                 )
 
             # ── Normal tool call: second LLM call with tool results ───────────

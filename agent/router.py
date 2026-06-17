@@ -1,12 +1,15 @@
 from fastapi import APIRouter
+from pydantic import BaseModel
 from models import ChatRequest, AgentResponse
 from handlers.boot import handle_boot
 from handlers.brief import handle_brief
 from handlers.creative import handle_creative
 from handlers.audience import handle_audience, handle_dmp_recommend, handle_audience_entry
-from handlers.setup import handle_setup, handle_zone_recommend_api
+from handlers.setup import handle_setup, handle_zone_recommend_api, handle_setup_entry
 from handlers.result import handle_result
 from handlers.freeform import handle_freeform
+from handlers.report import handle_report_entry, handle_report_chat
+from handlers.image_gen import handle_generate_image, get_remaining, AD_FORMATS
 
 agent_router = APIRouter()
 
@@ -83,8 +86,16 @@ async def chat(req: ChatRequest) -> AgentResponse:
         if req.step == 4:
             return await handle_result(sid)
 
+        if req.step == 5:
+            return await handle_report_entry(sid)
+
     # ── Free-form text → LLM + tools ─────────────────────────────────────────
     if req.message:
+        # Step 5 (Report): route to report chat handler with context isolation
+        if req.step == 5:
+            active_tab = (req.formData or {}).get("activeReportTab", "all") if req.formData else "all"
+            return await handle_report_chat(req.message, sid, active_tab)
+
         return await handle_freeform(
             req.message,
             req.step,
@@ -115,10 +126,119 @@ async def zones_recommend(session_id: str = "default"):
 
 
 @agent_router.get("/audience-entry")
-async def audience_entry(session_id: str = "default"):
+async def audience_entry(session_id: str = "default", brief_hint: str = ""):
     """
     Proactive audience recommendation when user enters step 1.
     Returns Targeting Parameters + DMP Segments (+ optional Advanced Targeting) as chat blocks.
     Returns {skip: true} if brief not set or audience already selected.
+    brief_hint: optional JSON-encoded brief from frontend (used when pending_proposal hasn't been committed yet).
     """
-    return await handle_audience_entry(session_id)
+    import json as _j
+    hint = None
+    if brief_hint:
+        try:
+            hint = _j.loads(brief_hint)
+        except Exception:
+            pass
+    return await handle_audience_entry(session_id, brief_hint=hint)
+
+
+@agent_router.get("/setup-entry")
+async def setup_entry_endpoint(session_id: str = "default"):
+    """
+    Proactive zone recommendation when user enters Step 3 (Setup).
+    Like audience-entry: ranks zones, annotates conflicts, returns workspace_proposal + chat explanation.
+    Returns {skip: true} if zones already selected or brief not set.
+    """
+    return await handle_setup_entry(session_id)
+
+
+@agent_router.get("/report-entry")
+async def report_entry_endpoint(session_id: str = "default"):
+    """
+    Called when user enters Report step (step 5).
+    Triggers background report generation and returns intro message.
+    """
+    return await handle_report_entry(session_id)
+
+
+@agent_router.post("/commit-workspace")
+async def commit_workspace(request: dict):
+    """
+    Commit a workspace field directly to session form_state.
+    Called by frontend when user clicks 'Đồng ý' button or footer 'Đồng ý & Tiếp tục',
+    bypassing the chat confirm flow (which would require a round-trip LLM call).
+    Body: { session_id, field, value }
+    """
+    import json as _j
+    from session import update_form_state, get_pending_proposal, clear_pending_proposal, log_event
+    sid = request.get("session_id", "default")
+    field = request.get("field", "")
+    value = request.get("value")
+    if not field:
+        return {"ok": False, "error": "field required"}
+
+    # value may arrive as a JSON string if the frontend double-serialized it
+    if isinstance(value, str):
+        try:
+            value = _j.loads(value)
+        except Exception:
+            pass  # keep as string
+
+    await update_form_state(sid, field, value)
+
+    # Clear pending_proposal for this field if any
+    pending = await get_pending_proposal(sid)
+    if pending and pending.get("field") == field:
+        await clear_pending_proposal(sid)
+
+    # ── Add a history entry so the LLM knows this step was confirmed via button ──
+    # Without this, button-based confirms leave no record in MongoDB and the LLM
+    # thinks it's still waiting for confirmation on the next user message.
+    from session import add_message
+    _CONFIRM_MSGS = {
+        "brief":    "✅ [Hệ thống] Brief đã được xác nhận qua nút bấm. Chuyển sang bước Audience.",
+        "segment":  "✅ [Hệ thống] Audience segments đã được xác nhận qua nút bấm. Chuyển sang bước Creative.",
+        "creative": "✅ [Hệ thống] Creative đã được xác nhận qua nút bấm. Chuyển sang bước Setup.",
+        "setup":    "✅ [Hệ thống] Ad zones đã được xác nhận qua nút bấm. Tiến hành gán creative và tạo order.",
+    }
+    if field in _CONFIRM_MSGS:
+        await add_message(sid, "assistant", _CONFIRM_MSGS[field])
+
+    value_summary = list(value.keys()) if isinstance(value, dict) else str(value)[:60]
+    await log_event(sid, "commit_workspace", {"field": field, "value_keys": value_summary})
+    return {"ok": True, "field": field}
+
+
+# ─── Image generation ─────────────────────────────────────────────────────────
+
+class GenerateImageRequest(BaseModel):
+    session_id: str
+    brief: dict = {}
+    format_id: str
+
+
+@agent_router.post("/generate-image")
+async def generate_image_route(req: GenerateImageRequest):
+    """Generate an ad creative image via gpt-image-1."""
+    return await handle_generate_image(
+        session_id=req.session_id,
+        brief=req.brief,
+        format_id=req.format_id,
+    )
+
+
+@agent_router.get("/image-gen-status")
+async def image_gen_status_route(session_id: str):
+    """Return remaining image generation quota for this session."""
+    remaining = get_remaining(session_id)
+    return {"remaining": remaining, "max": 10}
+
+
+@agent_router.get("/image-gen-formats")
+async def image_gen_formats_route():
+    """Return all available ad format IDs and metadata (no layout description)."""
+    return [
+        {"id": fid, "label": f["label"], "width": f["width"], "height": f["height"]}
+        for fid, f in AD_FORMATS.items()
+    ]
