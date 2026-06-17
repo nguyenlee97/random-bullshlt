@@ -46,9 +46,11 @@ router.post('/generate', async (req, res) => {
 });
 
 // ── GET /api/reports/status/:campaignId ──────────────────────────────────────
-// Poll generation status
+// Poll generation status — must never be cached (browser would get stale "pending")
 router.get('/status/:campaignId', async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
     const status = await getReportStatus(req.params.campaignId);
     res.json(status);
   } catch (err) {

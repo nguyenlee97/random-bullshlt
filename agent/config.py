@@ -34,6 +34,11 @@ class Config:
     AGENT_HOST: str = os.getenv("AGENT_HOST", "0.0.0.0")
     AGENT_PORT: int = int(os.getenv("AGENT_PORT", "8080"))
 
+    # ── Debug ─────────────────────────────────────────────────────────────────
+    # Set AGENT_DEBUG=true in .env to dump full LLM prompts + responses to stdout.
+    # Useful for diagnosing LLM output mismatches. Keep false in production.
+    AGENT_DEBUG: bool = os.getenv("AGENT_DEBUG", "false").lower() == "true"
+
     # ── CORS origins ──────────────────────────────────────────────────────────
     CORS_ORIGINS: list[str] = os.getenv(
         "CORS_ORIGINS",

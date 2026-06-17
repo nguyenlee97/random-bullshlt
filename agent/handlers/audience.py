@@ -12,6 +12,7 @@ from prompts.audience import (
     TARGETING_AUTOPICK_SYSTEM, TARGETING_AUTOPICK_USER,
     DMP_RECOMMEND_SYSTEM, DMP_RECOMMEND_USER,
     AUDIENCE_ENTRY_SYSTEM, AUDIENCE_ENTRY_USER,
+    AUDIENCE_ENTRY_RETRY_SYSTEM, AUDIENCE_ENTRY_RETRY_USER,
 )
 from tools.targeting_options import get_targeting_options
 from tools.audience_library import get_all_segments
@@ -400,46 +401,80 @@ async def handle_audience_entry(session_id: str, brief_hint: dict | None = None)
             "meta": {"tool": "audience_entry", "model": "minimax", "step": 1},
         }
 
-    # ── Case 2: Full recommendation ───────────────────────────────────────────
+    # ── Case 2: Full recommendation ──────────────────────────────────────────────
     targeting = data.get("targeting", {})
     targeting_reasoning = data.get("targeting_reasoning", [])
     dmp_recs = data.get("dmp_segments", [])
     advanced_note = data.get("advanced_targeting_note", "")
 
-    label_map = label_map  # already built above
     enriched_dmp = [
         _normalize_dmp_attr({**_lookup_seg(r["fullLabel"]), "reason": r.get("reason", "")})
         for r in dmp_recs if r.get("fullLabel") and _lookup_seg(r["fullLabel"])
     ]
 
-    # ── Keyword fallback when LLM segment names don't match DB ────────────────
-    # Score all_segs by word overlap with brief notes+brand and pick top 6.
+    # ── Keyword fallback when LLM segment names don't match DB ─────────────────
     if not enriched_dmp:
         await log_event(session_id, "warn", {
             "handler": "audience_entry",
             "event": "enriched_dmp_empty",
             "llm_recs": [r.get("fullLabel", "") for r in dmp_recs],
-            "note": "Using keyword fallback"
+            "note": "Attempting retry with simplified prompt"
         })
-        # Build keyword set from brief
-        search_text = " ".join([
-            brief.get("brand", ""),
-            brief.get("notes", ""),
-            brief.get("objective", ""),
-        ]).lower()
-        kw_set = set(w for w in search_text.split() if len(w) > 3)
 
-        def _score_seg(seg: dict) -> int:
-            lbl = (seg.get("fullLabel") or seg.get("name", "")).lower()
-            return sum(1 for kw in kw_set if kw in lbl)
+        # ── Retry with a simpler, more constrained prompt ────────────────────────
+        # The first call may have returned segment names in wrong format or hallucinated.
+        # The retry uses a much simpler prompt with fewer tokens to reduce hallucination.
+        try:
+            # Give LLM only the segment names (no [Type] suffix) to reduce confusion
+            seg_labels_simple = [s.get("fullLabel") or s.get("name", "") for s in all_segs if s.get("fullLabel") or s.get("name")]
+            retry_prompt = AUDIENCE_ENTRY_RETRY_USER.format(
+                brand=brief.get("brand", "?"),
+                objective=brief.get("objective", "?"),
+                notes=brief.get("notes", "(trống)"),
+                segments_json=json.dumps(seg_labels_simple[:150], ensure_ascii=False),
+            )
+            raw_retry = simple_generate(AUDIENCE_ENTRY_RETRY_SYSTEM, retry_prompt)
+            retry_data = parse_json_response(raw_retry)
+            retry_recs = retry_data.get("dmp_segments", [])
+            await log_event(session_id, "warn", {
+                "handler": "audience_entry",
+                "event": "retry_attempt",
+                "retry_recs": [r.get("fullLabel", "") for r in retry_recs],
+            })
+            enriched_dmp = [
+                _normalize_dmp_attr({**_lookup_seg(r["fullLabel"]), "reason": r.get("reason", "")})
+                for r in retry_recs if r.get("fullLabel") and _lookup_seg(r["fullLabel"])
+            ]
+        except Exception as e:
+            await log_event(session_id, "error", {"handler": "audience_entry", "event": "retry_failed", "error": str(e)})
 
-        # Sort by keyword overlap, then by size (sizeMax) as tiebreaker
-        scored = sorted(all_segs, key=lambda s: (_score_seg(s), s.get("sizeMax", 0) or 0), reverse=True)
-        fallback_segs = scored[:6]
-        enriched_dmp = [
-            _normalize_dmp_attr({**s, "reason": "Được chọn tự động dựa trên brief (fallback)"})
-            for s in fallback_segs
-        ]
+        # ── Last resort keyword fallback ────────────────────────────────────────
+        if not enriched_dmp:
+            await log_event(session_id, "warn", {
+                "handler": "audience_entry",
+                "event": "enriched_dmp_empty",
+                "llm_recs": [r.get("fullLabel", "") for r in dmp_recs],
+                "note": "Using keyword fallback"
+            })
+            # Build keyword set from brief (extract English words too, e.g. 'game', 'food')
+            search_text = " ".join([
+                brief.get("brand", ""),
+                brief.get("notes", ""),
+                brief.get("objective", ""),
+            ]).lower()
+            kw_set = set(w for w in search_text.split() if len(w) > 3)
+
+            def _score_seg(seg: dict) -> int:
+                lbl = (seg.get("fullLabel") or seg.get("name", "")).lower()
+                return sum(1 for kw in kw_set if kw in lbl)
+
+            # Sort by keyword overlap, then by size (sizeMax) as tiebreaker
+            scored = sorted(all_segs, key=lambda s: (_score_seg(s), s.get("sizeMax", 0) or 0), reverse=True)
+            fallback_segs = scored[:6]
+            enriched_dmp = [
+                _normalize_dmp_attr({**s, "reason": "Được chọn tự động dựa trên brief (fallback)"})
+                for s in fallback_segs
+            ]
 
     blocks = []
 

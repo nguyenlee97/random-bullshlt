@@ -1,8 +1,7 @@
-"""Tool registry — definitions + dispatcher for OpenAI function calling."""
 import json
 from tools.audience_library import search_audience
 from tools.zone_catalog import get_all_zones
-from tools.order_api import fetch_order, fetch_all_orders
+from tools.order_api import fetch_order, fetch_all_orders, fetch_zone_conflicts
 from tools.targeting_options import get_targeting_options
 
 TOOL_DEFINITIONS = [
@@ -10,11 +9,13 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "get_zone_list",
-            "description": "Lấy danh sách tất cả ad zones với metrics. Dùng khi hỏi danh sách zone hoặc muốn xem toàn bộ.",
+            "description": "Lấy danh sách tất cả ad zones với metrics. Dùng khi hỏi danh sách zone hoặc muốn xem toàn bộ. Luôn truyền start_date và end_date từ brief để kiểm tra availability.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "objective": {"type": "string", "description": "awareness|consideration|conversion|retention. Optional."},
+                    "start_date": {"type": "string", "description": "Ngày bắt đầu campaign (YYYY-MM-DD) — từ brief. Dùng để check zone availability."},
+                    "end_date": {"type": "string", "description": "Ngày kết thúc campaign (YYYY-MM-DD) — từ brief. Dùng để check zone availability."},
                 },
                 "required": [],
             },
@@ -28,6 +29,7 @@ TOOL_DEFINITIONS = [
                 "Tìm kiếm ad zones theo từ khoá, objective, format hoặc platform. Có tổng 35 zones. "
                 "Dùng khi người dùng hỏi 'zone nào phù hợp cho awareness', 'zone ZingNews', "
                 "'zone banner 300x250', 'zone có VI% cao', 'zone rẻ nhất'. "
+                "Luôn truyền start_date và end_date từ brief để lọc zone bị đặt trước. "
                 "Ưu tiên tool này hơn get_zone_list khi có từ khoá tìm kiếm cụ thể."
             ),
             "parameters": {
@@ -35,6 +37,8 @@ TOOL_DEFINITIONS = [
                 "properties": {
                     "query": {"type": "string", "description": "Từ khoá tìm (tên zone, platform như 'znews'/'baomoi'/'zmp3', format như 'banner'/'masthead'/'skin')"},
                     "objective": {"type": "string", "description": "awareness|consideration|conversion|retention. Optional."},
+                    "start_date": {"type": "string", "description": "Ngày bắt đầu campaign (YYYY-MM-DD) — từ brief."},
+                    "end_date": {"type": "string", "description": "Ngày kết thúc campaign (YYYY-MM-DD) — từ brief."},
                 },
                 "required": [],
             },
@@ -138,11 +142,14 @@ async def execute_tool(name: str, args: dict) -> dict:
         obj = args.get("objective")
         if obj:
             zones = [z for z in zones if z.get("obj") == obj]
+        conflicts = await fetch_zone_conflicts(args.get("start_date", ""), args.get("end_date", ""))
         return {"zones": [{
             "id": z["id"], "format": z["format"], "size": z["size"],
             "reach": z["reach"], "vi": z["vi"], "ctr": z["ctr"],
             "cpm": z["cpm"], "obj": z["obj"],
             "channel": z.get("channel", ""),
+            "is_booked": z["id"] in conflicts,
+            "conflict": conflicts.get(z["id"]),
         } for z in zones]}
 
     elif name == "search_zones":
@@ -159,6 +166,7 @@ async def execute_tool(name: str, args: dict) -> dict:
                 z.get("size", ""), z.get("obj", ""),
             ]).lower()]
 
+        conflicts = await fetch_zone_conflicts(args.get("start_date", ""), args.get("end_date", ""))
         return {
             "zones": [{
                 "id": z["id"], "channel": z.get("channel", ""),
@@ -166,9 +174,11 @@ async def execute_tool(name: str, args: dict) -> dict:
                 "reach": z["reach"], "vi": z["vi"], "ctr": z["ctr"],
                 "cpm": z["cpm"], "obj": z["obj"],
                 "siteUrl": z.get("siteUrl", ""),
+                "is_booked": z["id"] in conflicts,
+                "conflict": conflicts.get(z["id"]),
             } for z in results[:15]],
             "total": len(results),
-            "note": "Không tìm thấy zone nào." if not results else f"Tìm thấy {len(results)} zone.",
+            "note": "Không tìm thấy zone nào." if not results else f"Tìm thấy {len(results)} zone ({sum(1 for z in results[:15] if z['id'] in conflicts)} bị đặt trước).",
         }
 
     elif name == "get_audience_list":

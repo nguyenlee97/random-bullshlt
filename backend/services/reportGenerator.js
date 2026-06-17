@@ -73,9 +73,9 @@ const QUESTIONS_MAP = {
 };
 
 // ─── OpenAI call helper ──────────────────────────────────────────────────────
-async function callOpenAI(messages, { temperature = 0.7, max_tokens = 8000 } = {}) {
+async function callOpenAI(messages, { temperature = 0.7, max_completion_tokens = 8000 } = {}) {
   if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set');
-  console.log(`[openai] → model=${OPENAI_MODEL} max_tokens=${max_tokens} prompt_len=${JSON.stringify(messages).length}`);
+  console.log(`[openai] → model=${OPENAI_MODEL} max_completion_tokens=${max_completion_tokens} prompt_len=${JSON.stringify(messages).length}`);
   const res = await fetch(OPENAI_URL, {
     method: 'POST',
     headers: {
@@ -86,7 +86,7 @@ async function callOpenAI(messages, { temperature = 0.7, max_tokens = 8000 } = {
       model: OPENAI_MODEL,
       messages,
       temperature,
-      max_tokens,
+      max_completion_tokens,
       response_format: { type: 'json_object' },
     }),
   });
@@ -160,7 +160,7 @@ OUTPUT FORMAT: Return JSON with key "records" containing the array.
   const result = await callOpenAI([
     { role: 'system', content: 'You are a data generator. Output ONLY valid JSON. Generate realistic advertising performance data.' },
     { role: 'user', content: prompt },
-  ], { temperature: 0.8, max_tokens: 16000 });
+  ], { temperature: 0.8, max_completion_tokens: 16000 });
 
   return result.records || [];
 }
@@ -241,7 +241,7 @@ RULES:
   const result = await callOpenAI([
     { role: 'system', content: 'You are a Vietnamese digital advertising analyst. Output ONLY valid JSON. Be specific, data-driven, and professional.' },
     { role: 'user', content: prompt },
-  ], { temperature: 0.6, max_tokens: 8000 });
+  ], { temperature: 0.6, max_completion_tokens: 8000 });
 
   return result;
 }

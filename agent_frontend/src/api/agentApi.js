@@ -62,7 +62,7 @@ async function callAgent(payload) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(35000),
+      signal: AbortSignal.timeout(90000),
     })
     if (!res.ok) {
       log.error(`callAgent HTTP ${res.status}`, { status: res.status, payload })
@@ -903,7 +903,7 @@ export const AgentAPI = {
       if (brief && brief.brand) {
         url += `&brief_hint=${encodeURIComponent(JSON.stringify(brief))}`
       }
-      const res = await fetch(url, { signal: AbortSignal.timeout(35000) })
+      const res = await fetch(url, { signal: AbortSignal.timeout(60000) })
       if (!res.ok) return null
       return await res.json()
     } catch (e) {

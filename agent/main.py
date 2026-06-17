@@ -10,7 +10,7 @@ from config import config
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-06-17.39"
+BUILD_VERSION = "2026-06-17.40"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -47,6 +47,15 @@ BUILD_FEATURES = [
     "email-pdf-pdfkit",               # PDF generated server-side via pdfkit (no puppeteer)
     "email-raw-export",               # CSV + JSON download endpoints for analytics records
     "email-resend",                   # email sent via Resend API (onboarding@resend.dev)
+    "confirm-trigger-expanded",       # added duyệt/ổn rồi/ok rồi/hợp lý to confirm triggers
+    "step-advance-llm-rule",          # LLM explicitly told update_workspace is only way to advance
+    "llm-debug-logging",              # AGENT_DEBUG=true dumps full LLM input/output to stdout
+    "llm-max-tokens-4096",            # raised LLM_MAX_TOKENS from 2000 to 4096
+    "finish-reason-length-retry",     # retries with short context when LLM hits token limit
+    "zone-conflict-detection",        # get_zone_list/search_zones annotate is_booked + conflict info
+    "zone-date-injection",            # brief dates auto-injected into zone tool args from workspace
+    "proposal-block-segment-display", # fixed [object Object] in WorkspaceProposalBlock for segment
+    "confirm-segment-count-fix",      # fixed '0 segments' in confirm message when value is JSON string
 ]
 
 app = FastAPI(

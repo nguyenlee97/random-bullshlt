@@ -537,10 +537,14 @@ export default function App() {
               log.step('workspace_confirm(setup) — skipping markStepDone; sub-phase flow handles advance')
               return
             }
-            // Inject a confirmation message into chat so user sees the agent acknowledge
+            // Parse value if LLM returned it as a JSON string (not an object)
+            const _rawPatchVal = e.detail.patch.value
+            const _patchVal = typeof _rawPatchVal === 'string'
+              ? (() => { try { return JSON.parse(_rawPatchVal) } catch { return {} } })()
+              : (_rawPatchVal || {})
             const confirmMessages = {
               brief: '✅ Brief đã được lưu! Em sẽ chuyển sang bước **Audience** để gợi ý segments phù hợp.',
-              segment: `✅ Audience đã xác nhận! ${(e.detail.patch.value?.attrs || []).length} segments được áp dụng — em sẽ chuyển sang bước **Creative**.`,
+              segment: `✅ Audience đã xác nhận! ${(_patchVal.attrs || []).length} segments được áp dụng — em sẽ chuyển sang bước **Creative**.`,
               creative: '✅ Creative đã xác nhận! Em sẽ chuyển sang bước **Setup Camp**.',
             }
             const confirmText = confirmMessages[topField] || `✅ Bước ${topField} đã xác nhận.`

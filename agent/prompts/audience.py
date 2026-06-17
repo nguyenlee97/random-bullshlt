@@ -116,8 +116,9 @@ DMP segments có sẵn:
 YÊU CẦU — ĐỌC KỸ:
 1. DMP Segments: LUÔN LUÔN gợi ý 5-8 segments PHÙ HỢP NHẤT, BẤT KỂ brief có đủ thông tin hay không. Đây là bắt buộc, không được để mảng rỗng.
 2. Targeting Parameters (geo/age/gender): Nếu đủ thông tin → trả đề xuất cụ thể. Nếu thiếu geo/age/gender → vẫn trả dạng 1 (need_more_info: false) với các field đó để trống [].
-3. KHÔNG BAO GIỜ trả need_more_info: true. Luôn trả dạng 1 và gợi ý DMP segments từ những gì đã có trong brief.notes.
+3. KHÔNG BAO GIờ trả need_more_info: true. Luôn trả dạng 1 và gợi ý DMP segments từ những gì đã có trong brief.notes.
 4. Advanced Targeting (interest, career, income...): Chỉ gợi ý nếu có signal từ notes. Nếu không → mảng rỗng.
+5. fullLabel TRONG dmp_segments: SAO CHÉP CHÍNH XÁC từ danh sách DMP segments bên trên (chỉ lấy phần trước [Type], giữ nguyên dấu ngoặc, hoa/thường, dấu &). Đây là bắt buộc tuyệt đối. Nhân vật bỏ sót hoặc viết sai sẽ không match được hệ thống.
 
 Trả JSON dạng DUY NHẤT:
 {{
@@ -132,8 +133,23 @@ Trả JSON dạng DUY NHẤT:
     {{"field": "geo", "picks": ["TP.HCM", "Hà Nội"], "reason": "Lý do ngắn"}}
   ],
   "dmp_segments": [
-    {{"fullLabel": "tên segment CHÍNH XÁC (KHÔNG bao gồm [Type] ở cuối)", "reason": "Lý do phù hợp"}}
+    {{"fullLabel": "tên segment CHÍNH XÁC (SAO CHÉP nguyên văn từ danh sách, KHÔNG bao gồm [Type] ở cuối)", "reason": "Lý do phù hợp"}}
   ],
   "advanced_targeting_note": "Gợi ý thêm nếu cần (hoặc để trống)"
 }}"""
+
+# Simplified retry prompt — used when first audience_entry LLM call returns no matchable segments
+AUDIENCE_ENTRY_RETRY_SYSTEM = """Bạn là Camp Ads Agent. Nhiệm vụ: Chọn DMP segments phù hợp nhất.
+Trả về JSON đơn giản. KHÔNG thêm text ngoài JSON."""
+
+AUDIENCE_ENTRY_RETRY_USER = """Brief: {brand} — {objective}.
+Ghi chú: {notes}
+
+Danh sách DMP segments (chỉ lấy phần trước [Type]):
+{segments_json}
+
+Chọn đúng 6 segments phù hợp nhất với brief. fullLabel phải SAO CHÉP NGUYÊN VĂN từ danh sách.
+
+Trả JSON:
+{{"dmp_segments": [{{"fullLabel": "...", "reason": "..."}}]}}"""
 

@@ -266,8 +266,23 @@ function WorkspaceProposalBlock({ block }) {
       try {
         const parsed = JSON.parse(rawValue)
         if (typeof parsed === 'object' && parsed !== null) {
+          // If this is a segment value that was serialized as a string, route to
+          // the audience display so we don't show "[object Object]" for attrs
+          if (field === 'segment' && Array.isArray(parsed.attrs)) {
+            const attrs = parsed.attrs || []
+            const size = parsed.size
+            const targeting = parsed.targeting || {}
+            const lines = []
+            lines.push(`📦 ${attrs.length} DMP segments`)
+            if (size) lines.push(`👥 Audience ước tính: ${size.toLocaleString('vi-VN')} người`)
+            const geoStr = (targeting.geo || []).slice(0, 3).join(', ')
+            if (geoStr) lines.push(`🗺 Geo: ${geoStr}`)
+            const segNames = attrs.slice(0, 4).map(a => a.fullLabel || a.name || '?')
+            if (segNames.length) lines.push(`\nSegments: ${segNames.join(' · ')}${attrs.length > 4 ? ` +${attrs.length - 4} khác` : ''}`)
+            return lines.join('\n')
+          }
           return Object.entries(parsed)
-            .filter(([, v]) => v !== null && v !== '' && v !== undefined)
+            .filter(([, v]) => v !== null && v !== '' && v !== undefined && typeof v !== 'object')
             .map(([k, v]) => `${k}: ${v}`)
             .join('\n')
         }

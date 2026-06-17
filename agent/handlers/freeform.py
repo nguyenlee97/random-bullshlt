@@ -64,7 +64,15 @@ _CONFIRM_TRIGGERS = [
     "ok luôn",
     "oke luôn",
     "oke nhé",
-    "duyệt nhé"
+    "duyệt nhé",
+    # Additional unambiguous approval words
+    "duyệt",       # "oke duyệt", "duyệt luôn", "duyệt đi"
+    "ổn rồi",      # "ổn rồi, lưu lại"
+    "ok rồi",      # "ok rồi, tiếp theo đi"
+    "oke rồi",     # "oke rồi"
+    "chuẩn luôn",  # "chuẩn luôn, dùng cái này"
+    "hợp lý",     # "hợp lý đấy, đồng ý"
+    "lưu luôn",    # "lưu luôn đi"
 ]
 
 # Negation prefixes: only 3 roots, but they are checked by building the FULL
@@ -274,6 +282,15 @@ def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int], curre
     lines.append("- Nếu bước ✅ LOCKED, hỏi xác nhận user trước khi thay đổi và cảnh báo reset downstream.")
     lines.append("- User có thể thao tác bước sau ngay cả khi đang ở bước trước — luôn hỗ trợ.")
     lines.append("- Khi sửa segment (bước 1): LUÔN lấy CURRENT_SEGMENT_DATA làm base, chỉ sửa entry cần thiết. KHÔNG tự tạo mới attrs.")
+    lines.append("- Khi user yêu cầu chọn/giữ/bỏ/xóa segment: LUÔN gọi update_workspace ngay lập tức với danh sách attrs đã lọc đúng.")
+    lines.append("  Ví dụ: user nói 'chỉ giữ X và Y' → lọc CURRENT_SEGMENT_DATA chỉ còn X và Y → gọi update_workspace field=segment.")
+    lines.append("  KHÔNG chat hỏi lại ý kiến — gọi update_workspace trực tiếp rồi hỏi xác nhận.")
+    lines.append("")
+    lines.append("⚠️ QUAN TRỌNG — STEP ADVANCE:")
+    lines.append("- Để chuyển bước (ví dụ từ Audience sang Creative), HỀNH ĐỘNG DUY NHẤT là gọi update_workspace với đúng field.")
+    lines.append("- Chỉ trả lời text mà KHÔNG gọi update_workspace sẽ KHÔNG chuyển được bước — hệ thống frontend chỉ lắng nghe update_workspace.")
+    lines.append("- Khi user duyệt/xác nhận/đồng ý với segment ở bước 1: GỎi update_workspace(field='segment', value=CURRENT_SEGMENT_DATA) ngay.")
+    lines.append("- Khi user duyệt/xác nhận/đồng ý với brief ở bước 0: GỎi update_workspace(field='brief', value=<brief hiện tại>) ngay.")
     return "\n".join(lines)
 
 
@@ -409,51 +426,6 @@ async def handle_freeform(
                 ],
             )
 
-
-    # ── Step 1 segment REMOVE intercept ──────────────────────────────────────
-    # When user asks to remove a segment, filter programmatically using the REAL
-    # workspace attrs. NEVER let the LLM reconstruct segment objects — it will
-    # hallucinate fake IDs, names, and structure.
-    if step == 1:
-        current_attrs = (workspace or {}).get("segment", {}).get("attrs", [])
-        _REMOVE_PATTERNS = ["bỏ", "xóa", "loại", "remove", "không chọn", "bỏ đi", "bỏ ra", "loại bỏ", "loại ra"]
-        if current_attrs and any(pat in msg_lower for pat in _REMOVE_PATTERNS):
-            kept, removed_names = [], []
-            for attr in current_attrs:
-                label = (attr.get("fullLabel") or attr.get("name") or "").lower()
-                # Match: any meaningful word (>3 chars) from the label appears in the user message
-                label_words = {w for w in label.replace("(", " ").replace(")", " ").replace("&", " ").split() if len(w) > 3}
-                if label_words and any(w in msg_lower for w in label_words):
-                    removed_names.append(attr.get("fullLabel") or attr.get("name", "?"))
-                else:
-                    kept.append(attr)
-
-            if removed_names and len(kept) < len(current_attrs):
-                await add_message(session_id, "user", message)
-                current_seg = (workspace or {}).get("segment", {})
-                new_seg = {**current_seg, "attrs": kept}
-                confirm_text = (
-                    f"✅ Đã bỏ {len(removed_names)} segment: **{', '.join(removed_names)}**. "
-                    f"Còn {len(kept)} segments. Anh/chị xác nhận để lưu nhé!"
-                )
-                await add_message(session_id, "assistant", confirm_text)
-                await alog(session_id, "segment_filter", {"removed": removed_names, "kept_count": len(kept)})
-                return AgentResponse(
-                    text=confirm_text,
-                    blocks=[{
-                        "type": "workspace_proposal",
-                        "changes": {
-                            "field": "segment",
-                            "value": new_seg,
-                            "reason": f"Bỏ theo yêu cầu: {', '.join(removed_names)}",
-                        },
-                        "is_locked": False,
-                        "warning": "",
-                        "instruction": "Anh/chị bấm **Đồng ý** để xác nhận bỏ các segment trên.",
-                    }],
-                    meta=ResponseMeta(tool="segment_filter", model="none", step=step),
-                )
-
     effective_workspace = workspace or {}
 
     if not effective_workspace:
@@ -498,6 +470,32 @@ async def handle_freeform(
             "content_preview": raw_content[:200],
         })
 
+        # ── Handle token limit exhaustion ─────────────────────────────────────
+        # finish_reason='length' means the LLM ran out of output tokens and
+        # returned nothing useful. Retry with a truncated context (system + last
+        # 6 turns) using force_text so we always get a response.
+        if response.choices[0].finish_reason == "length" and not msg.tool_calls:
+            await alog(session_id, "warn", {
+                "event": "llm_length_truncated",
+                "original_msgs": len(messages),
+                "note": "Retrying with shortened context (last 6 turns)",
+            })
+            short_msgs = [messages[0]] + messages[-6:]  # system prompt + last 6 turns
+            try:
+                retry_resp = force_text_completion(messages=short_msgs)
+                retry_content = sanitize_response(retry_resp.choices[0].message.content or "")
+                raw_content = retry_content or (
+                    "Xin lỗi anh/chị, em bị quá tải ngữ cảnh ở tin nhắn này. "
+                    "Anh/chị có thể hỏi ngắn hơn hoặc bắt đầu lại không ạ?"
+                )
+            except Exception as retry_err:
+                await alog(session_id, "error", {"event": "length_retry_failed", "error": str(retry_err)})
+                raw_content = (
+                    "Xin lỗi anh/chị, em đang gặp giới hạn xử lý. "
+                    "Anh/chị thử hỏi ngắn gọn hơn hoặc tóm tắt câu hỏi giúp em nhé!"
+                )
+            msg.tool_calls = None  # ensure we go to freeform_chat path below
+
         # ── Handle tool calls ─────────────────────────────────────────────────
         if msg.tool_calls:
             tool_results = []
@@ -505,6 +503,18 @@ async def handle_freeform(
 
             for tc in msg.tool_calls:
                 args = json.loads(tc.function.arguments)
+
+                # ── Auto-inject brief dates into zone tools ───────────────────
+                # The LLM may forget to pass start_date/end_date even though the
+                # tool definition says to. Inject from workspace so conflict
+                # detection always runs with the campaign date range.
+                if tc.function.name in ("get_zone_list", "search_zones"):
+                    brief = (workspace or {}).get("brief") or {}
+                    if not args.get("start_date") and brief.get("startDate"):
+                        args["start_date"] = brief["startDate"]
+                    if not args.get("end_date") and brief.get("endDate"):
+                        args["end_date"] = brief["endDate"]
+
                 await alog(session_id, "tool_call", {
                     "tool": tc.function.name,
                     "args": {k: str(v)[:100] for k, v in args.items()},

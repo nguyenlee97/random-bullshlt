@@ -4,6 +4,7 @@ Provides: chat_completion(), simple_generate(), parse_json_response(), sanitize_
 """
 import json
 import re
+import time as _time
 from openai import OpenAI
 from config import config
 
@@ -12,6 +13,48 @@ _client = OpenAI(
     api_key=config.AI_PLATFORM_API_KEY,
     base_url=config.LLM_BASE_URL,
 )
+
+# ── Debug printer (stdout only, controlled by AGENT_DEBUG env var) ────────────
+_DBG_ON = config.AGENT_DEBUG
+_SEP = "=" * 80
+
+def _dbg_input(messages: list[dict], call_id: str) -> None:
+    if not _DBG_ON:
+        return
+    print(f"\n\033[36m{_SEP}\033[0m", flush=True)
+    print(f"\033[36m[LLM_INPUT] call_id={call_id}  messages={len(messages)}\033[0m", flush=True)
+    for i, m in enumerate(messages):
+        role = m.get("role", "?")
+        content = m.get("content") or ""
+        tc = m.get("tool_calls")
+        if tc:
+            print(f"\033[36m  [{i}] {role}: <tool_calls: {[t['function']['name'] for t in tc]}>\033[0m", flush=True)
+        else:
+            # Print full content, but cap at 3000 chars to avoid flooding
+            preview = content if len(content) <= 3000 else content[:3000] + "\n…[truncated]"
+            print(f"\033[36m  [{i}] {role}:\033[0m\n{preview}", flush=True)
+    print(f"\033[36m{_SEP}\033[0m\n", flush=True)
+
+def _dbg_output(content: str, tool_calls: list, call_id: str, duration_ms: int) -> None:
+    if not _DBG_ON:
+        return
+    print(f"\n\033[32m{_SEP}\033[0m", flush=True)
+    print(f"\033[32m[LLM_OUTPUT] call_id={call_id}  duration={duration_ms}ms\033[0m", flush=True)
+    if tool_calls:
+        for tc in tool_calls:
+            args_preview = tc.function.arguments[:500] if tc.function.arguments else ""
+            print(f"\033[32m  TOOL_CALL: {tc.function.name}({args_preview})\033[0m", flush=True)
+    if content:
+        preview = content if len(content) <= 3000 else content[:3000] + "\n…[truncated]"
+        print(f"\033[32m  CONTENT:\033[0m\n{preview}", flush=True)
+    print(f"\033[32m{_SEP}\033[0m\n", flush=True)
+
+_call_counter = 0
+def _next_call_id() -> str:
+    global _call_counter
+    _call_counter += 1
+    return f"llm_{_call_counter:04d}"
+
 
 # ── Response sanitizers ───────────────────────────────────────────────────────
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
@@ -40,6 +83,8 @@ def chat_completion(messages: list[dict], tools: list[dict] | None = None) -> ob
     Raw OpenAI chat completion call.
     Returns the full response object (caller accesses .choices[0].message).
     """
+    call_id = _next_call_id()
+    _dbg_input(messages, call_id)
     kwargs = {
         "model": config.LLM_MODEL,
         "messages": messages,
@@ -49,7 +94,12 @@ def chat_completion(messages: list[dict], tools: list[dict] | None = None) -> ob
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
-    return _client.chat.completions.create(**kwargs)
+    t0 = _time.time()
+    resp = _client.chat.completions.create(**kwargs)
+    dur = int((_time.time() - t0) * 1000)
+    msg = resp.choices[0].message
+    _dbg_output(msg.content or "", msg.tool_calls or [], call_id, dur)
+    return resp
 
 
 def force_text_completion(messages: list[dict], tools: list[dict] | None = None) -> object:
@@ -57,6 +107,8 @@ def force_text_completion(messages: list[dict], tools: list[dict] | None = None)
     Like chat_completion but forces tool_choice='none' so the model MUST return text.
     Use as fallback when the normal call returns empty/None content.
     """
+    call_id = _next_call_id()
+    _dbg_input(messages, call_id)
     kwargs = {
         "model": config.LLM_MODEL,
         "messages": messages,
@@ -66,7 +118,12 @@ def force_text_completion(messages: list[dict], tools: list[dict] | None = None)
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "none"   # Force text — no tool calls allowed
-    return _client.chat.completions.create(**kwargs)
+    t0 = _time.time()
+    resp = _client.chat.completions.create(**kwargs)
+    dur = int((_time.time() - t0) * 1000)
+    msg = resp.choices[0].message
+    _dbg_output(msg.content or "", [], call_id, dur)
+    return resp
 
 
 
