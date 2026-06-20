@@ -18,6 +18,7 @@ from session import (
     update_form_state,
 )
 from prompts.system import SYSTEM_PROMPT, STEP_NAMES
+from tools.zone_catalog import get_all_zones
 from agent_logger import alog
 
 from tools.registry import TOOL_DEFINITIONS, execute_tool
@@ -193,6 +194,10 @@ def _build_update_summary(field: str, value, reason: str) -> str:
     return f"Em đề xuất cập nhật `{field}` → `{value_str}`. Anh/Chị xác nhận để lưu nhé!"
 
 
+# ── Zone map cache for workspace snapshot enrichment ──────────────────────────
+_zone_map_cache: dict[str, dict] = {}
+
+
 def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int], current_step: int = -1) -> str:
     """Build a compact workspace context string injected as system message each call."""
     confirmed = set(confirmed_steps or [])
@@ -253,15 +258,20 @@ def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int], curre
     files = creative.get("files", [])
     if files:
         lines.append("--- Creative ---")
-        lines.append(f"Files     : {len(files)} đã upload")
-        for f in files[:4]:
-            lines.append(f"  - {f.get('name', '')} ({f.get('type', '')})")
+        lines.append(f"Tổng số files: {len(files)} đã upload")
+        for idx, f in enumerate(files):
+            fname = f.get('name', f'file_{idx}')
+            ftype = f.get('type', '?')
+            fsize = f.get('size', 0)
+            size_str = f"{fsize // 1024}KB" if fsize > 0 else "?"
+            lines.append(f"  [{idx}] {fname} ({ftype}, {size_str})")
         lines.append("")
 
-    # Setup
+    # Setup — resolve zone IDs to full details from catalog cache
     setup = workspace.get("setup", {})
     selected_zone_ids = setup.get("selectedZoneIds", [])
     setup_phase = setup.get("phase", "zones")
+    assignments = setup.get("assignments", {})
     _PHASE_LABELS = {
         "zones":  "1/3 — Chọn Ad Zones (user đang chọn zones)",
         "assign": "2/3 — Gắn Creative (user đang gán creative vào zones)",
@@ -272,7 +282,33 @@ def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int], curre
         lines.append("--- Setup Camp ---")
         lines.append(f"Sub-step hiện tại: {_PHASE_LABELS.get(setup_phase, setup_phase)}")
         lines.append(f"Zones đã chọn: {len(selected_zone_ids)}")
-        # Provide full list so LLM can modify without hallucinating zone IDs
+
+        # Resolve zone IDs to human-readable details from zone catalog
+        zone_map = _zone_map_cache or {}
+        for i, zid in enumerate(selected_zone_ids, 1):
+            z = zone_map.get(zid)
+            if z:
+                lines.append(
+                    f"  {i}. {zid} — {z.get('channel','?')} {z.get('format','?')} "
+                    f"{z.get('size','?')}, reach {z.get('reach',0):,}, "
+                    f"CPM {z.get('cpm',0):,}đ, obj={z.get('obj','?')}"
+                )
+            else:
+                lines.append(f"  {i}. {zid} — (chi tiết chưa load)")
+
+        # Show assignments (creative → zone mapping)
+        if assignments:
+            lines.append("")
+            lines.append("ASSIGNMENTS (creative index → zone):")
+            for zone_id, file_idx in assignments.items():
+                fname = files[int(file_idx)].get('name', f'file_{file_idx}') if files and int(file_idx) < len(files) else f'file_{file_idx}'
+                lines.append(f"  {zone_id} ← [{file_idx}] {fname}")
+            unassigned = [zid for zid in selected_zone_ids if zid not in assignments]
+            if unassigned:
+                lines.append(f"  ⚠️ Chưa gán creative: {', '.join(unassigned)}")
+
+        # Raw IDs for update_workspace
+        lines.append("")
         lines.append("CURRENT_SELECTED_ZONES (dùng làm base khi gọi update_workspace field=setup):")
         lines.append(_json2.dumps(selected_zone_ids, ensure_ascii=False))
         lines.append("")
@@ -431,6 +467,15 @@ async def handle_freeform(
     if not effective_workspace:
         session = await get_or_create_session(session_id)
         effective_workspace = session.get("form_state", {})
+
+    # ── Populate zone map cache for workspace snapshot enrichment ──────────
+    global _zone_map_cache
+    if not _zone_map_cache:
+        try:
+            all_zones = await get_all_zones()
+            _zone_map_cache = {z["id"]: z for z in all_zones}
+        except Exception:
+            _zone_map_cache = {}
 
     step_label = STEP_NAMES[step] if 0 <= step < len(STEP_NAMES) else f"Bước {step}"
 

@@ -177,6 +177,23 @@ export function useChat({
       workspaceEvents,
     )
 
+    // ── Error guard: null response = timeout / network / HTTP error ───────────
+    if (!response) {
+      const errMsg = {
+        id: generateId(),
+        role: 'error',
+        content: '⚠️ Yêu cầu thất bại hoặc quá thời gian chờ (>3 phút). Anh/chị thử lại nhé!',
+        blocks: [],
+        timestamp: new Date().toISOString(),
+        metadata: { tool: 'error', model: 'none', step: currentStep },
+      }
+      stopThinking(errMsg)
+      setBusy(false)
+      onClearWorkspaceEvents?.()
+      log.error('sendMessage: null response → showing error bubble')
+      return
+    }
+
     log.chat('sendMessage ←', {
       tool: response?.metadata?.tool,
       content_preview: response?.content?.slice(0, 200),

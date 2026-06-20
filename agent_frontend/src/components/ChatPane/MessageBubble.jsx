@@ -1,13 +1,32 @@
+import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import BlockRenderer from '@/blocks/BlockRenderer'
-import { Bot, User, Wrench, RefreshCw } from 'lucide-react'
+import { Bot, User, Wrench, RefreshCw, AlertTriangle } from 'lucide-react'
 
 // ─── Typing indicator ─────────────────────────────────────────────────────────
+const THINKING_PHRASES = [
+  'Đang suy nghĩ...',
+  'Chờ xíu nha...',
+  'Đang phân tích...',
+  'Gần xong rồi...',
+  'Đang xử lý...',
+  'Cho em thêm chút...',
+]
+
 function TypingIndicator() {
+  const [phraseIdx, setPhraseIdx] = useState(0)
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    const phraseTimer = setInterval(() => setPhraseIdx(i => (i + 1) % THINKING_PHRASES.length), 3000)
+    const elapsedTimer = setInterval(() => setElapsed(e => e + 1), 1000)
+    return () => { clearInterval(phraseTimer); clearInterval(elapsedTimer) }
+  }, [])
+
   return (
     <div className="flex gap-2.5 animate-fade-in">
       <Avatar className="w-8 h-8 flex-shrink-0 bg-gradient-to-br from-brand-500 to-brand-600">
@@ -15,8 +34,13 @@ function TypingIndicator() {
           <Bot className="w-4 h-4 text-white" />
         </AvatarFallback>
       </Avatar>
-      <div className="bg-white rounded-2xl rounded-tl-sm border border-border shadow-chat px-4 py-3 flex items-center gap-1.5 max-w-[200px]">
-        <span className="text-xs text-muted-foreground mr-1">Đang xử lý</span>
+      <div className="bg-white rounded-2xl rounded-tl-sm border border-border shadow-chat px-4 py-3 flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground transition-all duration-500">
+          {THINKING_PHRASES[phraseIdx]}
+        </span>
+        {elapsed >= 15 && (
+          <span className="text-[10px] text-amber-500 ml-1">({elapsed}s)</span>
+        )}
         <span className="typing-dot text-brand-400" />
         <span className="typing-dot text-brand-400" />
         <span className="typing-dot text-brand-400" />
@@ -106,12 +130,47 @@ function SuggestionChips({ suggestions, onSend, busy }) {
   )
 }
 
+// ─── Error bubble ─────────────────────────────────────────────────────────────
+function ErrorBubble({ message, onRetry }) {
+  return (
+    <div className="flex gap-2.5 animate-fade-in">
+      <Avatar className="w-8 h-8 flex-shrink-0 bg-red-500">
+        <AvatarFallback className="bg-transparent">
+          <AlertTriangle className="w-4 h-4 text-white" />
+        </AvatarFallback>
+      </Avatar>
+      <div className="max-w-[85%]">
+        <div className="bg-red-50 border border-red-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-chat">
+          <p className="text-sm text-red-700 font-medium mb-2">
+            {message.content || '⚠️ Yêu cầu thất bại hoặc quá thời gian chờ.'}
+          </p>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              id="error-retry-btn"
+              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 active:scale-95 transition-all px-3 py-1.5 rounded-full"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Thử lại
+            </button>
+          )}
+        </div>
+        <span className="text-[10px] text-muted-foreground mt-1 px-1 block">
+          {new Date(message.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Single message bubble ────────────────────────────────────────────────────
 function MessageBubble({ message, showRetry, onRetry, onSend, busy }) {
   const isUser = message.role === 'user'
   const isThinking = message.role === 'thinking'
+  const isError = message.role === 'error'
 
   if (isThinking) return <TypingIndicator />
+  if (isError) return <ErrorBubble message={message} onRetry={onRetry} />
 
   return (
     <div className={cn('flex gap-2.5 animate-fade-in', isUser && 'flex-row-reverse')}>

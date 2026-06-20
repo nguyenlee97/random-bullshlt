@@ -62,7 +62,7 @@ async function callAgent(payload) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(180000),
     })
     if (!res.ok) {
       log.error(`callAgent HTTP ${res.status}`, { status: res.status, payload })
@@ -641,7 +641,7 @@ export async function fetchDmpRecommendations() {
   try {
     const res = await fetch(
       `${AGENT_URL}/api/agent/dmp-recommend?session_id=${SESSION_ID}`,
-      { signal: AbortSignal.timeout(30000) }
+      { signal: AbortSignal.timeout(180000) }  // LLM call — up to 3 min
     )
     if (!res.ok) return []
     const data = await res.json()
@@ -663,7 +663,7 @@ export async function fetchZonesFromAgent() {
   try {
     const res = await fetch(
       `${AGENT_URL}/api/agent/zones-recommend?session_id=${SESSION_ID}`,
-      { signal: AbortSignal.timeout(15000) }
+      { signal: AbortSignal.timeout(180000) }  // LLM-ranked zones
     )
     if (!res.ok) return null
     return await res.json()
@@ -683,7 +683,7 @@ export async function getSetupEntry() {
   try {
     const res = await fetch(
       `${AGENT_URL}/api/agent/setup-entry?session_id=${SESSION_ID}`,
-      { signal: AbortSignal.timeout(30000) }
+      { signal: AbortSignal.timeout(180000) }  // LLM call — up to 3 min
     )
     if (!res.ok) return null
     return await res.json()
@@ -762,7 +762,7 @@ export async function createCampaignOrder(selectedZoneIds, assignments, fileUrls
           },
         },
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(180000),  // chat/order creation
     })
     if (!res.ok) return null
     return await res.json()
@@ -801,6 +801,7 @@ export const AgentAPI = {
       setup: {
         selectedZoneIds: formState?.setup?.selectedZoneIds || [],
         phase: formState?.setup?.phase || 'zones',
+        assignments: formState?.setup?.assignments || {},
       },
     }
 
@@ -903,7 +904,7 @@ export const AgentAPI = {
       if (brief && brief.brand) {
         url += `&brief_hint=${encodeURIComponent(JSON.stringify(brief))}`
       }
-      const res = await fetch(url, { signal: AbortSignal.timeout(60000) })
+      const res = await fetch(url, { signal: AbortSignal.timeout(180000) })  // LLM call — up to 3 min
       if (!res.ok) return null
       return await res.json()
     } catch (e) {
@@ -942,7 +943,7 @@ export const AgentAPI = {
     try {
       const res = await fetch(
         `${AGENT_URL}/api/agent/report-entry?session_id=${SESSION_ID}`,
-        { signal: AbortSignal.timeout(15000) }
+        { signal: AbortSignal.timeout(180000) }  // triggers background report gen
       )
       if (!res.ok) return null
       return await res.json()
@@ -1022,7 +1023,7 @@ export const AgentAPI = {
           brief: briefObj || {},
           format_id: formatId,
         }),
-        signal: AbortSignal.timeout(120000),  // image gen can be slow
+        signal: AbortSignal.timeout(180000),  // AI image gen — up to 3 min
       })
       if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
       return await res.json()

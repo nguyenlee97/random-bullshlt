@@ -10,7 +10,7 @@ from config import config
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-06-17.40"
+BUILD_VERSION = "2026-06-18.41"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -56,6 +56,13 @@ BUILD_FEATURES = [
     "zone-date-injection",            # brief dates auto-injected into zone tool args from workspace
     "proposal-block-segment-display", # fixed [object Object] in WorkspaceProposalBlock for segment
     "confirm-segment-count-fix",      # fixed '0 segments' in confirm message when value is JSON string
+    "zone-snapshot-enrichment",       # workspace snapshot resolves zone IDs to full details from catalog
+    "creative-full-listing",          # all creative files listed in snapshot (not just first 4)
+    "assignment-context",             # assignments sent from FE + shown in workspace snapshot
+    "thinking-phrases-rotation",      # TypingIndicator rotates Vietnamese thinking phrases every 3s
+    "thinking-elapsed-timer",         # shows elapsed seconds after 15s in thinking indicator
+    "error-bubble-retry",             # null API response shows red error bubble with retry button
+    "timeout-180s-all-ai",            # all AI-related fetch timeouts raised to 180s
 ]
 
 app = FastAPI(
