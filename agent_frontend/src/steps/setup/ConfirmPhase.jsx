@@ -117,7 +117,7 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
 
       {/* ── Brief ─────────────────────────────────────────────────────────────── */}
       <SectionCard icon={FileText} title="Brief chiến dịch" iconClass="text-brand-500">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
           {[
             ['Thương hiệu', brief?.brand],
             ['Mục tiêu', OBJECTIVE_LABELS[brief?.objective] || brief?.objective],

@@ -18,14 +18,14 @@ export default function TopBar({ onReset, onNewChat }) {
         </div>
       </div>
 
-      <Separator orientation="vertical" className="h-5 mx-1" />
+      <Separator orientation="vertical" className="h-5 mx-1 hidden sm:block" />
 
-      <Badge variant="muted" className="gap-1.5 text-[11px]">
+      <Badge variant="muted" className="gap-1.5 text-[11px] hidden sm:flex">
         <div className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
         v2.1.1 · AdsPilot
       </Badge>
 
-      <Badge variant="model-qwen" className="text-[11px]">
+      <Badge variant="model-qwen" className="text-[11px] hidden sm:flex">
         <Zap className="w-3 h-3" />
         Minimax-M2.5
       </Badge>
@@ -43,12 +43,12 @@ export default function TopBar({ onReset, onNewChat }) {
           id="new-chat-btn"
         >
           <MessageSquarePlus className="w-3.5 h-3.5" />
-          New Chat
+          <span className="hidden sm:inline">New Chat</span>
         </Button>
         {/* Đặt lại — workspace reset only */}
         <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5 text-xs h-8">
           <RotateCcw className="w-3.5 h-3.5" />
-          Đặt lại
+          <span className="hidden sm:inline">Đặt lại</span>
         </Button>
       </div>
     </header>

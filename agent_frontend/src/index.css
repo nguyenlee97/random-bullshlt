@@ -36,6 +36,16 @@
     height: 100%;
     overflow: hidden;
   }
+
+  /* Mobile: use the Visual Viewport height CSS variable (set by App.jsx via
+     window.visualViewport API). This makes the entire layout shrink when the
+     soft keyboard opens, so the chat composer is never hidden behind it.
+     Falls back to 100dvh if the JS hasn't run yet. */
+  @media (max-width: 767px) {
+    html, body, #root {
+      height: var(--visual-viewport-height, 100dvh);
+    }
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -106,3 +116,12 @@ input[type=number]::-webkit-outer-spin-button {
   margin: 0;
 }
 input[type=number] { -moz-appearance: textfield; }
+
+/* Hide scrollbar track while keeping scroll functionality */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

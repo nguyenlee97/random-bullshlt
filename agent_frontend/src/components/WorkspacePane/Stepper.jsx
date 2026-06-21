@@ -8,8 +8,8 @@ export default function Stepper({ steps, currentStep, stepStatuses, onStepJump }
 
   return (
     <div className="px-5 py-3 border-b border-border bg-white flex-shrink-0">
-      {/* Step pills */}
-      <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
+      {/* Step pills — horizontal scroll on mobile instead of wrapping */}
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 mb-2.5">
         {steps.map((step, i) => {
           const isDone = stepStatuses[i] === 'done'
           const isCurrent = i === currentStep
@@ -20,7 +20,7 @@ export default function Stepper({ steps, currentStep, stepStatuses, onStepJump }
               onClick={() => isReachable && onStepJump(i)}
               disabled={!isReachable}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 border',
+                'flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 border',
                 isDone && 'bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100',
                 isCurrent && !isDone && 'bg-brand-500 border-brand-500 text-white shadow-sm',
                 !isDone && !isCurrent && isReachable && 'bg-white border-border text-muted-foreground hover:bg-muted/50',
@@ -37,7 +37,7 @@ export default function Stepper({ steps, currentStep, stepStatuses, onStepJump }
               </span>
               {step.title}
               {step.heroLabel && (
-                <span className="text-[9px] font-bold bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full">
+                <span className="text-[9px] font-bold bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full flex-shrink-0">
                   {step.heroLabel}
                 </span>
               )}

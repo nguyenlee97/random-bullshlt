@@ -132,44 +132,47 @@ function exportChatLog(messages) {
 }
 
 // ─── ChatPane ───────────────────────────────────────────────────────────────────────────────
-export default function ChatPane({ messages, busy, currentStep, onSend, onBack, onRetry, canRetry }) {
+export default function ChatPane({ messages, busy, currentStep, onSend, onBack, onRetry, canRetry, chatCompact }) {
   return (
-    <div className="flex flex-col h-full">
-      {/* Pane header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-white/80 flex-shrink-0">
-        <MessageSquare className="w-4 h-4 text-blue-500" />
-        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Chat</span>
-        <span className="ml-1 text-xs text-muted-foreground">· Trao đổi với Agent</span>
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Pane header — hidden on mobile when chat is compact (workspace expanded) */}
+      {!chatCompact && (
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-white/80 flex-shrink-0">
+          <MessageSquare className="w-4 h-4 text-blue-500" />
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Chat</span>
+          <span className="ml-1 text-xs text-muted-foreground">· Trao đổi với Agent</span>
 
-        <div className="ml-auto flex items-center gap-2">
-          {busy && (
-            <span className="text-[11px] font-semibold text-brand-600 animate-pulse">
-              ● Đang xử lý...
-            </span>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {busy && (
+              <span className="text-[11px] font-semibold text-brand-600 animate-pulse">
+                ● Đang xử lý...
+              </span>
+            )}
 
-          {/* Export button */}
-          <button
-            onClick={() => exportChatLog(messages)}
-            disabled={messages.length === 0}
-            title="Xuất log chat (JSON)"
-            className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground border border-border rounded-full px-2 py-1 hover:bg-muted/60 hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            id="export-chat-btn"
-          >
-            <Download className="w-3 h-3" />
-            Export log
-          </button>
+            {/* Export button — hidden on mobile to save space */}
+            <button
+              onClick={() => exportChatLog(messages)}
+              disabled={messages.length === 0}
+              title="Xuất log chat (JSON)"
+              className="hidden md:flex items-center gap-1 text-[11px] font-semibold text-muted-foreground border border-border rounded-full px-2 py-1 hover:bg-muted/60 hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              id="export-chat-btn"
+            >
+              <Download className="w-3 h-3" />
+              Export log
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Thread */}
-      <div className="flex flex-col flex-1 min-h-0 bg-gradient-to-b from-slate-50/50 to-white">
-        <ChatThread messages={messages} canRetry={canRetry} onRetry={onRetry} onSend={onSend} />
+      {/* Thread — hidden when chat is compact on mobile */}
+      {!chatCompact && (
+        <div className="flex flex-col flex-1 min-h-0 bg-gradient-to-b from-slate-50/50 to-white">
+          <ChatThread messages={messages} canRetry={canRetry} onRetry={onRetry} onSend={onSend} />
+        </div>
+      )}
 
-      </div>
-
-      {/* Composer */}
-      <ChatComposer busy={busy} currentStep={currentStep} onSend={onSend} onBack={onBack} />
+      {/* Composer — always visible */}
+      <ChatComposer busy={busy} currentStep={currentStep} onSend={onSend} onBack={onBack} chatCompact={chatCompact} />
     </div>
   )
 }

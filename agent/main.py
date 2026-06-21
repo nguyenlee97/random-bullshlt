@@ -74,6 +74,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
+    # Allow any Cloudflare Quick Tunnel or ngrok URL automatically —
+    # removes the chicken-and-egg problem of needing the frontend URL before it exists.
+    allow_origin_regex=r"https://(.*\.trycloudflare\.com|.*\.ngrok(-free)?\.app|.*\.ngrok\.io)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

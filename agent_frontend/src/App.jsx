@@ -3,6 +3,7 @@ import { useChat } from '@/hooks/useChat'
 import TopBar from '@/components/TopBar'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
+import SplitDivider from '@/components/SplitDivider'
 import { AgentAPI, getSetupEntry } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
@@ -61,6 +62,80 @@ export default function App() {
   const [formState, setFormState] = useState(initialState)
   const [workspaceEvents, setWorkspaceEvents] = useState([])
   const workspaceRef = useRef(null)
+  const mainRef = useRef(null)
+
+  // ── Mobile split ratio ─────────────────────────────────────────────────────
+  // splitRatio = fraction [0.0–1.0] of the container height given to Chat pane (bottom).
+  // Workspace (top) gets (1 - splitRatio).
+  // Only used on mobile (< 768px); desktop uses fixed 42/58 flex sizing.
+  const [splitRatio, setSplitRatio] = useState(0.5)
+
+  // Steps that are workspace-heavy: auto-shrink chat to 35% on these
+  const WORKSPACE_HEAVY_STEPS = new Set([2, 3, 5, 6]) // Creative, Setup, Report, Email
+
+  // Auto-ratio fires every time currentStep changes (mobile only)
+  useEffect(() => {
+    if (window.innerWidth >= 768) return
+    setSplitRatio(WORKSPACE_HEAVY_STEPS.has(currentStep) ? 0.35 : 0.5)
+  }, [currentStep])
+
+  // Drag handler — called by SplitDivider with deltaY pixels from the drag.
+  // Layout: Workspace (top) height = (1-splitRatio), Chat (bottom) height = splitRatio.
+  // Dragging DOWN → divider moves down → workspace grows → splitRatio DECREASES → negate deltaY.
+  const handleSplitDrag = useCallback((deltaY) => {
+    const containerH = mainRef.current?.clientHeight ?? window.innerHeight
+    setSplitRatio(prev =>
+      Math.min(0.85, Math.max(0.15, prev - deltaY / containerH))
+    )
+  }, [])
+
+  // Expand button handlers (snap to target ratios or restore 50/50)
+  // Chat expand  → 85% chat / 15% workspace  (user ignores workspace, reads chat)
+  // Work expand  → 30% chat / 70% workspace  (user works in workspace, still needs chat)
+  const handleWorkspaceExpand = useCallback(() => {
+    setSplitRatio(prev => (prev <= 0.32 ? 0.5 : 0.30)) // toggle workspace 70%
+  }, [])
+  const handleChatExpand = useCallback(() => {
+    setSplitRatio(prev => (prev >= 0.83 ? 0.5 : 0.85)) // toggle chat 85%
+  }, [])
+
+  // Visual Viewport API — tracks keyboard height on mobile so the composer
+  // is never hidden behind the soft keyboard. Sets a CSS variable used in index.css.
+  useEffect(() => {
+    if (!window.visualViewport) return
+    const update = () => {
+      document.documentElement.style.setProperty(
+        '--visual-viewport-height',
+        `${window.visualViewport.height}px`
+      )
+    }
+    window.visualViewport.addEventListener('resize', update)
+    window.visualViewport.addEventListener('scroll', update)
+    update()
+    return () => {
+      window.visualViewport.removeEventListener('resize', update)
+      window.visualViewport.removeEventListener('scroll', update)
+    }
+  }, [])
+  // ── Activity notifications for SplitDivider ─────────────────────────────────
+  // chatHasNew      → new agent message while chat is compact (workspace expanded)
+  // workspaceHasNew → step advanced while workspace is compact (chat expanded)
+  const [chatHasNew, setChatHasNew] = useState(false)
+  const [workspaceHasNew, setWorkspaceHasNew] = useState(false)
+  const prevMsgIdRef = useRef(null)   // tracks last assistant msg ID (ID-based, not length-based)
+  // splitRatioRef keeps the latest ratio accessible inside callbacks without
+  // adding splitRatio to their dependency arrays (avoids stale closure).
+  const splitRatioRef = useRef(splitRatio)
+  useEffect(() => { splitRatioRef.current = splitRatio }, [splitRatio])
+
+  // (messages.length effect placed after useChat declaration below — TDZ-safe)
+  // workspaceHasNew is triggered directly inside handleWorkspaceUpdate below.
+
+  // Clear notifications when the pane becomes visible again
+  useEffect(() => {
+    if (splitRatio >= 0.38) setChatHasNew(false)
+    if (splitRatio <= 0.62) setWorkspaceHasNew(false)
+  }, [splitRatio])
 
   // ── Workspace event queue ──────────────────────────────────────────────────
   const pushWorkspaceEvent = useCallback((description) => {
@@ -221,6 +296,10 @@ export default function App() {
       return next
     })
     pushWorkspaceEvent(`Agent đã cập nhật "${field}" (đã xác nhận bởi anh/chị)`)
+    // Notify user if workspace is hidden behind an expanded chat pane
+    if (window.innerWidth < 768 && splitRatioRef.current > 0.62) {
+      setWorkspaceHasNew(true)
+    }
   }, [pushWorkspaceEvent])
 
 
@@ -291,6 +370,20 @@ export default function App() {
       setCurrentStep(snapshot.currentStep)
     }, [formState.creative.files]),
   })
+
+  // Watch for new assistant messages while chat is compact (workspace expanded on mobile).
+  // Uses ID comparison instead of messages.length — stopThinking() REPLACES the thinking
+  // bubble (array length unchanged) so length-based tracking misses chip responses.
+  useEffect(() => {
+    const last = messages[messages.length - 1]
+    if (!last || last.role !== 'assistant') return
+    if (last.id !== prevMsgIdRef.current) {
+      prevMsgIdRef.current = last.id
+      if (window.innerWidth < 768 && splitRatioRef.current < 0.38) {
+        setChatHasNew(true)
+      }
+    }
+  }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { boot() }, [boot])
 
@@ -633,26 +726,34 @@ export default function App() {
     }
   })()
 
+  // ── isMobile helper (used for conditional inline styles) ──────────────────
+  // Read at render-time. Tailwind md: breakpoints handle the class-based
+  // layout switching automatically on resize.
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 to-brand-50/30 overflow-hidden">
       <TopBar onReset={handleReset} onNewChat={handleNewChat} />
 
-      <main className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Chat Pane — 40% */}
-        <div className="flex-[0_0_42%] min-w-0 border-r border-border bg-white/60 backdrop-blur-sm">
-          <ChatPane
-            messages={messages}
-            busy={busy}
-            currentStep={currentStep}
-            onSend={sendMessage}
-            onBack={() => !busy && currentStep > 0 && setCurrentStep(prev => prev - 1)}
-            onRetry={retryLastMessage}
-            canRetry={canRetry && !busy}
-          />
-        </div>
+      {/*
+        Mobile layout: flex-col, Workspace on TOP, Chat on BOTTOM.
+        Desktop layout: flex-row (md:flex-row), Chat on LEFT (42%), Workspace on RIGHT.
 
-        {/* Workspace Pane — 58% */}
-        <div className="flex-1 min-w-0 bg-white">
+        We use CSS `order` to reorder without changing the DOM:
+          Workspace: order-1 on mobile (top), md:order-2 (right)
+          Chat:      order-3 on mobile (bottom), md:order-1 (left)
+      */}
+      <main ref={mainRef} className="flex flex-1 min-h-0 overflow-hidden flex-col md:flex-row">
+
+        {/* ── Workspace Pane ──────────────────────────────────────────
+            Mobile: TOP (order-1), height = (1 - splitRatio)
+            Desktop: RIGHT side, flex-1                              */}
+        <div
+          className="order-1 md:order-2 flex flex-col min-w-0 overflow-hidden bg-white
+                     md:flex-1 md:h-full
+                     transition-[height] duration-300 ease-in-out"
+          style={isMobile ? { height: `${(1 - splitRatio) * 100}%` } : undefined}
+        >
           <WorkspacePane
             ref={workspaceRef}
             steps={STEPS}
@@ -669,6 +770,43 @@ export default function App() {
             onSendChat={sendMessage}
           />
         </div>
+
+        {/* ── Draggable Divider ─────────────────────────────────────
+            Mobile only (md:hidden inside component), order-2       */}
+        <div className="order-2 md:hidden">
+          <SplitDivider
+            onDrag={handleSplitDrag}
+            splitRatio={splitRatio}
+            onWorkspaceExpand={handleWorkspaceExpand}
+            onChatExpand={handleChatExpand}
+            chatHasNew={chatHasNew}
+            workspaceHasNew={workspaceHasNew}
+          />
+        </div>
+
+        {/* ── Chat Pane ─────────────────────────────────────────────
+            Mobile: BOTTOM (order-3), height = splitRatio
+            Desktop: LEFT side, flex-[0_0_42%]                      */}
+        <div
+          className="order-3 md:order-1 flex flex-col min-w-0 overflow-hidden
+                     bg-white/60 backdrop-blur-sm border-border
+                     border-t md:border-t-0 md:border-r
+                     md:flex-[0_0_42%] md:h-full
+                     transition-[height] duration-300 ease-in-out"
+          style={isMobile ? { height: `${splitRatio * 100}%` } : undefined}
+        >
+          <ChatPane
+            messages={messages}
+            busy={busy}
+            currentStep={currentStep}
+            onSend={sendMessage}
+            onBack={() => !busy && currentStep > 0 && setCurrentStep(prev => prev - 1)}
+            onRetry={retryLastMessage}
+            canRetry={canRetry && !busy}
+            chatCompact={isMobile && splitRatio < 0.38}
+          />
+        </div>
+
       </main>
     </div>
   )

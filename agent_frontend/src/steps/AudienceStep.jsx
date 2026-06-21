@@ -165,7 +165,7 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
             Không tìm thấy segment phù hợp — thử xem thêm bên dưới.
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2 p-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2">
             {recoAttrs.map(attr => (
               <AttrCard key={attr._uid} attr={attr} selected={isSelected(attr)} onToggle={toggleAttr} reason={attr.reason} isReco />
             ))}
@@ -191,7 +191,7 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
               <span className="ml-2 text-sm text-muted-foreground">Đang tải...</span>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 max-h-[280px] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[280px] overflow-y-auto pr-1">
               {filtered.map(attr => (
                 <AttrCard key={getUid(attr)} attr={attr} selected={isSelected(attr)} onToggle={toggleAttr} isReco={false} />
               ))}

@@ -21,24 +21,27 @@ function TableBlock({ block }) {
           {block.title}
         </p>
       )}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {block.columns.map((col, i) => (
-              <TableHead key={i}>{col}</TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {block.rows.map((row, i) => (
-            <TableRow key={i}>
-              {row.map((cell, j) => (
-                <TableCell key={j} className="text-xs">{cell}</TableCell>
+      {/* overflow-x-auto: wide tables scroll horizontally instead of breaking viewport */}
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {block.columns.map((col, i) => (
+                <TableHead key={i}>{col}</TableHead>
               ))}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {block.rows.map((row, i) => (
+              <TableRow key={i}>
+                {row.map((cell, j) => (
+                  <TableCell key={j} className="text-xs">{cell}</TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }
@@ -184,7 +187,7 @@ function EmailPreviewBlock({ block }) {
         {[['To', block.to], ['Cc', block.cc], ['Subject', block.subject]].map(([k, v]) => (
           <div key={k} className="flex gap-2 text-xs">
             <span className="font-semibold text-muted-foreground w-12 flex-shrink-0">{k}:</span>
-            <span className="text-foreground">{v}</span>
+            <span className="text-foreground min-w-0 flex-1 break-words">{v}</span>
           </div>
         ))}
         <div className="mt-2 pt-2 border-t border-border">
@@ -339,12 +342,12 @@ function WorkspaceProposalBlock({ block }) {
           <span className="text-amber-700 font-medium w-14 flex-shrink-0">
             {isAudience ? 'Tóm tắt:' : 'Giá trị:'}
           </span>
-          <pre className="text-amber-900 text-[11px] whitespace-pre-wrap font-sans flex-1 leading-relaxed">{displayValue}</pre>
+          <pre className="text-amber-900 text-[11px] whitespace-pre-wrap break-words font-sans flex-1 leading-relaxed">{displayValue}</pre>
         </div>
         {reason && (
-          <div className="flex gap-2 text-xs">
+          <div className="flex gap-2 text-xs min-w-0">
             <span className="text-amber-700 font-medium w-14 flex-shrink-0">Lý do:</span>
-            <span className="text-amber-800 italic">{reason}</span>
+            <span className="text-amber-800 italic break-words min-w-0 flex-1">{reason}</span>
           </div>
         )}
         {/* Instruction for audience proposals (guide to deselect) */}

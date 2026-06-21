@@ -249,7 +249,7 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment })
                   <X className="w-3 h-3" /> Xoá tất cả
                 </button>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {files.map(file => (
                   <FileCard key={file.id} file={file} onRemove={removeFile} onPreview={setLightboxFile} />
                 ))}

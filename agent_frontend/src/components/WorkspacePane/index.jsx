@@ -104,7 +104,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Pane header */}
       <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-white/80 flex-shrink-0">
         <LayoutDashboard className="w-4 h-4 text-violet-500" />

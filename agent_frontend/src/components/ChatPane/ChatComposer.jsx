@@ -14,7 +14,7 @@ const STEP_CHIPS = {
   6: ['Thêm người nhận', 'Chỉnh sửa nội dung email'],
 }
 
-export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
+export default function ChatComposer({ busy, currentStep, onSend, onBack, chatCompact }) {
   const [text, setText] = useState('')
   const inputRef = useRef(null)
 
@@ -46,14 +46,17 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
   const chips = STEP_CHIPS[currentStep] || STEP_CHIPS[0]
 
   return (
-    <div className="border-t border-border bg-white p-3 flex-shrink-0">
-      {/* Quick chips */}
-      <div className="flex gap-1.5 flex-wrap mb-2.5">
+    <div
+      className="border-t border-border bg-white p-3 flex-shrink-0"
+      style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+    >
+      {/* Quick chips — hidden on mobile for steps 0-4, shown on mobile for Report(5)/Email(6) */}
+      <div className={`${currentStep >= 5 ? 'flex' : 'hidden md:flex'} gap-1.5 overflow-x-auto scrollbar-none pb-1 mb-2.5 flex-nowrap`}>
         {currentStep > 0 && (
           <button
             onClick={onBack}
             disabled={busy}
-            className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground border border-border rounded-full px-2.5 py-1 hover:bg-muted/60 transition-colors disabled:opacity-50"
+            className="flex-shrink-0 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground border border-border rounded-full px-2.5 py-1 hover:bg-muted/60 transition-colors disabled:opacity-50"
           >
             <ChevronLeft className="w-3 h-3" /> Quay lại
           </button>
@@ -63,7 +66,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
             key={chip}
             onClick={() => !busy && onSend(chip)}
             disabled={busy}
-            className="text-[11px] font-semibold text-brand-700 bg-brand-50 border border-brand-200 rounded-full px-2.5 py-1 hover:bg-brand-100 transition-colors disabled:opacity-50"
+            className="flex-shrink-0 text-[11px] font-semibold text-brand-700 bg-brand-50 border border-brand-200 rounded-full px-2.5 py-1 hover:bg-brand-100 transition-colors disabled:opacity-50"
           >
             {chip}
           </button>

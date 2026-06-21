@@ -173,7 +173,7 @@ function MessageBubble({ message, showRetry, onRetry, onSend, busy }) {
   if (isError) return <ErrorBubble message={message} onRetry={onRetry} />
 
   return (
-    <div className={cn('flex gap-2.5 animate-fade-in', isUser && 'flex-row-reverse')}>
+    <div className={cn('flex gap-2.5 animate-fade-in min-w-0', isUser && 'flex-row-reverse')}>
       {/* Avatar */}
       <Avatar className={cn('w-8 h-8 flex-shrink-0 self-start mt-0.5', isUser ? 'bg-blue-600' : 'bg-gradient-to-br from-brand-500 to-brand-600')}>
         <AvatarFallback className="bg-transparent">
@@ -187,7 +187,7 @@ function MessageBubble({ message, showRetry, onRetry, onSend, busy }) {
       {/* Bubble + chips below */}
       <div className={cn('max-w-[85%] min-w-0', isUser && 'flex flex-col items-end')}>
         <div className={cn(
-          'rounded-2xl px-4 py-3 shadow-chat',
+          'rounded-2xl px-4 py-3 shadow-chat overflow-x-auto',
           isUser
             ? 'bg-gradient-to-br from-brand-500 to-brand-600 text-white rounded-tr-sm'
             : 'bg-white border border-border text-foreground rounded-tl-sm'

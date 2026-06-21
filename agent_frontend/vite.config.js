@@ -14,5 +14,6 @@ export default defineConfig({
   },
   server: {
     port: 5175,
+    allowedHosts: true,    // allow tunnel URLs (cloudflare, ngrok, etc.)
   },
 })
