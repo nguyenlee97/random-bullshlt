@@ -1,12 +1,27 @@
 import { ALL_ZONES } from '@/data/zones'
 
+// ─── Parse size string — handles both 'x' (DB format) and '×' (display format)
+function _parseDims(sizeStr) {
+  if (!sizeStr) return null
+  const m = String(sizeStr).match(/^(\d+)[x×](\d+)$/i)
+  return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null
+}
+
+// ─── Returns true if the zone has a real parseable pixel size (not 'skin') ─────
+export function canCheckRatio(zone) {
+  return !!_parseDims(zone?.size)
+}
+
 // ─── Ratio mismatch check ─────────────────────────────────────────────────────
-// Returns a warning string if aspect ratio differs >15%, null if OK
+// Returns:
+//   string  — mismatch warning (ratio > 15% off)
+//   false   — explicitly checked and ratio is OK  ← use this to show green ✓
+//   null    — can't check (no file dims, or zone size is 'skin' / unparseable)
 export function checkMismatch(zone, file) {
   if (!file?.width || !file?.height) return null
-  const sizeStr = zone.size || ''
-  const [zw, zh] = sizeStr.split('×').map(Number)
-  if (!zw || !zh) return null
+  const dims = _parseDims(zone?.size)
+  if (!dims) return null                          // skin or non-parseable — skip
+  const [zw, zh] = dims
   const zRatio = zw / zh
   const fRatio = file.width / file.height
   if (Math.abs(zRatio - fRatio) / zRatio > 0.15) {
@@ -14,35 +29,58 @@ export function checkMismatch(zone, file) {
     const fLabel = file.width > file.height ? 'ngang' : 'dọc'
     return `Zone ${zone.size} (${zLabel}) · Ảnh ${file.width}×${file.height}px (${fLabel})`
   }
-  return null
+  return false                                    // explicitly OK
 }
 
 // ─── Smart score: how well a file fits a zone ─────────────────────────────────
 export function scoreFile(file, zone) {
   let score = 0
   const fname = (file.name || '').toLowerCase()
-  const platform = (zone.platform || '').toLowerCase()
-  const placement = (zone.placement || zone.id?.split('_').slice(1).join(' ') || '').toLowerCase()
+  const platform = (zone.platform || zone.channel || zone.id?.split('_')[0] || '').toLowerCase()
   const format = (zone.format || '').toLowerCase()
+  const dims = _parseDims(zone?.size)
 
-  if (platform && fname.includes(platform.slice(0, 4))) score += 3
-  if (placement && fname.includes(placement)) score += 3
-  if (format && fname.includes(format)) score += 2
-  if (zone.size) {
-    if (fname.includes(zone.size.replace('×', 'x'))) score += 5
-    if (fname.includes(zone.size.replace('×', '_'))) score += 5
+  // ─── 1. Skin format — filename "skin" is the strongest signal (±15)
+  if (format === 'skin') {
+    score += fname.includes('skin') ? 12 : -6
   }
 
-  if (file.width && file.height && zone.size) {
-    const [zw, zh] = zone.size.split('×').map(Number)
-    if (zw && zh) {
-      const diff = Math.abs((zw / zh) - (file.width / file.height)) / (zw / zh)
-      if (diff < 0.02) score += 8
-      else if (diff < 0.08) score += 4
-      else if (diff < 0.15) score += 1
-      else score -= 4
-    }
+  // ─── 2. Orientation match — portrait vs landscape (±10)
+  if (dims && file.width && file.height) {
+    const [zw, zh] = dims
+    const zPortrait = zh > zw
+    const fPortrait = file.height > file.width
+    score += zPortrait === fPortrait ? 10 : -10
   }
+
+  // ─── 3. Aspect ratio closeness (only within same orientation)
+  if (dims && file.width && file.height) {
+    const [zw, zh] = dims
+    const diff = Math.abs((zw / zh) - (file.width / file.height)) / (zw / zh)
+    if (diff < 0.02)       score += 8
+    else if (diff < 0.08)  score += 4
+    else if (diff < 0.15)  score += 1
+    else                   score -= 3
+  }
+
+  // ─── 4. Size string in filename (+5)
+  if (zone.size && format !== 'skin') {
+    const sNorm = zone.size.replace(/[x×]/i, 'x')
+    if (fname.includes(sNorm) || fname.includes(sNorm.replace('x', '_'))) score += 5
+  }
+
+  // ─── 5. Platform name in filename (+2, reduced — should not override size signals)
+  if (platform && format !== 'skin') {
+    const aliases = [
+      platform,
+      platform.replace('zing', 'z'),      // zingmp3 → zmp3, zingnews → znews
+      platform.replace('zingmp3', 'zmp3'),
+      platform.replace('zingnews', 'znews'),
+      platform.slice(0, 4),
+    ]
+    if (aliases.some(a => a.length > 2 && fname.includes(a))) score += 2
+  }
+
   return score
 }
 

@@ -7,7 +7,7 @@ export default function Stepper({ steps, currentStep, stepStatuses, onStepJump }
   const progress = Math.round((doneCount / steps.length) * 100)
 
   return (
-    <div className="px-5 py-3 border-b border-border bg-white flex-shrink-0">
+    <div data-demo="stepper" className="px-5 py-3 border-b border-border bg-white flex-shrink-0">
       {/* Step pills — horizontal scroll on mobile instead of wrapping */}
       <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 mb-2.5">
         {steps.map((step, i) => {

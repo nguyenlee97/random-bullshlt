@@ -10,7 +10,7 @@ from config import config
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-06-18.41"
+BUILD_VERSION = "2026-06-25.42"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -63,6 +63,7 @@ BUILD_FEATURES = [
     "thinking-elapsed-timer",         # shows elapsed seconds after 15s in thinking indicator
     "error-bubble-retry",             # null API response shows red error bubble with retry button
     "timeout-180s-all-ai",            # all AI-related fetch timeouts raised to 180s
+    "ad-screenshot",                  # GET /api/agent/screenshot: Playwright full-page capture of live test sites
 ]
 
 app = FastAPI(

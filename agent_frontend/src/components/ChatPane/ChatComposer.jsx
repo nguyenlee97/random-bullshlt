@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Send, Loader2, ChevronLeft } from 'lucide-react'
 
 // ─── Step-specific quick chips ────────────────────────────────────────────────
@@ -14,7 +13,7 @@ const STEP_CHIPS = {
   6: ['Thêm người nhận', 'Chỉnh sửa nội dung email'],
 }
 
-export default function ChatComposer({ busy, currentStep, onSend, onBack, chatCompact }) {
+export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
   const [text, setText] = useState('')
   const inputRef = useRef(null)
 
@@ -23,17 +22,36 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack, chatCo
     const handler = (e) => {
       if (e.detail?.text !== undefined) {
         setText(e.detail.text)
-        setTimeout(() => inputRef.current?.focus(), 50)
+        setTimeout(() => {
+          inputRef.current?.focus()
+          autoResize(inputRef.current)
+        }, 50)
       }
     }
     window.addEventListener('agent:prefill_composer', handler)
     return () => window.removeEventListener('agent:prefill_composer', handler)
   }, [])
 
+  // Auto-resize textarea up to max-height
+  function autoResize(el) {
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 72) + 'px'
+  }
+
+  const handleChange = (e) => {
+    setText(e.target.value)
+    autoResize(e.target)
+  }
+
   const handleSend = () => {
     if (!text.trim() || busy) return
     onSend(text.trim())
     setText('')
+    // Reset height
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+    }
   }
 
   const handleKeyDown = (e) => {
@@ -51,7 +69,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack, chatCo
       style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
     >
       {/* Quick chips — hidden on mobile for steps 0-4, shown on mobile for Report(5)/Email(6) */}
-      <div className={`${currentStep >= 5 ? 'flex' : 'hidden md:flex'} gap-1.5 overflow-x-auto scrollbar-none pb-1 mb-2.5 flex-nowrap`}>
+      <div data-demo="chat-chips" className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1 mb-2.5 flex-nowrap">
         {currentStep > 0 && (
           <button
             onClick={onBack}
@@ -74,23 +92,32 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack, chatCo
       </div>
 
       {/* Input row */}
-      <div className="flex gap-2">
-        <Input
+      <div className="flex gap-2 items-end">
+        <textarea
           ref={inputRef}
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Trao đổi với agent về bước hiện tại..."
-          disabled={busy}
-          className="flex-1 h-10 text-sm"
           id="chat-input"
+          value={text}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          placeholder="Trao đổi với agent về bước hiện tại... (Shift+Enter xuống dòng)"
+          disabled={busy}
+          rows={1}
+          className={[
+            'flex-1 text-sm resize-none rounded-md border border-input bg-background px-3 py-2',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            'disabled:cursor-not-allowed disabled:opacity-50',
+            'leading-5 overflow-y-auto transition-all',
+            // Desktop: max 3 lines (~72px), mobile: max 2 lines (~48px)
+            'max-h-[48px] md:max-h-[72px]',
+          ].join(' ')}
+          style={{ minHeight: '40px' }}
         />
 
         <Button
           onClick={handleSend}
           disabled={busy || !text.trim()}
           size="icon"
-          className="h-10 w-10 flex-shrink-0"
+          className="h-10 w-10 flex-shrink-0 self-end"
           id="chat-send-btn"
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

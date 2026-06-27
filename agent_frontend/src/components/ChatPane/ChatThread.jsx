@@ -33,7 +33,7 @@ export default function ChatThread({ messages, canRetry, onRetry, onSend }) {
 
   return (
     <ScrollArea className="flex-1">
-      <div className="flex flex-col gap-4 p-4">
+      <div data-demo="chat-thread" className="flex flex-col gap-4 p-4">
         {messages.map(msg => (
           <MessageBubble
             key={msg.id}

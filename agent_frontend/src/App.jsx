@@ -3,10 +3,11 @@ import { useChat } from '@/hooks/useChat'
 import TopBar from '@/components/TopBar'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
-import SplitDivider from '@/components/SplitDivider'
 import { AgentAPI, getSetupEntry } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
+import { MessageSquare, LayoutDashboard } from 'lucide-react'
+import { DemoProvider } from '@/demo/DemoEngine'
 
 // ─── Steps meta — NEW ORDER: Brief → Audience → Creative → Setup → Result ─────
 export const STEPS = [
@@ -56,6 +57,47 @@ const STEP_DEFAULTS = [
 ]
 const STEP_NAMES_VI = ['Brief', 'Audience', 'Creative', 'Setup Camp', 'Kết quả', 'Report', 'Email']
 
+// Steps that auto-navigate to Workspace tab after agent update (2.5s delay)
+const AUTO_NAV_STEPS = new Set([2, 3, 5]) // Creative, Setup, Report
+
+// ─── Mobile Tab Bar ─────────────────────────────────────────────────────────
+function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew }) {
+  return (
+    <div className="flex flex-shrink-0 border-b border-border bg-white/95 backdrop-blur-sm shadow-sm">
+      <button
+        id="tab-chat"
+        onClick={() => onTabChange('chat')}
+        className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-all relative ${
+          activeTab === 'chat'
+            ? 'text-brand-600 border-b-2 border-brand-500 bg-brand-50/30'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <MessageSquare className="w-4 h-4" />
+        Chat
+        {chatHasNew && (
+          <span className="absolute top-2 right-[28%] w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+        )}
+      </button>
+      <button
+        id="tab-workspace"
+        onClick={() => onTabChange('workspace')}
+        className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-all relative ${
+          activeTab === 'workspace'
+            ? 'text-violet-600 border-b-2 border-violet-500 bg-violet-50/30'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <LayoutDashboard className="w-4 h-4" />
+        Workspace
+        {workspaceHasNew && (
+          <span className="absolute top-2 right-[22%] w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
+        )}
+      </button>
+    </div>
+  )
+}
+
 export default function App() {
   const [currentStep, setCurrentStep] = useState(0)
   const [stepStatuses, setStepStatuses] = useState(STEPS.map(() => 'pending'))
@@ -64,40 +106,18 @@ export default function App() {
   const workspaceRef = useRef(null)
   const mainRef = useRef(null)
 
-  // ── Mobile split ratio ─────────────────────────────────────────────────────
-  // splitRatio = fraction [0.0–1.0] of the container height given to Chat pane (bottom).
-  // Workspace (top) gets (1 - splitRatio).
-  // Only used on mobile (< 768px); desktop uses fixed 42/58 flex sizing.
-  const [splitRatio, setSplitRatio] = useState(0.5)
+  // ── Demo visibility: hide Demo button once user has interacted ──────────
+  const [hasUserStarted, setHasUserStarted] = useState(false)
 
-  // Steps that are workspace-heavy: auto-shrink chat to 35% on these
-  const WORKSPACE_HEAVY_STEPS = new Set([2, 3, 5, 6]) // Creative, Setup, Report, Email
-
-  // Auto-ratio fires every time currentStep changes (mobile only)
-  useEffect(() => {
-    if (window.innerWidth >= 768) return
-    setSplitRatio(WORKSPACE_HEAVY_STEPS.has(currentStep) ? 0.35 : 0.5)
-  }, [currentStep])
-
-  // Drag handler — called by SplitDivider with deltaY pixels from the drag.
-  // Layout: Workspace (top) height = (1-splitRatio), Chat (bottom) height = splitRatio.
-  // Dragging DOWN → divider moves down → workspace grows → splitRatio DECREASES → negate deltaY.
-  const handleSplitDrag = useCallback((deltaY) => {
-    const containerH = mainRef.current?.clientHeight ?? window.innerHeight
-    setSplitRatio(prev =>
-      Math.min(0.85, Math.max(0.15, prev - deltaY / containerH))
-    )
-  }, [])
-
-  // Expand button handlers (snap to target ratios or restore 50/50)
-  // Chat expand  → 85% chat / 15% workspace  (user ignores workspace, reads chat)
-  // Work expand  → 30% chat / 70% workspace  (user works in workspace, still needs chat)
-  const handleWorkspaceExpand = useCallback(() => {
-    setSplitRatio(prev => (prev <= 0.32 ? 0.5 : 0.30)) // toggle workspace 70%
-  }, [])
-  const handleChatExpand = useCallback(() => {
-    setSplitRatio(prev => (prev >= 0.83 ? 0.5 : 0.85)) // toggle chat 85%
-  }, [])
+  // ── Mobile tab state ─────────────────────────────────────────────────────
+  // activeTab controls which pane is visible on mobile (<768px).
+  // Desktop keeps the fixed 42/58 split layout unchanged.
+  const [activeTab, setActiveTab] = useState('chat')
+  // Refs allow callbacks to read current values without stale closures
+  const activeTabRef = useRef('chat')
+  useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
+  const currentStepRef = useRef(currentStep)
+  useEffect(() => { currentStepRef.current = currentStep }, [currentStep])
 
   // Visual Viewport API — tracks keyboard height on mobile so the composer
   // is never hidden behind the soft keyboard. Sets a CSS variable used in index.css.
@@ -117,25 +137,18 @@ export default function App() {
       window.visualViewport.removeEventListener('scroll', update)
     }
   }, [])
-  // ── Activity notifications for SplitDivider ─────────────────────────────────
-  // chatHasNew      → new agent message while chat is compact (workspace expanded)
-  // workspaceHasNew → step advanced while workspace is compact (chat expanded)
+  // ── Tab notification state ───────────────────────────────────────────────
+  // chatHasNew      → new agent message while user is on Workspace tab
+  // workspaceHasNew → agent updated workspace while user is on Chat tab
   const [chatHasNew, setChatHasNew] = useState(false)
   const [workspaceHasNew, setWorkspaceHasNew] = useState(false)
-  const prevMsgIdRef = useRef(null)   // tracks last assistant msg ID (ID-based, not length-based)
-  // splitRatioRef keeps the latest ratio accessible inside callbacks without
-  // adding splitRatio to their dependency arrays (avoids stale closure).
-  const splitRatioRef = useRef(splitRatio)
-  useEffect(() => { splitRatioRef.current = splitRatio }, [splitRatio])
+  const prevMsgIdRef = useRef(null) // ID-based tracking (not length-based)
 
-  // (messages.length effect placed after useChat declaration below — TDZ-safe)
-  // workspaceHasNew is triggered directly inside handleWorkspaceUpdate below.
-
-  // Clear notifications when the pane becomes visible again
+  // Clear notification dot when user switches to that tab
   useEffect(() => {
-    if (splitRatio >= 0.38) setChatHasNew(false)
-    if (splitRatio <= 0.62) setWorkspaceHasNew(false)
-  }, [splitRatio])
+    if (activeTab === 'chat')      setChatHasNew(false)
+    if (activeTab === 'workspace') setWorkspaceHasNew(false)
+  }, [activeTab])
 
   // ── Workspace event queue ──────────────────────────────────────────────────
   const pushWorkspaceEvent = useCallback((description) => {
@@ -296,9 +309,12 @@ export default function App() {
       return next
     })
     pushWorkspaceEvent(`Agent đã cập nhật "${field}" (đã xác nhận bởi anh/chị)`)
-    // Notify user if workspace is hidden behind an expanded chat pane
-    if (window.innerWidth < 768 && splitRatioRef.current > 0.62) {
+    // On mobile: always notify. For key steps, also auto-navigate to Workspace after 2.5s.
+    if (window.innerWidth < 768) {
       setWorkspaceHasNew(true)
+      if (AUTO_NAV_STEPS.has(currentStepRef.current) && activeTabRef.current === 'chat') {
+        setTimeout(() => setActiveTab('workspace'), 2500)
+      }
     }
   }, [pushWorkspaceEvent])
 
@@ -379,7 +395,7 @@ export default function App() {
     if (!last || last.role !== 'assistant') return
     if (last.id !== prevMsgIdRef.current) {
       prevMsgIdRef.current = last.id
-      if (window.innerWidth < 768 && splitRatioRef.current < 0.38) {
+      if (window.innerWidth < 768 && activeTabRef.current === 'workspace') {
         setChatHasNew(true)
       }
     }
@@ -604,6 +620,44 @@ export default function App() {
     return () => window.removeEventListener('agent:reset', handler)
   }, [handleReset])
 
+  // ── Demo: listen for demo:set_form_field to programmatically change fields ─
+  useEffect(() => {
+    const handler = (e) => {
+      const { path, value } = e.detail || {}
+      if (!path) return
+      const [section, key] = path.split('.')
+      if (section && key) {
+        log.workspace(`demo:set_form_field → ${section}.${key} = ${value}`)
+        setFormStateWithEvents(prev => ({
+          ...prev,
+          [section]: { ...prev[section], [key]: value }
+        }))
+      }
+    }
+    window.addEventListener('demo:set_form_field', handler)
+    return () => window.removeEventListener('demo:set_form_field', handler)
+  }, [setFormStateWithEvents])
+
+  // ── Demo: listen for demo:new_chat to reset state for live run ─────────
+  useEffect(() => {
+    const handler = () => {
+      log.step('demo:new_chat → resetting for demo live run')
+      handleNewChat()
+    }
+    window.addEventListener('demo:new_chat', handler)
+    return () => window.removeEventListener('demo:new_chat', handler)
+  }, [handleNewChat])
+
+  // ── Track user interaction to hide Demo button ─────────────────────────
+  // Once user sends ANY message (not boot), hide the demo button permanently
+  useEffect(() => {
+    if (hasUserStarted) return
+    const userMsgs = messages.filter(m => m.role === 'user')
+    if (userMsgs.length > 0) {
+      setHasUserStarted(true)
+    }
+  }, [messages, hasUserStarted])
+
   // Listen for agent:workspace_confirm — user clicked Đồng ý on a proposal block
   useEffect(() => {
     const STEP_PRIMARY_FIELDS = { 0: 'brief', 1: 'segment', 2: 'creative', 3: 'setup' }
@@ -729,31 +783,37 @@ export default function App() {
   // ── isMobile helper (used for conditional inline styles) ──────────────────
   // Read at render-time. Tailwind md: breakpoints handle the class-based
   // layout switching automatically on resize.
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
   return (
+    <DemoProvider busy={busy} messages={messages} onSendMessage={sendMessage} onApprove={handleApprove}>
     <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 to-brand-50/30 overflow-hidden">
-      <TopBar onReset={handleReset} onNewChat={handleNewChat} />
+      <TopBar onReset={handleReset} onNewChat={handleNewChat} showDemo={!hasUserStarted} />
+
+      {/* Mobile-only Tab Bar — hidden on desktop (md:hidden) */}
+      <div className="md:hidden flex-shrink-0">
+        <TabBar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          chatHasNew={chatHasNew}
+          workspaceHasNew={workspaceHasNew}
+        />
+      </div>
 
       {/*
-        Mobile layout: flex-col, Workspace on TOP, Chat on BOTTOM.
+        Mobile layout: flex-col, one pane visible at a time via activeTab.
         Desktop layout: flex-row (md:flex-row), Chat on LEFT (42%), Workspace on RIGHT.
-
-        We use CSS `order` to reorder without changing the DOM:
-          Workspace: order-1 on mobile (top), md:order-2 (right)
-          Chat:      order-3 on mobile (bottom), md:order-1 (left)
+        md:flex on each pane overrides the mobile `hidden` so both show on desktop.
       */}
       <main ref={mainRef} className="flex flex-1 min-h-0 overflow-hidden flex-col md:flex-row">
 
         {/* ── Workspace Pane ──────────────────────────────────────────
-            Mobile: TOP (order-1), height = (1 - splitRatio)
-            Desktop: RIGHT side, flex-1                              */}
-        <div
-          className="order-1 md:order-2 flex flex-col min-w-0 overflow-hidden bg-white
-                     md:flex-1 md:h-full
-                     transition-[height] duration-300 ease-in-out"
-          style={isMobile ? { height: `${(1 - splitRatio) * 100}%` } : undefined}
-        >
+            Mobile: shown when activeTab==='workspace', hidden otherwise
+            Desktop: RIGHT side, flex-1 (always visible)             */}
+        <div data-demo="workspace-pane" className={`
+          md:order-2 flex flex-col min-w-0 overflow-hidden bg-white
+          md:flex-1 md:h-full
+          ${activeTab === 'workspace' ? 'flex-1' : 'hidden md:flex'}
+        `}>
           <WorkspacePane
             ref={workspaceRef}
             steps={STEPS}
@@ -771,30 +831,16 @@ export default function App() {
           />
         </div>
 
-        {/* ── Draggable Divider ─────────────────────────────────────
-            Mobile only (md:hidden inside component), order-2       */}
-        <div className="order-2 md:hidden">
-          <SplitDivider
-            onDrag={handleSplitDrag}
-            splitRatio={splitRatio}
-            onWorkspaceExpand={handleWorkspaceExpand}
-            onChatExpand={handleChatExpand}
-            chatHasNew={chatHasNew}
-            workspaceHasNew={workspaceHasNew}
-          />
-        </div>
-
         {/* ── Chat Pane ─────────────────────────────────────────────
-            Mobile: BOTTOM (order-3), height = splitRatio
-            Desktop: LEFT side, flex-[0_0_42%]                      */}
-        <div
-          className="order-3 md:order-1 flex flex-col min-w-0 overflow-hidden
-                     bg-white/60 backdrop-blur-sm border-border
-                     border-t md:border-t-0 md:border-r
-                     md:flex-[0_0_42%] md:h-full
-                     transition-[height] duration-300 ease-in-out"
-          style={isMobile ? { height: `${splitRatio * 100}%` } : undefined}
-        >
+            Mobile: shown when activeTab==='chat', hidden otherwise
+            Desktop: LEFT side, flex-[0_0_42%] (always visible)     */}
+        <div data-demo="chat-pane" className={`
+          md:order-1 flex flex-col min-w-0 overflow-hidden
+          bg-white/60 backdrop-blur-sm border-border
+          md:border-t-0 md:border-r
+          md:flex-[0_0_42%] md:h-full
+          ${activeTab === 'chat' ? 'flex-1' : 'hidden md:flex'}
+        `}>
           <ChatPane
             messages={messages}
             busy={busy}
@@ -803,11 +849,12 @@ export default function App() {
             onBack={() => !busy && currentStep > 0 && setCurrentStep(prev => prev - 1)}
             onRetry={retryLastMessage}
             canRetry={canRetry && !busy}
-            chatCompact={isMobile && splitRatio < 0.38}
           />
         </div>
 
       </main>
     </div>
+    </DemoProvider>
   )
 }
+

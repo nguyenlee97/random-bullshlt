@@ -132,12 +132,11 @@ function exportChatLog(messages) {
 }
 
 // ─── ChatPane ───────────────────────────────────────────────────────────────────────────────
-export default function ChatPane({ messages, busy, currentStep, onSend, onBack, onRetry, canRetry, chatCompact }) {
+export default function ChatPane({ messages, busy, currentStep, onSend, onBack, onRetry, canRetry }) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Pane header — hidden on mobile when chat is compact (workspace expanded) */}
-      {!chatCompact && (
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-white/80 flex-shrink-0">
+      {/* Pane header */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-white/80 flex-shrink-0">
           <MessageSquare className="w-4 h-4 text-blue-500" />
           <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Chat</span>
           <span className="ml-1 text-xs text-muted-foreground">· Trao đổi với Agent</span>
@@ -162,17 +161,14 @@ export default function ChatPane({ messages, busy, currentStep, onSend, onBack, 
             </button>
           </div>
         </div>
-      )}
 
-      {/* Thread — hidden when chat is compact on mobile */}
-      {!chatCompact && (
-        <div className="flex flex-col flex-1 min-h-0 bg-gradient-to-b from-slate-50/50 to-white">
-          <ChatThread messages={messages} canRetry={canRetry} onRetry={onRetry} onSend={onSend} />
-        </div>
-      )}
+      {/* Thread — always visible */}
+      <div className="flex flex-col flex-1 min-h-0 bg-gradient-to-b from-slate-50/50 to-white">
+        <ChatThread messages={messages} canRetry={canRetry} onRetry={onRetry} onSend={onSend} />
+      </div>
 
       {/* Composer — always visible */}
-      <ChatComposer busy={busy} currentStep={currentStep} onSend={onSend} onBack={onBack} chatCompact={chatCompact} />
+      <ChatComposer busy={busy} currentStep={currentStep} onSend={onSend} onBack={onBack} />
     </div>
   )
 }

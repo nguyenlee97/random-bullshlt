@@ -168,6 +168,7 @@ export default function TargetingForm({ targeting = {}, onChange }) {
       <button
         onClick={() => setExpanded(e => !e)}
         className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50 transition-colors text-left"
+        data-demo="targeting-panel-toggle"
       >
         <Target className="w-4 h-4 text-slate-400 flex-shrink-0" />
         <span className="text-xs font-bold text-slate-600">Targeting Parameters</span>
@@ -241,6 +242,7 @@ export default function TargetingForm({ targeting = {}, onChange }) {
               <button
                 onClick={() => setAdvExpanded(e => !e)}
                 className="w-full flex items-center gap-2 mt-3 py-1.5 text-left"
+                data-demo="advanced-targeting-toggle"
               >
                 <div className="flex-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-t border-slate-100 pt-1.5">
                   Advanced Targeting

@@ -1,0 +1,516 @@
+// ─── DemoEngine: React Context + Controller Hook ────────────────────────────
+// Drives the demo walkthrough by advancing through step sequences,
+// performing DOM actions, and communicating with App.jsx via custom events.
+
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
+import DemoOverlay from './DemoOverlay'
+import { STAGE1_STEPS, buildStage2Steps, pickRandomBrief } from './demoScripts'
+import log from '@/lib/logger'
+
+const DemoContext = createContext(null)
+
+export function useDemo() {
+  return useContext(DemoContext)
+}
+
+// ─── State machine phases ────────────────────────────────────────────────────
+const PHASE = {
+  IDLE: 'idle',
+  CONFIRM_START: 'confirm_start',
+  STAGE1: 'stage1',
+  CONFIRM_LIVE: 'confirm_live',
+  STAGE2: 'stage2',
+  COMPLETE: 'complete',
+}
+
+// ─── Helper: get element rect with retry ─────────────────────────────────────
+function getRect(selector, retries = 5) {
+  return new Promise((resolve) => {
+    let attempts = 0
+    const tryFind = () => {
+      const el = document.querySelector(selector)
+      if (el) {
+        const rect = el.getBoundingClientRect()
+        resolve({ top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height })
+      } else if (attempts < retries) {
+        attempts++
+        setTimeout(tryFind, 300)
+      } else {
+        log.error(`DemoEngine: element not found: ${selector}`)
+        resolve(null)
+      }
+    }
+    tryFind()
+  })
+}
+
+// ─── Helper: scroll element into view ────────────────────────────────────────
+function scrollIntoView(selector) {
+  const el = document.querySelector(selector)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+}
+
+
+// ─── DemoProvider ────────────────────────────────────────────────────────────
+export function DemoProvider({ children, busy, messages, onSendMessage, onApprove }) {
+  const [phase, setPhase] = useState(PHASE.IDLE)
+  const [stepIdx, setStepIdx] = useState(0)
+  const [steps, setSteps] = useState([])
+  const [targetRect, setTargetRect] = useState(null)
+  const [isWaiting, setIsWaiting] = useState(false)
+  const [popup, setPopup] = useState(null)
+  const briefRef = useRef(null)
+  const eventCleanupRef = useRef(null)
+  const busyRef = useRef(busy)
+  const messagesRef = useRef(messages)
+  const prevMsgCountRef = useRef(0)
+
+  // Keep refs fresh
+  useEffect(() => { busyRef.current = busy }, [busy])
+  useEffect(() => { messagesRef.current = messages }, [messages])
+
+  const isActive = phase !== PHASE.IDLE && phase !== PHASE.COMPLETE
+
+  const currentStep = isActive && steps[stepIdx] ? steps[stepIdx] : null
+
+  // ── Cleanup event listener on unmount ──────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (eventCleanupRef.current) eventCleanupRef.current()
+    }
+  }, [])
+
+  // ── Update target rect when step changes ───────────────────────────────
+  useEffect(() => {
+    if (!currentStep) {
+      setTargetRect(null)
+      return
+    }
+
+    const target = currentStep.target || currentStep.tooltip?.target
+    if (target) {
+      scrollIntoView(target)
+      // Small delay for scroll to settle
+      const timer = setTimeout(async () => {
+        const rect = await getRect(target)
+        setTargetRect(rect)
+      }, 200)
+      return () => clearTimeout(timer)
+    } else {
+      setTargetRect(null)
+    }
+  }, [currentStep, stepIdx, phase])
+
+  // ── Execute step action ────────────────────────────────────────────────
+  const executeStep = useCallback(async (step, idx) => {
+    if (!step) return
+
+    log.step(`DemoEngine: executing step ${idx} type=${step.type}`)
+
+    switch (step.type) {
+      case 'TOOLTIP':
+      case 'HIGHLIGHT_EL':
+        // Just show tooltip — user clicks "Tiếp theo" to advance
+        break
+
+      case 'HIGHLIGHT_MSG': {
+        // Scroll to last assistant message
+        const thread = document.querySelector('[data-demo="chat-thread"]')
+        if (thread) {
+          const bubbles = thread.querySelectorAll('[data-demo="msg-bubble"]')
+          const last = bubbles[bubbles.length - 1]
+          if (last) {
+            last.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            const rect = last.getBoundingClientRect()
+            setTargetRect({ top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height })
+          }
+        }
+        break
+      }
+
+      case 'TYPE_AND_SEND': {
+        setIsWaiting(true)
+        const input = document.querySelector('#chat-input')
+        if (input) {
+          const proto = input.tagName === 'TEXTAREA'
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype
+          const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value').set
+
+          // Type character by character
+          let i = 0
+          await new Promise(resolve => {
+            const typeChar = () => {
+              if (i <= step.text.length) {
+                nativeSetter.call(input, step.text.slice(0, i))
+                input.dispatchEvent(new Event('input', { bubbles: true }))
+                i++
+                setTimeout(typeChar, 15)
+              } else {
+                resolve()
+              }
+            }
+            typeChar()
+          })
+
+          // Pause then send
+          await new Promise(r => setTimeout(r, 400))
+          const sendBtn = document.querySelector('#chat-send-btn')
+          if (sendBtn && !sendBtn.disabled) sendBtn.click()
+        }
+        setIsWaiting(false)
+        // Immediately advance to WAIT_FOR_RESPONSE — which shows its own tooltip while waiting
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'WAIT_FOR_RESPONSE': {
+        setIsWaiting(true)
+        // Robust poll: wait for busy to appear, then clear
+        await new Promise(resolve => {
+          let seenBusy = false
+          const poll = () => {
+            if (!seenBusy && busyRef.current) {
+              seenBusy = true
+            }
+            // If we already went busy OR we haven't gone busy yet within 2s, then just wait for false
+            if (seenBusy && !busyRef.current) {
+              resolve()
+            } else {
+              setTimeout(poll, 150)
+            }
+          }
+          setTimeout(poll, 300)
+        })
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'EDIT_FIELD': {
+        const { path, value } = step
+        window.dispatchEvent(new CustomEvent('demo:set_form_field', {
+          detail: { path, value }
+        }))
+        // Refresh rect after field updates
+        await new Promise(r => setTimeout(r, 400))
+        const target = step.tooltip?.target
+        if (target) {
+          const rect = await getRect(target)
+          setTargetRect(rect)
+        }
+        break
+      }
+
+      case 'CLICK_EL': {
+        setIsWaiting(true)
+        const delay = step.delay || 300
+        await new Promise(r => setTimeout(r, delay))
+        const el = document.querySelector(step.target)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          await new Promise(r => setTimeout(r, 300))
+          el.click()
+        } else {
+          log.error(`DemoEngine: CLICK_EL target not found: ${step.target}`)
+        }
+        // Wait for any triggered busy cycle
+        await new Promise(r => setTimeout(r, 400))
+        if (busyRef.current) {
+          await new Promise(resolve => {
+            const poll = () => {
+              if (!busyRef.current) resolve()
+              else setTimeout(poll, 150)
+            }
+            poll()
+          })
+        }
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'WAIT_FOR_EVENT': {
+        setIsWaiting(true)
+        const { eventName, filter, timeout = 30000 } = step
+        await waitForCustomEvent(eventName, filter, timeout)
+        // Small extra wait for UI to settle
+        await new Promise(r => setTimeout(r, 1200))
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      // WAIT_FOR_MSG: like WAIT_FOR_EVENT but checks if message already exists first.
+      // Resolves immediately if the tool message is already in the messages list.
+      case 'WAIT_FOR_MSG': {
+        setIsWaiting(true)
+        const { metaTool, timeout = 30000 } = step
+
+        // Check if the message already arrived (user was slow clicking Tiếp theo)
+        const alreadyArrived = messagesRef.current.some(
+          m => m.metadata?.tool === metaTool
+        )
+
+        if (!alreadyArrived) {
+          // Wait for the live event
+          await new Promise((resolve) => {
+            let resolved = false
+            const handler = (e) => {
+              const tool = e.detail?.metadata?.tool
+              if (tool === metaTool && !resolved) {
+                resolved = true
+                window.removeEventListener('agent:inject_message', handler)
+                resolve()
+              }
+            }
+            window.addEventListener('agent:inject_message', handler)
+            eventCleanupRef.current = () => window.removeEventListener('agent:inject_message', handler)
+
+            setTimeout(() => {
+              if (!resolved) {
+                resolved = true
+                window.removeEventListener('agent:inject_message', handler)
+                log.error(`DemoEngine: WAIT_FOR_MSG timeout for metaTool=${metaTool}`)
+                resolve()
+              }
+            }, timeout)
+          })
+        }
+
+        // Small settle delay for UI to render
+        await new Promise(r => setTimeout(r, 600))
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'POPUP': {
+        setPopup(step)
+        break
+      }
+
+      case 'PAUSE': {
+        await new Promise(r => setTimeout(r, step.ms || 1000))
+        advanceStep(idx)
+        return
+      }
+
+
+      default:
+        log.error(`DemoEngine: unknown step type: ${step.type}`)
+    }
+  }, [])
+
+  // ── Wait for busy to become true then false ────────────────────────────
+  function waitForBusyCycle() {
+    return new Promise((resolve) => {
+      const check = () => {
+        if (!busyRef.current) {
+          resolve()
+        } else {
+          setTimeout(check, 200)
+        }
+      }
+      // Wait until busy goes true first, or if already true, wait for false
+      const waitForTrue = () => {
+        if (busyRef.current) {
+          check()
+        } else {
+          setTimeout(waitForTrue, 100)
+        }
+      }
+      // Give a small head start for the action to trigger busy
+      setTimeout(waitForTrue, 300)
+    })
+  }
+
+  // ── Wait for a custom DOM event ────────────────────────────────────────
+  function waitForCustomEvent(eventName, filter, timeout) {
+    return new Promise((resolve) => {
+      let resolved = false
+      const handler = (e) => {
+        if (filter?.metaTool) {
+          const tool = e.detail?.metadata?.tool
+          if (tool !== filter.metaTool) return
+        }
+        if (!resolved) {
+          resolved = true
+          window.removeEventListener(eventName, handler)
+          resolve()
+        }
+      }
+      window.addEventListener(eventName, handler)
+      eventCleanupRef.current = () => window.removeEventListener(eventName, handler)
+
+      // Timeout fallback
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true
+          window.removeEventListener(eventName, handler)
+          log.error(`DemoEngine: WAIT_FOR_EVENT timeout for ${eventName}`)
+          resolve()
+        }
+      }, timeout)
+    })
+  }
+
+  // ── Advance to next step ───────────────────────────────────────────────
+  const advanceStep = useCallback((fromIdx) => {
+    const nextIdx = (fromIdx ?? stepIdx) + 1
+    if (nextIdx >= steps.length) {
+      // End of current phase
+      handlePhaseEnd()
+    } else {
+      setStepIdx(nextIdx)
+    }
+  }, [stepIdx, steps])
+
+  // When stepIdx changes, execute the new step
+  useEffect(() => {
+    if (isActive && steps[stepIdx]) {
+      executeStep(steps[stepIdx], stepIdx)
+    }
+  }, [stepIdx, phase]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Handle end of a phase ──────────────────────────────────────────────
+  const handlePhaseEnd = useCallback(() => {
+    switch (phase) {
+      case PHASE.STAGE1:
+        setPhase(PHASE.CONFIRM_LIVE)
+        setPopup({
+          title: '🚀 Tiếp tục với Demo thực tế?',
+          text: 'Bạn đã nắm được giao diện. Tiếp theo, demo sẽ **tạo chiến dịch thật** với AI Agent.\n\nCần **kết nối backend** và mất khoảng 1–2 phút.',
+          buttons: [
+            { label: '🎬 Xem Demo thực tế', variant: 'primary', action: 'live' },
+            { label: '⏭ Bỏ qua', variant: 'ghost', action: 'skip' },
+          ],
+        })
+        break
+      case PHASE.STAGE2:
+        setPhase(PHASE.COMPLETE)
+        setPopup(null)
+        break
+      default:
+        setPhase(PHASE.IDLE)
+        setPopup(null)
+    }
+  }, [phase])
+
+  // ── Public API ─────────────────────────────────────────────────────────
+
+  const startDemo = useCallback(() => {
+    log.step('DemoEngine: startDemo')
+    if (window.innerWidth < 768) return // PC only
+
+    setPhase(PHASE.CONFIRM_START)
+    setPopup({
+      title: '🎯 Khởi động Demo',
+      text: 'Chọn loại demo bạn muốn trải nghiệm:\n\n**Hướng dẫn giao diện** — Tour nhanh các thành phần UI \n\n**Demo thực tế** — AI thực hiện tạo chiến dịch thật từ đầu đến cuối',
+      buttons: [
+        { label: '🖥 Hướng dẫn giao diện', variant: 'outline', action: 'tour' },
+        { label: '🎬 Demo thực tế', variant: 'primary', action: 'live' },
+        { label: '✕ Bỏ qua', variant: 'ghost', action: 'skip' },
+      ],
+    })
+  }, [])
+
+  const stopDemo = useCallback(() => {
+    log.step('DemoEngine: stopDemo')
+    setPhase(PHASE.IDLE)
+    setStepIdx(0)
+    setSteps([])
+    setTargetRect(null)
+    setIsWaiting(false)
+    setPopup(null)
+    if (eventCleanupRef.current) eventCleanupRef.current()
+  }, [])
+
+  // ── Handle popup button actions ────────────────────────────────────────
+  const handlePopupAction = useCallback((action) => {
+    setPopup(null)
+
+    if (action === 'skip') {
+      stopDemo()
+      return
+    }
+
+    switch (phase) {
+      case PHASE.CONFIRM_START: {
+        if (action === 'tour') {
+          // Stage 1 UI Tour
+          setSteps([...STAGE1_STEPS])
+          setStepIdx(0)
+          setPhase(PHASE.STAGE1)
+        } else if (action === 'live') {
+          // Skip tour, go straight to live demo
+          startLiveDemo()
+        }
+        break
+      }
+      case PHASE.CONFIRM_LIVE: {
+        if (action === 'live') {
+          startLiveDemo()
+        } else {
+          stopDemo()
+        }
+        break
+      }
+      case PHASE.STAGE2:
+        // POPUP step within stage 2 — advance
+        setStepIdx(prev => prev + 1)
+        break
+      case PHASE.COMPLETE:
+        stopDemo()
+        break
+      default:
+        stopDemo()
+    }
+  }, [phase, stopDemo]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function startLiveDemo() {
+    // FIX: clear steps immediately to prevent Stage1 steps from flashing
+    // during the 2s new-chat settle delay
+    setSteps([])
+    setStepIdx(0)
+    setTargetRect(null)
+    window.dispatchEvent(new CustomEvent('demo:new_chat'))
+    briefRef.current = pickRandomBrief()
+    log.step(`DemoEngine: picked brief "${briefRef.current.id}"`)
+    setTimeout(() => {
+      const s2 = buildStage2Steps(briefRef.current)
+      setSteps(s2)
+      setStepIdx(0)
+      setPhase(PHASE.STAGE2)
+      prevMsgCountRef.current = messagesRef.current.length
+    }, 2000)
+  }
+
+  // ── Handle "Tiếp theo" click ───────────────────────────────────────────
+  const handleNext = useCallback(() => {
+    if (isWaiting) return
+    advanceStep(stepIdx)
+  }, [isWaiting, stepIdx, advanceStep])
+
+  const totalSteps = steps.length
+
+  return (
+    <DemoContext.Provider value={{ isActive, phase, startDemo, stopDemo }}>
+      {children}
+      <DemoOverlay
+        isActive={isActive || popup !== null}
+        currentStep={currentStep}
+        stepIdx={stepIdx}
+        totalSteps={totalSteps}
+        targetRect={targetRect}
+        onNext={handleNext}
+        onSkip={stopDemo}
+        isWaiting={isWaiting}
+        popup={popup}
+        onPopupAction={handlePopupAction}
+      />
+    </DemoContext.Provider>
+  )
+}

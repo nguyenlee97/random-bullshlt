@@ -189,61 +189,66 @@ AD_FORMATS: dict[str, dict] = {
 
 # ─── Prompt builder ───────────────────────────────────────────────────────────
 PROMPT_WRAPPER = """\
-You are an expert commercial art director and AI image generator. Your task is to generate a digital marketing ad image by combining a specific marketing campaign brief with a strict layout structure.
+You are an expert commercial art director and AI image generator. Your task is to generate a single digital marketing ad image that combines a campaign brief with a specific layout structure.
 
 === INPUT 1: CAMPAIGN BRIEF ===
 {brief_text}
 
-=== INPUT 2: TARGET DIMENSIONS ===
-{width} × {height} pixels
+=== INPUT 2: AD FORMAT ===
+Format: {label}
+Output ratio: {api_ratio} (standard generation size — do NOT try to simulate a different aspect ratio inside the canvas)
 
 === INPUT 3: LAYOUT STRUCTURE ===
 {layout_description}
-
+{custom_prompt_block}
 === GENERATION INSTRUCTIONS ===
-{safe_zone_constraint}
+1. FILL THE FULL CANVAS: Generate content that fills the entire image naturally at the output ratio. Do NOT leave large empty areas or squish elements into a narrow strip.
 
-2. THEMATIC ADAPTATION: Do not use any objects or branding from the original layout description. Translate the campaign brief into appropriate visual elements.
-   - Replace placeholder objects with items relevant to the brief.
-   - Match the overall mood and color palette to the campaign notes.
+2. THEMATIC ADAPTATION: Do not use placeholder objects or branding from the layout description. Replace all elements with visually appropriate equivalents based on the campaign brief.
+   - Match the mood, color palette, and energy described in the campaign notes.
 
-3. SPATIAL ADHERENCE: You MUST follow the exact structural arrangement described in the Layout Structure, but compress it into the safe zone defined in step 1.
+3. SPATIAL ADHERENCE: Follow the structural arrangement described (left/center/right, top/bottom zones) adapted naturally to the actual canvas shape.
 
-4. TEXT & TYPOGRAPHY: Incorporate text elements directly from the brief into the designated text areas of the layout. Keep it clean, bold, and readable. Do not hallucinate extra text.
+4. TEXT & TYPOGRAPHY: Incorporate the brand name and key message from the brief into the design. Keep text clean, bold, and readable. Do not hallucinate extra words.
 
-Generate the image adhering exactly to these constraints.\
+Generate the image now.\
 """
 
 
 def _build_brief_text(brief: dict) -> str:
+    """Only include visually-relevant fields. Budget, KPI, dates pollute the image prompt."""
     lines = []
     if brief.get("brand"):
         lines.append(f"Brand: {brief['brand']}")
-    if brief.get("objective"):
-        lines.append(f"Objective: {brief['objective']}")
-    if brief.get("kpi"):
-        lines.append(f"KPI: {brief['kpi']}")
-    if brief.get("budget"):
-        lines.append(f"Budget: {brief['budget']} triệu VND")
-    if brief.get("startDate") and brief.get("endDate"):
-        lines.append(f"Thời gian: {brief['startDate']} → {brief['endDate']}")
     if brief.get("notes"):
-        lines.append(f"Notes:\n{brief['notes']}")
+        lines.append(f"Campaign Theme / Audience:\n{brief['notes']}")
     return "\n".join(lines) if lines else "No brief provided."
 
 
-def _build_prompt(fmt: dict, brief: dict) -> str:
+def _build_prompt(fmt: dict, brief: dict, custom_prompt: str = "") -> str:
+    # Determine which of the 3 standard gpt-image-1 ratios this format maps to
+    ratio = fmt["width"] / fmt["height"]
+    if ratio > 1.2:
+        api_ratio = "1536×1024 (landscape, ~3:2)"
+    elif ratio < 0.9:
+        api_ratio = "1024×1536 (portrait, ~2:3)"
+    else:
+        api_ratio = "1024×1024 (square, 1:1)"
+
+    custom_block = ""
+    if custom_prompt and custom_prompt.strip():
+        custom_block = f"\n=== INPUT 4: CUSTOM STYLE INSTRUCTIONS ===\n{custom_prompt.strip()}\n"
     return PROMPT_WRAPPER.format(
         brief_text=_build_brief_text(brief),
-        width=fmt["width"],
-        height=fmt["height"],
+        label=fmt["label"],
+        api_ratio=api_ratio,
         layout_description=fmt["layoutDescription"],
-        safe_zone_constraint=fmt["safeZoneConstraint"],
+        custom_prompt_block=custom_block,
     )
 
 
 # ─── Handler ──────────────────────────────────────────────────────────────────
-async def handle_generate_image(session_id: str, brief: dict, format_id: str) -> dict:
+async def handle_generate_image(session_id: str, brief: dict, format_id: str, custom_prompt: str = "") -> dict:
     """
     Generate an ad image using gpt-image-1.
     Returns: {ok, imageB64, formatId, width, height, remaining} | {ok: False, error}
@@ -264,7 +269,7 @@ async def handle_generate_image(session_id: str, brief: dict, format_id: str) ->
         }
 
     # Build prompt
-    prompt = _build_prompt(fmt, brief)
+    prompt = _build_prompt(fmt, brief, custom_prompt=custom_prompt)
 
     # Call VNG Cloud image API
     api_key = config.AI_PLATFORM_API_KEY

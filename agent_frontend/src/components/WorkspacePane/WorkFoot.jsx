@@ -55,6 +55,7 @@ export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canA
             onClick={onApprove}
             disabled={!canApprove || busy}
             className={cn('h-9 gap-1.5', canApprove && !busy && 'shadow-glow-green')}
+            data-demo="approve-btn"
           >
             {busy ? (
               <><Loader2 className="w-3.5 h-3.5 animate-spin" />Đang xử lý...</>

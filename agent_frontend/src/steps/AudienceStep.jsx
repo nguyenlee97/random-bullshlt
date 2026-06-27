@@ -145,7 +145,7 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
       />
 
       {/* AI Recommended — fetched from backend LLM based on real DMP + brief */}
-      <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 overflow-hidden">
+      <div data-demo="ai-reco-section" className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-amber-200 bg-amber-100/60">
           <BrainCircuit className="w-4 h-4 text-amber-600" />
           <span className="text-xs font-bold text-amber-700">
@@ -174,7 +174,7 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
       </div>
 
       {/* Expand full list */}
-      <Button variant="outline" size="sm" onClick={() => setExpanded(e => !e)} className="w-full gap-2 text-xs h-9">
+      <Button variant="outline" size="sm" onClick={() => setExpanded(e => !e)} className="w-full gap-2 text-xs h-9" data-demo="expand-segments-btn">
         {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         {expanded ? 'Thu gọn danh sách' : `Xem thêm ${loading ? '…đang tải' : `${filtered.length} segments khác`}`}
       </Button>

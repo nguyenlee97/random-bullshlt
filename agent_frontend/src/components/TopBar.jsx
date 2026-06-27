@@ -1,9 +1,12 @@
-import { Bot, Zap, RotateCcw, MessageSquarePlus } from 'lucide-react'
+import { Bot, Zap, RotateCcw, MessageSquarePlus, Play } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { useDemo } from '@/demo/DemoEngine'
 
-export default function TopBar({ onReset, onNewChat }) {
+export default function TopBar({ onReset, onNewChat, showDemo }) {
+  const demo = useDemo()
+
   return (
     <header className="h-14 flex items-center gap-3 px-5 border-b border-border bg-white/95 backdrop-blur-md shadow-sm flex-shrink-0 z-10">
       {/* Logo */}
@@ -34,6 +37,21 @@ export default function TopBar({ onReset, onNewChat }) {
         <span className="text-xs text-muted-foreground hidden sm:block">
           Powered by GreenNode AI
         </span>
+
+        {/* Demo button — PC only, hidden once user starts interacting */}
+        {showDemo && demo && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={demo.startDemo}
+            className="hidden md:flex gap-1.5 text-xs h-8 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 animate-pulse hover:animate-none"
+            id="demo-btn"
+          >
+            <Play className="w-3.5 h-3.5" />
+            Demo
+          </Button>
+        )}
+
         {/* New Chat — clears chat + resets workspace */}
         <Button
           variant="default"
@@ -46,7 +64,7 @@ export default function TopBar({ onReset, onNewChat }) {
           <span className="hidden sm:inline">New Chat</span>
         </Button>
         {/* Đặt lại — workspace reset only */}
-        <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5 text-xs h-8">
+        <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5 text-xs h-8" data-demo="reset-btn">
           <RotateCcw className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Đặt lại</span>
         </Button>

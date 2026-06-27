@@ -122,7 +122,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
 
       {/* Step body */}
       <ScrollArea className="flex-1" ref={bodyRef}>
-        <div className="p-5">
+        <div data-demo="step-body" className="p-5">
           {/* Step heading */}
           <div className={cn('flex items-center gap-3 mb-1', isDone && 'opacity-90')}>
             <div className={cn(

@@ -5,63 +5,11 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
   Sparkles, Loader2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
-  X, PlusCircle, ImageIcon, ZoomIn, Wand2,
+  X, PlusCircle, ImageIcon, ZoomIn, Wand2, Pencil,
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
 import { AD_FORMATS, AD_FORMATS_MAP } from '@/data/adFormats'
-
-// ─── Canvas resize (with optional crop) ──────────────────────────────────────
-// Strategy:
-//   1. If src aspect ratio is within RATIO_TOLERANCE of target → skip crop, just scale.
-//   2. If ratio mismatch is too large → crop to the correct ratio (using anchor),
-//      then scale to exact target dimensions.
-// This preserves more image content when gpt-image-1 returns a close-enough ratio.
-const RATIO_TOLERANCE = 0.15  // allow 15% ratio difference before cropping
-
-function cropAndResize(base64, targetW, targetH, anchor = 'center') {
-  return new Promise((resolve) => {
-    const img = new window.Image()
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = targetW
-      canvas.height = targetH
-      const ctx = canvas.getContext('2d')
-
-      const srcRatio = img.width / img.height
-      const dstRatio = targetW / targetH
-      const ratioDiff = Math.abs(srcRatio - dstRatio) / dstRatio
-
-      if (ratioDiff <= RATIO_TOLERANCE) {
-        // ✅ Ratio is close enough — scale the entire image, no crop
-        ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, targetW, targetH)
-      } else {
-        // ✂️ Ratio too different — crop to target ratio first, then scale
-        let sx, sy, sw, sh
-        if (srcRatio > dstRatio) {
-          // Source is wider → crop left/right sides using anchor
-          sh = img.height
-          sw = sh * dstRatio
-          sx = anchor === 'left'  ? 0
-             : anchor === 'right' ? img.width - sw
-             : (img.width - sw) / 2   // center
-          sy = 0
-        } else {
-          // Source is taller → crop top/bottom using anchor
-          sw = img.width
-          sh = sw / dstRatio
-          sx = 0
-          sy = anchor === 'top' ? 0 : (img.height - sh) / 2   // top or center
-        }
-        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH)
-      }
-
-      resolve(canvas.toDataURL('image/png'))
-    }
-    img.onerror = () => resolve(`data:image/png;base64,${base64}`)  // fallback: raw
-    img.src = `data:image/png;base64,${base64}`
-  })
-}
-
+import ImageCropModal from './ImageCropModal'
 
 // ─── Format Card ──────────────────────────────────────────────────────────────
 function FormatCard({ fmt, selected, onClick }) {
@@ -130,7 +78,7 @@ function GenImageCard({ img, selected, onToggle, onRemove, onPreview }) {
             <ZoomIn className="w-4 h-4" />
           </div>
         </div>
-        {/* Selection checkbox — stops propagation so it doesn't open lightbox */}
+        {/* Selection checkbox */}
         <div
           className={cn(
             'absolute top-1.5 left-1.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer',
@@ -148,13 +96,13 @@ function GenImageCard({ img, selected, onToggle, onRemove, onPreview }) {
           <X className="w-2.5 h-2.5" />
         </button>
       </div>
-      {/* Footer — clicking selects/deselects */}
+      {/* Footer */}
       <div
         className="px-2 py-1.5 cursor-pointer hover:bg-muted/30 transition-colors"
         onClick={() => onToggle(img.id)}
       >
         <p className="text-[10px] font-semibold text-foreground truncate">{fmt.label || img.name}</p>
-        <p className="text-[10px] text-muted-foreground">{fmt.width}×{fmt.height}px</p>
+        <p className="text-[10px] text-muted-foreground">{img.width}×{img.height}px</p>
       </div>
     </div>
   )
@@ -183,7 +131,7 @@ function GenLightbox({ img, onClose }) {
         />
         <p className="text-white/80 text-sm text-center mt-3 font-medium">
           {fmt.label || img.name}
-          <span className="ml-2 text-white/50 text-xs">{fmt.width}×{fmt.height}px</span>
+          <span className="ml-2 text-white/50 text-xs">{img.width}×{img.height}px</span>
         </p>
       </div>
     </div>
@@ -200,6 +148,12 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
   const [remaining, setRemaining]               = useState(10)
   const [briefExpanded, setBriefExpanded]       = useState(false)
   const [lightboxImg, setLightboxImg]           = useState(null)
+  const [customPrompt, setCustomPrompt]         = useState('')
+  const [promptExpanded, setPromptExpanded]     = useState(false)
+
+  // Pending crop: raw response waiting for user crop action
+  // { b64, formatId, width, height }
+  const [pendingCrop, setPendingCrop] = useState(null)
 
   // Fetch initial quota
   useEffect(() => {
@@ -211,7 +165,7 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
     setGenerating(true)
     setError('')
 
-    const result = await AgentAPI.generateAdImage(brief, selectedFormatId)
+    const result = await AgentAPI.generateAdImage(brief, selectedFormatId, customPrompt)
 
     if (!result.ok) {
       setError(result.error || 'Tạo ảnh thất bại — hãy thử lại')
@@ -222,31 +176,49 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
     // Update quota from server response
     setRemaining(result.remaining ?? Math.max(0, remaining - 1))
 
-    // Canvas crop+resize to exact dimensions
-    const fmt = AD_FORMATS_MAP[selectedFormatId]
-    const croppedDataUrl = await cropAndResize(
-      result.imageB64,
-      result.width,
-      result.height,
-      fmt?.cropAnchor || 'center',
-    )
+    // Open crop modal instead of auto-cropping
+    setPendingCrop({
+      b64:      result.imageB64,
+      formatId: selectedFormatId,
+      width:    result.width,
+      height:   result.height,
+    })
+    setGenerating(false)
+  }, [selectedFormatId, generating, remaining, brief, customPrompt])
 
+  // ── After crop modal resolves ─────────────────────────────────────────────
+  const finishImage = useCallback((croppedDataUrl, fmtId, w, h) => {
     const timestamp = Date.now()
     const newImg = {
-      id: `ai-${selectedFormatId}-${timestamp}`,
-      name: `ai-${selectedFormatId}-${timestamp}.png`,
+      id: `ai-${fmtId}-${timestamp}`,
+      name: `ai-${fmtId}-${timestamp}.png`,
       type: 'image/png',
       size: Math.round(croppedDataUrl.length * 0.75),
       dataUrl: croppedDataUrl,
-      width: result.width,
-      height: result.height,
-      formatId: selectedFormatId,
+      width: w,
+      height: h,
+      formatId: fmtId,
       aiGenerated: true,
     }
-
     setGeneratedImages(prev => [newImg, ...prev])
-    setGenerating(false)
-  }, [selectedFormatId, generating, remaining, brief])
+    setPendingCrop(null)
+  }, [])
+
+  const handleCropConfirm = useCallback((croppedDataUrl) => {
+    if (!pendingCrop) return
+    const fmt = AD_FORMATS_MAP[pendingCrop.formatId]
+    finishImage(croppedDataUrl, pendingCrop.formatId, fmt?.width ?? pendingCrop.width, fmt?.height ?? pendingCrop.height)
+  }, [pendingCrop, finishImage])
+
+  const handleScale = useCallback((scaledDataUrl) => {
+    if (!pendingCrop) return
+    const fmt = AD_FORMATS_MAP[pendingCrop.formatId]
+    finishImage(scaledDataUrl, pendingCrop.formatId, fmt?.width ?? pendingCrop.width, fmt?.height ?? pendingCrop.height)
+  }, [pendingCrop, finishImage])
+
+  const handleCropCancel = useCallback(() => {
+    setPendingCrop(null)
+  }, [])
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
@@ -265,7 +237,6 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
     const toAdd = generatedImages.filter(i => selectedIds.has(i.id))
     if (!toAdd.length) return
     onAddToCreative(toAdd)
-    // Deselect after adding
     setSelectedIds(new Set())
   }
 
@@ -274,14 +245,10 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
                    : remaining <= 3  ? 'text-amber-700 bg-amber-50 border-amber-200'
                    : 'text-violet-700 bg-violet-50 border-violet-200'
 
-  // Brief + audience summary for preview
+  // Brief preview — only visually-relevant fields (mirrors backend)
   const briefLines = [
-    brief?.brand      && `🏷 Brand: ${brief.brand}`,
-    brief?.objective  && `🎯 Objective: ${brief.objective}`,
-    brief?.kpi        && `📊 KPI: ${brief.kpi}`,
-    brief?.budget     && `💰 Budget: ${brief.budget}M VND`,
-    (brief?.startDate && brief?.endDate) && `📅 ${brief.startDate} → ${brief.endDate}`,
-    brief?.notes      && `📝 Notes:\n${brief.notes}`,
+    brief?.brand && `🏷 Brand: ${brief.brand}`,
+    brief?.notes && `📝 Notes: ${brief.notes}`,
   ].filter(Boolean)
 
   const audienceLines = (segment?.attrs || []).map(a =>
@@ -295,8 +262,23 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
     .filter(([, v]) => v && (Array.isArray(v) ? v.length : true))
     .map(([k, v]) => `• ${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
 
+  const pendingFmt = pendingCrop ? (AD_FORMATS_MAP[pendingCrop.formatId] || {}) : null
+
   return (
     <div className="space-y-4">
+
+      {/* Crop modal — rendered when API returns raw image */}
+      {pendingCrop && (
+        <ImageCropModal
+          src={pendingCrop.b64}
+          targetW={pendingFmt?.width  ?? pendingCrop.width}
+          targetH={pendingFmt?.height ?? pendingCrop.height}
+          label={pendingFmt?.label ?? pendingCrop.formatId}
+          onConfirm={handleCropConfirm}
+          onScale={handleScale}
+          onCancel={handleCropCancel}
+        />
+      )}
 
       {/* Quota counter */}
       <div className={cn('flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold', quotaColor)}>
@@ -307,48 +289,47 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
         <span>{remaining}/10 lượt còn lại</span>
       </div>
 
-      {/* Brief preview */}
+      {/* Brief preview (collapsed by default) */}
       <Card className="border-slate-200 bg-slate-50">
         <CardContent className="py-2.5 px-3">
           <button
             onClick={() => setBriefExpanded(e => !e)}
             className="w-full flex items-center justify-between text-xs font-semibold text-slate-600"
           >
-            <span>📋 Brief hiện tại ({brief?.brand || 'chưa có'})</span>
+            <span>📋 Brief ({brief?.brand || 'chưa có'}) — Brand + Notes</span>
             {briefExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
           {briefExpanded && (
-          <div className="mt-2 space-y-1">
-            {briefLines.length === 0 && (
-              <p className="text-[11px] text-amber-700">⚠ Hoàn thành bước Brief trước để prompt chính xác hơn.</p>
-            )}
-            {briefLines.map((l, i) => (
-              <p key={i} className="text-[11px] text-slate-700 whitespace-pre-wrap">{l}</p>
-            ))}
+            <div className="mt-2 space-y-1">
+              {briefLines.length === 0 && (
+                <p className="text-[11px] text-amber-700">⚠ Hoàn thành bước Brief trước để prompt chính xác hơn.</p>
+              )}
+              <p className="text-[10px] text-slate-400 italic">
+                💡 Chỉ Brand & Notes được dùng trong prompt ảnh. KPI, budget, ngày tháng không ảnh hưởng visual.
+              </p>
+              {briefLines.map((l, i) => (
+                <p key={i} className="text-[11px] text-slate-700 whitespace-pre-wrap">{l}</p>
+              ))}
 
-            {audienceLines.length > 0 && (
-              <>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-2">👥 Audience Segments</p>
-                {audienceLines.map((l, i) => (
-                  <p key={i} className="text-[11px] text-slate-700">{l}</p>
-                ))}
-              </>
-            )}
+              {audienceLines.length > 0 && (
+                <>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-2">👥 Audience Segments</p>
+                  {audienceLines.map((l, i) => (
+                    <p key={i} className="text-[11px] text-slate-700">{l}</p>
+                  ))}
+                </>
+              )}
 
-            {targetingLines.length > 0 && (
-              <>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-2">🎯 Targeting Parameters</p>
-                {targetingLines.map((l, i) => (
-                  <p key={i} className="text-[11px] text-slate-700">{l}</p>
-                ))}
-              </>
-            )}
-
-            {audienceLines.length === 0 && targetingLines.length === 0 && briefLines.length > 0 && (
-              <p className="text-[10px] text-amber-600 mt-1">💡 Hoàn thành bước Audience để thêm segment vào prompt.</p>
-            )}
-          </div>
-        )}
+              {targetingLines.length > 0 && (
+                <>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-2">🎯 Targeting Parameters</p>
+                  {targetingLines.map((l, i) => (
+                    <p key={i} className="text-[11px] text-slate-700">{l}</p>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -367,6 +348,47 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
             />
           ))}
         </div>
+      </div>
+
+      {/* Custom prompt */}
+      <div className="rounded-xl border border-border overflow-hidden">
+        <button
+          onClick={() => setPromptExpanded(e => !e)}
+          className="w-full flex items-center justify-between px-3 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors text-xs font-semibold text-muted-foreground"
+          id="btn-toggle-custom-prompt"
+        >
+          <span className="flex items-center gap-1.5">
+            <Pencil className="w-3.5 h-3.5" />
+            Prompt tùy chỉnh
+            {customPrompt.trim() && (
+              <Badge className="text-[9px] h-4 px-1.5 bg-violet-100 text-violet-700 border-violet-200">Đã thêm</Badge>
+            )}
+          </span>
+          {promptExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
+        {promptExpanded && (
+          <div className="p-3 bg-white">
+            <p className="text-[10px] text-muted-foreground mb-2">
+              Thêm yêu cầu phong cách: màu sắc, bố cục, vibe, v.v. Ví dụ: <em>"retro style, warm orange palette, bold typography"</em>
+            </p>
+            <textarea
+              id="custom-prompt-input"
+              value={customPrompt}
+              onChange={e => setCustomPrompt(e.target.value)}
+              placeholder="Ví dụ: minimalist design, pastel blue tones, no text overlay..."
+              rows={3}
+              className="w-full text-xs border border-border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 placeholder:text-muted-foreground/60"
+            />
+            {customPrompt.trim() && (
+              <button
+                onClick={() => setCustomPrompt('')}
+                className="text-[10px] text-red-500 hover:text-red-600 mt-1 flex items-center gap-0.5"
+              >
+                <X className="w-2.5 h-2.5" /> Xoá prompt
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Error */}

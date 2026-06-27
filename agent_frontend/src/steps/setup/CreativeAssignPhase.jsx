@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Check, AlertTriangle, CheckCircle2, Layers, ArrowRight, Film, Wand2 } from 'lucide-react'
-import { checkMismatch, scoreFile, getSelectedZones } from './setupUtils'
+import { checkMismatch, canCheckRatio, scoreFile, getSelectedZones } from './setupUtils'
 
 // ─── Single creative thumbnail option ─────────────────────────────────────────
 function CreativeOption({ file, zone, selected, onSelect, rank }) {
@@ -121,11 +121,13 @@ function AssignRow({ zone, files, assignedFileId, onAssign, onGroupSameSize, gro
             <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
             <p className="text-[10px] text-red-600">{mismatch}</p>
           </div>
-        ) : assignedFile ? (
+        ) : assignedFile && mismatch === false ? (
           <div className="flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-brand-500" />
             <p className="text-[10px] text-brand-600 font-medium">Tỷ lệ khớp ✓</p>
           </div>
+        ) : assignedFile && mismatch === null && !canCheckRatio(zone) ? (
+          <p className="text-[10px] text-muted-foreground italic">Skin format — kiểm tỷ lệ thủ công</p>
         ) : null}
 
         {assignedFile && groupedCount > 0 && (

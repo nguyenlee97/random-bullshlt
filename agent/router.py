@@ -11,6 +11,7 @@ from handlers.freeform import handle_freeform
 from handlers.report import handle_report_entry, handle_report_chat
 from handlers.email import handle_email_entry, handle_email_send
 from handlers.image_gen import handle_generate_image, get_remaining, AD_FORMATS
+from handlers.screenshot import handle_screenshot, ALLOWED_DOMAINS
 
 agent_router = APIRouter()
 
@@ -242,6 +243,7 @@ class GenerateImageRequest(BaseModel):
     session_id: str
     brief: dict = {}
     format_id: str
+    custom_prompt: str = ""
 
 
 @agent_router.post("/generate-image")
@@ -251,6 +253,7 @@ async def generate_image_route(req: GenerateImageRequest):
         session_id=req.session_id,
         brief=req.brief,
         format_id=req.format_id,
+        custom_prompt=req.custom_prompt,
     )
 
 
@@ -268,3 +271,29 @@ async def image_gen_formats_route():
         {"id": fid, "label": f["label"], "width": f["width"], "height": f["height"]}
         for fid, f in AD_FORMATS.items()
     ]
+
+
+# ─── Ad screenshot (headless Playwright) ──────────────────────────────────────────────
+
+@agent_router.get("/screenshot")
+async def screenshot_route(
+    url: str = "",
+    session_id: str = "default",
+    zone_ids: str = "",   # comma-separated DOM element IDs, e.g. "ZingNews_Masthead,ZingNews_Halfpage"
+):
+    """
+    Capture a zone-aware screenshot of a live test-site URL using Playwright.
+    Only allowed for whitelisted staging domains (znews-stg, baomoi-stg, zingmp3-stg).
+
+    Query params:
+        url       — full URL to capture (must be in ALLOWED_DOMAINS)
+        session_id — current session (for logging)
+        zone_ids  — comma-separated DOM element IDs to capture (from selectedZoneIds).
+                     If omitted, all known zones for the site are attempted.
+
+    Returns:
+        { ok, full_b64, zones, zone_count, width, height, captured_at, url }  on success
+        { ok: false, error }                                                   on failure
+    """
+    parsed_zone_ids = [z.strip() for z in zone_ids.split(",") if z.strip()] if zone_ids else None
+    return await handle_screenshot(url=url, session_id=session_id, zone_ids=parsed_zone_ids)

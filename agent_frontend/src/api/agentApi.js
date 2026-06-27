@@ -1013,7 +1013,7 @@ export const AgentAPI = {
    * @param {string} formatId   - one of the AD_FORMATS ids
    * @returns {Promise<{ok, imageB64, formatId, width, height, remaining} | {ok: false, error}>}
    */
-  async generateAdImage(briefObj, formatId) {
+  async generateAdImage(briefObj, formatId, customPrompt = '') {
     try {
       const res = await fetch(`${AGENT_URL}/api/agent/generate-image`, {
         method: 'POST',
@@ -1022,6 +1022,7 @@ export const AgentAPI = {
           session_id: SESSION_ID,
           brief: briefObj || {},
           format_id: formatId,
+          custom_prompt: customPrompt || '',
         }),
         signal: AbortSignal.timeout(180000),  // AI image gen — up to 3 min
       })
@@ -1047,6 +1048,36 @@ export const AgentAPI = {
       return await res.json()
     } catch {
       return { remaining: 10, max: 10 }
+    }
+  },
+
+  /**
+   * Capture a full-page screenshot of a live test-site URL via Playwright.
+   * Only works for whitelisted staging domains (znews-stg, baomoi-stg, zingmp3-stg).
+   *
+   * @param {string}   siteUrl  - e.g. "https://znews-stg.pawgrammers.io.vn"
+   * @param {string[]} zoneIds  - DOM element IDs to capture (from selectedZoneIds).
+   *                             These match the `testSiteZone` / `id` field in the DB.
+   *                             If empty, all known zones for the site are attempted.
+   */
+  async captureAdScreenshot(siteUrl, zoneIds = []) {
+    try {
+      const params = new URLSearchParams({
+        url: siteUrl,
+        session_id: SESSION_ID,
+      })
+      if (zoneIds && zoneIds.length > 0) {
+        params.set('zone_ids', zoneIds.join(','))
+      }
+      const res = await fetch(
+        `${AGENT_URL}/api/agent/screenshot?${params.toString()}`,
+        { signal: AbortSignal.timeout(60000) }
+      )
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
+      return await res.json()
+    } catch (e) {
+      console.warn('[captureAdScreenshot] failed:', e.message)
+      return { ok: false, error: e.message }
     }
   },
 }

@@ -173,7 +173,7 @@ function MessageBubble({ message, showRetry, onRetry, onSend, busy }) {
   if (isError) return <ErrorBubble message={message} onRetry={onRetry} />
 
   return (
-    <div className={cn('flex gap-2.5 animate-fade-in min-w-0', isUser && 'flex-row-reverse')}>
+    <div data-demo="msg-bubble" className={cn('flex gap-2.5 animate-fade-in min-w-0', isUser && 'flex-row-reverse')}>
       {/* Avatar */}
       <Avatar className={cn('w-8 h-8 flex-shrink-0 self-start mt-0.5', isUser ? 'bg-blue-600' : 'bg-gradient-to-br from-brand-500 to-brand-600')}>
         <AvatarFallback className="bg-transparent">
