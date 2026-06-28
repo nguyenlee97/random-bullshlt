@@ -70,15 +70,35 @@ ZONE_COLORS = [
     (249, 115,  22),
 ]
 
-# Padding around each zone crop (pixels)
+# Padding around each zone crop (pixels) — larger = more page context visible
 CROP_PADDING = 250
 
-# Hard cap on full-page scroll height (safety)
+# Max full-page height captured (safety cap)
 MAX_HEIGHT_PX = 8000
 
-# Desktop viewport width
-VIEWPORT_WIDTH = 1440
+# Desktop viewport width — 1920px needed for BaoMoi sticky side gutters to be fully visible
+VIEWPORT_WIDTH = 1920
 
+# Background/skin zones: the DOM element is a transparent click overlay with
+# 0px height. Use a fixed top-of-page bbox so the background image is visible.
+_BACKGROUND_ZONE_IDS = {
+    "BaoMoi_Background",
+    "Znews_TheThao_Background",
+    "Znews_KinhDoanh_Background",
+    "Znews_CongNghe_Background",
+    "Znews_GiaiTri_Background",
+    "Znews_DoiSong_Background",
+    "Znews_SucKhoe_Background",
+}
+
+# Sites where full-page capture is LIMITED to deepest zone + padding.
+# BaoMoi has an extremely long scroll that would produce 8000px+ images
+# with mostly irrelevant content below the last ad zone.
+# All other sites capture the FULL scroll height so marketers see the whole page.
+_LIMIT_CLIP_DOMAINS = {
+    "baomoi-stg.pawgrammers.io.vn",
+    "baomoi.com",
+}
 
 def _is_allowed(url: str) -> bool:
     try:
@@ -103,6 +123,9 @@ def _annotate_and_crop(screenshot_bytes: bytes, found_zones: list, clip_h: int) 
     from PIL import Image, ImageDraw
 
     full_img = Image.open(io.BytesIO(screenshot_bytes)).convert("RGBA")
+    # Clip to desired height
+    full_img = full_img.crop((0, 0, full_img.width, min(full_img.height, clip_h)))
+    
     annotated = full_img.copy()
     draw = ImageDraw.Draw(annotated)
     img_w, img_h = full_img.size
@@ -280,6 +303,19 @@ async def handle_screenshot(url: str, session_id: str, zone_ids: list[str] | Non
 
                 # ── Collect bounding boxes ─────────────────────────────────────
                 for idx, (zone_id, zone_label) in enumerate(zone_defs):
+
+                    # Special case: background/skin zones use a fixed top-of-page
+                    # bbox because the DOM element is a transparent click overlay
+                    # with 0px height. The background IS visible as body CSS.
+                    if zone_id in _BACKGROUND_ZONE_IDS:
+                        raw_zones.append({
+                            "id":    zone_id,
+                            "label": zone_label,
+                            "bbox":  {"x": 0, "y": 0, "width": VIEWPORT_WIDTH, "height": 700},
+                            "color": ZONE_COLORS[idx % len(ZONE_COLORS)],
+                        })
+                        continue
+
                     bbox = None
                     try:
                         el = page.locator(f"#{zone_id}")
@@ -318,22 +354,26 @@ async def handle_screenshot(url: str, session_id: str, zone_ids: list[str] | Non
                         "color": ZONE_COLORS[idx % len(ZONE_COLORS)],
                     })
 
-                # ── Clip screenshot: deepest found zone + 400px padding ─────────
-                # This avoids capturing many empty pages below the last ad zone.
-                # Scroll still goes to full height above to trigger lazy-load.
-                if raw_zones:
-                    deepest = max(z["bbox"]["y"] + z["bbox"]["height"] for z in raw_zones)
-                    # Ensure clip_h is at least the deepest zone bottom + padding
-                    clip_h = min(int(deepest) + 400, MAX_HEIGHT_PX)
-                else:
-                    # No zones found — capture at least one viewport
-                    clip_h = min(1800, scroll_height)
+                # ── Full-page screenshot (captures entire scroll height) ───────
+                # full_page=True makes Playwright scroll and stitch the whole doc.
+                # Pillow then crops to the desired height afterward.
+                screenshot_bytes = await page.screenshot(full_page=True, type="png")
 
-                # Playwright clip option — height clamped to actual page
-                screenshot_bytes = await page.screenshot(
-                    clip={"x": 0, "y": 0, "width": VIEWPORT_WIDTH, "height": clip_h},
-                    type="png",
-                )
+                # Determine clip height:
+                # • BaoMoi (long-scroll): limit to deepest zone + 400px so the
+                #   image doesn't include thousands of pixels of irrelevant feed.
+                # • All other sites: full scroll height so marketers see the
+                #   whole page state.
+                host = _host(url)
+                if host in _LIMIT_CLIP_DOMAINS:
+                    if raw_zones:
+                        deepest = max(z["bbox"]["y"] + z["bbox"]["height"] for z in raw_zones)
+                        clip_h = min(int(deepest) + 400, MAX_HEIGHT_PX)
+                    else:
+                        clip_h = min(1800, scroll_height)
+                else:
+                    # Full page for ZNews, ZingMP3, and all other sites
+                    clip_h = min(scroll_height, MAX_HEIGHT_PX)
 
                 dims = {"width": VIEWPORT_WIDTH, "height": clip_h}
 

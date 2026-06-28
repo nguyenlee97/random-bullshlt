@@ -367,3 +367,114 @@ function populateScheduleWidget() {
         </a>
     `;
 }
+
+// ── AdsPilot Category Zone Injection ─────────────────────────────────────────
+// Detects the current category page and injects the correct ad zone elements.
+(function injectCategoryAdZones() {
+    const PAGE_ZONES = {
+        'the-thao':   'TheThao',
+        'kinh-doanh': 'KinhDoanh',
+        'cong-nghe':  'CongNghe',
+        'giai-tri':   'GiaiTri',
+        'doi-song':   'DoiSong',
+        'suc-khoe':   'SucKhoe',
+    };
+
+    function inject() {
+        // Detect which category we're on from the URL pathname
+        const path = window.location.pathname;
+        let prefix = null;
+        for (const [slug, p] of Object.entries(PAGE_ZONES)) {
+            if (path.includes(slug)) { prefix = p; break; }
+        }
+        if (!prefix) return;  // Not a category page — skip
+
+        // Already injected guard
+        if (document.getElementById(`Znews_${prefix}_Background`)) return;
+
+        // Helper: if HTML already has a [data-zone] element, assign our ID to it.
+        function tagExisting(zoneSuffix) {
+            const el = document.querySelector(`[data-zone="Znews_${prefix}_${zoneSuffix}"]`);
+            if (el) { el.id = `Znews_${prefix}_${zoneSuffix}`; return true; }
+            return false;
+        }
+
+        // ── Background ────────────────────────────────────────────────────────
+        if (!tagExisting('Background')) {
+            const bg = document.createElement('div');
+            bg.id = `Znews_${prefix}_Background`;
+            bg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:0;'
+                             + 'pointer-events:none;z-index:-999;';
+            document.body.appendChild(bg);
+        }
+
+        // ── Sticky side panels ────────────────────────────────────────────────
+        // Created immediately — do not depend on the ZingNews ad loader.
+        ['SideLeft', 'SideRight'].forEach(side => {
+            if (!tagExisting(side)) {
+                const el = document.createElement('div');
+                el.id = `Znews_${prefix}_${side}`;
+                const isLeft = side === 'SideLeft';
+                el.style.cssText = `position:fixed;${isLeft ? 'left:0' : 'right:0'};top:200px;`
+                    + 'width:160px;height:600px;z-index:9000;pointer-events:none;';
+                document.body.appendChild(el);
+            }
+        });
+
+        // ── Sidebar box ───────────────────────────────────────────────────────
+        // .znews-banner slots are created DYNAMICALLY by ZingNews's ad loader AFTER
+        // DOMContentLoaded. Poll for up to 5s for a banner with content loaded,
+        // then relabel it — avoiding the "empty slot above the real ad" bug.
+        if (!tagExisting('SidebarBox')) {
+            const sidebar = document.querySelector('section.sidebar')
+                         || document.querySelector('.section-sidebar')
+                         || document.querySelector('.sidebar');
+            const deadline = Date.now() + 5000;
+
+            function pollForBanner() {
+                if (document.getElementById(`Znews_${prefix}_SidebarBox`)) return;
+
+                const candidates = sidebar
+                    ? [...sidebar.querySelectorAll('.znews-banner, [class*="banner"]:not(script)')]
+                    : [...document.querySelectorAll('.znews-banner')];
+
+                // Prefer a slot that has a visible img or iframe loaded
+                const loaded = candidates.find(
+                    el => el.querySelector('img[src]:not([src=""]), iframe, canvas')
+                );
+
+                if (loaded) {
+                    loaded.id = `Znews_${prefix}_SidebarBox`;
+                    console.log('[AdsPilot] Tagged loaded ad as', loaded.id);
+                } else if (Date.now() >= deadline) {
+                    // Timed out — fall back to first candidate or create a new div
+                    const fallback = candidates[0];
+                    if (fallback) {
+                        fallback.id = `Znews_${prefix}_SidebarBox`;
+                        console.log('[AdsPilot] Fallback to empty slot:', fallback.id);
+                    } else {
+                        const box = document.createElement('div');
+                        box.id = `Znews_${prefix}_SidebarBox`;
+                        box.style.cssText = 'width:300px;height:250px;display:block;';
+                        (sidebar || document.body).appendChild(box);
+                        console.log('[AdsPilot] Fallback: created placeholder', box.id);
+                    }
+                } else {
+                    setTimeout(pollForBanner, 300);
+                }
+            }
+
+            pollForBanner();
+        }
+
+        console.log('[AdsPilot] Zone injection started for Znews_' + prefix);
+    }  // end inject()
+
+    // Wait for DOM to be ready so querySelector works reliably
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', inject);
+    } else {
+        inject();
+    }
+})();
+// ─────────────────────────────────────────────────────────────────────────────

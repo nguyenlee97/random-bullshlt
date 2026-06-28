@@ -24,7 +24,7 @@ export function checkMismatch(zone, file) {
   const [zw, zh] = dims
   const zRatio = zw / zh
   const fRatio = file.width / file.height
-  if (Math.abs(zRatio - fRatio) / zRatio > 0.15) {
+  if (Math.abs(zRatio - fRatio) / zRatio > 0.30) {
     const zLabel = zw > zh ? 'ngang' : 'dọc'
     const fLabel = file.width > file.height ? 'ngang' : 'dọc'
     return `Zone ${zone.size} (${zLabel}) · Ảnh ${file.width}×${file.height}px (${fLabel})`
