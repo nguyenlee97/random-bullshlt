@@ -1,0 +1,40 @@
+{
+  "id": "brief_032",
+  "lang": "vi",
+  "brief": {
+    "brand": "Beauty Garden - CLB hội viên",
+    "objective": "retention",
+    "kpi": "60.000 hội viên quay lại mua trong Q4",
+    "budget": 350,
+    "startDate": "2026-11-01",
+    "endDate": "2026-12-31",
+    "notes": "Đẩy chương trình tích điểm đổi quà cuối năm cho hội viên đã mua ít nhất 1 lần. Nhắm nữ 18-40 quan tâm mỹ phẩm, skincare, hay canh sale."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c714b",
+        "6a2df27adda0ba67f14c7149"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c714e",
+        "6a2df27adda0ba67f14c7154",
+        "6a2df27adda0ba67f14c715f",
+        "6a2df27adda0ba67f14c715c"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7144"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Motorcycles kept: motorcycle-enthusiast interest skews strongly male in most datasets, a gender-skew mismatch against a women-focused beauty loyalty program."
+  },
+  "tags": [
+    "retention",
+    "vi"
+  ]
+}

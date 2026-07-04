@@ -1,0 +1,41 @@
+{
+  "id": "brief_048",
+  "lang": "en",
+  "schema_version": 2,
+  "brief": {
+    "brand": "ForgeRig PC Builders",
+    "objective": "conversion",
+    "kpi": "1,200 custom-build orders, CPA <= $18",
+    "budget": 500,
+    "startDate": "2026-08-05",
+    "endDate": "2026-09-20",
+    "notes": "Custom gaming PC builder selling processors, memory, storage and pre-built desktops. Targeting PC gamers and enthusiasts who research hardware specs before buying, not casual console players."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c87",
+        "6a48cc2381574c48dbd22c85",
+        "6a48cc2381574c48dbd22c8b"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22c89",
+        "6a48cc2381574c48dbd22c84"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c8e"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Computer processors / memory / hard drives only exist in the full catalog (Technology > Computers subcategory). must_exclude=Tablet computers: casual/consumption device, opposite of the DIY hardware-enthusiast buyer."
+  },
+  "tags": [
+    "conversion",
+    "en",
+    "full_catalog_only"
+  ]
+}

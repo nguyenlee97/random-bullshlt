@@ -117,6 +117,20 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const payload = req.body || {};
+
+    // ── Idempotency (Phase 0) ────────────────────────────────────────────────
+    // If this key was already used, return the existing order instead of
+    // creating a duplicate (agent retry after commit-then-timeout case).
+    if (payload.idempotencyKey) {
+      const existing = await Campaign.findOne({
+        idempotencyKey: payload.idempotencyKey,
+        deletedAt: null,
+      }).lean();
+      if (existing) {
+        return res.status(200).json({ ...formatOrder(existing), deduplicated: true });
+      }
+    }
+
     const seq = await getSeq();
     const placements = await getZonePlacements();
 
@@ -160,11 +174,20 @@ router.post('/', async (req, res) => {
       placements: payload.placements || [],
       targeting:  payload.targeting  || {},
       dmp:        payload.dmp        || { include: [], exclude: [] },
+      idempotencyKey: payload.idempotencyKey || undefined,
       warnings,
     });
 
     res.status(201).json(formatOrder(order.toObject()));
   } catch (err) {
+    // Race on idempotencyKey unique index (two concurrent retries): treat the
+    // loser as a dedup hit and return the winner's order.
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.idempotencyKey) {
+      const winner = await Campaign.findOne({
+        idempotencyKey: req.body.idempotencyKey,
+      }).lean();
+      if (winner) return res.status(200).json({ ...formatOrder(winner), deduplicated: true });
+    }
     if (err.name === 'ValidationError') return res.status(400).json({ error: err.message });
     res.status(500).json({ error: err.message });
   }

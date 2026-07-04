@@ -1,0 +1,58 @@
+{
+  "id": "brief_060",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Xe Điện ZipGo",
+    "objective": "awareness",
+    "kpi": "Reach 2 triệu sinh viên toàn quốc",
+    "budget": 200,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-15",
+    "notes": "Xe máy điện giá rẻ, thuê theo tháng, hướng tới sinh viên đi lại trong thành phố. Chạy toàn quốc ở các thành phố có đại học lớn."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7141",
+        "6a48cc2381574c48dbd22c5d"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7144",
+        "6a48cc2381574c48dbd22c58"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c713f"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Straightforward student/18-24 targeting, no conflict with defaults; included in the quota for coverage of the non-conflicting majority (guide requires only >=3 conflicting, not all 12).",
+    "targeting": {
+      "expected": {
+        "age": [
+          "18-24"
+        ],
+        "career": [
+          "Student"
+        ],
+        "geo": [
+          "Hà Nội",
+          "TP.HCM",
+          "Đà Nẵng",
+          "Hải Phòng",
+          "Cần Thơ"
+        ]
+      },
+      "note": "Notes explicitly target students in university cities nationwide — a plain (non-conflicting) targeting_labeled case."
+    }
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "targeting_labeled"
+  ]
+}

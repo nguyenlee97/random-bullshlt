@@ -1,0 +1,41 @@
+{
+  "id": "brief_045",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Seoul Grill House",
+    "objective": "conversion",
+    "kpi": "15.000 lượt đặt bàn qua app trong 2 tháng",
+    "budget": 320,
+    "startDate": "2026-09-05",
+    "endDate": "2026-11-05",
+    "notes": "Chuỗi nhà hàng BBQ Hàn Quốc mới mở tại TP.HCM, món nướng và hải sản tươi. Nhắm nhóm bạn/gia đình 20-40 tuổi thích ẩm thực Hàn Quốc, hay đi ăn ngoài cuối tuần."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c1e",
+        "6a48cc2381574c48dbd22c26",
+        "6a48cc2381574c48dbd22c2a"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7108",
+        "6a2df27adda0ba67f14c7109"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c2b"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Korean cuisine / Barbecue / Seafood are Food and drink (consumables) segments only present in the full 310-catalog. must_exclude=Vegetarianism is a clean positioning conflict for a meat-and-seafood BBQ grill house."
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "full_catalog_only"
+  ]
+}

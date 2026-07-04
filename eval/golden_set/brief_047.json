@@ -1,0 +1,41 @@
+{
+  "id": "brief_047",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Lumen Camera Store",
+    "objective": "awareness",
+    "kpi": "Reach 3 triệu người yêu nhiếp ảnh & quay phim",
+    "budget": 340,
+    "startDate": "2026-09-15",
+    "endDate": "2026-11-01",
+    "notes": "Cửa hàng máy ảnh, máy quay và thiết bị âm thanh chuyên dụng. Muốn tăng nhận diện trong giới nhiếp ảnh gia, vlogger, người quay phim gia đình/du lịch."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c92",
+        "6a48cc2381574c48dbd22c91",
+        "6a48cc2381574c48dbd22c90"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7117",
+        "6a48cc2381574c48dbd22c94"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c3e"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Cameras / Camcorders / Audio equipment sit under the full-catalog-only 'Technology (computers & electronics)' category. must_exclude=Home Appliances: near-miss — both read as 'electronics store' but appliances are a different department a camera specialty shop doesn't stock."
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "full_catalog_only"
+  ]
+}

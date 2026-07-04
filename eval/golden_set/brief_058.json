@@ -1,0 +1,53 @@
+{
+  "id": "brief_058",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Vay Nhanh 247",
+    "objective": "conversion",
+    "kpi": "20.000 khoản vay được giải ngân",
+    "budget": 550,
+    "startDate": "2026-08-01",
+    "endDate": "2026-09-30",
+    "notes": "App vay tiêu dùng tín chấp, giải ngân trong ngày. Nhắm người đi làm 25-44 thu nhập trung bình trên toàn quốc, không giới hạn khu vực cụ thể."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7088",
+        "6a48cc2381574c48dbd22bcb"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c708b",
+        "6a2df27adda0ba67f14c715f"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c6d"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "No geo restriction stated, so geo intentionally left unlabeled per the guide ('unlabeled != wrong'); income and age reflect the stated mass-market working-age borrower.",
+    "targeting": {
+      "expected": {
+        "age": [
+          "25-34",
+          "35-44"
+        ],
+        "income": [
+          "Top 50-75%",
+          "Top 75-100%"
+        ]
+      },
+      "note": "Mass-market consumer loan; notes say nationwide with no city restriction, income skewed toward the mass-market brackets rather than top earners."
+    }
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "targeting_labeled"
+  ]
+}

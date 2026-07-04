@@ -1,0 +1,41 @@
+{
+  "id": "brief_053",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Exotic Pet House",
+    "objective": "awareness",
+    "kpi": "Reach 1.5 triệu người nuôi thú cảnh không truyền thống",
+    "budget": 180,
+    "startDate": "2026-09-10",
+    "endDate": "2026-10-25",
+    "notes": "Cửa hàng chuyên vật nuôi và phụ kiện cho thú cảnh không phổ biến: bò sát, thỏ, chim cảnh, cá cảnh. Nhắm người đang nuôi hoặc quan tâm nuôi các loại thú cảnh này, không phải chủ chó/mèo thông thường."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c45",
+        "6a48cc2381574c48dbd22c44",
+        "6a48cc2381574c48dbd22c40"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22c41",
+        "6a48cc2381574c48dbd22c43"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7123"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Reptiles / Rabbits / Birds are Pets subcategory segments only present in the full catalog. must_exclude=Cats: the notes explicitly say 'not regular cat/dog owners' — a direct, defensible exclude."
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "full_catalog_only"
+  ]
+}

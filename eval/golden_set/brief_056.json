@@ -1,0 +1,63 @@
+{
+  "id": "brief_056",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Serene Glow Skincare",
+    "objective": "conversion",
+    "kpi": "8.000 đơn hàng, CPA ≤ 220.000đ",
+    "budget": 260,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-15",
+    "notes": "Dòng skincare mới, chỉ chạy thử nghiệm tại TP.HCM và Đà Nẵng trước khi mở rộng toàn quốc. Nhắm nữ 25-34, không nhắm nam."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c714b",
+        "6a2df27adda0ba67f14c7149"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22c60",
+        "6a2df27adda0ba67f14c714e"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7152"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Notes explicitly restrict geo to 2 cities and gender to female only — narrower than a typical nationwide/both-gender default, a genuine conflict case.",
+    "targeting": {
+      "expected": {
+        "geo": [
+          "TP.HCM",
+          "Đà Nẵng"
+        ],
+        "age": [
+          "25-34"
+        ],
+        "gender": [
+          "Female"
+        ]
+      },
+      "must_not_set": {
+        "geo": [
+          "Hà Nội"
+        ],
+        "gender": [
+          "Male"
+        ]
+      },
+      "note": "Pilot is explicitly HCM+Da Nang only and female-only per notes; defaulting to nationwide/both-gender would be a clear error."
+    }
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "targeting_labeled"
+  ]
+}

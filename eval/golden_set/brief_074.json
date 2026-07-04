@@ -1,0 +1,40 @@
+{
+  "id": "brief_074",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "ProSurge Electrolyte",
+    "objective": "conversion",
+    "kpi": "12.000 chai bán ra qua kênh thể thao",
+    "budget": 240,
+    "startDate": "2026-08-15",
+    "endDate": "2026-10-01",
+    "notes": "Nước uống điện giải cho vận động viên tập luyện cường độ cao. Nhắm người chạy bộ, tập gym, chơi thể thao — không phải người uống cà phê để tỉnh táo buổi sáng."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c12",
+        "6a2df27adda0ba67f14c70df"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70de",
+        "6a2df27adda0ba67f14c716a"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70e7"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Near-miss trap: Coffee shares a surface 'stay energized' association with an electrolyte sports drink but serves a completely different occasion and buyer (desk-bound caffeine ritual vs. athletic hydration) — the notes explicitly rule this reading out."
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "near_miss"
+  ]
+}

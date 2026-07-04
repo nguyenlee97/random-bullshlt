@@ -1,0 +1,41 @@
+{
+  "id": "brief_016",
+  "lang": "vi",
+  "brief": {
+    "brand": "Mỹ phẩm thuần chay Cỏ Mềm",
+    "objective": "conversion",
+    "kpi": "12.000 đơn trên website, CPA ≤ 42.000đ",
+    "budget": 500,
+    "startDate": "2026-11-01",
+    "endDate": "2026-12-24",
+    "notes": "Đợt sale cuối năm cho bộ chăm sóc da thuần chay. Nhắm nữ 20-38 quan tâm mỹ phẩm có nguồn gốc thiên nhiên, mua sắm online thường xuyên."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c714b",
+        "6a2df27adda0ba67f14c7149",
+        "6a2df27adda0ba67f14c7106"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c714e",
+        "6a2df27adda0ba67f14c715f",
+        "6a2df27adda0ba67f14c7154",
+        "6a2df27adda0ba67f14c7103"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70e3"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Beer kept: same clean/vegan-lifestyle-vs-alcohol mismatch logic already validated in brief_004/010."
+  },
+  "tags": [
+    "conversion",
+    "vi"
+  ]
+}

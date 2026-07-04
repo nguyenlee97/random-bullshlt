@@ -1,0 +1,40 @@
+{
+  "id": "brief_076",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Atelier Noir Interiors",
+    "objective": "conversion",
+    "kpi": "200 lượt đặt lịch tư vấn thiết kế nội thất",
+    "budget": 300,
+    "startDate": "2026-09-10",
+    "endDate": "2026-11-05",
+    "notes": "Studio thiết kế nội thất cao cấp cho căn hộ và villa. Đây là dịch vụ thiết kế không gian sống, không liên quan tới thiết kế web hay thiết kế đồ hoạ."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22bc2",
+        "6a2df27adda0ba67f14c711d"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7071",
+        "6a48cc2381574c48dbd22c3b"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22bc8"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Near-miss trap: 'Web design' shares only the word 'design' with 'Interior design' — different discipline, different buyer (digital marketer vs. homeowner) — notes explicitly disambiguate this."
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "near_miss"
+  ]
+}

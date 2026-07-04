@@ -1,0 +1,40 @@
+{
+  "id": "brief_003",
+  "lang": "en",
+  "brief": {
+    "brand": "SkyJet Air",
+    "objective": "awareness",
+    "kpi": "12M reach for the two new domestic routes",
+    "budget": 900,
+    "startDate": "2026-10-01",
+    "endDate": "2026-11-30",
+    "notes": "Launching two new budget domestic routes (HAN-PQC, SGN-DAD). Target frequent domestic travelers and young holiday planners booking year-end trips."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7132",
+        "6a2df27adda0ba67f14c718f",
+        "6a2df27adda0ba67f14c7068"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7137",
+        "6a2df27adda0ba67f14c7117",
+        "6a2df27adda0ba67f14c7164"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7171"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Golf kept: golf/premium-leisure travelers skew toward international/premium routes, a mismatch against a budget domestic route launch targeting frequent low-cost travelers."
+  },
+  "tags": [
+    "awareness",
+    "en"
+  ]
+}

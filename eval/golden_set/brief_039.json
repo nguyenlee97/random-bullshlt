@@ -1,0 +1,41 @@
+{
+  "id": "brief_039",
+  "lang": "en",
+  "brief": {
+    "brand": "ViePay Cashback Club",
+    "objective": "retention",
+    "kpi": "Reactivate 100,000 dormant wallets in 6 weeks",
+    "budget": 280,
+    "startDate": "2026-09-15",
+    "endDate": "2026-10-31",
+    "notes": ""
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7088",
+        "6a2df27adda0ba67f14c7076"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c715c",
+        "6a2df27adda0ba67f14c718d",
+        "6a2df27adda0ba67f14c7194",
+        "6a2df27adda0ba67f14c715f"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70b3"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "empty_notes brief — must_exclude=Horror movies is a low-confidence generic default; no brief-specific signal available. Flagged rather than swapped, consistent with brief_013/025."
+  },
+  "tags": [
+    "retention",
+    "en",
+    "empty_notes"
+  ]
+}

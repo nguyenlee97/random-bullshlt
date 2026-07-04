@@ -1,0 +1,41 @@
+{
+  "id": "brief_054",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "HomeCraft Renovation",
+    "objective": "conversion",
+    "kpi": "600 lượt yêu cầu khảo sát sửa nhà",
+    "budget": 420,
+    "startDate": "2026-09-01",
+    "endDate": "2026-11-10",
+    "notes": "Dịch vụ sửa chữa & cải tạo nhà trọn gói: nội thất, sân vườn, thiết bị gia dụng. Nhắm chủ nhà 30-55 tuổi đang có nhu cầu cải tạo, tự làm (DIY) một phần hoặc thuê trọn gói."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c3f",
+        "6a48cc2381574c48dbd22c3c",
+        "6a48cc2381574c48dbd22c3d"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22c3e",
+        "6a2df27adda0ba67f14c711d"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7071"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Home improvement / DIY / Gardening are full-catalog-only Home and garden children. must_exclude=Real estate: shares the 'home' theme but the intent is house-hunting/buying, a mismatch against people already renovating a home they own."
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "full_catalog_only"
+  ]
+}

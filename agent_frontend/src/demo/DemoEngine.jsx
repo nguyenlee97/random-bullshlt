@@ -4,7 +4,7 @@
 
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import DemoOverlay from './DemoOverlay'
-import { STAGE1_STEPS, buildStage2Steps, pickRandomBrief } from './demoScripts'
+import { STAGE1_STEPS, buildStage2Steps, pickRandomBrief, DEMO_AD_FORMAT_META, DEMO_NON_BOX_FORMAT_IDS, ZONE_FORMAT_MAP } from './demoScripts'
 import log from '@/lib/logger'
 
 const DemoContext = createContext(null)
@@ -52,9 +52,47 @@ function scrollIntoView(selector) {
   }
 }
 
+// ─── Helper: which mobile pane ('chat' | 'workspace') a step needs ────────────
+// On desktop both panes are always visible, so this is only used to drive the
+// mobile TabBar. Detection order:
+//   1. If the step's target element is in the DOM, use its containing pane
+//      (works even while a pane is hidden via `display:none`, since the node
+//      is still mounted).
+//   2. Otherwise (target not yet rendered, e.g. WAIT_FOR_SELECTOR) fall back to
+//      a step-type default.
+// Returns null for top-bar / global targets (New Chat, Reset, popups) → no switch.
+function resolvePaneForStep(step) {
+  if (!step) return null
+  const sel = step.target || step.tooltip?.target
+  if (sel) {
+    const el = document.querySelector(sel)
+    if (el) {
+      if (el.closest('[data-demo="chat-pane"]')) return 'chat'
+      if (el.closest('[data-demo="workspace-pane"]')) return 'workspace'
+      return null // top-bar / global element — leave the current tab as-is
+    }
+  }
+  // Target not in DOM (or no target) → decide by step type
+  switch (step.type) {
+    case 'WAIT_FOR_RESPONSE':
+    case 'WAIT_FOR_MSG':
+    case 'HIGHLIGHT_MSG':
+    case 'TYPE_AND_SEND':
+      return 'chat'
+    case 'WAIT_FOR_SELECTOR':
+    case 'INJECT_DEMO_CREATIVES':
+    case 'SELECT_RECO_ZONES':
+    case 'ASSIGN_CREATIVES':
+    case 'EDIT_FIELD':
+      return 'workspace'
+    default:
+      return null
+  }
+}
+
 
 // ─── DemoProvider ────────────────────────────────────────────────────────────
-export function DemoProvider({ children, busy, messages, onSendMessage, onApprove }) {
+export function DemoProvider({ children, busy, messages, onSendMessage, onApprove, onRequestTab, activeTab, onActiveChange }) {
   const [phase, setPhase] = useState(PHASE.IDLE)
   const [stepIdx, setStepIdx] = useState(0)
   const [steps, setSteps] = useState([])
@@ -66,12 +104,33 @@ export function DemoProvider({ children, busy, messages, onSendMessage, onApprov
   const busyRef = useRef(busy)
   const messagesRef = useRef(messages)
   const prevMsgCountRef = useRef(0)
+  // Refs for mobile tab control — read inside async step logic without stale closures
+  const onRequestTabRef = useRef(onRequestTab)
+  const activeTabRef = useRef(activeTab)
 
   // Keep refs fresh
   useEffect(() => { busyRef.current = busy }, [busy])
   useEffect(() => { messagesRef.current = messages }, [messages])
+  useEffect(() => { onRequestTabRef.current = onRequestTab }, [onRequestTab])
+  useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
 
   const isActive = phase !== PHASE.IDLE && phase !== PHASE.COMPLETE
+
+  // Notify parent when the demo becomes active/inactive (used to pause App auto-nav)
+  useEffect(() => { onActiveChange?.(isActive) }, [isActive]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Ensure the correct mobile pane is visible before measuring/acting ──────
+  // Desktop (>=768px) shows both panes, so this is a no-op there. Only switches
+  // (and waits for layout) when an actual tab change is needed on mobile.
+  const syncTabForStep = useCallback(async (step) => {
+    if (typeof window === 'undefined' || window.innerWidth >= 768) return
+    const pane = resolvePaneForStep(step)
+    if (pane && pane !== activeTabRef.current && onRequestTabRef.current) {
+      onRequestTabRef.current(pane)
+      activeTabRef.current = pane // optimistic — avoids double-switch before prop updates
+      await new Promise(r => setTimeout(r, 350)) // let the pane mount + lay out
+    }
+  }, [])
 
   const currentStep = isActive && steps[stepIdx] ? steps[stepIdx] : null
 
@@ -89,25 +148,35 @@ export function DemoProvider({ children, busy, messages, onSendMessage, onApprov
       return
     }
 
+    let cancelled = false
     const target = currentStep.target || currentStep.tooltip?.target
-    if (target) {
-      scrollIntoView(target)
-      // Small delay for scroll to settle
-      const timer = setTimeout(async () => {
+    ;(async () => {
+      // On mobile, make the pane holding this target visible before measuring
+      await syncTabForStep(currentStep)
+      if (cancelled) return
+      if (target) {
+        scrollIntoView(target)
+        // Small delay for scroll to settle
+        await new Promise(r => setTimeout(r, 200))
+        if (cancelled) return
         const rect = await getRect(target)
-        setTargetRect(rect)
-      }, 200)
-      return () => clearTimeout(timer)
-    } else {
-      setTargetRect(null)
-    }
-  }, [currentStep, stepIdx, phase])
+        if (!cancelled) setTargetRect(rect)
+      } else {
+        setTargetRect(null)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [currentStep, stepIdx, phase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Execute step action ────────────────────────────────────────────────
   const executeStep = useCallback(async (step, idx) => {
     if (!step) return
 
     log.step(`DemoEngine: executing step ${idx} type=${step.type}`)
+
+    // Mobile: ensure the pane this step acts on is visible before clicking/typing.
+    // No-op on desktop and when already on the right tab.
+    await syncTabForStep(step)
 
     switch (step.type) {
       case 'TOOLTIP':
@@ -292,12 +361,142 @@ export function DemoProvider({ children, busy, messages, onSendMessage, onApprov
         break
       }
 
-      case 'PAUSE': {
-        await new Promise(r => setTimeout(r, step.ms || 1000))
-        advanceStep(idx)
+      case 'TYPE_INPUT': {
+        // Type text character-by-character into any arbitrary input/textarea selector
+        const inputEl = document.querySelector(step.target)
+        if (inputEl) {
+          inputEl.focus()
+          const proto = inputEl.tagName === 'TEXTAREA'
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype
+          const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value').set
+          const contentToType = step.inputText || ''
+          let i = 0
+          await new Promise(resolve => {
+            const typeChar = () => {
+              if (i <= contentToType.length) {
+                nativeSetter.call(inputEl, contentToType.slice(0, i))
+                inputEl.dispatchEvent(new Event('input', { bubbles: true }))
+                i++
+                setTimeout(typeChar, step.charDelay || 18)
+              } else {
+                resolve()
+              }
+            }
+            typeChar()
+          })
+        } else {
+          log.error(`DemoEngine: TYPE_INPUT target not found: ${step.target}`)
+        }
+        break
+      }
+
+      case 'WAIT_FOR_SELECTOR': {
+        // Poll until a CSS selector appears in the DOM, then advance
+        setIsWaiting(true)
+        const { target: sel, timeout: wfTimeout = 90000 } = step
+        await new Promise((resolve) => {
+          const start = Date.now()
+          const poll = () => {
+            if (document.querySelector(sel)) {
+              resolve()
+            } else if (Date.now() - start > wfTimeout) {
+              log.error(`DemoEngine: WAIT_FOR_SELECTOR timeout for: ${sel}`)
+              resolve()
+            } else {
+              setTimeout(poll, 300)
+            }
+          }
+          poll()
+        })
+        // Extra settle time so the element is fully rendered
+        await new Promise(r => setTimeout(r, 700))
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
         return
       }
 
+      case 'PAUSE': {
+        await new Promise(r => setTimeout(r, step.ms || 1000))
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'INJECT_DEMO_CREATIVES': {
+        setIsWaiting(true)
+        const { briefId } = step
+        const creatives = []
+        for (const formatId of DEMO_NON_BOX_FORMAT_IDS) {
+          const meta = DEMO_AD_FORMAT_META[formatId]
+          const url = `/demo-creatives/${briefId}/${formatId}.png`
+          try {
+            const resp = await fetch(url)
+            if (!resp.ok) {
+              log.error(`INJECT_DEMO_CREATIVES: 404 → ${url}`)
+              continue
+            }
+            const blob = await resp.blob()
+            const dataUrl = await new Promise((resolve) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(reader.result)
+              reader.readAsDataURL(blob)
+            })
+            creatives.push({
+              id: `demo-${briefId}-${formatId}-${Date.now()}`,
+              name: `${formatId}.png`,
+              type: 'image/png',
+              size: blob.size,
+              dataUrl,
+              width: meta.width,
+              height: meta.height,
+              formatId,
+              aiGenerated: false,
+              demoInjected: true,
+            })
+          } catch (e) {
+            log.error(`INJECT_DEMO_CREATIVES: failed ${url}`, e.message)
+          }
+        }
+        if (creatives.length > 0) {
+          window.dispatchEvent(new CustomEvent('demo:inject_creatives', { detail: { creatives } }))
+          await new Promise(r => setTimeout(r, 500))
+        }
+        log.step(`INJECT_DEMO_CREATIVES: injected ${creatives.length} creatives for brief "${briefId}"`)
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'SELECT_RECO_ZONES': {
+        setIsWaiting(true)
+        const chosen = await new Promise(resolve => {
+          const handler = (e) => { resolve(e.detail?.zoneIds || []) }
+          window.addEventListener('demo:reco_zones_selected', handler, { once: true })
+          window.dispatchEvent(new CustomEvent('demo:select_reco_zones', {
+            detail: { count: step.count || 2 }
+          }))
+          // Safety timeout
+          setTimeout(() => resolve([]), 6000)
+        })
+        log.step(`SELECT_RECO_ZONES: selected [${chosen.join(', ')}]`)
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'ASSIGN_CREATIVES': {
+        setIsWaiting(true)
+        const done = await new Promise(resolve => {
+          const handler = (e) => { resolve(e.detail?.assignments || {}) }
+          window.addEventListener('demo:creatives_assigned', handler, { once: true })
+          window.dispatchEvent(new CustomEvent('demo:assign_creatives', {}))
+          setTimeout(() => resolve({}), 6000)
+        })
+        log.step(`ASSIGN_CREATIVES: assigned ${Object.keys(done).length} zones`)
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
 
       default:
         log.error(`DemoEngine: unknown step type: ${step.type}`)
@@ -403,7 +602,6 @@ export function DemoProvider({ children, busy, messages, onSendMessage, onApprov
 
   const startDemo = useCallback(() => {
     log.step('DemoEngine: startDemo')
-    if (window.innerWidth < 768) return // PC only
 
     setPhase(PHASE.CONFIRM_START)
     setPopup({

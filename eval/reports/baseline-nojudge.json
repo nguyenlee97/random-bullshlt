@@ -1,0 +1,470 @@
+{
+  "summary": {
+    "n": 40,
+    "errors": 0,
+    "mean_recall@15": 0.571,
+    "exclusion_violations_total": 0,
+    "judge_score": null,
+    "p95_latency_s": 93.3
+  },
+  "results": [
+    {
+      "id": "brief_001",
+      "tags": [
+        "awareness",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 93.3
+    },
+    {
+      "id": "brief_002",
+      "tags": [
+        "conversion",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.3333333333333333,
+      "exclusion_violations": [],
+      "latency_s": 65.2
+    },
+    {
+      "id": "brief_003",
+      "tags": [
+        "awareness",
+        "en"
+      ],
+      "n_recs": 1,
+      "recall_at_k": 0.3333333333333333,
+      "exclusion_violations": [],
+      "latency_s": 93.3
+    },
+    {
+      "id": "brief_004",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "n_recs": 5,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 74.5
+    },
+    {
+      "id": "brief_005",
+      "tags": [
+        "conversion",
+        "vi",
+        "tiny_budget"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 79.5
+    },
+    {
+      "id": "brief_006",
+      "tags": [
+        "awareness",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 79.5
+    },
+    {
+      "id": "brief_007",
+      "tags": [
+        "retention",
+        "vi"
+      ],
+      "n_recs": 5,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 100.2
+    },
+    {
+      "id": "brief_008",
+      "tags": [
+        "consideration",
+        "en"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 67.2
+    },
+    {
+      "id": "brief_009",
+      "tags": [
+        "conversion",
+        "vi",
+        "kpi_budget_conflict"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.0,
+      "exclusion_violations": [],
+      "latency_s": 94.6
+    },
+    {
+      "id": "brief_010",
+      "tags": [
+        "awareness",
+        "vi",
+        "ambiguous_notes"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 91.5
+    },
+    {
+      "id": "brief_011",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 91.5
+    },
+    {
+      "id": "brief_012",
+      "tags": [
+        "conversion",
+        "en"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "exclusion_violations": [],
+      "latency_s": 64.0
+    },
+    {
+      "id": "brief_013",
+      "tags": [
+        "retention",
+        "vi",
+        "empty_notes"
+      ],
+      "n_recs": 5,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 84.1
+    },
+    {
+      "id": "brief_014",
+      "tags": [
+        "awareness",
+        "vi",
+        "adversarial"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "exclusion_violations": [],
+      "latency_s": 84.1
+    },
+    {
+      "id": "brief_015",
+      "tags": [
+        "consideration",
+        "vi",
+        "long_rambling_notes"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 84.1
+    },
+    {
+      "id": "brief_016",
+      "tags": [
+        "conversion",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.3333333333333333,
+      "exclusion_violations": [],
+      "latency_s": 77.4
+    },
+    {
+      "id": "brief_017",
+      "tags": [
+        "awareness",
+        "en"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.0,
+      "exclusion_violations": [],
+      "latency_s": 77.4
+    },
+    {
+      "id": "brief_018",
+      "tags": [
+        "retention",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 77.4
+    },
+    {
+      "id": "brief_019",
+      "tags": [
+        "consideration",
+        "vi",
+        "kpi_budget_conflict"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 89.8
+    },
+    {
+      "id": "brief_020",
+      "tags": [
+        "conversion",
+        "vi",
+        "tiny_budget"
+      ],
+      "n_recs": 5,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 89.8
+    },
+    {
+      "id": "brief_021",
+      "tags": [
+        "awareness",
+        "vi"
+      ],
+      "n_recs": 5,
+      "recall_at_k": 0.6666666666666666,
+      "exclusion_violations": [],
+      "latency_s": 89.8
+    },
+    {
+      "id": "brief_022",
+      "tags": [
+        "consideration",
+        "en",
+        "ambiguous_notes"
+      ],
+      "n_recs": 1,
+      "recall_at_k": 0.0,
+      "exclusion_violations": [],
+      "latency_s": 84.6
+    },
+    {
+      "id": "brief_023",
+      "tags": [
+        "conversion",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.0,
+      "exclusion_violations": [],
+      "latency_s": 84.6
+    },
+    {
+      "id": "brief_024",
+      "tags": [
+        "retention",
+        "en"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 84.6
+    },
+    {
+      "id": "brief_025",
+      "tags": [
+        "awareness",
+        "vi",
+        "empty_notes"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 77.6
+    },
+    {
+      "id": "brief_026",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 77.6
+    },
+    {
+      "id": "brief_027",
+      "tags": [
+        "conversion",
+        "vi",
+        "adversarial"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 77.6
+    },
+    {
+      "id": "brief_028",
+      "tags": [
+        "retention",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "exclusion_violations": [],
+      "latency_s": 79.8
+    },
+    {
+      "id": "brief_029",
+      "tags": [
+        "awareness",
+        "vi",
+        "long_rambling_notes"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 79.8
+    },
+    {
+      "id": "brief_030",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 79.8
+    },
+    {
+      "id": "brief_031",
+      "tags": [
+        "conversion",
+        "en",
+        "kpi_budget_conflict"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.3333333333333333,
+      "exclusion_violations": [],
+      "latency_s": 84.1
+    },
+    {
+      "id": "brief_032",
+      "tags": [
+        "retention",
+        "vi"
+      ],
+      "n_recs": 2,
+      "recall_at_k": 0.0,
+      "exclusion_violations": [],
+      "latency_s": 84.1
+    },
+    {
+      "id": "brief_033",
+      "tags": [
+        "awareness",
+        "vi",
+        "tiny_budget"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 84.1
+    },
+    {
+      "id": "brief_034",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 76.6
+    },
+    {
+      "id": "brief_035",
+      "tags": [
+        "conversion",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 76.6
+    },
+    {
+      "id": "brief_036",
+      "tags": [
+        "awareness",
+        "en",
+        "adversarial"
+      ],
+      "n_recs": 5,
+      "recall_at_k": 0.3333333333333333,
+      "exclusion_violations": [],
+      "latency_s": 76.7
+    },
+    {
+      "id": "brief_037",
+      "tags": [
+        "consideration",
+        "vi",
+        "ambiguous_notes"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 86.2
+    },
+    {
+      "id": "brief_038",
+      "tags": [
+        "conversion",
+        "vi"
+      ],
+      "n_recs": 2,
+      "recall_at_k": 0.0,
+      "exclusion_violations": [],
+      "latency_s": 63.4
+    },
+    {
+      "id": "brief_039",
+      "tags": [
+        "retention",
+        "en",
+        "empty_notes"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.5,
+      "exclusion_violations": [],
+      "latency_s": 86.2
+    },
+    {
+      "id": "brief_040",
+      "tags": [
+        "conversion",
+        "en",
+        "long_rambling_notes"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "exclusion_violations": [],
+      "latency_s": 36.9
+    }
+  ]
+}

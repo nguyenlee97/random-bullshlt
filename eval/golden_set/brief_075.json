@@ -1,0 +1,40 @@
+{
+  "id": "brief_075",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Budget Buddy",
+    "objective": "consideration",
+    "kpi": "25.000 lượt tải app quản lý chi tiêu cá nhân",
+    "budget": 200,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-20",
+    "notes": "App quản lý tài chính cá nhân cho người mới đi làm, giúp lập ngân sách và tiết kiệm. Đây là công cụ cho cá nhân bình thường, không phải sản phẩm cho ngân hàng đầu tư hay nhà đầu tư tổ chức."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7088",
+        "6a2df27adda0ba67f14c708b"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22bb2",
+        "6a48cc2381574c48dbd22bbd"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22bbc"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Near-miss trap: 'Investment banking' keyword-matches on 'invest' but targets institutional bankers, the opposite tier of user from a mass-market personal budgeting app — notes explicitly rule this out ('not institutional investors')."
+  },
+  "tags": [
+    "consideration",
+    "vi",
+    "near_miss"
+  ]
+}

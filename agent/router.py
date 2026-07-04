@@ -1,13 +1,20 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from models import ChatRequest, AgentResponse
+from ratelimit import limiter, CHAT_LIMIT, RECOMMEND_LIMIT
 from handlers.boot import handle_boot
 from handlers.brief import handle_brief
 from handlers.creative import handle_creative
 from handlers.audience import handle_audience, handle_dmp_recommend, handle_audience_entry
 from handlers.setup import handle_setup, handle_zone_recommend_api, handle_setup_entry
 from handlers.result import handle_result
-from handlers.freeform import handle_freeform
+# Phase 1 strangler flag: graph path vs original freeform (identical signature).
+# ⛔ Flip USE_LANGGRAPH_FREEFORM only after scripts/parity_check.py passes.
+from config import config as _cfg
+if _cfg.USE_LANGGRAPH_FREEFORM:
+    from graph.entry import handle_freeform_graph as handle_freeform
+else:
+    from handlers.freeform import handle_freeform
 from handlers.report import handle_report_entry, handle_report_chat
 from handlers.email import handle_email_entry, handle_email_send
 from handlers.image_gen import handle_generate_image, get_remaining, AD_FORMATS
@@ -61,7 +68,8 @@ async def get_logs(session_id: str, limit: int = 200):
 
 
 @agent_router.post("/chat", response_model=AgentResponse)
-async def chat(req: ChatRequest) -> AgentResponse:
+@limiter.limit(CHAT_LIMIT)
+async def chat(request: Request, req: ChatRequest) -> AgentResponse:
     sid = req.session_id or "default"
 
     # ── Boot ──────────────────────────────────────────────────────────────────
@@ -132,14 +140,48 @@ async def chat(req: ChatRequest) -> AgentResponse:
     )
 
 
+@agent_router.get("/creative-intel")
+async def creative_intel(session_id: str = "default"):
+    """Phase 3: analysis verdicts per uploaded creative (status: analyzing /
+    auto_approved / needs_review + deterministic facts + optional VLM result)."""
+    from creative_intel.service import get_intel
+    return {"files": await get_intel(session_id)}
+
+
+class _AnalyzeFile(BaseModel):
+    name: str = ""
+    url: str = ""
+
+
+class _AnalyzeRequest(BaseModel):
+    session_id: str = "default"
+    files: list[_AnalyzeFile] = []
+
+
+@agent_router.post("/creative-analyze")
+async def creative_analyze(req: _AnalyzeRequest):
+    """Phase 3 trigger. Called by ConfirmPhase right after files get real URLs
+    (the Creative step is frontend-local and never reaches the agent — the KB's
+    'upload at step 2' description is outdated). Analysis runs async; results
+    land in /creative-intel."""
+    from config import config as _cfg
+    if not _cfg.USE_VLM_CREATIVE:
+        return {"enqueued": 0, "note": "USE_VLM_CREATIVE=false"}
+    from creative_intel.service import enqueue_analysis
+    n = enqueue_analysis(req.session_id, [f.model_dump() for f in req.files])
+    return {"enqueued": n}
+
+
 @agent_router.get("/dmp-recommend")
-async def dmp_recommend(session_id: str = "default"):
+@limiter.limit(RECOMMEND_LIMIT)
+async def dmp_recommend(request: Request, session_id: str = "default"):
     """AI picks top DMP segments based on brief + real segment data."""
     return await handle_dmp_recommend(session_id)
 
 
 @agent_router.get("/zones-recommend")
-async def zones_recommend(session_id: str = "default"):
+@limiter.limit(RECOMMEND_LIMIT)
+async def zones_recommend(request: Request, session_id: str = "default"):
     """AI ranks real zones based on brief objective/budget/KPI + creative files."""
     return await handle_zone_recommend_api(session_id)
 

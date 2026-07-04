@@ -1,0 +1,43 @@
+{
+  "id": "brief_019",
+  "lang": "vi",
+  "brief": {
+    "brand": "Căn hộ The Mizuki Riverside",
+    "objective": "consideration",
+    "kpi": "5.000 lượt đặt lịch tham quan nhà mẫu",
+    "budget": 80,
+    "startDate": "2026-09-15",
+    "endDate": "2026-11-15",
+    "notes": "Dự án căn hộ trung cao cấp ven sông, nhắm gia đình trẻ và nhà đầu tư 30-45 đang tìm mua bất động sản, quan tâm vay ngân hàng lãi suất ưu đãi."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7071",
+        "6a2df27adda0ba67f14c708b"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7076",
+        "6a2df27adda0ba67f14c70d5",
+        "6a2df27adda0ba67f14c70db",
+        "6a2df27adda0ba67f14c711d"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c715c"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [
+      "kpi_unrealistic_for_budget"
+    ],
+    "labeler_note": "must_exclude=Coupons kept: discount-hunting behavior is a weak-but-real negative signal against premium/mid-high apartment buyers, who are not price-promotion-driven the way FMCG shoppers are."
+  },
+  "tags": [
+    "consideration",
+    "vi",
+    "kpi_budget_conflict"
+  ]
+}

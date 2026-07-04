@@ -1,0 +1,58 @@
+{
+  "id": "brief_057",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Bia Vàng Kim Cang",
+    "objective": "awareness",
+    "kpi": "Reach 6 triệu nam giới 25-45",
+    "budget": 500,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-31",
+    "notes": "Bia lager mới ra mắt, chiến dịch mùa hè. Nhắm nam 25-45 tuổi, tuyệt đối không nhắm người dưới 18 tuổi theo quy định quảng cáo đồ uống có cồn."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c70e2",
+        "6a2df27adda0ba67f14c70e3"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c716a",
+        "6a48cc2381574c48dbd22c78"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70da"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Classic alcohol-ad must_not_set=Under 18 case per the guide's own example; age/gender expected follow the stated 25-45 male audience. must_exclude=Parenting mirrors brief_001's brand-safety reasoning (keep alcohol ads away from family/kids content).",
+    "targeting": {
+      "expected": {
+        "age": [
+          "25-34",
+          "35-44",
+          "45-54"
+        ],
+        "gender": [
+          "Male"
+        ]
+      },
+      "must_not_set": {
+        "age": [
+          "Under 18"
+        ]
+      },
+      "note": "Alcohol-adjacent brand; notes explicitly forbid targeting minors — a brand-safety must_not_set, not just a style choice."
+    }
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "targeting_labeled"
+  ]
+}

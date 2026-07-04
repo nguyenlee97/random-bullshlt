@@ -1,6 +1,8 @@
 """
 Creative-to-zone assignment scoring.
-Handles both banner (ratio match) and skin (name match) zones.
+Banner zones: ratio match on measured-or-reported dimensions.
+Skin zones (Phase 3): MEASURED layout (creative_intel) beats the legacy
+`"skin" in filename` heuristic; filename remains the last-resort fallback.
 """
 from __future__ import annotations
 import re
@@ -11,16 +13,48 @@ def _parse_dims(size_str: str) -> tuple[int, int] | None:
     return (int(m.group(1)), int(m.group(2))) if m else None
 
 
+def enrich_files_with_intel(files: list[dict], intel_docs: list[dict]) -> list[dict]:
+    """Attach creative_intel verdicts to files (matched by url, then name).
+    Adds file["intel"] = {is_skin, width, height, status} when available."""
+    by_url = {d.get("url"): d for d in intel_docs if d.get("url")}
+    by_name = {d.get("name"): d for d in intel_docs if d.get("name")}
+    out = []
+    for f in files:
+        doc = by_url.get(f.get("url")) or by_name.get(f.get("name"))
+        if doc:
+            det = doc.get("deterministic") or {}
+            vlm = doc.get("vlm") or {}
+            is_skin = vlm.get("is_skin_takeover") if vlm else det.get("is_skin_layout")
+            f = {**f, "intel": {
+                "is_skin": is_skin,
+                "width": det.get("width"), "height": det.get("height"),
+                "status": doc.get("status"),
+            }}
+        out.append(f)
+    return out
+
+
 def score_file_for_zone(file: dict, zone: dict) -> tuple[int, list[str]]:
     """Score a creative file against a zone. Returns (score, warnings)."""
     score = 0
     warnings: list[str] = []
     fname = (file.get("name") or "").lower()
+    intel = file.get("intel") or {}
 
-    # Skin zones: match on name
+    # Phase 3: files flagged needs_review may not be auto-assigned silently
+    if intel.get("status") == "needs_review":
+        warnings.append("Creative đang chờ review (creative-intel) — kiểm tra trước khi book")
+        score -= 3
+
+    # Skin zones — measured layout first, filename hack last
     is_skin_zone = zone.get("format") == "skin" or zone.get("size") == "skin"
     if is_skin_zone:
-        if "skin" in fname:
+        if intel.get("is_skin") is True:
+            score += 10
+        elif intel.get("is_skin") is False:
+            score -= 5
+            warnings.append("Ảnh không có layout skin/toàn trang (đo từ pixel thật)")
+        elif "skin" in fname:                       # no intel → legacy heuristic
             score += 10
         else:
             score -= 5
@@ -37,7 +71,9 @@ def score_file_for_zone(file: dict, zone: dict) -> tuple[int, list[str]]:
         score += 5
 
     zone_dims = _parse_dims(zone.get("size", ""))
-    fw, fh = file.get("width", 0), file.get("height", 0)
+    # measured dimensions (real bytes) beat frontend-reported ones
+    fw = intel.get("width") or file.get("width", 0)
+    fh = intel.get("height") or file.get("height", 0)
 
     if zone_dims and fw > 0 and fh > 0:
         zw, zh = zone_dims

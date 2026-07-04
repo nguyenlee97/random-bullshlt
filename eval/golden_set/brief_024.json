@@ -1,0 +1,40 @@
+{
+  "id": "brief_024",
+  "lang": "en",
+  "brief": {
+    "brand": "Bamboo Club Miles Program",
+    "objective": "retention",
+    "kpi": "Reactivate 50,000 dormant frequent-flyer members",
+    "budget": 400,
+    "startDate": "2026-09-01",
+    "endDate": "2026-12-31",
+    "notes": "Year-end double-miles offer for members inactive 6+ months. Target frequent flyers and premium leisure travelers; creative highlights lounge upgrades."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7132",
+        "6a2df27adda0ba67f14c718f",
+        "6a2df27adda0ba67f14c7068"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7137",
+        "6a2df27adda0ba67f14c7171",
+        "6a2df27adda0ba67f14c7117"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70d3"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=TV reality shows kept: mass/budget daytime entertainment audience is a lifestyle mismatch against the premium frequent-flyer/lounge-upgrade audience this reactivation targets."
+  },
+  "tags": [
+    "retention",
+    "en"
+  ]
+}

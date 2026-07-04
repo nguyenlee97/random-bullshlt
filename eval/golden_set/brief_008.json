@@ -1,0 +1,39 @@
+{
+  "id": "brief_008",
+  "lang": "en",
+  "brief": {
+    "brand": "VinFast VF5",
+    "objective": "consideration",
+    "kpi": "60,000 test-drive landing visits, 3,000 sign-ups",
+    "budget": 1500,
+    "startDate": "2026-09-15",
+    "endDate": "2026-11-15",
+    "notes": "Mid-campaign push for the VF5 e-SUV. Target urban professionals 28-45 comparing their first family car, highlight charging network and battery subscription."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7141",
+        "6a2df27adda0ba67f14c713f"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7144",
+        "6a2df27adda0ba67f14c7076",
+        "6a2df27adda0ba67f14c70d5"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c708f"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Board games kept as a weak signal: board-game hobbyists skew toward childless/leisure-first lifestyles, a mismatch against 28-45 professionals buying their first family car. Acknowledged as thin — no stronger alternative exists in the 71-item catalog."
+  },
+  "tags": [
+    "consideration",
+    "en"
+  ]
+}

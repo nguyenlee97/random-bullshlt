@@ -1,0 +1,42 @@
+{
+  "id": "brief_041",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Ngân hàng số Vikkey",
+    "objective": "conversion",
+    "kpi": "30.000 thẻ tín dụng số mở mới, CPA ≤ 180.000đ",
+    "budget": 650,
+    "startDate": "2026-08-01",
+    "endDate": "2026-09-30",
+    "notes": "Thẻ tín dụng số phát hành hoàn toàn online, không phí năm đầu. Nhắm người đi làm 25-40 ở đô thị lớn, đã có tài khoản ngân hàng, quen thanh toán online/quẹt thẻ."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22bcb",
+        "6a48cc2381574c48dbd22bbd",
+        "6a48cc2381574c48dbd22bbe"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7088",
+        "6a2df27adda0ba67f14c708b",
+        "6a2df27adda0ba67f14c715f"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7171"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_include are all Business and industry/Banking segments that only exist in the full 310 catalog, not the 71-dump — this is the point of the deep-catalog cell. must_exclude=Golf kept as a demographic-mismatch signal (affluent/45+ niche vs. a mass-market urban digital-card product), the same reasoning already established in brief_002/brief_003."
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "full_catalog_only"
+  ]
+}

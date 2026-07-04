@@ -1,0 +1,40 @@
+{
+  "id": "brief_052",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "TerraDrive Auto",
+    "objective": "conversion",
+    "kpi": "500 lượt lái thử SUV/bán tải, tỷ lệ chốt ≥ 12%",
+    "budget": 900,
+    "startDate": "2026-08-10",
+    "endDate": "2026-10-10",
+    "notes": "Đại lý ô tô chuyên SUV và bán tải cỡ lớn, phù hợp gia đình đông người hoặc nhu cầu chở hàng. Nhắm nam 30-50 có thu nhập ổn định, cần xe rộng rãi/off-road nhẹ."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c5e",
+        "6a48cc2381574c48dbd22c5f"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22c5c",
+        "6a2df27adda0ba67f14c713f"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c5d"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "SUVs / Trucks (Vehicles subcategory) only exist in the full catalog. must_exclude=Scooters: a completely different vehicle tier/use-case from large SUVs and pickups."
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "full_catalog_only"
+  ]
+}

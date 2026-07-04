@@ -1,0 +1,39 @@
+{
+  "id": "brief_006",
+  "lang": "vi",
+  "brief": {
+    "brand": "Game Kiếm Hiệp Truyền Kỳ",
+    "objective": "awareness",
+    "kpi": "Reach 15 triệu gamer, 70% xem hết video 15s",
+    "budget": 1200,
+    "startDate": "2026-11-01",
+    "endDate": "2026-12-15",
+    "notes": "Ra mắt game nhập vai kiếm hiệp mobile, nhắm nam 18-35 chơi game mobile thường xuyên, thích thể loại hành động và tiên hiệp."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c709f",
+        "6a2df27adda0ba67f14c708d"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70ac",
+        "6a2df27adda0ba67f14c70b5",
+        "6a2df27adda0ba67f14c708f"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7171"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Golf kept: golf skews older/affluent and non-digital, a demographic mismatch against the 18-35 mobile-first RPG gamer audience."
+  },
+  "tags": [
+    "awareness",
+    "vi"
+  ]
+}

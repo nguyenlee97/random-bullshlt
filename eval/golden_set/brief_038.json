@@ -1,0 +1,41 @@
+{
+  "id": "brief_038",
+  "lang": "vi",
+  "brief": {
+    "brand": "Sàn TMĐT ShopViet 11.11",
+    "objective": "conversion",
+    "kpi": "500.000 đơn trong đợt sale 11.11",
+    "budget": 1500,
+    "startDate": "2026-11-01",
+    "endDate": "2026-11-15",
+    "notes": "Mega sale 11.11: flash sale từng khung giờ, freeship toàn sàn. Nhắm người mua sắm online mọi ngành hàng, đặc biệt nhóm săn mã giảm giá."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c715f",
+        "6a2df27adda0ba67f14c715a",
+        "6a2df27adda0ba67f14c715c"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7194",
+        "6a2df27adda0ba67f14c7154",
+        "6a2df27adda0ba67f14c7152",
+        "6a2df27adda0ba67f14c718d"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7199"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Shops admins correctly excludes B2B sellers/store admins from a consumer flash-sale audience. No changes needed."
+  },
+  "tags": [
+    "conversion",
+    "vi"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "id": "brief_031",
+  "lang": "en",
+  "brief": {
+    "brand": "Strike Arena Mobile FPS",
+    "objective": "conversion",
+    "kpi": "800,000 installs at CPI ≤ 2,000 VND",
+    "budget": 70,
+    "startDate": "2026-08-10",
+    "endDate": "2026-09-10",
+    "notes": "Global-style mobile FPS soft-launching in Vietnam. Target hardcore mobile gamers 16-30 who play shooters and watch esports content."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c709f",
+        "6a2df27adda0ba67f14c708d",
+        "6a2df27adda0ba67f14c70ac"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70b5",
+        "6a2df27adda0ba67f14c718d",
+        "6a2df27adda0ba67f14c70be"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70da"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [
+      "kpi_unrealistic_for_budget"
+    ],
+    "labeler_note": "must_exclude=Parenting is a sensible brand-safety exclude given the target audience skews down to 16 years old. No changes needed."
+  },
+  "tags": [
+    "conversion",
+    "en",
+    "kpi_budget_conflict"
+  ]
+}

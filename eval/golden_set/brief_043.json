@@ -1,0 +1,42 @@
+{
+  "id": "brief_043",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Nimbus Web Studio",
+    "objective": "awareness",
+    "kpi": "Reach 2 triệu chủ doanh nghiệp/marketer quan tâm website",
+    "budget": 250,
+    "startDate": "2026-08-15",
+    "endDate": "2026-10-01",
+    "notes": "Agency thiết kế & phát triển website, dịch vụ SEO và hosting trọn gói cho doanh nghiệp vừa và nhỏ. Muốn tăng nhận diện thương hiệu trong giới marketing và chủ shop online."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22bc8",
+        "6a48cc2381574c48dbd22bc9",
+        "6a48cc2381574c48dbd22bca"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22bc6",
+        "6a48cc2381574c48dbd22bc3",
+        "6a2df27adda0ba67f14c7083"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22bb5"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Web design/development/hosting are Business and industry/Online segments new to the full catalog. must_exclude=Engineering: weak but real mismatch — shares a vague 'technical' vibe but targets hardware/civil engineers, not web/marketing buyers (same weak-signal-but-real-mismatch reasoning as brief_002/003)."
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "full_catalog_only"
+  ]
+}

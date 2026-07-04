@@ -5,7 +5,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import BlockRenderer from '@/blocks/BlockRenderer'
-import { Bot, User, Wrench, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Bot, User, Wrench, RefreshCw, AlertTriangle, Play } from 'lucide-react'
+import { useDemo } from '@/demo/DemoEngine'
 
 // ─── Typing indicator ─────────────────────────────────────────────────────────
 const THINKING_PHRASES = [
@@ -168,6 +169,10 @@ function MessageBubble({ message, showRetry, onRetry, onSend, busy }) {
   const isUser = message.role === 'user'
   const isThinking = message.role === 'thinking'
   const isError = message.role === 'error'
+  const demo = useDemo()
+  // Boot/greeting message → offer an inline demo trigger (same flow as the
+  // top Demo button). Useful when the top bar isn't reachable on some phones.
+  const isBoot = !isUser && message.metadata?.tool === 'agent_boot'
 
   if (isThinking) return <TypingIndicator />
   if (isError) return <ErrorBubble message={message} onRetry={onRetry} />
@@ -223,6 +228,18 @@ function MessageBubble({ message, showRetry, onRetry, onSend, busy }) {
             <BlockRenderer key={i} block={block} />
           ))}
         </div>
+
+        {/* Inline demo trigger — under the greeting bubble (same as top Demo button) */}
+        {isBoot && demo && !demo.isActive && (
+          <button
+            onClick={demo.startDemo}
+            id="demo-btn-inline"
+            className="mt-2.5 flex items-center gap-1.5 text-xs font-bold rounded-full px-3.5 py-2 border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition-all active:scale-95 animate-pulse hover:animate-none"
+          >
+            <Play className="w-3.5 h-3.5" />
+            Xem demo hướng dẫn
+          </button>
+        )}
 
         {/* Quick-reply suggestion chips — only on bot messages with suggestions */}
         {!isUser && (

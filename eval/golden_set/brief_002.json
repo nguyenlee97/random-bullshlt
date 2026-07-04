@@ -1,0 +1,41 @@
+{
+  "id": "brief_002",
+  "lang": "vi",
+  "brief": {
+    "brand": "Ví điện tử VinPay",
+    "objective": "conversion",
+    "kpi": "45.000 lượt liên kết thẻ mới, CPA ≤ 13.000đ",
+    "budget": 600,
+    "startDate": "2026-08-10",
+    "endDate": "2026-09-30",
+    "notes": "Nhắm người dùng thành thị 20-35 thường thanh toán hóa đơn và mua sắm online, đẩy mạnh ưu đãi hoàn tiền khi liên kết thẻ ngân hàng lần đầu."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7088",
+        "6a2df27adda0ba67f14c7076",
+        "6a2df27adda0ba67f14c715f"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c718d",
+        "6a2df27adda0ba67f14c715c",
+        "6a2df27adda0ba67f14c7195",
+        "6a2df27adda0ba67f14c708b"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7171"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Golf kept: Golf skews affluent/45+, a demographic mismatch against the mass-market urban 20-35 bill-pay/cashback audience. Weak signal but a real mismatch, not brand-unsafe."
+  },
+  "tags": [
+    "conversion",
+    "vi"
+  ]
+}

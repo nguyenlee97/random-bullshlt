@@ -66,7 +66,10 @@ async def get_or_create_session(session_id: str) -> dict:
         if not doc:
             doc = _default_session(session_id)
             await _sessions_col.insert_one(doc)
-        return doc
+        # Merge defaults: docs created by upsert paths (e.g. set_pending_proposal
+        # before any form submit) can lack keys like form_state — every consumer
+        # gets the full shape. (Read-side only; stored doc unchanged.)
+        return {**_default_session(session_id), **doc}
     else:
         if session_id not in _mem:
             _mem[session_id] = _default_session(session_id)

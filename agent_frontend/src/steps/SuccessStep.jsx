@@ -338,7 +338,7 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
   return (
     <div className="space-y-4">
       {/* Hero banner */}
-      <div className="rounded-2xl bg-gradient-to-br from-brand-500 to-violet-600 p-5 text-white shadow-lg">
+      <div data-demo="result-hero" className="rounded-2xl bg-gradient-to-br from-brand-500 to-violet-600 p-5 text-white shadow-lg">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -357,7 +357,7 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
       </div>
 
       {/* Quick links */}
-      <Card className="border-brand-200">
+      <Card data-demo="quick-links-card" className="border-brand-200">
         <CardHeader className="pb-2 pt-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <Monitor className="w-4 h-4 text-brand-500" />
@@ -395,7 +395,7 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
 
       {/* ── Screenshot capture card — only when LIVE ────────────────────────── */}
       {live && uniquePlatforms.length > 0 && (
-        <Card className="border-green-200 bg-green-50/30">
+        <Card data-demo="ad-live-card" className="border-green-200 bg-green-50/30">
           <CardHeader className="pb-2 pt-3">
             <CardTitle className="text-sm flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -426,7 +426,7 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
       )}
 
       {/* KPI grid */}
-      <div className="grid grid-cols-2 gap-2">
+      <div data-demo="kpi-grid" className="grid grid-cols-2 gap-2">
         <KpiCard icon={LayoutGrid} label="Ad zones" value={selectedZones.length} color="text-brand-600" bg="bg-brand-50 border-brand-200" />
         <KpiCard icon={Users} label="Audience" value={fmt(audienceSize || 0)} sub="người dùng" color="text-blue-600" bg="bg-blue-50 border-blue-200" />
         <KpiCard icon={DollarSign} label="Ngân sách" value={`${brief?.budget}M`} sub="VND" color="text-violet-600" bg="bg-violet-50 border-violet-200" />

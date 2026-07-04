@@ -1,0 +1,40 @@
+{
+  "id": "brief_007",
+  "lang": "vi",
+  "brief": {
+    "brand": "Nhà mạng MobiOne",
+    "objective": "retention",
+    "kpi": "200.000 thuê bao gia hạn gói data, giảm churn 15%",
+    "budget": 500,
+    "startDate": "2026-09-01",
+    "endDate": "2026-11-30",
+    "notes": "Chương trình tri ân thuê bao lâu năm: gia hạn gói data 4G/5G nhận thêm 50% dung lượng. Nhắm thuê bao hiện hữu dùng smartphone, hoạt động online nhiều."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c718d",
+        "6a2df27adda0ba67f14c7083"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c715f",
+        "6a2df27adda0ba67f14c7195",
+        "6a2df27adda0ba67f14c709f",
+        "6a2df27adda0ba67f14c70d1"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7196"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Downgraded 'Digital Activities' out of must_include — at ~50-60M reach it's too broad to justify grade-2 ('removing it would clearly hurt the campaign'); moved to acceptable. Promoted 'Social media' into must_include instead, since heavy social use is a more specific proxy for '4G/5G data renewal, hoạt động online nhiều' than the generic behavior segment. must_exclude=New Active Business kept: brand-new business owners have distinct billing/usage patterns from the long-tenure personal subscribers this loyalty renewal targets — weak but brief-specific, not copy-pasted filler."
+  },
+  "tags": [
+    "retention",
+    "vi"
+  ]
+}

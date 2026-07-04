@@ -1,0 +1,54 @@
+{
+  "id": "brief_065",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Oxford Line Menswear",
+    "objective": "consideration",
+    "kpi": "120.000 lượt xem lookbook công sở nam",
+    "budget": 200,
+    "startDate": "2026-09-10",
+    "endDate": "2026-10-25",
+    "notes": "Thời trang nam công sở: sơ mi, blazer, giày da. Nhắm nam giới đi làm văn phòng, thu nhập trung bình khá."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7152",
+        "6a48cc2381574c48dbd22c65"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22c66",
+        "6a2df27adda0ba67f14c7150"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c64"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Plain menswear brief, included for targeting-cell coverage of straightforward (non-conflicting) cases per guide quota.",
+    "targeting": {
+      "expected": {
+        "gender": [
+          "Male"
+        ],
+        "career": [
+          "Office Worker"
+        ],
+        "income": [
+          "Top 25-50%"
+        ]
+      },
+      "note": "Direct, non-conflicting mapping from notes: office-working men, mid-upper income."
+    }
+  },
+  "tags": [
+    "consideration",
+    "vi",
+    "targeting_labeled"
+  ]
+}

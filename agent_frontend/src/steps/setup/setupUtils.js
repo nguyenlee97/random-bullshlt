@@ -24,13 +24,21 @@ export function checkMismatch(zone, file) {
   const [zw, zh] = dims
   const zRatio = zw / zh
   const fRatio = file.width / file.height
-  if (Math.abs(zRatio - fRatio) / zRatio > 0.30) {
+
+  // Same orientation (both portrait or both landscape): ad servers can stretch/fit,
+  // so allow up to 45% ratio diff before warning.
+  // Cross-orientation (portrait zone vs landscape image or vice versa): warn at 30%.
+  const sameOrientation = (zw >= zh) === (file.width >= file.height)
+  const threshold = sameOrientation ? 0.45 : 0.30
+
+  if (Math.abs(zRatio - fRatio) / zRatio > threshold) {
     const zLabel = zw > zh ? 'ngang' : 'dọc'
     const fLabel = file.width > file.height ? 'ngang' : 'dọc'
     return `Zone ${zone.size} (${zLabel}) · Ảnh ${file.width}×${file.height}px (${fLabel})`
   }
   return false                                    // explicitly OK
 }
+
 
 // ─── Smart score: how well a file fits a zone ─────────────────────────────────
 export function scoreFile(file, zone) {

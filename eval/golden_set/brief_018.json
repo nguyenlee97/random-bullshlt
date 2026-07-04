@@ -1,0 +1,39 @@
+{
+  "id": "brief_018",
+  "lang": "vi",
+  "brief": {
+    "brand": "Game Võ Lâm Huyền Thoại",
+    "objective": "retention",
+    "kpi": "120.000 người chơi cũ quay lại trong sự kiện Trung Thu",
+    "budget": 450,
+    "startDate": "2026-09-10",
+    "endDate": "2026-09-30",
+    "notes": "Sự kiện Trung Thu server mới, tặng vật phẩm giới hạn cho tài khoản không đăng nhập 60 ngày. Nhắm cộng đồng gamer nhập vai, đặc biệt người từng chơi dòng võ lâm."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c709f",
+        "6a2df27adda0ba67f14c708d"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c708f",
+        "6a2df27adda0ba67f14c70ac",
+        "6a2df27adda0ba67f14c70b5"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70db"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Weddings kept: engaged/newly-married audiences are reallocating time and spend toward wedding planning, a competing-priority mismatch against a gamer win-back event. Weak but plausible."
+  },
+  "tags": [
+    "retention",
+    "vi"
+  ]
+}

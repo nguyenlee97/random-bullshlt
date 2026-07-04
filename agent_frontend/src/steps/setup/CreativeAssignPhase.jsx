@@ -238,6 +238,7 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones, r
           </div>
           {files.length > 0 && (
             <button
+              data-demo="auto-assign-btn"
               onClick={handleAutoAssign}
               className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-100 hover:bg-violet-200 text-violet-700 text-xs font-semibold transition-colors border border-violet-200"
               title="Tự động gắn creative phù hợp nhất vào mỗi zone"

@@ -1,0 +1,40 @@
+{
+  "id": "brief_030",
+  "lang": "vi",
+  "brief": {
+    "brand": "Sushi Hokkaido Sachi",
+    "objective": "consideration",
+    "kpi": "15.000 lượt đặt bàn online trong 6 tuần",
+    "budget": 250,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-15",
+    "notes": "Chuỗi nhà hàng Nhật tầm trung cao, ra menu omakase mùa thu. Nhắm người mê ẩm thực Nhật, hay đi ăn nhà hàng, thu nhập khá."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c70f6",
+        "6a2df27adda0ba67f14c7108"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70ec",
+        "6a2df27adda0ba67f14c718f",
+        "6a2df27adda0ba67f14c7117"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7102",
+        "6a2df27adda0ba67f14c715c"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Fast food/Coupons correctly reflect the premium omakase positioning (non-fast-food, non-discount-driven diners). No changes needed."
+  },
+  "tags": [
+    "consideration",
+    "vi"
+  ]
+}

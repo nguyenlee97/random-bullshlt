@@ -1,0 +1,40 @@
+{
+  "id": "brief_072",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "TeaLoop Bubble Tea",
+    "objective": "retention",
+    "kpi": "35% khách quay lại dùng app tích điểm trong 45 ngày",
+    "budget": 110,
+    "startDate": "2026-08-01",
+    "endDate": "2026-12-01",
+    "notes": "Chuỗi trà sữa gần khu đại học. Đối tượng ưu tiên chính là học sinh/sinh viên ghé thường xuyên sau giờ học. Dân văn phòng gần đó cũng mua nhưng tần suất thấp hơn, xem là nhóm phụ."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c25",
+        "6a48cc2381574c48dbd22c28"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70e7",
+        "6a2df27adda0ba67f14c7102"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70e3"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "No dedicated 'bubble tea' segment exists in the catalog, so the closest general F&B interest is must_include for the stated-primary student audience; Coffee (a more office-worker-coded beverage habit) stands in for the secondary office-worker audience at acceptable only."
+  },
+  "tags": [
+    "retention",
+    "vi",
+    "primary_secondary"
+  ]
+}

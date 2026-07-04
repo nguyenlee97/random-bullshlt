@@ -1,0 +1,41 @@
+{
+  "id": "brief_004",
+  "lang": "vi",
+  "brief": {
+    "brand": "Sữa hạt Green Farm",
+    "objective": "consideration",
+    "kpi": "150.000 lượt truy cập trang sản phẩm, tỷ lệ đọc hết ≥ 40%",
+    "budget": 450,
+    "startDate": "2026-09-05",
+    "endDate": "2026-10-20",
+    "notes": "Sữa hạt hữu cơ mới, định vị lành mạnh cho dân văn phòng ăn uống healthy, tập yoga/gym, ưu tiên nữ 25-40 quan tâm thực phẩm organic và lối sống xanh."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7103",
+        "6a2df27adda0ba67f14c7106"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70e1",
+        "6a2df27adda0ba67f14c70de",
+        "6a2df27adda0ba67f14c70ec",
+        "6a2df27adda0ba67f14c70eb"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70e3",
+        "6a2df27adda0ba67f14c7102"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Beer/Fast food reflect a genuine positioning conflict with the organic/healthy lifestyle brief — kept as-is, well justified."
+  },
+  "tags": [
+    "consideration",
+    "vi"
+  ]
+}

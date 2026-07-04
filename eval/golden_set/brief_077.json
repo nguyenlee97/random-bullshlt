@@ -1,0 +1,40 @@
+{
+  "id": "brief_077",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Cuir Noble Leather Goods",
+    "objective": "consideration",
+    "kpi": "90.000 lượt xem bộ sưu tập túi da thủ công",
+    "budget": 210,
+    "startDate": "2026-09-15",
+    "endDate": "2026-11-01",
+    "notes": "Thương hiệu túi và đồ da thủ công cao cấp (không sản xuất trang sức). Nhắm người yêu thời trang, thích đồ da bền, sang trọng."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c68",
+        "6a48cc2381574c48dbd22c66"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7150",
+        "6a2df27adda0ba67f14c715a"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c69"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Near-miss trap: Jewelry sits in the same 'luxury accessories' neighborhood as Handbags and is easy to over-include by association, but the brief explicitly states it does not sell jewelry — a materially different buyer intent (metals/gems vs. leather goods)."
+  },
+  "tags": [
+    "consideration",
+    "vi",
+    "near_miss"
+  ]
+}

@@ -137,6 +137,18 @@ _STEP_EXPLANATIONS = {
 
 
 async def execute_tool(name: str, args: dict) -> dict:
+    """Single dispatcher for all tool calls — metrics recorded here (Phase 0 B4)."""
+    from metrics import TOOL_CALLS
+    try:
+        result = await _execute_tool_inner(name, args)
+        TOOL_CALLS.labels(tool=name, outcome="ok").inc()
+        return result
+    except Exception:
+        TOOL_CALLS.labels(tool=name, outcome="error").inc()
+        raise
+
+
+async def _execute_tool_inner(name: str, args: dict) -> dict:
     if name == "get_zone_list":
         zones = await get_all_zones()
         obj = args.get("objective")

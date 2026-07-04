@@ -1,0 +1,58 @@
+{
+  "id": "brief_067",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Château Rouge Fine Wines",
+    "objective": "awareness",
+    "kpi": "Reach 800.000 người yêu rượu vang cao cấp",
+    "budget": 300,
+    "startDate": "2026-10-01",
+    "endDate": "2026-11-30",
+    "notes": "Nhà nhập khẩu rượu vang cao cấp từ Pháp. Nhắm người 35-54 tuổi, thu nhập cao, am hiểu ẩm thực. Không nhắm người dưới 18 tuổi và không nhắm nhóm sinh viên/mới đi làm."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c10",
+        "6a48cc2381574c48dbd22c19"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70e2",
+        "6a48cc2381574c48dbd22c1d"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70e3"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_not_set includes 18-24 in addition to Under 18 specifically because the notes call out students/early-career as excluded, not just legal minors — a stronger conflict than the typical alcohol case.",
+    "targeting": {
+      "expected": {
+        "age": [
+          "35-44",
+          "45-54"
+        ],
+        "income": [
+          "Top 10-25%"
+        ]
+      },
+      "must_not_set": {
+        "age": [
+          "Under 18",
+          "18-24"
+        ]
+      },
+      "note": "Alcohol brand explicitly narrows age away from both minors AND the 18-24 student/early-career bracket — a stricter, notes-driven conflict beyond the baseline minors-only rule."
+    }
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "targeting_labeled"
+  ]
+}

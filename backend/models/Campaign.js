@@ -74,6 +74,10 @@ const campaignSchema = new mongoose.Schema(
     // Zone validation warnings (populated at create/update time)
     warnings:   [{ type: String }],
 
+    // Idempotency key (Phase 0) — unique sparse index; agent retries with the
+    // same key can never create a duplicate campaign. Optional for manual UI.
+    idempotencyKey: { type: String, index: { unique: true, sparse: true } },
+
     // Soft delete — set to a Date when deleted; null = not deleted.
     // The document is kept in MongoDB so orderId is never reused and
     // analytic_records / report_analyses references remain valid.

@@ -5,12 +5,25 @@ import log from '@/lib/logger'
 const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8000'
 // AdsPilot backend (for /api/creative/upload)
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+
+// Phase 0 auth: X-API-Key sent on every agent call when VITE_AGENT_API_KEY is
+// set (must match AGENT_API_KEY in agent/.env — middleware no-ops when empty).
+const AGENT_API_KEY = import.meta.env.VITE_AGENT_API_KEY || ''
+const agentFetch = (url, opts = {}) =>
+  fetch(url, {
+    ...opts,
+    headers: {
+      ...(opts.headers || {}),
+      ...(AGENT_API_KEY ? { 'X-API-Key': AGENT_API_KEY } : {}),
+    },
+  })
+
 let _agentReachable = null // null=unknown, true/false after first probe
 
 async function probeAgent() {
   if (_agentReachable !== null) return _agentReachable
   try {
-    const r = await fetch(`${AGENT_URL}/api/health`, { signal: AbortSignal.timeout(2000) })
+    const r = await agentFetch(`${AGENT_URL}/api/health`, { signal: AbortSignal.timeout(2000) })
     _agentReachable = r.ok
   } catch {
     _agentReachable = false
@@ -20,7 +33,7 @@ async function probeAgent() {
 
 async function probeVersion() {
   try {
-    const r = await fetch(`${AGENT_URL}/api/version`, { signal: AbortSignal.timeout(3000) })
+    const r = await agentFetch(`${AGENT_URL}/api/version`, { signal: AbortSignal.timeout(3000) })
     if (!r.ok) return
     const data = await r.json()
     // Big, visible log so you can confirm the deployed backend version instantly
@@ -58,7 +71,7 @@ async function callAgent(payload) {
     formData: payload.formData,
   })
   try {
-    const res = await fetch(`${AGENT_URL}/api/agent/chat`, {
+    const res = await agentFetch(`${AGENT_URL}/api/agent/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -639,7 +652,7 @@ if (typeof window !== 'undefined') window.__AGENT_SESSION_ID__ = SESSION_ID
  */
 export async function fetchDmpRecommendations() {
   try {
-    const res = await fetch(
+    const res = await agentFetch(
       `${AGENT_URL}/api/agent/dmp-recommend?session_id=${SESSION_ID}`,
       { signal: AbortSignal.timeout(180000) }  // LLM call — up to 3 min
     )
@@ -661,7 +674,7 @@ export async function fetchDmpRecommendations() {
  */
 export async function fetchZonesFromAgent() {
   try {
-    const res = await fetch(
+    const res = await agentFetch(
       `${AGENT_URL}/api/agent/zones-recommend?session_id=${SESSION_ID}`,
       { signal: AbortSignal.timeout(180000) }  // LLM-ranked zones
     )
@@ -681,7 +694,7 @@ export async function fetchZonesFromAgent() {
  */
 export async function getSetupEntry() {
   try {
-    const res = await fetch(
+    const res = await agentFetch(
       `${AGENT_URL}/api/agent/setup-entry?session_id=${SESSION_ID}`,
       { signal: AbortSignal.timeout(180000) }  // LLM call — up to 3 min
     )
@@ -744,9 +757,15 @@ export async function uploadCreativeFile(dataUrl, filename, mimeType) {
  * @param {Object}  assignments   { zoneId: fileIndexInt }
  * @param {Object}  fileUrls      { "0": "https://...", "1": "https://..." }
  */
+// Idempotency (Phase 0): one key per confirm intent. Kept module-level so a
+// user retry of the SAME confirm reuses the key (backend dedupes); reset after
+// a successful create so a genuinely new campaign gets a fresh key.
+let _orderIdempotencyKey = null
+
 export async function createCampaignOrder(selectedZoneIds, assignments, fileUrls = {}) {
+  if (!_orderIdempotencyKey) _orderIdempotencyKey = crypto.randomUUID()
   try {
-    const res = await fetch(`${AGENT_URL}/api/agent/chat`, {
+    const res = await agentFetch(`${AGENT_URL}/api/agent/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -759,13 +778,19 @@ export async function createCampaignOrder(selectedZoneIds, assignments, fileUrls
             selectedZoneIds: selectedZoneIds || [],
             assignments: assignments || {},
             fileUrls: fileUrls || {},
+            idempotencyKey: _orderIdempotencyKey,
           },
         },
       }),
       signal: AbortSignal.timeout(180000),  // chat/order creation
     })
     if (!res.ok) return null
-    return await res.json()
+    const data = await res.json()
+    // Success → next confirm is a new campaign, needs a new key.
+    // (Guard-rejection returns tool 'order_guard'; keep the key so a fixed
+    //  retry of the same intent still dedupes.)
+    if (data?.meta?.tool === 'order_create') _orderIdempotencyKey = null
+    return data
   } catch (e) {
     console.warn('[createCampaignOrder] failed:', e.message)
     return null
@@ -904,7 +929,7 @@ export const AgentAPI = {
       if (brief && brief.brand) {
         url += `&brief_hint=${encodeURIComponent(JSON.stringify(brief))}`
       }
-      const res = await fetch(url, { signal: AbortSignal.timeout(180000) })  // LLM call — up to 3 min
+      const res = await agentFetch(url, { signal: AbortSignal.timeout(180000) })  // LLM call — up to 3 min
       if (!res.ok) return null
       return await res.json()
     } catch (e) {
@@ -922,7 +947,7 @@ export const AgentAPI = {
    */
   async commitWorkspace(field, value) {
     try {
-      const res = await fetch(`${AGENT_URL}/api/agent/commit-workspace`, {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/commit-workspace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: SESSION_ID, field, value }),
@@ -941,7 +966,7 @@ export const AgentAPI = {
    */
   async reportEntry() {
     try {
-      const res = await fetch(
+      const res = await agentFetch(
         `${AGENT_URL}/api/agent/report-entry?session_id=${SESSION_ID}`,
         { signal: AbortSignal.timeout(180000) }  // triggers background report gen
       )
@@ -1015,7 +1040,7 @@ export const AgentAPI = {
    */
   async generateAdImage(briefObj, formatId, customPrompt = '') {
     try {
-      const res = await fetch(`${AGENT_URL}/api/agent/generate-image`, {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/generate-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1040,7 +1065,7 @@ export const AgentAPI = {
    */
   async getImageGenStatus() {
     try {
-      const res = await fetch(
+      const res = await agentFetch(
         `${AGENT_URL}/api/agent/image-gen-status?session_id=${SESSION_ID}`,
         { signal: AbortSignal.timeout(5000) }
       )
@@ -1069,7 +1094,7 @@ export const AgentAPI = {
       if (zoneIds && zoneIds.length > 0) {
         params.set('zone_ids', zoneIds.join(','))
       }
-      const res = await fetch(
+      const res = await agentFetch(
         `${AGENT_URL}/api/agent/screenshot?${params.toString()}`,
         { signal: AbortSignal.timeout(60000) }
       )

@@ -100,6 +100,7 @@ function GenImageCard({ img, selected, onToggle, onRemove, onPreview }) {
       <div
         className="px-2 py-1.5 cursor-pointer hover:bg-muted/30 transition-colors"
         onClick={() => onToggle(img.id)}
+        data-demo="gen-img-footer"
       >
         <p className="text-[10px] font-semibold text-foreground truncate">{fmt.label || img.name}</p>
         <p className="text-[10px] text-muted-foreground">{img.width}×{img.height}px</p>

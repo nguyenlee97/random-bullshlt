@@ -12,9 +12,9 @@ export const DEMO_BRIEFS = [
       '- Objective: awareness\n' +
       '- KPI: Reach\n' +
       '- Budget: 150 triệu VND\n' +
-      '- Thời gian: 1/7/2026 đến 19/8/2026\n' +
+      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
       '- Ghi chú: Đối tượng Nam 18–30 tuổi, quan tâm mạng xã hội và gaming',
-    briefPatch: { brand: 'Mixi', objective: 'awareness', kpi: 'Reach', budget: 15, startDate: '2026-07-01', endDate: '2026-08-19', notes: 'Nam 18–30, mạng xã hội & gaming' },
+    briefPatch: { brand: 'Mixi', objective: 'awareness', kpi: 'Reach', budget: 150, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nam 18–30, mạng xã hội & gaming' },
     budgetEdit: 180,
   },
   // 2. Café 24 — F&B chain
@@ -26,9 +26,9 @@ export const DEMO_BRIEFS = [
       '- Objective: awareness\n' +
       '- KPI: CTR\n' +
       '- Budget: 250 triệu VND\n' +
-      '- Thời gian: 15/7/2026 đến 26/8/2026\n' +
+      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
       '- Ghi chú: Đối tượng Nữ 22–35, thích cà phê và lifestyle',
-    briefPatch: { brand: 'Café 24', objective: 'awareness', kpi: 'CTR', budget: 25, startDate: '2026-07-15', endDate: '2026-08-26', notes: 'Nữ 22–35, café & lifestyle' },
+    briefPatch: { brand: 'Café 24', objective: 'awareness', kpi: 'CTR', budget: 250, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nữ 22–35, café & lifestyle' },
     budgetEdit: 300,
   },
   // 3. ZPlay — Mobile gaming
@@ -40,9 +40,9 @@ export const DEMO_BRIEFS = [
       '- Objective: awareness\n' +
       '- KPI: Reach, VTR\n' +
       '- Budget: 200 triệu VND\n' +
-      '- Thời gian: 10/8/2026 đến 14/9/2026\n' +
+      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
       '- Ghi chú: Đối tượng Nam 15–28, gaming và esports',
-    briefPatch: { brand: 'ZPlay', objective: 'awareness', kpi: 'Reach, VTR', budget: 20, startDate: '2026-08-10', endDate: '2026-09-14', notes: 'Nam 15–28, gaming & esports' },
+    briefPatch: { brand: 'ZPlay', objective: 'awareness', kpi: 'Reach, VTR', budget: 200, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nam 15–28, gaming & esports' },
     budgetEdit: 220,
   },
   // 4. VPBank Neo — Digital banking / Fintech
@@ -54,9 +54,9 @@ export const DEMO_BRIEFS = [
       '- Objective: awareness\n' +
       '- KPI: CTR, Reach\n' +
       '- Budget: 400 triệu VND\n' +
-      '- Thời gian: 1/8/2026 đến 30/9/2026\n' +
+      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
       '- Ghi chú: Đối tượng 22–40 tuổi, quan tâm tài chính số và đầu tư',
-    briefPatch: { brand: 'VPBank Neo', objective: 'awareness', kpi: 'CTR, Reach', budget: 40, startDate: '2026-08-01', endDate: '2026-09-30', notes: '22–40, tài chính số & đầu tư' },
+    briefPatch: { brand: 'VPBank Neo', objective: 'awareness', kpi: 'CTR, Reach', budget: 400, startDate: '2026-06-30', endDate: '2026-07-07', notes: '22–40, tài chính số & đầu tư' },
     budgetEdit: 450,
   },
   // 5. Tiki — E-commerce
@@ -68,9 +68,9 @@ export const DEMO_BRIEFS = [
       '- Objective: awareness\n' +
       '- KPI: CTR\n' +
       '- Budget: 350 triệu VND\n' +
-      '- Thời gian: 20/7/2026 đến 20/8/2026\n' +
+      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
       '- Ghi chú: Đối tượng 20–45 tuổi, thích mua sắm online và deals',
-    briefPatch: { brand: 'Tiki', objective: 'awareness', kpi: 'CTR', budget: 35, startDate: '2026-07-20', endDate: '2026-08-20', notes: '20–45, mua sắm online & deals' },
+    briefPatch: { brand: 'Tiki', objective: 'awareness', kpi: 'CTR', budget: 350, startDate: '2026-06-30', endDate: '2026-07-07', notes: '20–45, mua sắm online & deals' },
     budgetEdit: 400,
   },
   // 6. Gentis — Healthcare / DNA testing
@@ -82,9 +82,9 @@ export const DEMO_BRIEFS = [
       '- Objective: awareness\n' +
       '- KPI: Reach, VTR\n' +
       '- Budget: 180 triệu VND\n' +
-      '- Thời gian: 5/8/2026 đến 5/9/2026\n' +
+      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
       '- Ghi chú: Đối tượng 28–50 tuổi, quan tâm sức khỏe và y tế gia đình',
-    briefPatch: { brand: 'Gentis', objective: 'awareness', kpi: 'Reach, VTR', budget: 18, startDate: '2026-08-05', endDate: '2026-09-05', notes: '28–50, sức khỏe & y tế gia đình' },
+    briefPatch: { brand: 'Gentis', objective: 'awareness', kpi: 'Reach, VTR', budget: 180, startDate: '2026-06-30', endDate: '2026-07-07', notes: '28–50, sức khỏe & y tế gia đình' },
     budgetEdit: 200,
   },
   // 7. ELSA Speak — EdTech / English learning
@@ -96,9 +96,9 @@ export const DEMO_BRIEFS = [
       '- Objective: awareness\n' +
       '- KPI: CTR, Reach\n' +
       '- Budget: 220 triệu VND\n' +
-      '- Thời gian: 1/9/2026 đến 30/9/2026\n' +
+      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
       '- Ghi chú: Đối tượng 16–35 tuổi, sinh viên và đi làm muốn học tiếng Anh',
-    briefPatch: { brand: 'ELSA Speak', objective: 'awareness', kpi: 'CTR, Reach', budget: 22, startDate: '2026-09-01', endDate: '2026-09-30', notes: '16–35, sinh viên & đi làm học tiếng Anh' },
+    briefPatch: { brand: 'ELSA Speak', objective: 'awareness', kpi: 'CTR, Reach', budget: 220, startDate: '2026-06-30', endDate: '2026-07-07', notes: '16–35, sinh viên & đi làm học tiếng Anh' },
     budgetEdit: 250,
   },
   // 8. Vietjet Air — Low-cost travel
@@ -110,9 +110,9 @@ export const DEMO_BRIEFS = [
       '- Objective: awareness\n' +
       '- KPI: Reach, VTR\n' +
       '- Budget: 500 triệu VND\n' +
-      '- Thời gian: 15/8/2026 đến 15/9/2026\n' +
+      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
       '- Ghi chú: Đối tượng 20–45 tuổi, thích du lịch và săn vé giá rẻ',
-    briefPatch: { brand: 'Vietjet Air', objective: 'awareness', kpi: 'Reach, VTR', budget: 50, startDate: '2026-08-15', endDate: '2026-09-15', notes: '20–45, du lịch & săn vé rẻ' },
+    briefPatch: { brand: 'Vietjet Air', objective: 'awareness', kpi: 'Reach, VTR', budget: 500, startDate: '2026-06-30', endDate: '2026-07-07', notes: '20–45, du lịch & săn vé rẻ' },
     budgetEdit: 550,
   },
   // 9. Cocoon — Vietnamese beauty / skincare
@@ -124,9 +124,9 @@ export const DEMO_BRIEFS = [
       '- Objective: awareness\n' +
       '- KPI: CTR, Reach\n' +
       '- Budget: 160 triệu VND\n' +
-      '- Thời gian: 1/7/2026 đến 31/7/2026\n' +
+      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
       '- Ghi chú: Đối tượng Nữ 18–35, quan tâm làm đẹp và skincare thuần Việt',
-    briefPatch: { brand: 'Cocoon', objective: 'awareness', kpi: 'CTR, Reach', budget: 16, startDate: '2026-07-01', endDate: '2026-07-31', notes: 'Nữ 18–35, làm đẹp & skincare thuần Việt' },
+    briefPatch: { brand: 'Cocoon', objective: 'awareness', kpi: 'CTR, Reach', budget: 160, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nữ 18–35, làm đẹp & skincare thuần Việt' },
     budgetEdit: 200,
   },
   // 10. VinFast — EV automotive
@@ -138,12 +138,14 @@ export const DEMO_BRIEFS = [
       '- Objective: awareness\n' +
       '- KPI: Reach, VTR\n' +
       '- Budget: 800 triệu VND\n' +
-      '- Thời gian: 10/9/2026 đến 10/10/2026\n' +
+      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
       '- Ghi chú: Đối tượng 30–55 tuổi, thu nhập khá, quan tâm xe điện và công nghệ',
-    briefPatch: { brand: 'VinFast', objective: 'awareness', kpi: 'Reach, VTR', budget: 80, startDate: '2026-09-10', endDate: '2026-10-10', notes: '30–55, thu nhập khá, xe điện & công nghệ' },
+    briefPatch: { brand: 'VinFast', objective: 'awareness', kpi: 'Reach, VTR', budget: 800, startDate: '2026-06-30', endDate: '2026-07-07', notes: '30–55, thu nhập khá, xe điện & công nghệ' },
     budgetEdit: 900,
   },
 ]
+
+
 
 // Pick a random brief, never repeating the last one
 let _lastBriefId = null
@@ -156,9 +158,67 @@ export function pickRandomBrief() {
   return pick
 }
 
+// ─── Pre-generated creative format metadata ──────────────────────────────────
+// These formats are injected automatically after the Box AI generation step.
+// Images are served from /public/demo-creatives/{briefId}/{formatId}.png
+export const DEMO_AD_FORMAT_META = {
+  'zmp3-top-banner':      { width: 2032, height: 528,  label: 'ZMP3 Top Banner Panoramic' },
+  'znews-Background':     { width: 1504, height: 704,  label: 'ZNews Desktop Background' },
+  'znews-middle-banner':  { width: 2048, height: 512,  label: 'ZNews Mid-page Banner' },
+  'znews-side-banner':    { width: 736,  height: 1456, label: 'ZNews Side Skyscraper' },
+  'znews-top-banner':     { width: 2224, height: 480,  label: 'ZNews Top Banner Ultra-wide' },
+  'zuma-baomoi-masthead': { width: 1160, height: 280,  label: 'Baomoi Masthead Strip' },
+  'zuma-Left':            { width: 465,  height: 1200, label: 'Sticky Side Slider Left' },
+  'zuma-Right':           { width: 465,  height: 1200, label: 'Sticky Side Slider Right' },
+}
+export const DEMO_NON_BOX_FORMAT_IDS = Object.keys(DEMO_AD_FORMAT_META)
 
-// ─── Step Types ──────────────────────────────────────────────────────────────
-// TOOLTIP          — show tooltip on element, wait for user "Tiếp theo" click
+// ─── Zone → creative format mapping ──────────────────────────────────────────
+// null = use the AI-generated box creative (name matches /^ai-zuma-box/)
+export const ZONE_FORMAT_MAP = {
+  // BaoMoi sticky sidebars (465×1200)
+  'BaoMoi_StickyLeft':             'zuma-Left',
+  'BaoMoi_StickyRight':            'zuma-Right',
+  // Backgrounds (1504×704)
+  'BaoMoi_Background':             'znews-Background',
+  'Znews_CongNghe_Background':     'znews-Background',
+  'Znews_TheThao_Background':      'znews-Background',
+  'Znews_GiaiTri_Background':      'znews-Background',
+  'Znews_DoiSong_Background':      'znews-Background',
+  'Znews_SucKhoe_Background':      'znews-Background',
+  'Znews_KinhDoanh_Background':    'znews-Background',
+  // ZMP3 masthead (2032×528)
+  'ZingMP3_Masthead':              'zmp3-top-banner',
+  // ZNews top mastheads (2224×480)
+  'ZingNews_Masthead':             'znews-top-banner',
+  // Mid-page / inline (2048×512)
+  'ZingNews_Masthead_Inline_1':    'znews-middle-banner',
+  'ZingNews_Halfpage':             'znews-middle-banner',
+  // Skyscrapers / side banners (736×1456)
+  'Znews_CongNghe_SideLeft':      'znews-side-banner',
+  'Znews_CongNghe_SideRight':     'znews-side-banner',
+  'Znews_TheThao_SideLeft':       'znews-side-banner',
+  'Znews_TheThao_SideRight':      'znews-side-banner',
+  'Znews_GiaiTri_SideLeft':       'znews-side-banner',
+  'Znews_GiaiTri_SideRight':      'znews-side-banner',
+  'Znews_DoiSong_SideLeft':       'znews-side-banner',
+  'Znews_DoiSong_SideRight':      'znews-side-banner',
+  'Znews_SucKhoe_SideLeft':       'znews-side-banner',
+  'Znews_SucKhoe_SideRight':      'znews-side-banner',
+  'Znews_KinhDoanh_SideLeft':     'znews-side-banner',
+  'Znews_KinhDoanh_SideRight':    'znews-side-banner',
+  // Box zones → null = AI-generated box
+  'ZingNews_PrBox_2':              null,
+  'Znews_KinhDoanh_SidebarBox':   null,
+  'Znews_DoiSong_SidebarBox':     null,
+  'Znews_TheThao_SidebarBox':     null,
+  'Znews_GiaiTri_SidebarBox':     null,
+  'Znews_SucKhoe_SidebarBox':     null,
+  'BaoMoi_Box1':                  null,
+  'BaoMoi_Box2':                  null,
+}
+
+
 // TYPE_AND_SEND    — type text into chat input and send it (real API call)
 // WAIT_FOR_RESPONSE— pause until busy=false & new assistant message arrives
 // HIGHLIGHT_MSG    — scroll to & spotlight last assistant message
@@ -434,11 +494,405 @@ export function buildStage2Steps(brief) {
       title: '🎉 Audience xác nhận!',
       text: '✅ Audience đã xác nhận! Agent chuyển sang bước **Creative** tiếp theo. Demo của 2 bước đầu đã hoàn thành.',
     },
-    // ── End of Stage 2 demo ───────────────────────────────────────────────
+    // ── Transition into Creative step ─────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_MSG',
+      position: 'right',
+      title: '🎨 Audience xác nhận — bước Creative!',
+      text: 'Audience đã xác nhận thành công! 🎉 Agent chuyển sang bước **Creative**.\n\nBây giờ mình sẽ cùng xem qua 2 cách thêm creative: **Upload** thủ công và **AI Tạo Ảnh** tự động.',
+    },
+
+    // ── Creative Step: Upload tab introduction ──────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#creative-tab-upload',
+      position: 'bottom',
+      title: '📎 Tab Upload',
+      text: 'Cách đầu tiên: **kéo thả** hoặc chọn file ảnh/video từ máy tính.\n\nHỗ trợ PNG, JPG, MP4 — hệ thống tự đọc độ phân giải và kích thước.',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#creative-drop-zone',
+      position: 'top',
+      title: '📂 Kéo thả file vào đây',
+      text: 'Vùng **kéo thả** — chấp nhận nhiều file cùng lúc. Thông tin kích thước và độ phân giải sẽ được đọc tự động sau khi upload.',
+    },
+
+    // ── Switch to AI tab ────────────────────────────────────────────────────
+    {
+      type: 'CLICK_EL',
+      target: '#creative-tab-ai',
+      tooltip: {
+        target: '#creative-tab-ai',
+        position: 'bottom',
+        title: '🤖 Chuyển sang AI Tạo Ảnh',
+        text: 'Cách thứ hai: dùng **AI sinh ảnh** trực tiếp từ brief. Chọn định dạng, thêm prompt tuỳ chỉnh, rồi để AI lo phần còn lại.',
+      },
+      delay: 400,
+    },
+
+    // ── Brief pause so panel renders before highlighting ────────────────────
+    {
+      type: 'PAUSE',
+      ms: 500,
+    },
+
+    // ── Introduce the AI panel layout ───────────────────────────────────────
+    {
+      type: 'TOOLTIP',
+      target: '#btn-ai-generate',
+      position: 'top',
+      title: '🎨 Bảng điều khiển AI Tạo Ảnh',
+      text: 'Panel AI có **3 phần chính**:\n① **Chọn định dạng** — kích thước & tỉ lệ ảnh đầu ra\n② **Prompt tuỳ chỉnh** — hướng dẫn thêm về phong cách, màu sắc (tùy chọn)\n③ **Tạo ảnh** — AI sinh ảnh theo brief + prompt, kết quả hiện ngay bên dưới',
+    },
+
+    // ── Explain the format picker ───────────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#format-zuma-box',
+      position: 'right',
+      title: '📐 Định dạng ảnh — nhiều lựa chọn',
+      text: 'Hệ thống hỗ trợ **nhiều định dạng quảng cáo** khác nhau: banner ngang, skin toàn trang, skyscraper, box...\n\nMỗi định dạng phù hợp với một vị trí hiển thị cụ thể trên các trang Zing.\n\n👉 Trong demo này, chúng ta thử với **Display Box 300×250** — kích thước IAB phổ biến nhất trên desktop.',
+    },
+
+    // ── Select the format ───────────────────────────────────────────────────
+    {
+      type: 'CLICK_EL',
+      target: '#format-zuma-box',
+      tooltip: {
+        target: '#format-zuma-box',
+        position: 'right',
+        title: '✅ Chọn Display Box 300×250',
+        text: 'Đang chọn định dạng **Display Box** cho ví dụ này...',
+      },
+      delay: 400,
+    },
+
+    // ── Open custom prompt accordion ─────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#btn-toggle-custom-prompt',
+      position: 'top',
+      title: '✏️ Prompt tùy chỉnh (không bắt buộc)',
+      text: 'Ngoài brief, bạn có thể thêm **yêu cầu sáng tạo** cụ thể: phong cách thiết kế, màu sắc, bố cục, vibe...\n\nAI sẽ kết hợp cả brief gốc và prompt này khi sinh ảnh.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '#btn-toggle-custom-prompt',
+      tooltip: {
+        target: '#btn-toggle-custom-prompt',
+        position: 'top',
+        title: '📝 Mở phần nhập Prompt',
+        text: 'Mở phần nhập prompt tùy chỉnh...',
+      },
+      delay: 300,
+    },
+
+    // ── Type the custom prompt ────────────────────────────────────────────
+    {
+      type: 'TYPE_INPUT',
+      target: '#custom-prompt-input',
+      inputText: 'Thiết kế tối giản, hạn chế tối đa chữ (chỉ làm rõ tên thương hiệu), tập trung vào hình ảnh trực quan bắt mắt và các chi tiết cuốn hút phù hợp với sở thích của đối tượng mục tiêu.',
+      charDelay: 14,
+      title: '⌨️ Nhập Prompt tùy chỉnh',
+      text: 'Đang nhập yêu cầu sáng tạo...\n\nPrompt này hướng AI tập trung vào **hình ảnh thương hiệu** rõ nét, tối giản chữ và phù hợp với đối tượng mục tiêu đã xác định ở bước Audience.',
+    },
+
+    // ── Click generate ─────────────────────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#btn-ai-generate',
+      position: 'top',
+      title: '🚀 Tạo ảnh AI',
+      text: 'Nhấn **Tạo ảnh AI** để bắt đầu. AI sẽ mất khoảng **30–60 giây** để sinh ảnh.\n\nSau khi hoàn thành, bạn sẽ được chọn giữa **Crop** (cắt chính xác) hoặc **Scale** (co giãn toàn ảnh).',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '#btn-ai-generate',
+      tooltip: {
+        target: '#btn-ai-generate',
+        position: 'top',
+        title: '⏳ Đang tạo ảnh AI...',
+        text: 'AI đang xử lý yêu cầu. Quá trình này mất khoảng 30–60 giây — hãy đợi một chút ☕',
+      },
+      delay: 300,
+    },
+
+    // ── Wait for crop modal to appear ──────────────────────────────────────
+    {
+      type: 'WAIT_FOR_SELECTOR',
+      target: '#btn-crop-scale',
+      timeout: 90000,
+      title: '⏳ Đang chờ AI sinh ảnh...',
+      text: 'AI đang tạo ảnh theo brief và prompt. Quá trình thường mất **30–60 giây**.\n\nSau khi xong, cửa sổ crop sẽ xuất hiện để bạn tinh chỉnh khung ảnh.',
+    },
+
+    // ── Explain crop vs scale ───────────────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#btn-crop-confirm',
+      position: 'bottom',
+      title: '✂️ Crop & Dùng',
+      text: '**Crop**: kéo thả khung để cắt chính xác vùng ảnh muốn giữ. Tỉ lệ khung được khóa theo định dạng đã chọn.\n\nDùng khi bạn muốn chọn vùng nội dung cụ thể từ ảnh AI.',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#btn-crop-scale',
+      position: 'bottom',
+      title: '↔️ Giữ nguyên & Scale',
+      text: '**Scale**: co giãn toàn bộ ảnh AI vào đúng kích thước định dạng mà không cắt bỏ vùng nào.\n\nLý tưởng khi ảnh AI đã có bố cục tốt và bạn muốn giữ nguyên toàn cảnh. Chúng ta sẽ dùng tùy chọn này cho demo!',
+    },
+
+    // ── Click Scale ─────────────────────────────────────────────────────────
+    {
+      type: 'CLICK_EL',
+      target: '#btn-crop-scale',
+      tooltip: {
+        target: '#btn-crop-scale',
+        position: 'bottom',
+        title: '↔️ Áp dụng Scale...',
+        text: 'Đang scale ảnh về đúng tỉ lệ 300×250px...',
+      },
+      delay: 300,
+    },
+
+    // ── Wait for image to appear in gallery, then select it ─────────────────
+    {
+      type: 'WAIT_FOR_SELECTOR',
+      target: '[id^="gen-img-ai-zuma-box"]',
+      timeout: 10000,
+      title: '⏳ Xử lý ảnh...',
+      text: 'Đang xử lý và hiển thị ảnh vào thư viện...',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[id^="gen-img-ai-zuma-box"]',
+      position: 'top',
+      title: '🖼️ Ảnh đã được tạo!',
+      text: 'Ảnh AI vừa sinh xong hiển thị trong **thư viện**. Bạn có thể **chọn nhiều ảnh** rồi thêm tất cả vào creative cùng lúc.\n\nNhấn vào ô chọn để đánh dấu ảnh muốn dùng.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '[data-demo="gen-img-footer"]',
+      tooltip: {
+        target: '[id^="gen-img-ai-zuma-box"]',
+        position: 'top',
+        title: '✅ Chọn ảnh để thêm vào Creative',
+        text: 'Đang chọn ảnh vừa tạo...',
+      },
+      delay: 400,
+    },
+
+    // ── Add to Creative ──────────────────────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#btn-add-to-creative',
+      position: 'top',
+      title: '➕ Thêm vào Creative',
+      text: 'Nút **Thêm ảnh vào Creative** sẽ chuyển ảnh AI sang tab Upload và đưa vào pool creative của chiến dịch.\n\nSau đó bạn có thể xác nhận và chuyển sang bước Setup!',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '#btn-add-to-creative',
+      tooltip: {
+        target: '#btn-add-to-creative',
+        position: 'top',
+        title: '✅ Thêm vào Creative pool...',
+        text: 'Đang thêm ảnh AI vào creative...',
+      },
+      delay: 300,
+    },
+
+    // ── Inject all pre-generated creatives (silent loader) ──────────────────
+    {
+      type: 'INJECT_DEMO_CREATIVES',
+      briefId: brief.id,
+      title: '⏳ Đang tải creative...',
+      text: 'Đang chuẩn bị creative cho tất cả định dạng quảng cáo...',
+    },
+
+    // ── Explain injection — user reads and clicks Tiếp theo ────────────────
+    {
+      type: 'TOOLTIP',
+      target: '[data-demo="approve-btn"]',
+      position: 'top',
+      title: '🖼️ Demo đã thêm creative cho bạn!',
+      text: 'Để tiết kiệm thời gian, demo đã tự động thêm **creative cho tất cả 8 định dạng quảng cáo** phù hợp với brief của bạn.\n\nGiờ creative workspace có đầy đủ:\n- **Box 300×250** — vừa tạo bằng AI\n- **8 định dạng còn lại** — được chuẩn bị sẵn\n\nỠ bước Setup, AI sẽ gợi ý các vị trí còn trống và chúng ta đã có creative phù hợp cho mọi vị trí!\n\nTrong thực tế, bạn có thể upload thêm hoặc dùng AI tạo ảnh cho từng định dạng.',
+    },
+
+    // ── Short pause for state to settle ──────────────────────────────────────
+    {
+      type: 'PAUSE',
+      ms: 400,
+    },
+
+    // ── Highlight approve button ──────────────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="approve-btn"]',
+      position: 'top',
+      title: '✅ Creative đã sẵn sàng!',
+      text: 'Creative workspace giờ có đầy đủ: **Box 300×250** (vừa tạo bằng AI) và **8 định dạng** được chuẩn bị sẵn cho tất cả vị trí quảng cáo. 🎉\n\nỞ bước Setup, AI sẽ gợi ý các vị trí quảng cáo còn trống — và chúng ta đã có creative phù hợp cho mọi vị trí được đề xuất!\n\nNhấn **Đồng ý & Tiếp tục** để xác nhận và chuyển sang bước **Setup Campaign**.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '[data-demo="approve-btn"]',
+      tooltip: {
+        target: '[data-demo="approve-btn"]',
+        position: 'top',
+        title: '⏳ Xác nhận Creative...',
+        text: 'Đang xác nhận creative và chuyển sang bước Setup...',
+      },
+    },
+
+    // ── Wait for setup_entry message ────────────────────────────────────────
+    {
+      type: 'WAIT_FOR_MSG',
+      metaTool: 'setup_entry',
+      timeout: 30000,
+      title: '⏳ Agent đang phân tích zones...',
+      text: 'Agent đang phân tích brief, audience và creative để **gợi ý ad zones** phù hợp nhất cho chiến dịch.\n\nBước Setup sẽ xuất hiện ngay sau đây...',
+    },
+
+    // ── Highlight setup_entry message ───────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_MSG',
+      position: 'right',
+      title: '📍 Setup Campaign — Agent đề xuất Zones!',
+      text: 'Agent đã phân tích toàn bộ brief + audience + creative và đề xuất **ad zones** phù hợp nhất trên các trang Zing.\n\nBạn có thể chỉnh sửa zones qua workspace hoặc chat tự nhiên với agent.',
+    },
+
+
+    // ── Intro: Recommended zones section ─────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="reco-zones-section"]',
+      position: 'right',
+      title: '🗺️ Zones được AI đề xuất',
+      text: 'AI phân tích brief + audience + creative và gợi ý **ad zones phù hợp nhất**.\n\nMỗi zone hiển thị: Reach (lượt tiếp cận), VI (Viewability Index), CTR và CPM.\n\n**Quan trọng**: Các zone này đã được lọc — không bị chiếm bởi chiến dịch nào khác trong khuông thời gian của bạn.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '[data-demo="expand-zones-btn"]',
+      tooltip: {
+        target: '[data-demo="expand-zones-btn"]',
+        position: 'top',
+        title: '📋 Xem thêm zones khác',
+        text: 'Ngoài các zones được đề xuất, bạn có thể xem toàn bộ danh sách và tự chọn thêm...',
+      },
+      delay: 400,
+    },
+    { type: 'PAUSE', ms: 700 },
+    {
+      type: 'HIGHLIGHT_MSG',
+      position: 'right',
+      title: '💬 Lý do Agent đề xuất',
+      text: 'Bubble chat trên giải thích chi tiết **tại sao** AI chọn những zones này — dựa trên objective, budget, audience profile và lịch sử xung đột.',
+    },
+    {
+      type: 'SELECT_RECO_ZONES',
+      count: 2,
+      title: '⏳ Đang chọn zones...',
+      text: 'Demo đang chọn ngẫu nhiên 2 zones từ danh sách đề xuất...',
+    },
+    {
+      type: 'TOOLTIP',
+      target: '[data-demo="reco-zones-section"]',
+      position: 'right',
+      title: '🎯 Demo chọn 2 zones ngẫu nhiên',
+      text: 'Vì AI đã lọc sẵn các zones không xung đột, demo chọn ngẫu nhiên **2 zones** để tiến hành.\n\nTrong thực tế, bạn có thể chọn nhiều zones hơn tùy budget.',
+    },
+    { type: 'PAUSE', ms: 400 },
+    {
+      type: 'TOOLTIP',
+      target: '#confirm-zones-btn',
+      position: 'top',
+      title: '➡️ Tiếp tục gắn Creative',
+      text: '2 zones đã được chọn. Nhấn **Tiếp tục** để sang bước gắn creative vào từng zone.',
+    },
+    { type: 'CLICK_EL', target: '#confirm-zones-btn', delay: 300 },
+    {
+      type: 'WAIT_FOR_SELECTOR',
+      target: '[data-demo="auto-assign-btn"]',
+      timeout: 8000,
+      title: '⏳ Đang chuyển sang gắn creative...',
+      text: '',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="auto-assign-btn"]',
+      position: 'bottom',
+      title: '🎨 Gắn Creative vào Ad Zone',
+      text: 'Mỗi ad zone cần creative phù hợp về **tỷ lệ khung hình**.\n\n- **Tự động gắn**: AI tự chọn creative tốt nhất theo tỷ lệ\n- **Tỷ lệ lệch** (⚠️): cảnh báo nếu creative không khớp kích thước zone\n\nDemo đã chuẩn bị creative cho mọi định dạng — ta chỉ cần gắn đúng file vào đúng zone.',
+    },
+    {
+      type: 'ASSIGN_CREATIVES',
+      title: '⏳ Đang gắn creative...',
+      text: 'Đang khớp creative với từng ad zone...',
+    },
+    { type: 'PAUSE', ms: 500 },
+    {
+      type: 'TOOLTIP',
+      target: '#proceed-to-confirm-btn',
+      position: 'top',
+      title: '📋 Xem Tổng Kết',
+      text: 'Creative đã được gắn cho cả 2 zones. Nhấn để **xem tổng kết** và xác nhận tạo chiến dịch.',
+    },
+    { type: 'CLICK_EL', target: '#proceed-to-confirm-btn', delay: 300 },
+    {
+      type: 'WAIT_FOR_SELECTOR',
+      target: '#create-campaign-btn',
+      timeout: 8000,
+      title: '⏳ Đang tải tổng kết...',
+      text: '',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#create-campaign-btn',
+      position: 'top',
+      title: '✅ Xác nhận & Tạo Chiến Dịch',
+      text: 'Workspace tóm tắt đầy đủ: Brief, Audience, Zones với creative đã gắn, budget phân bổ và est. impressions.\n\nKiểm tra lại rồi nhấn **Tiếp theo** để xác nhận và tạo chiến dịch thật trên hệ thống!',
+    },
+    { type: 'CLICK_EL', target: '#create-campaign-btn', delay: 400 },
+    {
+      type: 'WAIT_FOR_SELECTOR',
+      target: '[data-demo="result-hero"]',
+      timeout: 90000,
+      title: '⏳ Đang tạo chiến dịch...',
+      text: 'Hệ thống đang gửi order đến AdsPilot và tạo chiến dịch thật. Vui lòng chờ...',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="result-hero"]',
+      position: 'bottom',
+      title: '🎉 Chiến dịch đã được tạo!',
+      text: 'Chiến dịch đã chạy thành công trên **AdsPilot**. Bước Kết quả tổng hợp thông tin về chiến dịch vừa tạo — từ zones, creative, budget đến các chỉ số dự kiến.',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="quick-links-card"]',
+      position: 'top',
+      title: '🔗 Liên Kết Nhanh',
+      text: '**Xem trong AdsPilot**: Mở trực tiếp trang quản lý chiến dịch để kiểm tra, pause hoặc chỉnh sửa.\n\n**Test Site**: Mở trang web thực tế chứa ad zone để xác nhận quảng cáo đang hiển thị đúng vị trí.',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="ad-live-card"]',
+      position: 'top',
+      title: '📸 Ảnh Chụp Ad Live',
+      text: 'Khi chiến dịch đang **live**, hệ thống triển khai một **sub-agent** tự động điều hướng đến trang web, chụp ảnh màn hình và cắt chính xác từng ad zone.\n\nKết quả trả về ảnh crop của từng zone kèm toàn cảnh trang có đánh dấu — xác nhận quảng cáo đang chạy đúng vị trí và đúng creative.',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="kpi-grid"]',
+      position: 'top',
+      title: '📊 Chỉ Số Dự Kiến',
+      text: 'Dựa trên dữ liệu lịch sử của từng zone, hệ thống ước tính:\n- **Impressions**: tổng lượt hiển thị\n- **Avg CTR**: tỷ lệ nhấp trung bình\n- **Avg Viewability**: % quảng cáo thực sự được nhìn thấy\n\nCác con số giúp đánh giá hiệu quả dự kiến ngay sau khi chiến dịch được tạo.',
+    },
     {
       type: 'POPUP',
       title: '🎉 Demo hoàn thành!',
-      text: 'Bạn đã trải nghiệm 2 bước đầu tiên: **Brief** và **Audience**. Từ đây bạn có thể tiếp tục tự khám phá các bước **Creative → Setup → Kết quả** với AI Agent!',
+      text: 'Bạn đã trải nghiệm toàn bộ luồng:\n**Brief → Audience → Creative → Setup → Kết quả**\n\nAgent đã tự động:\n- ✅ Phân tích brief và điền workspace\n- ✅ Gợi ý DMP audience segments\n- ✅ Sinh ảnh AI và thêm creative pool\n- ✅ Đề xuất ad zones không xung đột\n- ✅ Gắn creative phù hợp và tạo chiến dịch\n- ✅ Hiển thị kết quả và liên kết live\n\nTừ đây, bạn có thể tự khám phá bước **Report** và **Email**!',
       buttons: [
         { label: '🚀 Tiếp tục tự khám phá', variant: 'primary', action: 'skip' },
       ],

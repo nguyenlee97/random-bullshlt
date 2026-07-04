@@ -8,6 +8,7 @@ import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
 import { MessageSquare, LayoutDashboard } from 'lucide-react'
 import { DemoProvider } from '@/demo/DemoEngine'
+import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 
 // ─── Steps meta — NEW ORDER: Brief → Audience → Creative → Setup → Result ─────
 export const STEPS = [
@@ -118,6 +119,11 @@ export default function App() {
   useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
   const currentStepRef = useRef(currentStep)
   useEffect(() => { currentStepRef.current = currentStep }, [currentStep])
+
+  // ── Demo-active flag ───────────────────────────────────────────────────────
+  // While the guided demo is running it is the sole controller of the mobile
+  // tab, so App's own auto-navigation must stand down to avoid fighting it.
+  const isDemoActiveRef = useRef(false)
 
   // Visual Viewport API — tracks keyboard height on mobile so the composer
   // is never hidden behind the soft keyboard. Sets a CSS variable used in index.css.
@@ -310,7 +316,8 @@ export default function App() {
     })
     pushWorkspaceEvent(`Agent đã cập nhật "${field}" (đã xác nhận bởi anh/chị)`)
     // On mobile: always notify. For key steps, also auto-navigate to Workspace after 2.5s.
-    if (window.innerWidth < 768) {
+    // Suppressed while the guided demo runs — it drives the tabs itself.
+    if (window.innerWidth < 768 && !isDemoActiveRef.current) {
       setWorkspaceHasNew(true)
       if (AUTO_NAV_STEPS.has(currentStepRef.current) && activeTabRef.current === 'chat') {
         setTimeout(() => setActiveTab('workspace'), 2500)
@@ -395,7 +402,7 @@ export default function App() {
     if (!last || last.role !== 'assistant') return
     if (last.id !== prevMsgIdRef.current) {
       prevMsgIdRef.current = last.id
-      if (window.innerWidth < 768 && activeTabRef.current === 'workspace') {
+      if (window.innerWidth < 768 && activeTabRef.current === 'workspace' && !isDemoActiveRef.current) {
         setChatHasNew(true)
       }
     }
@@ -648,6 +655,77 @@ export default function App() {
     return () => window.removeEventListener('demo:new_chat', handler)
   }, [handleNewChat])
 
+  // ── Demo: listen for demo:inject_creatives to add pre-generated assets ──
+  useEffect(() => {
+    const handler = (e) => {
+      const { creatives } = e.detail || {}
+      if (!creatives?.length) return
+      setFormStateWithEvents(prev => {
+        const existing = prev.creative?.files || []
+        const existingIds = new Set(existing.map(f => f.id))
+        const toAdd = creatives.filter(c => !existingIds.has(c.id))
+        if (!toAdd.length) return prev
+        log.workspace(`demo:inject_creatives → adding ${toAdd.length} pre-generated creatives`)
+        return {
+          ...prev,
+          creative: {
+            ...prev.creative,
+            files: [...existing, ...toAdd],
+            uploaded: true,
+          },
+        }
+      })
+    }
+    window.addEventListener('demo:inject_creatives', handler)
+    return () => window.removeEventListener('demo:inject_creatives', handler)
+  }, [setFormStateWithEvents])
+
+  // ── Demo: pick 2 random recommended zones ─────────────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      const count = e.detail?.count || 2
+      setFormStateWithEvents(prev => {
+        const recoZones = prev.setup?.recoZones || []
+        const available = recoZones.filter(z => !z.conflict)
+        const shuffled = [...available].sort(() => Math.random() - 0.5)
+        const chosen = shuffled.slice(0, count).map(z => z.id)
+        log.workspace(`demo:select_reco_zones → picked [${chosen.join(', ')}]`)
+        window.dispatchEvent(new CustomEvent('demo:reco_zones_selected', { detail: { zoneIds: chosen } }))
+        return { ...prev, setup: { ...prev.setup, selectedZoneIds: chosen, created: false } }
+      })
+    }
+    window.addEventListener('demo:select_reco_zones', handler)
+    return () => window.removeEventListener('demo:select_reco_zones', handler)
+  }, [setFormStateWithEvents])
+
+  // ── Demo: assign creatives to selected zones by format map ────────────────
+  useEffect(() => {
+    const handler = () => {
+      setFormStateWithEvents(prev => {
+        const selectedZoneIds = prev.setup?.selectedZoneIds || []
+        const files = prev.creative?.files || []
+        const assignments = { ...(prev.setup?.assignments || {}) }
+        selectedZoneIds.forEach(zoneId => {
+          const formatId = ZONE_FORMAT_MAP[zoneId]  // null = box
+          let matched
+          if (formatId === null || formatId === undefined) {
+            // Box: match the AI-generated file (name starts with "ai-zuma-box")
+            matched = files.find(f => /^ai-zuma-box/i.test(f.name))
+          } else {
+            // Non-box: match by format filename
+            matched = files.find(f => f.name === `${formatId}.png` || f.formatId === formatId)
+          }
+          if (matched) assignments[zoneId] = matched.id
+        })
+        log.workspace(`demo:assign_creatives → assignments:`, assignments)
+        window.dispatchEvent(new CustomEvent('demo:creatives_assigned', { detail: { assignments } }))
+        return { ...prev, setup: { ...prev.setup, assignments } }
+      })
+    }
+    window.addEventListener('demo:assign_creatives', handler)
+    return () => window.removeEventListener('demo:assign_creatives', handler)
+  }, [setFormStateWithEvents])
+
   // ── Track user interaction to hide Demo button ─────────────────────────
   // Once user sends ANY message (not boot), hide the demo button permanently
   useEffect(() => {
@@ -785,7 +863,15 @@ export default function App() {
   // layout switching automatically on resize.
 
   return (
-    <DemoProvider busy={busy} messages={messages} onSendMessage={sendMessage} onApprove={handleApprove}>
+    <DemoProvider
+      busy={busy}
+      messages={messages}
+      onSendMessage={sendMessage}
+      onApprove={handleApprove}
+      onRequestTab={setActiveTab}
+      activeTab={activeTab}
+      onActiveChange={(active) => { isDemoActiveRef.current = active }}
+    >
     <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 to-brand-50/30 overflow-hidden">
       <TopBar onReset={handleReset} onNewChat={handleNewChat} showDemo={!hasUserStarted} />
 

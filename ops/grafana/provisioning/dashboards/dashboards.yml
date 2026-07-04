@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: agent-ops
+    folder: Agent
+    type: file
+    options:
+      path: /etc/grafana/provisioning/dashboards

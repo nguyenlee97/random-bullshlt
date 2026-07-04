@@ -1,0 +1,40 @@
+{
+  "id": "brief_033",
+  "lang": "vi",
+  "brief": {
+    "brand": "Tiệm bánh mì Cô Ba Quận 3",
+    "objective": "awareness",
+    "kpi": "Phủ 200.000 người quanh bán kính 5km Quận 3",
+    "budget": 15,
+    "startDate": "2026-08-01",
+    "endDate": "2026-08-14",
+    "notes": "Tiệm bánh mì gia truyền mở thêm chi nhánh, ngân sách rất nhỏ, chỉ cần người quanh khu vực biết đến, nhắm dân văn phòng ăn sáng và giới trẻ thích ăn vặt."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7102",
+        "6a2df27adda0ba67f14c7108"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70e7",
+        "6a2df27adda0ba67f14c7109",
+        "6a2df27adda0ba67f14c70ec"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7171"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Golf kept: same affluent-leisure-vs-budget-conscious mismatch pattern as brief_002/003/006."
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "tiny_budget"
+  ]
+}

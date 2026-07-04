@@ -1,0 +1,40 @@
+{
+  "id": "brief_025",
+  "lang": "vi",
+  "brief": {
+    "brand": "Nước mắm Làng Chài Xưa",
+    "objective": "awareness",
+    "kpi": "Reach 8 triệu người nội trợ trước Tết",
+    "budget": 350,
+    "startDate": "2026-11-15",
+    "endDate": "2026-12-31",
+    "notes": ""
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c70ec",
+        "6a2df27adda0ba67f14c70d5"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7108",
+        "6a2df27adda0ba67f14c7103",
+        "6a2df27adda0ba67f14c70da"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c709f"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "empty_notes brief — must_exclude=Video games is a low-confidence generic default; no brief-specific signal available. Flagged rather than swapped, consistent with brief_013/039."
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "empty_notes"
+  ]
+}

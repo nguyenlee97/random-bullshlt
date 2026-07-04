@@ -1,0 +1,41 @@
+{
+  "id": "brief_044",
+  "lang": "en",
+  "schema_version": 2,
+  "brief": {
+    "brand": "LaunchPad Ads Suite",
+    "objective": "consideration",
+    "kpi": "5,000 free-trial signups from SMB marketers",
+    "budget": 420,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-31",
+    "notes": "Self-serve SaaS tool bundling online advertising campaign management, email marketing automation, and social media scheduling for small business marketers who currently juggle multiple tools."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22bc5",
+        "6a48cc2381574c48dbd22bc4",
+        "6a48cc2381574c48dbd22bc7"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7070",
+        "6a2df27adda0ba67f14c707f"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22bb8"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Online advertising / Email marketing / Social media marketing are full-catalog-only Business and industry > Online sub-segments. must_exclude=Retail(industry): a near-miss — sounds SMB-adjacent but targets retail-sector operators specifically, not the cross-industry marketers this SaaS tool is built for."
+  },
+  "tags": [
+    "consideration",
+    "en",
+    "full_catalog_only"
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "id": "brief_023",
+  "lang": "vi",
+  "brief": {
+    "brand": "Xe máy điện DatBike Quantum",
+    "objective": "conversion",
+    "kpi": "6.000 lượt đặt cọc lái thử",
+    "budget": 800,
+    "startDate": "2026-10-01",
+    "endDate": "2026-11-30",
+    "notes": "Mẫu xe máy điện mới pin 285km, nhắm người đi làm thành thị 22-38 đang cân nhắc đổi từ xe xăng sang xe điện, quan tâm công nghệ."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7141",
+        "6a2df27adda0ba67f14c7144"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c713f",
+        "6a2df27adda0ba67f14c718d",
+        "6a2df27adda0ba67f14c7195"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c711d"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Furniture kept as a weak signal: furniture is a competing big-ticket discretionary purchase category, distinct from an e-motorbike upgrade decision. Acknowledged as thin — no stronger alternative in the catalog."
+  },
+  "tags": [
+    "conversion",
+    "vi"
+  ]
+}

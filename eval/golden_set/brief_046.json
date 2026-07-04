@@ -1,0 +1,41 @@
+{
+  "id": "brief_046",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Pizza Bella Casa",
+    "objective": "consideration",
+    "kpi": "200.000 lượt xem menu online, CTR ≥ 2%",
+    "budget": 280,
+    "startDate": "2026-08-20",
+    "endDate": "2026-10-05",
+    "notes": "Chuỗi pizza & pasta phong cách Ý bình dân mới ra mắt 5 chi nhánh. Nhắm gia đình trẻ và dân văn phòng thích ẩm thực Ý, có dùng kèm rượu vang nhẹ."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c1d",
+        "6a48cc2381574c48dbd22c29",
+        "6a48cc2381574c48dbd22c10"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22c25",
+        "6a48cc2381574c48dbd22c2c"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c23"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Italian cuisine / Pizza / Wine are full-catalog-only Food and drink (consumables) segments. must_exclude=Thai cuisine: different cuisine positioning, no synergy with an Italian concept."
+  },
+  "tags": [
+    "consideration",
+    "vi",
+    "full_catalog_only"
+  ]
+}

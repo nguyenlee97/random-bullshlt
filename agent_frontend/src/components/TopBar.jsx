@@ -1,4 +1,4 @@
-import { Bot, Zap, RotateCcw, MessageSquarePlus, Play } from 'lucide-react'
+import { Bot, Zap, RotateCcw, MessageSquarePlus, Play, FileText } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -14,7 +14,7 @@ export default function TopBar({ onReset, onNewChat, showDemo }) {
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center shadow-sm">
           <Bot className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
         </div>
-        <div className="flex items-baseline gap-1.5">
+        <div className="hidden sm:flex items-baseline gap-1.5">
           <span className="font-black text-base text-brand-700 tracking-tight">Camp</span>
           <span className="font-black text-base text-amber-500 tracking-tight">Ads</span>
           <span className="font-black text-base text-brand-700 tracking-tight">Agent</span>
@@ -34,17 +34,27 @@ export default function TopBar({ onReset, onNewChat, showDemo }) {
       </Badge>
 
       <div className="ml-auto flex items-center gap-2">
-        <span className="text-xs text-muted-foreground hidden sm:block">
-          Powered by GreenNode AI
-        </span>
 
-        {/* Demo button — PC only, hidden once user starts interacting */}
+        {/* Technical docs — opens standalone report page */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => { window.location.href = '/tech-docs.html' }}
+          className="gap-1.5 text-xs h-8"
+          title="Tài liệu kỹ thuật"
+          id="tech-docs-btn"
+        >
+          <FileText className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Docs</span>
+        </Button>
+
+        {/* Demo button — available on all viewports, hidden once user starts interacting */}
         {showDemo && demo && (
           <Button
             variant="outline"
             size="sm"
             onClick={demo.startDemo}
-            className="hidden md:flex gap-1.5 text-xs h-8 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 animate-pulse hover:animate-none"
+            className="flex gap-1.5 text-xs h-8 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 animate-pulse hover:animate-none"
             id="demo-btn"
           >
             <Play className="w-3.5 h-3.5" />

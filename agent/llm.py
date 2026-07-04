@@ -3,16 +3,89 @@ LLM wrapper — OpenAI SDK configured for GreenNode MaaS (minimax-m2.5).
 Provides: chat_completion(), simple_generate(), parse_json_response(), sanitize_response()
 """
 import json
+import os
 import re
 import time as _time
-from openai import OpenAI
 from config import config
+from openai import OpenAI
+
+from metrics import LLM_CALLS, LLM_TOKENS, SESSION_COST  # noqa: E402
+
+# ── Langfuse tracing (Phase 0 B3) ─────────────────────────────────────────────
+# NOTE: The langfuse.openai drop-in wrapper only works for the standard OpenAI
+# endpoint. Since we use a custom base_url (GreenNode MaaS), it silently falls
+# back to plain OpenAI and produces no traces.
+# Fix: use explicit langfuse_context to manually record each LLM call — this
+# approach works with ANY OpenAI-compatible provider.
+_langfuse = None
+if os.getenv("LANGFUSE_PUBLIC_KEY"):
+    try:
+        from langfuse import Langfuse
+        _langfuse = Langfuse()  # picks up LANGFUSE_PUBLIC_KEY / SECRET_KEY / HOST
+        print("[llm] Langfuse tracing enabled →", os.getenv("LANGFUSE_HOST"))
+    except Exception as _lf_err:
+        print(f"[llm] Langfuse init failed, tracing disabled: {_lf_err}")
 
 # Sync client (FastAPI runs async but openai sync client is fine with asyncio)
 _client = OpenAI(
     api_key=config.AI_PLATFORM_API_KEY,
     base_url=config.LLM_BASE_URL,
 )
+
+
+def _trace_to_langfuse(
+    handler: str,
+    messages: list[dict],
+    resp,
+    duration_ms: int,
+) -> None:
+    """Push one LLM call as an independent Langfuse generation (v4 API). No-op if not configured.
+
+    Uses start_observation() + .end() (NOT start_as_current_observation) so that
+    each LLM call gets its own trace record in Langfuse, rather than nesting all
+    calls from one HTTP request under a single shared OTel context/trace.
+    """
+    if _langfuse is None:
+        return
+    try:
+        usage = getattr(resp, "usage", None)
+        msg = resp.choices[0].message
+        output = msg.content or ""
+        if msg.tool_calls:
+            output = str([{"name": tc.function.name, "args": tc.function.arguments} for tc in msg.tool_calls])
+        obs = _langfuse.start_observation(
+            as_type="generation",
+            name=handler,
+            model=config.LLM_MODEL,
+            input=messages,
+            output=output,
+            usage_details={
+                "input": getattr(usage, "prompt_tokens", None),
+                "output": getattr(usage, "completion_tokens", None),
+                "total": getattr(usage, "total_tokens", None),
+            } if usage else None,
+            metadata={"duration_ms": duration_ms, "base_url": config.LLM_BASE_URL},
+        )
+        obs.end()
+        _langfuse.flush()
+    except Exception as _e:
+        print(f"[llm] Langfuse trace push failed: {_e}")
+
+
+def _record_metrics(resp, duration_s: float, handler: str) -> None:
+    """Prometheus counters for every LLM call (Phase 0 B4)."""
+    try:
+        content = resp.choices[0].message.content or ""
+        outcome = "ok" if (content or resp.choices[0].message.tool_calls) else "empty"
+        LLM_CALLS.labels(model=config.LLM_MODEL, handler=handler, outcome=outcome).inc()
+        SESSION_COST.observe(duration_s)
+        if getattr(resp, "usage", None):
+            LLM_TOKENS.labels(model=config.LLM_MODEL, direction="prompt").inc(
+                resp.usage.prompt_tokens or 0)
+            LLM_TOKENS.labels(model=config.LLM_MODEL, direction="completion").inc(
+                resp.usage.completion_tokens or 0)
+    except Exception:
+        pass  # metrics must never break the request path
 
 # ── Debug printer (stdout only, controlled by AGENT_DEBUG env var) ────────────
 _DBG_ON = config.AGENT_DEBUG
@@ -97,6 +170,8 @@ def chat_completion(messages: list[dict], tools: list[dict] | None = None) -> ob
     t0 = _time.time()
     resp = _client.chat.completions.create(**kwargs)
     dur = int((_time.time() - t0) * 1000)
+    _record_metrics(resp, dur / 1000, handler="chat_completion")
+    _trace_to_langfuse("chat_completion", messages, resp, dur)
     msg = resp.choices[0].message
     _dbg_output(msg.content or "", msg.tool_calls or [], call_id, dur)
     return resp
@@ -121,6 +196,8 @@ def force_text_completion(messages: list[dict], tools: list[dict] | None = None)
     t0 = _time.time()
     resp = _client.chat.completions.create(**kwargs)
     dur = int((_time.time() - t0) * 1000)
+    _record_metrics(resp, dur / 1000, handler="force_text")
+    _trace_to_langfuse("force_text_completion", messages, resp, dur)
     msg = resp.choices[0].message
     _dbg_output(msg.content or "", [], call_id, dur)
     return resp

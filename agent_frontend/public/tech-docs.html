@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camp Ads Agent — Báo cáo Kiến trúc Kỹ thuật</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#141b24; --panel2:#1b2430; --ink:#e6edf3; --muted:#9aa7b4;
+    --line:#25303c; --accent:#4dd4ac; --accent2:#5aa9ff; --accent3:#ffb454; --danger:#ff6b6b;
+    --code-bg:#0a0f16; --chip:#1f2a36;
+    --maxw:1080px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px 120px}
+  header.hero{
+    background:
+      radial-gradient(1200px 400px at 20% -10%, rgba(90,169,255,.18), transparent),
+      radial-gradient(900px 400px at 90% 0%, rgba(77,212,172,.16), transparent),
+      linear-gradient(180deg,#0f1720,#0d1117);
+    border-bottom:1px solid var(--line);
+    padding:72px 24px 56px;
+    text-align:center;
+  }
+  .hero .kicker{letter-spacing:.28em; text-transform:uppercase; font-size:12px; color:var(--accent); font-weight:700}
+  .hero h1{font-size:44px; line-height:1.1; margin:14px 0 10px; font-weight:800; letter-spacing:-.02em}
+  .hero p.sub{color:var(--muted); max-width:760px; margin:0 auto; font-size:18px}
+  .badges{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:26px}
+  .badge{background:var(--chip); border:1px solid var(--line); color:var(--ink);
+    padding:6px 12px; border-radius:999px; font-size:12.5px; font-weight:600}
+  .badge.g{color:var(--accent); border-color:rgba(77,212,172,.4)}
+  .badge.b{color:var(--accent2); border-color:rgba(90,169,255,.4)}
+  .meta{margin-top:22px; color:var(--muted); font-size:13px}
+
+  h2{font-size:27px; margin:64px 0 6px; letter-spacing:-.01em; scroll-margin-top:20px}
+  h2 .num{color:var(--accent); font-weight:800; margin-right:10px}
+  h3{font-size:19px; margin:34px 0 8px; color:#fff}
+  h4{font-size:15px; margin:22px 0 4px; color:var(--accent3); text-transform:uppercase; letter-spacing:.05em}
+  p{color:#d3dbe3}
+  .lead{font-size:17.5px; color:#c8d2dc}
+  a{color:var(--accent2); text-decoration:none}
+  a:hover{text-decoration:underline}
+  hr.sep{border:none; border-top:1px solid var(--line); margin:0}
+
+  .toc{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px 26px; margin:44px 0}
+  .toc h4{margin:0 0 12px; color:var(--muted)}
+  .toc ol{margin:0; padding-left:20px; columns:2; column-gap:40px}
+  .toc li{margin:5px 0; break-inside:avoid}
+  .toc a{color:#cdd7e1}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px 24px; margin:20px 0}
+  .card.accent{border-left:3px solid var(--accent)}
+  .card.blue{border-left:3px solid var(--accent2)}
+  .card.amber{border-left:3px solid var(--accent3)}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr} .toc ol{columns:1} .hero h1{font-size:32px}}
+
+  .mermaid{background:var(--panel2); border:1px solid var(--line); border-radius:14px;
+    padding:22px; margin:24px 0; text-align:center; overflow-x:auto}
+  figcaption{color:var(--muted); font-size:13px; text-align:center; margin:-12px 0 26px}
+
+  code{background:var(--code-bg); border:1px solid var(--line); border-radius:5px;
+    padding:1.5px 6px; font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:13.5px; color:#9fe6cf}
+  pre{background:var(--code-bg); border:1px solid var(--line); border-radius:12px;
+    padding:16px 18px; overflow-x:auto; font-size:13px; line-height:1.55}
+  pre code{background:none; border:none; padding:0; color:#d7e2ec}
+
+  table{width:100%; border-collapse:collapse; margin:18px 0; font-size:14px}
+  th,td{border:1px solid var(--line); padding:9px 12px; text-align:left; vertical-align:top}
+  th{background:var(--panel2); color:#fff; font-weight:600}
+  tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+
+  .callout{border-radius:12px; padding:14px 18px; margin:20px 0; font-size:14.5px}
+  .callout.tip{background:rgba(77,212,172,.08); border:1px solid rgba(77,212,172,.35)}
+  .callout.warn{background:rgba(255,180,84,.08); border:1px solid rgba(255,180,84,.35)}
+  .callout b{color:#fff}
+  .pill{display:inline-block; background:var(--chip); border:1px solid var(--line);
+    border-radius:6px; padding:2px 8px; font-size:12px; margin:2px 4px 2px 0; color:#cdd7e1; font-weight:600}
+  .step-h{display:flex; align-items:center; gap:12px; margin-top:40px}
+  .step-h .dot{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent2),var(--accent));
+    color:#06121a; font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 34px}
+  .step-h h3{margin:0}
+  footer{color:var(--muted); font-size:13px; text-align:center; margin-top:80px; padding-top:24px; border-top:1px solid var(--line)}
+  .kv{font-size:13.5px}
+  .kv td:first-child{color:var(--accent3); font-weight:600; white-space:nowrap; width:200px}
+
+  /* Floating "back to agent" button */
+  .back-agent{
+    position:fixed; top:16px; left:16px; z-index:1000;
+    display:inline-flex; align-items:center; gap:8px;
+    background:rgba(20,27,36,.92); backdrop-filter:blur(10px);
+    border:1px solid var(--line); color:var(--ink);
+    padding:10px 15px; border-radius:999px; font-size:13.5px; font-weight:600;
+    text-decoration:none; box-shadow:0 6px 20px rgba(0,0,0,.4);
+    transition:border-color .15s ease,color .15s ease,transform .15s ease;
+  }
+  .back-agent:hover{border-color:var(--accent); color:var(--accent); text-decoration:none; transform:translateY(-1px)}
+  .back-agent svg{width:16px; height:16px; flex:0 0 16px}
+  @media(max-width:600px){
+    .back-agent{top:10px; left:10px; padding:9px; gap:0}
+    .back-agent .label{display:none}   /* icon-only on small screens */
+  }
+
+  /* --- Responsive tables: horizontal scroll on narrow screens --- */
+  .table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; margin:18px 0; border:1px solid var(--line); border-radius:12px}
+  .table-wrap table{margin:0; border:none}
+  .table-wrap table td:first-child, .table-wrap table th:first-child{border-left:none}
+  .table-wrap table tr:first-child th{border-top:none}
+
+  /* --- Mermaid: tap to zoom + lightbox --- */
+  .mermaid{position:relative; cursor:zoom-in}
+  .mm-hint{position:absolute; top:8px; right:10px; font-size:11px; color:var(--muted);
+    background:rgba(13,17,23,.72); border:1px solid var(--line); border-radius:6px; padding:2px 8px;
+    pointer-events:none; opacity:.9}
+  .mm-overlay{position:fixed; inset:0; z-index:2000; display:none;
+    background:rgba(6,10,15,.95); backdrop-filter:blur(4px)}
+  .mm-overlay.open{display:flex; flex-direction:column}
+  .mm-bar{display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:12px 14px; flex:0 0 auto}
+  .mm-bar button{width:42px; height:42px; border-radius:10px; border:1px solid var(--line);
+    background:var(--panel); color:var(--ink); font-size:20px; font-weight:700; cursor:pointer; line-height:1;
+    display:flex; align-items:center; justify-content:center}
+  .mm-bar button:hover{border-color:var(--accent); color:var(--accent)}
+  .mm-stage{flex:1 1 auto; overflow:auto; -webkit-overflow-scrolling:touch;
+    display:flex; align-items:flex-start; justify-content:center; padding:0 16px 28px}
+  .mm-stage svg{transform-origin:top center; height:auto !important; max-width:none !important}
+
+  /* --- General small-screen tightening --- */
+  @media(max-width:640px){
+    .wrap{padding:0 14px 90px}
+    header.hero{padding:56px 16px 40px}
+    .hero h1{font-size:28px}
+    .hero p.sub{font-size:15.5px}
+    h2{font-size:22px; margin:48px 0 6px}
+    h3{font-size:17px}
+    .lead{font-size:16px}
+    .toc{padding:18px 18px}
+    .table-wrap table{min-width:560px; font-size:13px}   /* keep columns readable, allow scroll */
+    pre{font-size:12px}
+    .mm-hint{font-size:10px}
+  }
+</style>
+</head>
+<body>
+
+<a href="/" class="back-agent" title="Quay lại Camp Ads Agent">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  <span class="label">Về Agent</span>
+</a>
+
+<header class="hero">
+  <div class="kicker">Báo cáo Kiến trúc Kỹ thuật</div>
+  <h1>Camp Ads Agent</h1>
+  <p class="sub">Một "harness" agentic bao bọc công cụ thiết lập chiến dịch quảng cáo truyền thống bằng một lớp AI hội thoại — biến biểu mẫu 5 bước tĩnh thành một workspace được orchestrate, có tool-calling và ràng buộc trạng thái hai chiều.</p>
+  <div class="badges">
+    <span class="badge g">Agentic Orchestration</span>
+    <span class="badge b">Tool Calling</span>
+    <span class="badge">Tool Registry kiểu MCP</span>
+    <span class="badge g">Two-Way State Binding</span>
+    <span class="badge b">FastAPI · React 18 · MongoDB</span>
+    <span class="badge">GreenNode MaaS · MiniMax M2.5</span>
+  </div>
+  <div class="meta">Build <code>2026-06-16.7</code> &nbsp;·&nbsp; Claw-a-thon 2026 &nbsp;·&nbsp; Tài liệu phục vụ review kỹ thuật</div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <h4>Nội dung</h4>
+  <ol>
+    <li><a href="#s1">Tóm tắt — Luận điểm "Harness"</a></li>
+    <li><a href="#s2">Kiến trúc hệ thống</a></li>
+    <li><a href="#s3">Công nghệ sử dụng</a></li>
+    <li><a href="#s4">Workspace ràng buộc hai chiều</a></li>
+    <li><a href="#s5">Vòng đời request &amp; Orchestration</a></li>
+    <li><a href="#s6">Lõi suy luận &amp; Lớp Tool</a></li>
+    <li><a href="#s7">Đi sâu tính năng (theo thứ tự bước)</a></li>
+    <li><a href="#s8">Điều phối đa tác tử — Sub-Agent chuyên biệt</a></li>
+    <li><a href="#s9">Kỹ thuật đảm bảo độ tin cậy</a></li>
+    <li><a href="#s10">Observability &amp; Logging</a></li>
+    <li><a href="#s11">Triển khai &amp; Hạ tầng</a></li>
+  </ol>
+</div>
+
+<!-- ===================== 1 ===================== -->
+<h2 id="s1"><span class="num">01</span>Tóm tắt — Luận điểm "Harness"</h2>
+<p class="lead">Camp Ads Agent lấy một quy trình quảng cáo truyền thống — brief, audience, creative, đặt ad-zone, launch — và hiện đại hóa nó không phải bằng cách thay thế công cụ của người vận hành, mà bằng cách <b>"harness" (bao bọc &amp; điều phối)</b> công cụ đó. Hệ thống có thể được hiểu như một <b>agentic harness</b>: một lớp orchestration mỏng, ràng buộc mô hình ngôn ngữ lớn (LLM) với (a) một workspace thiết lập chiến dịch trực tiếp và (b) một tập hợp năng lực backend có thể gọi được, để con người và agent tự động cùng điều khiển một trạng thái chiến dịch một cách cộng tác.</p>
+
+<div class="grid2">
+  <div class="card accent">
+    <h4>Quy trình truyền thống</h4>
+    <p>Nhà quảng cáo mở dashboard và điền tay một biểu mẫu nhiều bước: gõ brief, tìm kiếm trong hàng trăm phân khúc đối tượng, tải creative lên, đối chiếu ad-zone với mục tiêu, rồi gửi order. Mọi quyết định đều thủ công; công cụ chỉ đóng vai trò thụ động.</p>
+  </div>
+  <div class="card blue">
+    <h4>Quy trình được "harness"</h4>
+    <p>Cùng biểu mẫu đó được bao bọc trong một agent điều khiển bằng chat. Người vận hành có thể gõ, bấm, hoặc ủy quyền. Ở mỗi lượt, agent đọc trạng thái form hiện tại, suy luận, gọi các <b>tool</b> backend để lấy và xếp hạng các lựa chọn, rồi ghi thay đổi ngược lại vào form — trong khi con người vẫn giữ quyền phủ quyết qua cổng xác nhận.</p>
+  </div>
+</div>
+
+<p>Ba ý tưởng kỹ thuật làm cho điều này khả thi, và chúng ánh xạ trực tiếp tới các thuật ngữ mà ngành đang dùng:</p>
+<table>
+  <thead><tr><th>Khái niệm</th><th>Ý nghĩa trong dự án này</th><th>Nằm ở đâu</th></tr></thead>
+  <tbody>
+    <tr><td><b>Orchestration harness</b></td><td>Một router mang tính xác định (deterministic) quyết định — theo từng request — chạy handler xác định nhanh hay chạy toàn bộ pipeline suy luận LLM; agent không bao giờ chạy ngoài tầm kiểm soát.</td><td><code>agent/router.py</code>, <code>handlers/</code></td></tr>
+    <tr><td><b>Tool calling (kiểu MCP)</b></td><td>Một registry các năng lực được mô tả bằng schema, có kiểu (tìm audience, xếp hạng zone, tạo order) mà mô hình có thể gọi theo nhu cầu — cùng mẫu "contract" mà MCP chuẩn hóa, ở đây triển khai trên định dạng tool-calling của OpenAI.</td><td><code>agent/tools/registry.py</code></td></tr>
+    <tr><td><b>Two-way state binding</b></td><td>Một đối tượng "workspace" dùng chung, đồng bộ theo cả hai chiều: thao tác trên UI được stream về agent dưới dạng event; đề xuất của agent stream ngược lại thành các workspace patch.</td><td>Workspace snapshot + hàng đợi event</td></tr>
+  </tbody>
+</table>
+
+<div class="callout tip"><b>Lưu ý khi đọc.</b> Nền tảng bên dưới được chọn có chủ đích cho gọn nhẹ — FastAPI, tool-calling thuần, không LangChain. Điểm tinh vi nằm ở <i>orchestration contract</i>, không phải ở framework nặng nề. Báo cáo này mô tả chi tiết contract đó.</div>
+
+<!-- ===================== 2 ===================== -->
+<h2 id="s2"><span class="num">02</span>Kiến trúc hệ thống</h2>
+<p>Nền tảng gồm năm bề mặt triển khai (deployable surface) phía sau một VPS duy nhất. Agent nằm ở giữa như một reasoning proxy giữa React chat client và backend dữ liệu chiến dịch, đồng thời làm trung gian gọi ra nhà cung cấp LLM.</p>
+
+<div class="mermaid">
+flowchart TB
+    subgraph CLIENT["Trình duyệt — agent.pawgrammers.io.vn"]
+        direction LR
+        CHAT["Chat Pane 42%<br/>danh sách tin nhắn · ô nhập"]
+        WS["Workspace Pane 58%<br/>biểu mẫu 5 bước"]
+    end
+
+    subgraph AGENT["AI Agent API — FastAPI · :8000"]
+        ROUTER["router.py<br/>điều phối request"]
+        HANDLERS["handlers/<br/>boot · brief · audience<br/>creative · setup · result · freeform"]
+        TOOLS["tools/ registry<br/>audience · zones · ranker<br/>creative-match · order"]
+        SESS["session.py<br/>Mongo + fallback in-memory"]
+        ROUTER --> HANDLERS --> TOOLS
+        HANDLERS --> SESS
+    end
+
+    subgraph DATA["Campaign Backend — Node/Express · :3000"]
+        REST["REST API<br/>orders · dmp · zones<br/>targeting · creative · analytics"]
+        MONGO[("MongoDB 8.x<br/>adspilot + camp_ads")]
+        REST --> MONGO
+    end
+
+    LLM["GreenNode MaaS<br/>minimax/minimax-m2.5<br/>tương thích OpenAI"]
+    SITES["Site quảng cáo mô phỏng<br/>ZNews · BaoMoi · ZingMP3"]
+
+    CHAT -->|"POST /api/agent/chat"| ROUTER
+    WS -->|"GET dmp-recommend<br/>GET zones-recommend"| ROUTER
+    TOOLS -->|"REST calls"| REST
+    HANDLERS -->|"chat_completion + tools"| LLM
+    REST -.->|"phục vụ ad zone"| SITES
+    SESS --> MONGO
+</div>
+<figcaption>Hình 1 — Topology hệ thống đầu-cuối. Agent là reasoning proxy, không phải nơi lưu dữ liệu; toàn bộ trạng thái chiến dịch bền vững nằm ở Node backend.</figcaption>
+
+<h3>Danh mục thành phần</h3>
+<table>
+  <thead><tr><th>Bề mặt</th><th>Công nghệ</th><th>Trách nhiệm</th></tr></thead>
+  <tbody>
+    <tr><td><b>Agent Chat Frontend</b><br/><code>agent_frontend/</code></td><td>React 18 · Vite · Tailwind · shadcn/ui</td><td>Split-pane chat + workspace; sở hữu trạng thái chiến dịch cục bộ; render các block phản hồi giàu định dạng.</td></tr>
+    <tr><td><b>AI Agent API</b><br/><code>agent/</code></td><td>FastAPI · Python · OpenAI SDK · Motor</td><td>Router, handlers, tool registry, prompts, session store. Chính là orchestration harness.</td></tr>
+    <tr><td><b>Campaign Backend</b><br/><code>backend/</code></td><td>Node.js · Express · Mongoose</td><td>Nguồn dữ liệu gốc (system of record): campaigns, DMP segments, ad zones, creatives, analytics.</td></tr>
+    <tr><td><b>Site quảng cáo mô phỏng</b></td><td>Bản sao HTML/JS tĩnh</td><td>ZNews (7 zone), BaoMoi (6 zone), ZingMP3 (1 zone) — mục tiêu đặt quảng cáo thực tế để preview trực tiếp.</td></tr>
+    <tr><td><b>Nhà cung cấp LLM</b></td><td>GreenNode MaaS (VNG Cloud)</td><td>Host <code>minimax/minimax-m2.5</code> qua endpoint tương thích OpenAI.</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== 3 ===================== -->
+<h2 id="s3"><span class="num">03</span>Công nghệ &amp; Quyết định kỹ thuật chính</h2>
+<p>Mọi lựa chọn công nghệ đều được tối ưu cho bộ ràng buộc của một hackathon: lặp nhanh, chất lượng tiếng Việt tốt, và hành vi agent kiểm soát được.</p>
+<table>
+  <thead><tr><th>Tầng</th><th>Lựa chọn</th><th>Lý do</th></tr></thead>
+  <tbody>
+    <tr><td>Nhà cung cấp LLM</td><td>GreenNode MaaS (VNG Cloud)</td><td>Yêu cầu nền tảng của hackathon; giao diện tương thích OpenAI.</td></tr>
+    <tr><td>Mô hình</td><td><code>minimax/minimax-m2.5</code></td><td>Cân bằng tốt nhất giữa độ mượt tiếng Việt và hỗ trợ tool-calling gốc.</td></tr>
+    <tr><td>Framework agent</td><td>FastAPI + <b>tool calling thuần</b></td><td>Gọn nhẹ và kiểm soát hoàn toàn — cố ý không dùng LangChain, để mọi bước suy luận đều audit được.</td></tr>
+    <tr><td>Frontend</td><td>React 18 + Vite + Tailwind + shadcn/ui</td><td>Tốc độ build; HMR tức thời; component primitives sẵn có.</td></tr>
+    <tr><td>State</td><td><code>useState</code> / <code>useCallback</code> cục bộ</td><td>Không Redux/Zustand — đối tượng workspace nhỏ và tập trung ở <code>App.jsx</code>.</td></tr>
+    <tr><td>Cơ sở dữ liệu</td><td>MongoDB 8.x + Motor (async)</td><td>Document chiến dịch + session store của agent trong một engine.</td></tr>
+    <tr><td>Lưu session</td><td>Collection Mongo <code>agent_sessions</code></td><td>Fallback về dict in-process nếu Mongo không truy cập được — demo không bao giờ chết cứng.</td></tr>
+    <tr><td>Triển khai</td><td>PM2 + Nginx trên một VPS</td><td>Tất cả service đặt chung; đồng thời build image container cho GreenNode registry.</td></tr>
+  </tbody>
+</table>
+<p><b>Tham số tinh chỉnh.</b> Mô hình chạy ở <code>temperature 0.1</code> để hành vi xác định, ít "sáng tạo"; <code>max_tokens 2000</code>; và một <code>CONTEXT_WINDOW</code> cuộn 18 tin nhắn để giới hạn chi phí token mỗi lượt.</p>
+
+<!-- ===================== 4 ===================== -->
+<h2 id="s4"><span class="num">04</span>Workspace ràng buộc hai chiều</h2>
+<p class="lead">Đây là trái tim kiến trúc của hệ thống và là cơ chế "hiện đại hóa quy trình truyền thống". Biểu mẫu chiến dịch 5 bước không phải một UI thụ động — nó là một <b>bề mặt trạng thái dùng chung</b>, ràng buộc hai chiều với agent.</p>
+
+<h3>Chiều A — UI → Agent (workspace snapshot + hàng đợi event)</h3>
+<p>Ở mỗi lượt chat, frontend serialize một góc nhìn gọn của form hiện tại và gửi kèm tin nhắn. Handler chèn nó vào như một <b>workspace snapshot tươi mới</b> — một system message được dựng lại mỗi lần gọi và cố ý <i>không</i> lưu vào history, để tránh tích lũy snapshot cũ. Bên cạnh đó, mọi thao tác UI trực tiếp (gõ brand, thêm segment, tải file, bấm "chỉnh sửa lại") được ghi vào một <b>hàng đợi workspace event</b> và đẩy tới agent dưới dạng diff, giúp mô hình luôn đồng bộ với những cú click mà nó chưa từng thấy.</p>
+
+<pre><code>=== TRẠNG THÁI WORKSPACE HIỆN TẠI ===
+  Bước 1 - Brief:    ✅ Đã xác nhận (LOCKED)
+  Bước 2 - Audience: ⏳ Chưa xác nhận
+  ...
+--- Brief ---
+Brand: ZUMA Ice | Objective: Awareness | Budget: 600 triệu VND
+QUY TẮC: Dùng thông tin trên. KHÔNG hỏi lại giá trị đã biết.
+         Nếu bước đã LOCKED, hỏi user trước khi thay đổi.</code></pre>
+
+<h3>Chiều B — Agent → UI (workspace proposal &amp; patch)</h3>
+<p>Khi user yêu cầu agent thay đổi một trường ("đổi brand thành Coca-Cola"), mô hình gọi tool <code>update_workspace</code>. Harness sau đó đi qua một <b>cổng xác nhận có con người trong vòng lặp (human-in-the-loop)</b>: trừ khi user đã xác nhận ngay trong cùng tin nhắn, thay đổi sẽ được trả về như một <i>proposal block</i> thay vì áp dụng. Chỉ một xác nhận rõ ràng ("đồng ý" / "xác nhận") mới commit patch vào React state. Các bước đã bị khóa (đã duyệt) còn kích hoạt thêm cảnh báo reset dây chuyền.</p>
+
+<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant FE as React Workspace
+    participant AG as Agent Harness
+    participant LLM as MiniMax M2.5
+
+    U->>FE: "đổi brand thành Coca-Cola"
+    FE->>AG: POST /chat (msg + workspace snapshot + confirmed_steps)
+    AG->>LLM: messages + định nghĩa tool
+    LLM-->>AG: tool_call update_workspace{field, value}
+    alt đã xác nhận trong cùng lượt VÀ bước chưa khóa
+        AG-->>FE: workspace_update (áp dụng ngay)
+    else cần xác nhận / bước đã khóa
+        AG->>AG: lưu pending_proposal vào session
+        AG-->>FE: workspace_proposal block (+ cảnh báo reset)
+        U->>FE: bấm "Đồng ý" / gõ "xác nhận"
+        FE->>AG: confirm trigger
+        AG-->>FE: workspace_update (patch)
+    end
+    FE->>FE: setFormState → render lại workspace
+</div>
+<figcaption>Hình 2 — Vòng lặp đề xuất / xác nhận, giữ con người kiểm soát mọi thay đổi trạng thái do agent khởi xướng.</figcaption>
+
+<div class="callout tip"><b>Vì sao quan trọng.</b> Ràng buộc hai chiều là thứ cho phép con người và agent cùng điều khiển <i>cùng một</i> chiến dịch mà không xung đột. Người vận hành có thể sửa tay bất kỳ trường nào bất kỳ lúc nào; agent luôn thấy sự thật và không bao giờ âm thầm ghi đè công việc đã xác nhận.</div>
+
+<!-- ===================== 5 ===================== -->
+<h2 id="s5"><span class="num">05</span>Vòng đời request &amp; Orchestration</h2>
+<p>Mọi tương tác dồn qua một endpoint duy nhất — <code>POST /api/agent/chat</code> — và router đưa ra quyết định đầu tiên, quan trọng nhất: <b>handler xác định hay pipeline LLM?</b> Việc submit form đi theo đường xác định nhanh, không dùng LLM; chat tự do đi qua toàn bộ pipeline suy luận. Sự phân tách này là cốt lõi cho hồ sơ chi phí và độ tin cậy của harness.</p>
+
+<div class="mermaid">
+flowchart TD
+    A["POST /api/agent/chat<br/>ChatRequest"] --> B{"step == -1<br/>hay boot rỗng?"}
+    B -->|có| BOOT["handle_boot()<br/>lời chào"]
+    B -->|không| C{"có formData?"}
+    C -->|có — XÁC ĐỊNH| D{"bước nào?"}
+    D -->|0| BR["handle_brief"]
+    D -->|1| AU["handle_audience"]
+    D -->|2| CR["handle_creative"]
+    D -->|3| SE["handle_setup<br/>3 pha"]
+    D -->|4| RE["handle_result"]
+    C -->|không — có message| FF["handle_freeform<br/>LLM + tool calling"]
+
+    style FF fill:#1b2f2a,stroke:#4dd4ac,color:#e6edf3
+    style D fill:#1b263a,stroke:#5aa9ff,color:#e6edf3
+</div>
+<figcaption>Hình 3 — Điều phối của router. Bấm "Đồng ý &amp; Tiếp tục" là xác định và rẻ; gõ chat thì đi vào engine suy luận.</figcaption>
+
+<div class="callout tip"><b>Điểm mấu chốt.</b> Bằng cách cho phần duyệt form đi qua handler xác định, harness chỉ tiêu ngân sách LLM ở nơi thực sự cần hiểu ngôn ngữ. Nút bấm thì nhanh và dễ đoán; chat thì thông minh.</div>
+
+<h3>Pipeline freeform (engine suy luận)</h3>
+<p>Handler <code>freeform</code> là thành phần lớn và tinh vi nhất (481 dòng). Trước khi chạm tới mô hình, nó chạy một tập <b>intercept ý định xác định (deterministic intent intercepts)</b> — các trigger từ khóa cho tự động chọn targeting, chuyển bước tiếp, reset chiến dịch, và xác nhận proposal. Chỉ khi không cái nào khớp, nó mới dựng mảng message và gọi LLM.</p>
+<pre><code>messages = [
+  system:  SYSTEM_PROMPT            # persona + quy tắc tool theo từng bước
+  system:  WORKSPACE_SNAPSHOT       # dựng lại mỗi lần, không lưu history
+  system:  WORKSPACE_DIFF           # tùy chọn — thay đổi UI từ lượt trước
+  ...history (cắt còn 18)
+  user:    tin nhắn hiện tại
+]
+chat_completion(messages, TOOL_DEFINITIONS)   # → MiniMax M2.5</code></pre>
+
+<!-- ===================== 6 ===================== -->
+<h2 id="s6"><span class="num">06</span>Lõi suy luận &amp; Lớp Tool</h2>
+<p class="lead">"Đôi tay" của agent là một registry gồm sáu tool có kiểu. Đây là một <b>contract năng lực kiểu MCP</b>: mỗi tool được mô tả bằng schema mà mô hình đọc được, được gọi theo tên với tham số có cấu trúc, và điều phối qua một hàm <code>execute_tool()</code> duy nhất — cùng nguyên lý thiết kế mà Model Context Protocol chuẩn hóa, ở đây triển khai trực tiếp trên định dạng tool-calling của OpenAI để kiểm soát tối đa.</p>
+
+<table>
+  <thead><tr><th>Tool</th><th>Mục đích</th><th>Dựa trên</th></tr></thead>
+  <tbody>
+    <tr><td><code>get_zone_list</code></td><td>Trả về toàn bộ 35 ad zone</td><td>Zone catalog (cache từ backend)</td></tr>
+    <tr><td><code>search_zones</code></td><td>Lọc zone theo từ khóa / mục tiêu</td><td>Zone catalog</td></tr>
+    <tr><td><code>get_audience_list</code></td><td>Tìm 310+ DMP segment với fuzzy fallback</td><td><code>GET /api/dmp/attributes</code></td></tr>
+    <tr><td><code>update_workspace</code></td><td>Đề xuất thay đổi trường của form</td><td>Session / luồng proposal</td></tr>
+    <tr><td><code>explain_step</code></td><td>Giải thích bước hiện tại làm gì</td><td>Logic prompt tĩnh</td></tr>
+    <tr><td><code>get_order_status</code></td><td>Kiểm tra trạng thái chiến dịch đã tạo</td><td><code>GET /api/orders</code></td></tr>
+  </tbody>
+</table>
+
+<h4>Rào chắn: quyền tool theo phạm vi từng bước</h4>
+<p>System prompt cưỡng chế <b>tool nào được phép chạy ở bước nào</b> — một dạng "policy-constrained tool use" ngăn mô hình, chẳng hạn, đi tìm audience trong khi user vẫn đang viết brief.</p>
+<p>
+<span class="pill">Bước 0 Brief → chỉ <code>update_workspace</code></span>
+<span class="pill">Bước 1 Audience → <code>get_audience_list</code> (tối đa 3×/lượt)</span>
+<span class="pill">Bước 2 Creative → không tool</span>
+<span class="pill">Bước 3 Setup → <code>search_zones</code></span>
+</p>
+
+<h3>Vòng lặp tool-calling với fallback 3 cấp</h3>
+<p>MiniMax thỉnh thoảng trả về nội dung rỗng ở lượt thứ hai sau khi có kết quả tool. Harness bọc vòng lặp trong một <b>chiến lược giảm cấp ba tầng (degradation strategy)</b> để user luôn nhận được phản hồi dùng được.</p>
+
+<div class="mermaid">
+flowchart TD
+    S["LLM trả về tool_call"] --> EX["execute_tool()<br/>chạy năng lực"]
+    EX --> A1["Lần 1<br/>chat_completion(msgs + tool_result, tools)"]
+    A1 --> Q1{"phản hồi rỗng?"}
+    Q1 -->|không| DONE["✅ gửi phản hồi"]
+    Q1 -->|có| A2["Lần 2<br/>force_text_completion(tool_choice=none)"]
+    A2 --> Q2{"vẫn rỗng?"}
+    Q2 -->|không| DONE
+    Q2 -->|có| A3["Lần 3<br/>tin nhắn fallback cứng theo từng tool"]
+    A3 --> DONE
+
+    style DONE fill:#1b2f2a,stroke:#4dd4ac,color:#e6edf3
+    style A3 fill:#3a2f1b,stroke:#ffb454,color:#e6edf3
+</div>
+<figcaption>Hình 4 — Thang giảm cấp tool-calling: hai lần thử mô hình, rồi một lưới an toàn xác định.</figcaption>
+
+<h4>Làm sạch output</h4>
+<p>MiniMax đôi khi làm rò rỉ khối suy luận <code>&lt;think&gt;</code> hoặc cú pháp tool XML thô vào text hiển thị. Mọi phản hồi đều đi qua <code>sanitize_response()</code>, hàm này bóc các thẻ suy luận, thẻ mồ côi, và tool XML rò rỉ trước khi text tới frontend.</p>
+
+<!-- ===================== 7 ===================== -->
+<h2 id="s7"><span class="num">07</span>Đi sâu tính năng — Theo thứ tự bước</h2>
+<p>Chiến dịch được dựng qua một máy trạng thái (state machine) năm bước. Mỗi bước có một handler xác định cho hành động "duyệt" và phần suy luận LLM riêng cho phần phân tích. Thứ tự bên dưới phản ánh build hiện tại: <b>Brief → Audience → Creative → Setup → Result</b>.</p>
+
+<div class="mermaid">
+flowchart LR
+    B["① Brief<br/>brand · objective<br/>KPI · budget · dates"] --> A["② Audience<br/>310+ DMP segment<br/>AI reco + tìm kiếm"]
+    A --> C["③ Creative<br/>upload · validate<br/>lưu VPS"]
+    C --> S["④ Setup<br/>rank zone → match<br/>→ tạo order"]
+    S --> R["⑤ Result<br/>order ID · link<br/>preview trực tiếp"]
+    style B fill:#1b263a,stroke:#5aa9ff,color:#fff
+    style A fill:#1b263a,stroke:#5aa9ff,color:#fff
+    style C fill:#1b263a,stroke:#5aa9ff,color:#fff
+    style S fill:#1b2f2a,stroke:#4dd4ac,color:#fff
+    style R fill:#1b2f2a,stroke:#4dd4ac,color:#fff
+</div>
+<figcaption>Hình 5 — Máy trạng thái chiến dịch năm bước.</figcaption>
+
+<div class="step-h"><div class="dot">1</div><h3>Brief — thu thập &amp; kiểm tra ý định</h3></div>
+<p><b>Kích hoạt:</b> user điền form và bấm duyệt → <code>handle_brief</code>. Handler kiểm tra xác định (brand không rỗng, budget &gt; 0, có ngày), rồi yêu cầu LLM tóm tắt brief bằng tiếng Việt, gợi ý audience từ phần notes tự do, và cảnh báo các điểm như KPI trông không thực tế so với budget.</p>
+<p><b>Block đầu ra:</b> một <code>table</code> tóm tắt, một <code>info</code> cảnh báo (nếu có), và một gợi ý sang bước audience. <b>Trạng thái:</b> ghi vào <code>session.form_state.brief</code>.</p>
+
+<div class="step-h"><div class="dot">2</div><h3>Audience — gợi ý &amp; tính quy mô phân khúc</h3></div>
+<p><b>Kích hoạt:</b> user chọn DMP segment → <code>handle_audience</code>. Hai việc chạy:</p>
+<p><b>(a) Tính quy mô audience</b> dùng mô hình hợp (union) để tránh đếm trùng quá mức — các size được sắp giảm dần và mỗi segment thêm vào bị chiết khấu do trùng lặp:</p>
+<pre><code>total = Σ  size_i × 0.7^i      # i = thứ hạng sau khi sắp size giảm dần</code></pre>
+<p><b>(b) Gợi ý AI</b> chạy song song qua <code>GET /api/agent/dmp-recommend</code>, được gọi khi bước Audience mount. Handler đưa toàn bộ catalog segment cho mô hình, mô hình trả về các segment liên quan nhất kèm lý do — hiển thị ở panel màu hổ phách "⭐ AI Gợi ý". LLM cũng chấm chất lượng khớp (excellent / good / fair / poor) và giải thích độ phù hợp.</p>
+
+<div class="step-h"><div class="dot">3</div><h3>Creative — upload, validate, lưu trữ</h3></div>
+<p><b>Kích hoạt:</b> user tải file lên → <code>handle_creative</code>. Validate cưỡng chế định dạng cho phép (PNG, JPG, MP4, GIF, WebP), tối thiểu 300×300 với chính sách cảnh báo nếu nhỏ hơn, và giới hạn 10 MB. Song song, frontend upload từng file lên <code>POST /api/creative/upload</code> (base64 → lưu VPS) và ghi lại URL trả về để tạo order sau này. Đầu ra là một <code>table</code> file kèm kích thước, dung lượng và trạng thái.</p>
+
+<div class="step-h"><div class="dot">4</div><h3>Setup — engine ba pha</h3></div>
+<p>Setup là nơi agent suy luận nặng nhất, trong ba pha nội bộ.</p>
+<h4>Pha 0 — Xếp hạng zone</h4>
+<p>Khi mount, <code>GET /api/agent/zones-recommend</code> nạp toàn bộ 35 zone và chấm điểm mỗi zone bằng heuristic có trọng số theo mục tiêu, rồi kiểm tra xung đột đặt chỗ theo khoảng ngày của chiến dịch và đánh dấu 6 zone khả dụng hàng đầu là được gợi ý.</p>
+<table class="kv">
+  <tbody>
+    <tr><td>Awareness</td><td>Reach 40% · Viewability 35% · Efficiency 20% · CTR 5%</td></tr>
+    <tr><td>Consideration</td><td>Viewability 35% · Reach 30% · CTR 20% · Efficiency 15%</td></tr>
+    <tr><td>Conversion</td><td>CTR 50% · Efficiency 20% · Viewability 20% · Reach 10%</td></tr>
+    <tr><td>Retention</td><td>Viewability 50% · CTR 20% · Reach 20% · Efficiency 10%</td></tr>
+  </tbody>
+</table>
+<h4>Pha 1 — Ghép creative</h4>
+<p>Các zone đã chọn được tự động ghép với creative đã upload theo độ khớp kích thước, với một heuristic tên file "skin" định tuyến creative skin tới zone skin. Trả về một bản đồ gán kèm mọi cảnh báo.</p>
+<h4>Pha 2 — Tạo order</h4>
+<p>Khi xác nhận, frontend post payload setup; backend lắp ráp body <code>POST /api/orders</code> (budget quy đổi triệu → VND, gom creative theo zone, DMP include dưới dạng ObjectId) và áp dụng logic auto-status: <code>active</code> nếu <code>startDate ≤ hôm nay</code>, ngược lại là <code>pending</code>.</p>
+
+<div class="step-h"><div class="dot">5</div><h3>Result — tóm tắt launch</h3></div>
+<p><code>handle_result</code> render order đã tạo: order ID (vd. <code>ORD-2026-005</code>), badge trạng thái, deep link tới trang chiến dịch AdsPilot, các link preview trực tiếp tới site quảng cáo mô phỏng, và tóm tắt budget. Điều này khép vòng — công việc của agent trở thành một chiến dịch thực, có thể kiểm tra được.</p>
+
+<!-- ===================== 8 — SUB-AGENTS ===================== -->
+<h2 id="s8"><span class="num">08</span>Điều phối đa tác tử — Sub-Agent chuyên biệt</h2>
+<p class="lead">Agent hội thoại chính không làm mọi thứ một mình. Với các tác vụ nặng và dài hơi, harness <b>spawn (khởi tạo) các sub-agent chuyên biệt</b> chạy nền theo mô hình <b>orchestrator / worker (fan-out)</b>: agent chính đóng vai nhạc trưởng, ủy thác nhiệm vụ cho các worker agent độc lập, rồi tổng hợp (aggregate) kết quả trả về. Đây là bước chuyển từ "một trợ lý chat" sang một <b>hệ đa tác tử (multi-agent system)</b> thực thụ.</p>
+
+<div class="mermaid">
+flowchart TB
+    ORCH["🧠 Orchestrator Agent<br/>agent hội thoại chính"]
+    ORCH -->|"spawn sau khi tạo order"| CAP["📸 Live Capture Agent<br/>headless browser worker"]
+    ORCH -->|"spawn khi cần báo cáo"| ANA["📊 Report Analytics Agent<br/>data + insight worker"]
+
+    CAP --> S1["ZNews / BaoMoi / ZingMP3<br/>điều hướng + định vị zone"]
+    S1 --> PROOF["🖼️ Proof-of-serve<br/>screenshot bằng chứng"]
+    PROOF -->|"báo cáo về"| ORCH
+
+    ANA --> STAT["Analytics API<br/>impressions · CTR · VTR · reach"]
+    STAT --> INS["Tổng hợp insight + biểu đồ<br/>+ email tường thuật"]
+    INS -->|"báo cáo về"| ORCH
+
+    style ORCH fill:#1b2f2a,stroke:#4dd4ac,color:#fff
+    style CAP fill:#1b263a,stroke:#5aa9ff,color:#fff
+    style ANA fill:#3a2f1b,stroke:#ffb454,color:#fff
+</div>
+<figcaption>Hình 6 — Orchestrator fan-out: agent chính spawn các sub-agent chuyên biệt và tổng hợp kết quả (closed-loop).</figcaption>
+
+<div class="step-h"><div class="dot">A</div><h3>Live Ad Capture Agent — xác minh hiển thị trực tiếp</h3></div>
+<p>Ngay sau khi order được tạo, orchestrator <b>spawn một Live Capture Agent</b> chạy trên headless browser. Sub-agent này hành động tự chủ: tự điều hướng tới đúng site đã đặt quảng cáo (ZNews / BaoMoi / ZingMP3), định vị ad-zone theo đúng chuyên mục, chờ creative render xong, rồi chụp lại <b>screenshot làm bằng chứng hiển thị (proof-of-serve)</b>. Kết quả đóng vòng lặp (closed-loop verification): thay vì tin rằng quảng cáo "chắc là đã lên", hệ thống <b>tự kiểm chứng bằng thị giác (autonomous visual QA)</b> rằng đúng creative đã hiển thị đúng vị trí. Ảnh chụp được đính kèm vào bản ghi chiến dịch để đối soát.</p>
+
+<div class="step-h"><div class="dot">B</div><h3>Report Analytics Agent — phân tích &amp; tường thuật số liệu</h3></div>
+<p>Theo yêu cầu hoặc theo lịch, orchestrator <b>spawn một Report Analytics Agent</b>. Worker này kéo số liệu vận hành từ Analytics API (impressions, CTR, VTR, reach, hiệu suất theo zone), chạy một pipeline tính toán và <b>phát hiện bất thường (anomaly detection)</b>, sau đó dùng LLM để <b>tổng hợp insight</b> thành một báo cáo <b>tường thuật bằng ngôn ngữ tự nhiên (narrative reporting)</b> kèm biểu đồ, và soạn sẵn email tổng kết cho stakeholder. Toàn bộ chuỗi "số liệu thô → insight → báo cáo → email" được một sub-agent đảm nhiệm đầu-cuối, giải phóng agent chính để tiếp tục hội thoại.</p>
+
+<!-- ===================== 9 ===================== -->
+<h2 id="s9"><span class="num">09</span>Kỹ thuật đảm bảo độ tin cậy</h2>
+<p>Vì hệ thống được xây để demo trực tiếp, khả năng chống lỗi được thiết kế vào mọi tầng thay vì chắp vá sau.</p>
+<div class="grid2">
+  <div class="card amber">
+    <h4>Fallback tool 3 cấp</h4>
+    <p>Hai lần thử mô hình rồi một tin nhắn xác định theo từng tool đảm bảo user không bao giờ thấy phản hồi rỗng sau khi gọi tool (Hình 4).</p>
+  </div>
+  <div class="card amber">
+    <h4>Fallback session</h4>
+    <p>Session bền vững trong MongoDB <code>agent_sessions</code>; nếu Mongo không truy cập được, trạng thái tự động fallback về dict in-process để luồng tiếp tục.</p>
+  </div>
+  <div class="card amber">
+    <h4>Fallback mock ở frontend</h4>
+    <p>Nếu agent API không truy cập được, <code>callAgent()</code> trả null và client phục vụ các phản hồi mock <code>AGENT_SCENARIOS.*</code> hợp lý — demo không thể vỡ.</p>
+  </div>
+  <div class="card amber">
+    <h4>Sanitize &amp; guard phản hồi</h4>
+    <p>Suy luận/XML rò rỉ được bóc phía server; client chèn tin nhắn fallback nếu phản hồi tới mà không có cả content lẫn block.</p>
+  </div>
+</div>
+<p><b>Timeout &amp; ngân sách:</b> client hủy lời gọi agent sau 35 giây; history cắt còn 18 tin nhắn; snapshot bị loại khỏi history để tránh phình context.</p>
+
+<!-- ===================== 9 ===================== -->
+<h2 id="s10"><span class="num">10</span>Observability &amp; Logging</h2>
+<p>Harness đi kèm một <b>kiến trúc logging kép</b> để bất kỳ session trực tiếp nào cũng replay và debug được.</p>
+<p><b>Backend:</b> một lời gọi <code>alog(session_id, event_type, data)</code> duy nhất ghi đồng thời ra stdout tô màu (xem qua <code>pm2 logs</code>) và collection MongoDB <code>agent_logs</code>. Các loại event vẽ ra toàn bộ đường suy luận — <code>request</code>, <code>llm_call_start</code>, <code>llm_call_done</code>, <code>tool_call</code>, <code>tool_result</code>, <code>fallback</code>, <code>confirm</code>, <code>reply</code>, <code>error</code>. Log truy xuất được theo session qua <code>GET /api/agent/logs/{session_id}</code>, đã phân loại sẵn thành LLM request, response, tool call và error.</p>
+<p><b>Frontend:</b> một logger <code>log.*</code> theo namespace (api / chat / step / workspace / event / error) ghi các mục tô màu vào DevTools, và nút "Export Log" tải xuống một gói JSON hoàn chỉnh — hội thoại, tool đã dùng, thông tin debug, và network trace — để phân tích offline.</p>
+<p><b>Truy vết build:</b> một manifest <code>BUILD_VERSION</code> + <code>BUILD_FEATURES</code> được lộ ở <code>GET /api/version</code>, in ra banner console tô màu khi load, và hiển thị ở version badge trên UI.</p>
+
+<!-- ===================== 10 ===================== -->
+<h2 id="s11"><span class="num">11</span>Triển khai &amp; Hạ tầng</h2>
+<p>Tất cả service đặt chung trên một VPS duy nhất, phía trước là Nginx và được PM2 giám sát, đồng thời cũng build một image container cho GreenNode registry.</p>
+
+<div class="mermaid">
+flowchart TB
+    NET["Internet — *.pawgrammers.io.vn (HTTPS)"] --> NGINX["Nginx :80/:443<br/>reverse proxy + TLS"]
+    NGINX -->|"agent.*"| FE["/var/www/agent<br/>React static build"]
+    NGINX -->|"agent-api.*"| PA["PM2: agent-api<br/>uvicorn :8000"]
+    NGINX -->|"api.*"| PB["PM2: backend-api<br/>node :3000"]
+    NGINX -->|"adspilot / analytics<br/>znews / baomoi / zingmp3"| STATIC["/var/www/* site tĩnh"]
+    PA --> DB[("MongoDB :27017<br/>camp_ads + adspilot")]
+    PB --> DB
+    PA -->|"HTTPS"| MAAS["GreenNode MaaS"]
+
+    style PA fill:#1b2f2a,stroke:#4dd4ac,color:#fff
+    style PB fill:#1b263a,stroke:#5aa9ff,color:#fff
+</div>
+<figcaption>Hình 7 — Topology triển khai một-VPS dưới Nginx + PM2.</figcaption>
+
+<div class="callout tip"><b>Tóm trong một câu.</b> Camp Ads Agent là một orchestration harness gọn nhẹ, audit được hoàn toàn, ràng buộc một LLM với một công cụ thiết lập chiến dịch thực thông qua tool calling kiểu MCP và một workspace ràng buộc hai chiều — biến một biểu mẫu nhiều bước thủ công thành một quy trình cộng tác do agent điều khiển, mà không đánh mất quyền kiểm soát của con người lẫn tính minh bạch vận hành.</div>
+
+<footer>
+  Camp Ads Agent — Báo cáo Kiến trúc Kỹ thuật · Build 2026-06-16.7 · Claw-a-thon 2026<br/>
+  Nguồn: knowledge base của dự án (<code>docs/knowledge base/</code>) và mã nguồn agent/frontend/backend.
+</footer>
+
+</div><!-- /wrap -->
+
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'dark',
+    themeVariables: {
+      background: '#1b2430',
+      primaryColor: '#1b2430',
+      primaryTextColor: '#e6edf3',
+      primaryBorderColor: '#4dd4ac',
+      lineColor: '#5aa9ff',
+      fontSize: '14px',
+      fontFamily: 'ui-sans-serif, system-ui, sans-serif'
+    },
+    flowchart: { curve: 'basis', useMaxWidth: true },
+    sequence: { useMaxWidth: true }
+  });
+
+  (async () => {
+    // 1) Wrap every content table so it scrolls horizontally on narrow screens
+    document.querySelectorAll('.wrap table').forEach((t) => {
+      if (t.parentElement && t.parentElement.classList.contains('table-wrap')) return;
+      const w = document.createElement('div');
+      w.className = 'table-wrap';
+      t.parentNode.insertBefore(w, t);
+      w.appendChild(t);
+    });
+
+    // 2) Render the diagrams
+    await mermaid.run({ querySelector: '.mermaid' });
+
+    // 3) Build a single fullscreen zoom lightbox reused by all diagrams
+    const overlay = document.createElement('div');
+    overlay.className = 'mm-overlay';
+    overlay.innerHTML =
+      '<div class="mm-bar">' +
+        '<button data-a="out" title="Thu nhỏ">−</button>' +
+        '<button data-a="in" title="Phóng to">+</button>' +
+        '<button data-a="reset" title="Vừa màn hình">↺</button>' +
+        '<button data-a="close" title="Đóng">✕</button>' +
+      '</div>' +
+      '<div class="mm-stage"></div>';
+    document.body.appendChild(overlay);
+    const stage = overlay.querySelector('.mm-stage');
+    let scale = 1;
+    const apply = () => { const s = stage.querySelector('svg'); if (s) s.style.width = (scale * 100) + '%'; };
+    const open = (svgHtml) => { stage.innerHTML = svgHtml; scale = 1; apply(); overlay.classList.add('open'); document.body.style.overflow = 'hidden'; };
+    const close = () => { overlay.classList.remove('open'); stage.innerHTML = ''; document.body.style.overflow = ''; };
+
+    overlay.addEventListener('click', (e) => {
+      const a = e.target.getAttribute && e.target.getAttribute('data-a');
+      if (!a) { if (e.target === overlay) close(); return; }
+      if (a === 'in') scale = Math.min(scale * 1.25, 6);
+      else if (a === 'out') scale = Math.max(scale / 1.25, 0.4);
+      else if (a === 'reset') scale = 1;
+      else if (a === 'close') { close(); return; }
+      apply();
+    });
+    stage.addEventListener('wheel', (e) => {
+      if (!overlay.classList.contains('open')) return;
+      e.preventDefault();
+      scale = e.deltaY < 0 ? Math.min(scale * 1.1, 6) : Math.max(scale / 1.1, 0.4);
+      apply();
+    }, { passive: false });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+
+    // 4) Make each rendered diagram open the lightbox on tap/click
+    document.querySelectorAll('.mermaid').forEach((m) => {
+      const hint = document.createElement('span');
+      hint.className = 'mm-hint';
+      hint.textContent = '⇱ chạm để phóng to';
+      m.appendChild(hint);
+      m.addEventListener('click', () => {
+        const svg = m.querySelector('svg');
+        if (svg) open(svg.outerHTML);
+      });
+    });
+  })();
+</script>
+</body>
+</html>

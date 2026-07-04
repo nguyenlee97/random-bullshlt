@@ -1,0 +1,54 @@
+{
+  "id": "brief_062",
+  "lang": "en",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Fernweh",
+    "objective": "consideration",
+    "kpi": "15,000 new app downloads from young professionals",
+    "budget": 240,
+    "startDate": "2026-08-20",
+    "endDate": "2026-10-05",
+    "notes": "Dating app positioned for busy young professionals in big cities. Targeting single people aged 25-34 with office jobs."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7083",
+        "6a48cc2381574c48dbd22be5"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c715f",
+        "6a48cc2381574c48dbd22bb2"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c0a"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Marriage is a clean life-stage mismatch — the notes are specifically about singles, so a 'married' interest segment is a visible miss, not just irrelevant.",
+    "targeting": {
+      "expected": {
+        "age": [
+          "25-34"
+        ],
+        "marital": [
+          "Single"
+        ],
+        "career": [
+          "Office Worker"
+        ]
+      },
+      "note": "Straightforward mapping of 'single', 'office jobs', '25-34' straight from the notes; no conflict with typical defaults."
+    }
+  },
+  "tags": [
+    "consideration",
+    "en",
+    "targeting_labeled"
+  ]
+}

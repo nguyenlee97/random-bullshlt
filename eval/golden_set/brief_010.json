@@ -1,0 +1,42 @@
+{
+  "id": "brief_010",
+  "lang": "vi",
+  "brief": {
+    "brand": "Trà Xanh Mộc An",
+    "objective": "awareness",
+    "kpi": "Reach 6 triệu người dùng trẻ",
+    "budget": 400,
+    "startDate": "2026-08-01",
+    "endDate": "2026-09-15",
+    "notes": "Nhắm tới giới trẻ năng động, sống xanh, thích những gì tự nhiên. Cụ thể thế nào thì team tự đề xuất giúp mình nhé."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c70eb",
+        "6a2df27adda0ba67f14c7103"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70e1",
+        "6a2df27adda0ba67f14c70de",
+        "6a2df27adda0ba67f14c70e7",
+        "6a2df27adda0ba67f14c7106"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70e2",
+        "6a2df27adda0ba67f14c70e3"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Alcoholic beverages/Beer kept: inferred (not explicit in the ambiguous notes) from the 'trẻ, sống xanh, tự nhiên' positioning, which conflicts with alcohol association — same logic already validated in brief_004."
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "ambiguous_notes"
+  ]
+}

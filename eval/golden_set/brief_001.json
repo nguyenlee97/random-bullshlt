@@ -1,0 +1,40 @@
+{
+  "id": "brief_001",
+  "lang": "vi",
+  "brief": {
+    "brand": "Bia Larue Smooth",
+    "objective": "awareness",
+    "kpi": "Reach 10 triệu nam giới 25-40 trong mùa giải V-League",
+    "budget": 800,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-15",
+    "notes": "Chiến dịch mùa bóng đá, nhắm nam giới 25-40 hay tụ tập bạn bè xem bóng đá ở quán. Tuyệt đối không xuất hiện cạnh nội dung trẻ em, không nhắm người dưới 18 tuổi."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c70e3",
+        "6a2df27adda0ba67f14c70e2"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7193",
+        "6a2df27adda0ba67f14c7190",
+        "6a2df27adda0ba67f14c70b7",
+        "6a2df27adda0ba67f14c7108"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70da"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Parenting directly matches the explicit no-kids-content / no-under-18 rule in the notes. No changes needed."
+  },
+  "tags": [
+    "awareness",
+    "vi"
+  ]
+}

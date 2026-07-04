@@ -1,0 +1,42 @@
+{
+  "id": "brief_040",
+  "lang": "en",
+  "brief": {
+    "brand": "Highland Bloom Tea & Coffee",
+    "objective": "conversion",
+    "kpi": "50,000 app orders during the new-menu launch",
+    "budget": 380,
+    "startDate": "2026-10-01",
+    "endDate": "2026-11-15",
+    "notes": "Hi team, apologies in advance for the wall of text but there is quite a bit of context you need before building this plan. We are launching the new autumn menu for Highland Bloom across all 92 stores, and unlike the spring campaign, which was almost entirely about in-store footfall and honestly did not move app numbers at all, this one is app-first: every conversion we count is an order placed through the Highland Bloom app, delivery or pickup, no exceptions. The core customers we keep seeing in our data are office workers roughly 22 to 35 in Ho Chi Minh City and Hanoi who order a morning coffee or an afternoon tea to the office two or three times a week. The new menu is tea-forward, oolong and jasmine cold brews, so tea-interested audiences matter just as much as coffee this time, please do not treat tea as an afterthought like last quarter. One hard rule from legal after the incident in May: absolutely no adjacency to alcohol-related audiences or placements, we cannot appear next to beer content again. Loyalty members will be handled by CRM separately so do not spend against them. Budget and flight dates are in the brief fields; keep the recommendation within those. Thanks!"
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c70e7",
+        "6a2df27adda0ba67f14c7109",
+        "6a2df27adda0ba67f14c70eb"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7108",
+        "6a2df27adda0ba67f14c715f",
+        "6a2df27adda0ba67f14c7117",
+        "6a2df27adda0ba67f14c70b7"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70e2"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Alcoholic beverages directly encodes the explicit legal 'no alcohol adjacency' rule from the notes. must_include correctly elevates Tea per the explicit 'don't treat tea as an afterthought' instruction. No changes needed."
+  },
+  "tags": [
+    "conversion",
+    "en",
+    "long_rambling_notes"
+  ]
+}

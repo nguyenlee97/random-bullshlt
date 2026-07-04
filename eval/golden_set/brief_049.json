@@ -1,0 +1,41 @@
+{
+  "id": "brief_049",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "TrailMax Running Gear",
+    "objective": "awareness",
+    "kpi": "Reach 4 triệu người tập chạy bộ/triathlon",
+    "budget": 300,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-20",
+    "notes": "Thương hiệu giày và đồ chạy bộ chuyên dụng, tài trợ các giải marathon và triathlon trong nước. Nhắm người tập chạy bộ nghiêm túc, người chuẩn bị thi marathon/triathlon lần đầu."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c7d",
+        "6a48cc2381574c48dbd22c82",
+        "6a48cc2381574c48dbd22c80"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70df",
+        "6a2df27adda0ba67f14c7164"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c7a"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Marathons / Triathlons / Swimming are Sports and outdoors segments only present in the full 310-catalog (the 71-dump only had generic 'Running'). must_exclude=Baseball: no equipment or audience overlap with running/triathlon gear."
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "full_catalog_only"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "brief_069",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "JetHop Air",
+    "objective": "awareness",
+    "kpi": "Reach 5 triệu người, ưu tiên nhóm backpacker",
+    "budget": 380,
+    "startDate": "2026-09-01",
+    "endDate": "2026-11-15",
+    "notes": "Hãng bay giá rẻ mới. Đối tượng chính (ngân sách ưu tiên) là khách du lịch trẻ, đi phượt/backpacker 18-24 tuổi. Doanh nhân đi công tác thường xuyên là nhóm phụ, chỉ nên nhắm với phần ngân sách nhỏ hơn dù giá trị mỗi khách cao hơn."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c4d",
+        "6a2df27adda0ba67f14c7132"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7137",
+        "6a48cc2381574c48dbd22c56"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c6d"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Notes deliberately state the higher-lifetime-value business-traveler segment is secondary despite being 'obviously' more valuable — tests whether the agent follows the brief's stated priority instead of its own value assumption."
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "primary_secondary"
+  ]
+}

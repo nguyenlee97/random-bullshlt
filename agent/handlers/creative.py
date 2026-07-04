@@ -51,6 +51,15 @@ async def handle_creative(creative: CreativeData, session_id: str) -> AgentRespo
 
     # ── Store in session ──────────────────────────────────────────────────────
     await update_form_state(session_id, "creative", creative.model_dump())
+
+    # ── Phase 3: async creative intelligence (deterministic + optional VLM) ──
+    from config import config as _cfg
+    if _cfg.USE_VLM_CREATIVE:
+        try:
+            from creative_intel.service import enqueue_analysis
+            enqueue_analysis(session_id, [f.model_dump() for f in files])
+        except Exception:
+            pass  # analysis is advisory — never blocks the upload flow
     await log_event(session_id, "handler", {"step": "creative", "files": len(files), "valid": valid_count})
 
     # ── Build blocks ──────────────────────────────────────────────────────────

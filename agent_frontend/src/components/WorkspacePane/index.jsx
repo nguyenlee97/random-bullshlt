@@ -17,7 +17,7 @@ const STEP_DESCS = [
   'Điền brief khách hàng — agent chuẩn hóa về JSON schema và đề xuất KPI.',
   'Chọn attributes từ DMP. Size = min(tệp) × discount overlap 22%/tệp.',
   'Upload nhiều creative (ảnh / video) để lưu vào storage. Dùng ở bước Setup Camp.',
-  '3 campaign draft theo zone tối ưu CPM. Tạo + pause/run từng campaign.',
+  'Chọn ad zones phù hợp, gắn creative vào từng zone và xác nhận tạo chiến dịch.',
   'Tổng kết campaigns vừa tạo. Xem chi tiết trước khi sang phân tích.',
   'Extract report · vẽ chart performance · LLM đánh giá · đề xuất hành động.',
   'Soạn email tổng kết · gửi cho Account team và Ad Opt team.',
@@ -106,7 +106,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Pane header */}
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-white/80 flex-shrink-0">
+      <div className="flex items-center gap-2 px-3 sm:px-5 py-3 border-b border-border bg-white/80 flex-shrink-0">
         <LayoutDashboard className="w-4 h-4 text-violet-500" />
         <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Workspace</span>
         <span className="ml-1 text-xs text-muted-foreground">· Form & kết quả · bước hiện tại</span>
@@ -122,7 +122,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
 
       {/* Step body */}
       <ScrollArea className="flex-1" ref={bodyRef}>
-        <div data-demo="step-body" className="p-5">
+        <div data-demo="step-body" className="p-3 sm:p-5">
           {/* Step heading */}
           <div className={cn('flex items-center gap-3 mb-1', isDone && 'opacity-90')}>
             <div className={cn(

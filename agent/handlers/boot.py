@@ -1,6 +1,6 @@
 """Boot handler — step -1, stateless greeting."""
 from models import AgentResponse, ResponseMeta
-from main import BUILD_VERSION
+from version import BUILD_VERSION
 
 
 async def handle_boot() -> AgentResponse:

@@ -1,0 +1,40 @@
+{
+  "id": "brief_055",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Board & Brew Cafe",
+    "objective": "retention",
+    "kpi": "40% khách cũ quay lại trong vòng 30 ngày",
+    "budget": 90,
+    "startDate": "2026-08-01",
+    "endDate": "2026-12-31",
+    "notes": "Cafe board game với hơn 200 game bài/chiến thuật, tổ chức giải đấu hàng tuần. Chương trình thành viên thân thiết để khách cũ quay lại chơi game và uống cà phê."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22bd0",
+        "6a48cc2381574c48dbd22bdd"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22bd8",
+        "6a48cc2381574c48dbd22bde"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22bd1"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Card games / Strategy games are Entertainment (leisure) segments only present in the full 310-catalog (the plain 'Entertainment' category, incl. 'Board games', was already in the 71-dump). must_exclude=Casino games: gambling association is a brand-safety mismatch for a family cafe."
+  },
+  "tags": [
+    "retention",
+    "vi",
+    "full_catalog_only"
+  ]
+}

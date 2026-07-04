@@ -1,0 +1,41 @@
+{
+  "id": "brief_050",
+  "lang": "en",
+  "schema_version": 2,
+  "brief": {
+    "brand": "The Gridiron Pub",
+    "objective": "retention",
+    "kpi": "70% of season-pass holders renew for next season",
+    "budget": 150,
+    "startDate": "2026-09-01",
+    "endDate": "2027-02-01",
+    "notes": "Sports bar near the international district that screens NFL and college football every week for the expat community and returning regulars. Loyalty push to renew season food-and-drink passes."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c9d",
+        "6a48cc2381574c48dbd22c77",
+        "6a48cc2381574c48dbd22c7c"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22c78",
+        "6a48cc2381574c48dbd22c7b"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c7a"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Expats (Behavior) and American/College football only exist in the full 310-catalog — a nice cross-type (Behavior+Interest) full_catalog_only combination. must_exclude=Baseball: not part of this bar's programming, would misdirect budget."
+  },
+  "tags": [
+    "retention",
+    "en",
+    "full_catalog_only"
+  ]
+}

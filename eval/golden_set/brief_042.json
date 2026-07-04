@@ -1,0 +1,41 @@
+{
+  "id": "brief_042",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Alta Capital Advisory",
+    "objective": "consideration",
+    "kpi": "800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí",
+    "budget": 380,
+    "startDate": "2026-09-10",
+    "endDate": "2026-11-05",
+    "notes": "Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22bbb",
+        "6a48cc2381574c48dbd22bb7",
+        "6a48cc2381574c48dbd22bbc"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c706d",
+        "6a48cc2381574c48dbd22bb2"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c708b"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Small business / Management / Investment banking only exist in the full catalog. must_exclude=Investment(personal) because the brief explicitly excludes small individual retail investors — that segment is the near-opposite audience tier from SME owners."
+  },
+  "tags": [
+    "consideration",
+    "vi",
+    "full_catalog_only"
+  ]
+}

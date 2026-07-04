@@ -1,0 +1,40 @@
+{
+  "id": "brief_021",
+  "lang": "vi",
+  "brief": {
+    "brand": "VietBank - Nhà tài trợ V-League",
+    "objective": "awareness",
+    "kpi": "Reach 18 triệu fan bóng đá trong mùa giải",
+    "budget": 1000,
+    "startDate": "2026-08-15",
+    "endDate": "2026-12-15",
+    "notes": "Kích hoạt gói tài trợ V-League: brand luôn gắn với các nội dung bóng đá trong nước, nhắm fan bóng đá mọi miền, ưu tiên nhóm có quan tâm tài chính cá nhân."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7193",
+        "6a2df27adda0ba67f14c7190",
+        "6a2df27adda0ba67f14c7076"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c716a",
+        "6a2df27adda0ba67f14c7088",
+        "6a2df27adda0ba67f14c708b"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70b3"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Horror movies reframed as a brand-safety pick (not arbitrary): a mainstream bank running a national football sponsorship wants to avoid adjacency to dark/negative-tone content, consistent with how sponsors typically manage tonal brand safety."
+  },
+  "tags": [
+    "awareness",
+    "vi"
+  ]
+}

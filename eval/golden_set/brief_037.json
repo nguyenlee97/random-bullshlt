@@ -1,0 +1,41 @@
+{
+  "id": "brief_037",
+  "lang": "vi",
+  "brief": {
+    "brand": "App học tiếng Nhật Sakura Learn",
+    "objective": "consideration",
+    "kpi": "30.000 lượt cài đặt có mở bài học đầu tiên",
+    "budget": 200,
+    "startDate": "2026-08-15",
+    "endDate": "2026-09-30",
+    "notes": "App học tiếng Nhật cho người mới bắt đầu. Cứ nhắm những ai yêu thích Nhật Bản nói chung là được."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c70f6",
+        "6a2df27adda0ba67f14c718f"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7195",
+        "6a2df27adda0ba67f14c70ab",
+        "6a2df27adda0ba67f14c709f",
+        "6a2df27adda0ba67f14c70b7"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7071"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "'Japanese cuisine' is a stretch proxy for 'yêu thích Nhật Bản nói chung' (food interest != language-learning intent), but it's the only Japan-specific interest in the 71-item catalog (no anime/culture/Japan-general segment exists — verified) so it's kept rather than dropped. Promoted 'Travel' into must_include as a second, broader Japan-affinity proxy. Downgraded 'Digital Activities' out of must_include (too broad for grade-2, per the same reasoning as brief_007) and moved it to acceptable. must_exclude=Real estate kept as a weak generic high-consideration-purchase mismatch."
+  },
+  "tags": [
+    "consideration",
+    "vi",
+    "ambiguous_notes"
+  ]
+}

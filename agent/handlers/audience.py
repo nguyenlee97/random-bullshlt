@@ -231,8 +231,24 @@ async def handle_dmp_recommend(session_id: str) -> dict:
     if not brief.get("brand"):
         return {"recommendations": [], "total_segments": 0, "note": "brief_not_set"}
 
-    # Fetch real DMP segments
-    all_segs = await get_all_segments(limit=200)
+    # ── Phase 2: RAG path (query-rewrite → hybrid retrieve → rerank → LLM
+    # over ~15 candidates). Falls back to the legacy full-dump path on ANY
+    # failure — the Audience step must never break because of RAG infra ⛔.
+    from config import config as _cfg
+    if _cfg.USE_RAG_AUDIENCE:
+        try:
+            from rag.recommend import recommend_rag
+            return await recommend_rag(session_id, brief)
+        except Exception as e:
+            from metrics import RAG_REQUESTS
+            RAG_REQUESTS.labels(outcome="fallback").inc()
+            await log_event(session_id, "error", {
+                "handler": "dmp_recommend", "rag_fallback": str(e)[:150]})
+
+    # ── Legacy path: dump the whole catalog into the prompt ──────────────────
+    # (limit raised 200→400: with 310 live segments the old cap silently
+    # hid a third of the catalog from the LLM)
+    all_segs = await get_all_segments(limit=400)
     await log_event(session_id, "api_call", {"endpoint": "GET /api/dmp/attributes", "count": len(all_segs)})
 
     # Build compact label list for LLM context

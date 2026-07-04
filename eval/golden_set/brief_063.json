@@ -1,0 +1,56 @@
+{
+  "id": "brief_063",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "MilkyStart Formula",
+    "objective": "conversion",
+    "kpi": "10.000 hộp sữa bán ra qua kênh online",
+    "budget": 400,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-20",
+    "notes": "Sữa bột công thức cho trẻ dưới 6 tuổi. Đối tượng mua hàng là mẹ, quảng cáo hướng tới người mẹ chứ không hướng tới trẻ."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c0b",
+        "6a2df27adda0ba67f14c70da"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70d5",
+        "6a2df27adda0ba67f14c7103"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c08"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Fatherhood is a deliberate, notes-driven call (mother-focused messaging), not a generic gender exclude — worth flagging since Fatherhood is not brand-unsafe, just off-brief.",
+    "targeting": {
+      "expected": {
+        "gender": [
+          "Female"
+        ],
+        "parental": [
+          "Have children under age 6"
+        ]
+      },
+      "must_not_set": {
+        "age": [
+          "Under 18"
+        ]
+      },
+      "note": "Buyer is the mother, not the (far too young to target) infant — must_not_set=Under 18 is a hard safety rule for infant/child products, distinct from but analogous to the alcohol case."
+    }
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "targeting_labeled"
+  ]
+}

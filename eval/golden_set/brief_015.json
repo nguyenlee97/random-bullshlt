@@ -1,0 +1,41 @@
+{
+  "id": "brief_015",
+  "lang": "vi",
+  "brief": {
+    "brand": "Anh ngữ TalkFirst",
+    "objective": "consideration",
+    "kpi": "10.000 đăng ký kiểm tra trình độ miễn phí",
+    "budget": 400,
+    "startDate": "2026-09-01",
+    "endDate": "2026-11-15",
+    "notes": "Team ơi, mình note lại một số suy nghĩ sau buổi họp với sếp hôm qua, hơi dài dòng chút nhưng mọi người chịu khó đọc nhé. Ban đầu bên mình định làm campaign cho mùa tựu trường nhưng sau khi xem lại số liệu năm ngoái thì thấy nhóm học sinh cấp hai cấp ba hầu như không convert, phụ huynh mới là người trả tiền mà phụ huynh thì lại không dùng app của mình nhiều, nên năm nay sếp chốt là KHÔNG nhắm học sinh nữa. Đối tượng chính lần này là nhân viên văn phòng khoảng 24 đến 35 tuổi, đang đi làm ở Hồ Chí Minh hoặc Hà Nội, muốn học tiếng Anh để thăng tiến, phỏng vấn công ty nước ngoài, hoặc chuẩn bị khởi nghiệp kinh doanh riêng. Nhóm này thường quan tâm đến các chủ đề phát triển sự nghiệp, kinh doanh, marketing, đầu tư cá nhân. À còn một chuyện nữa là bên sales có xin chạy thêm nhóm giáo viên nhưng mình thấy chưa cần thiết trong đợt này, để đợt sau nhé. Ngân sách thì như trong brief, đừng đề xuất vượt. Về creative thì bên agency đang làm, mọi người không cần lo phần đó. Tóm lại: dân văn phòng 24-35, quan tâm sự nghiệp và kinh doanh, ưu tiên hai thành phố lớn, tuyệt đối không target học sinh."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c706d",
+        "6a2df27adda0ba67f14c7070"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c707f",
+        "6a2df27adda0ba67f14c7083",
+        "6a2df27adda0ba67f14c708b",
+        "6a2df27adda0ba67f14c7196"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c709f"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "GAP, not fixable by relabeling: the brief's central, twice-repeated requirement is excluding students ('KHÔNG nhắm học sinh'), but no student/school/teen segment exists anywhere in the 71-item audience_library.json (verified). must_exclude=Video games is kept as the closest available proxy (skews younger/teen relative to the 24-35 office-worker target) but is a weak stand-in, not a direct encoding. Recommend requesting a student/teen segment be added to the catalog; until then this brief cannot be fully labeled for this constraint."
+  },
+  "tags": [
+    "consideration",
+    "vi",
+    "long_rambling_notes"
+  ]
+}

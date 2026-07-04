@@ -1,0 +1,40 @@
+{
+  "id": "brief_029",
+  "lang": "vi",
+  "brief": {
+    "brand": "Ô tô điện VinFast VF3 bản mới",
+    "objective": "awareness",
+    "kpi": "Reach 14 triệu người 25-38 thành thị",
+    "budget": 1800,
+    "startDate": "2026-08-15",
+    "endDate": "2026-10-31",
+    "notes": "Mọi người xem kỹ giúp em brief này vì chị brand manager dặn đi dặn lại mấy lần rồi. Chuyện là đợt ra mắt phiên bản mới của VF3 lần này công ty muốn đánh mạnh vào nhóm gia đình trẻ ở thành thị, tầm 25 đến 38 tuổi, đang đi xe máy và cân nhắc lên đời chiếc ô tô điện cỡ nhỏ đầu tiên trong đời. Insight chính là chi phí lăn bánh thấp, sạc rẻ hơn đổ xăng, đi trong phố tiện. Hồi đầu năm bên em có chạy thử một đợt nhắm dân chơi xe độ nhưng hiệu quả kém lắm, tỷ lệ chuyển đổi gần như bằng không, nên đợt này bỏ hẳn hướng đó nhé. Ngoài ra chị brand cũng nhắc là tuyệt đối tránh các ngữ cảnh liên quan bia rượu vì dính đến chuyện lái xe, brand safety rất nhạy cảm khoản này. Còn về kênh thì team media sẽ lo phần zone, bên mình chỉ cần chốt audience thôi. À quên, nhóm đang quan tâm vay mua xe trả góp cũng đáng thử vì VF3 có gói trả góp 0 đồng trả trước. Mấy cái số liệu reach kỳ vọng em để trong phần KPI rồi, mọi người cứ bám theo đó mà làm. Tóm lại thứ tự ưu tiên: gia đình trẻ thành thị, người đang đi xe máy muốn lên ô tô điện, và nhóm quan tâm tài chính vay mua xe."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7141",
+        "6a2df27adda0ba67f14c713f"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7144",
+        "6a2df27adda0ba67f14c70d5",
+        "6a2df27adda0ba67f14c7076"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70e2"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Alcoholic beverages correctly encodes the brief's explicit 'tránh ngữ cảnh bia rượu' brand-safety rule — good label, kept. GAP (documented, not fixable): the brief also explicitly rejects 'dân chơi xe độ' (car-tuning/modification enthusiasts) after a failed prior campaign, but no equivalent segment exists in the 71-item catalog — Automobiles/Motorcycles are too broad and would incorrectly exclude legitimate upgrade-minded buyers, so no swap was made."
+  },
+  "tags": [
+    "awareness",
+    "vi",
+    "long_rambling_notes"
+  ]
+}

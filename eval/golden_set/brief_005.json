@@ -1,0 +1,40 @@
+{
+  "id": "brief_005",
+  "lang": "vi",
+  "brief": {
+    "brand": "Cà phê Mơ Phố",
+    "objective": "conversion",
+    "kpi": "600 đơn đặt qua app trong 2 tuần khai trương",
+    "budget": 30,
+    "startDate": "2026-08-15",
+    "endDate": "2026-08-31",
+    "notes": "Quán cà phê specialty mới mở ở Đà Nẵng, ngân sách nhỏ, cần kéo đơn đặt nước qua app trong 2 tuần khai trương, nhắm người mê cà phê và hay ngồi quán."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c70e7",
+        "6a2df27adda0ba67f14c7109"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70eb",
+        "6a2df27adda0ba67f14c7117",
+        "6a2df27adda0ba67f14c70b7"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7068"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Aviation kept: frequent flyers/business travelers are away from home often and less likely to be the hyperlocal repeat customer a small new coffee shop with a tiny budget needs."
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "tiny_budget"
+  ]
+}

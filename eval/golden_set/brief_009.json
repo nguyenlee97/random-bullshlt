@@ -1,0 +1,43 @@
+{
+  "id": "brief_009",
+  "lang": "vi",
+  "brief": {
+    "brand": "Thời trang Én Vàng",
+    "objective": "conversion",
+    "kpi": "25.000 đơn hàng trong 1 tháng (CPA ≤ 2.400đ)",
+    "budget": 60,
+    "startDate": "2026-10-01",
+    "endDate": "2026-10-31",
+    "notes": "Shop thời trang nữ online, đẩy bộ sưu tập thu đông. Nhắm nữ 18-30 hay mua quần áo online, thích săn mã giảm giá."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7154",
+        "6a2df27adda0ba67f14c715f",
+        "6a2df27adda0ba67f14c715a"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7150",
+        "6a2df27adda0ba67f14c715c",
+        "6a2df27adda0ba67f14c7149"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7152"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [
+      "kpi_unrealistic_for_budget"
+    ],
+    "labeler_note": "must_exclude=Men's clothing is a clean, correct gender-mismatch exclude. No changes needed."
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "kpi_budget_conflict"
+  ]
+}

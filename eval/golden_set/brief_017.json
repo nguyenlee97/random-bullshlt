@@ -1,0 +1,40 @@
+{
+  "id": "brief_017",
+  "lang": "en",
+  "brief": {
+    "brand": "Neon X5 Smartphone",
+    "objective": "awareness",
+    "kpi": "20M reach, 65% VTR on hero video",
+    "budget": 2000,
+    "startDate": "2026-10-10",
+    "endDate": "2026-11-20",
+    "notes": "Flagship launch. Camera-first positioning for Gen Z creators: 200MP night portrait, AI editing. Target young mobile-first users who shoot and share a lot."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c718d",
+        "6a2df27adda0ba67f14c7117"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c709f",
+        "6a2df27adda0ba67f14c7083",
+        "6a2df27adda0ba67f14c715f",
+        "6a2df27adda0ba67f14c70b7"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7071"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Real estate kept: real-estate interest skews toward older homeowners/investors, a clear age mismatch against the Gen Z creator target for this flagship launch."
+  },
+  "tags": [
+    "awareness",
+    "en"
+  ]
+}

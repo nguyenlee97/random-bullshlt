@@ -1,0 +1,40 @@
+{
+  "id": "brief_073",
+  "lang": "en",
+  "schema_version": 2,
+  "brief": {
+    "brand": "AeroTech MRO Supply",
+    "objective": "awareness",
+    "kpi": "Reach 40,000 aviation maintenance procurement managers",
+    "budget": 260,
+    "startDate": "2026-09-01",
+    "endDate": "2026-11-01",
+    "notes": "B2B supplier of aircraft maintenance, repair and overhaul (MRO) parts. Targeting airline procurement managers and MRO engineers — this is an industrial B2B audience, not leisure flyers."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7068",
+        "6a48cc2381574c48dbd22bb5"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22bb2",
+        "6a48cc2381574c48dbd22bb7"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7132"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Near-miss trap named directly after the guide's own example: 'Aviation (air travel)' (the B2B industry interest, correct) vs. 'Air travel (transportation)' (the consumer leisure-travel interest, tempting keyword match but the wrong audience for an MRO parts supplier) -> must_exclude."
+  },
+  "tags": [
+    "awareness",
+    "en",
+    "near_miss"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "brief_035",
+  "lang": "vi",
+  "brief": {
+    "brand": "MangoAds Academy",
+    "objective": "conversion",
+    "kpi": "2.500 học viên đăng ký khóa Digital Marketing",
+    "budget": 320,
+    "startDate": "2026-09-05",
+    "endDate": "2026-10-20",
+    "notes": "Khóa học digital marketing thực chiến cho người đi làm và chủ shop online muốn tự chạy quảng cáo, nhắm người quan tâm marketing và kinh doanh online."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c707f",
+        "6a2df27adda0ba67f14c7070"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c706d",
+        "6a2df27adda0ba67f14c7196",
+        "6a2df27adda0ba67f14c7199",
+        "6a2df27adda0ba67f14c7083"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c70d3"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "'Pets' had no discernible connection to a digital marketing course and was dropped — swapped to 'TV reality shows': passive mass-entertainment consumption is a weak mismatch against an audience actively investing in professional skill-building. Acknowledged as still weak; no strong brand-safety/demographic signal exists in the catalog for this brief."
+  },
+  "tags": [
+    "conversion",
+    "vi"
+  ]
+}

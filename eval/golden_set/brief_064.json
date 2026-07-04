@@ -1,0 +1,61 @@
+{
+  "id": "brief_064",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Emerald Hills Golf Club",
+    "objective": "retention",
+    "kpi": "65% hội viên gia hạn thẻ năm sau",
+    "budget": 220,
+    "startDate": "2026-09-01",
+    "endDate": "2027-03-01",
+    "notes": "Câu lạc bộ golf cao cấp, chỉ có sân tại TP.HCM và Hà Nội. Hội viên hiện tại chủ yếu là nam, thu nhập rất cao. Chương trình gia hạn thẻ hội viên."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7171",
+        "6a2df27adda0ba67f14c716a"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22c70",
+        "6a2df27adda0ba67f14c708b"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c80"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Geo narrowed to the two actual course cities and gender skewed male per the described membership base — a real conflict vs. a naive nationwide/balanced-gender default.",
+    "targeting": {
+      "expected": {
+        "geo": [
+          "TP.HCM",
+          "Hà Nội"
+        ],
+        "gender": [
+          "Male"
+        ],
+        "income": [
+          "Top 5%"
+        ]
+      },
+      "must_not_set": {
+        "geo": [
+          "Đà Nẵng",
+          "Cần Thơ"
+        ]
+      },
+      "note": "Only 2 courses exist (HCM, Hanoi); notes describe the membership base as predominantly male and very high income — narrower than a generic 'golf lovers nationwide' default."
+    }
+  },
+  "tags": [
+    "retention",
+    "vi",
+    "targeting_labeled"
+  ]
+}

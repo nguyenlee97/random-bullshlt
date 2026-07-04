@@ -1,0 +1,41 @@
+{
+  "id": "brief_022",
+  "lang": "en",
+  "brief": {
+    "brand": "Zen Retreat Da Nang",
+    "objective": "consideration",
+    "kpi": "40,000 landing page visits, 2,000 brochure downloads",
+    "budget": 650,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-31",
+    "notes": "We want people who need to slow down and take care of themselves. You know, the tired ones. Figure out the details."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c714e",
+        "6a2df27adda0ba67f14c70e1",
+        "6a2df27adda0ba67f14c7137"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c718f",
+        "6a2df27adda0ba67f14c70de",
+        "6a2df27adda0ba67f14c7103"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c715c"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Coupons kept: deal-hunting behavior conflicts with a self-care/wellness-retreat positioning; inferred under the ambiguous_notes tag, same logic as brief_019."
+  },
+  "tags": [
+    "consideration",
+    "en",
+    "ambiguous_notes"
+  ]
+}

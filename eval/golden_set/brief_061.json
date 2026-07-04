@@ -1,0 +1,60 @@
+{
+  "id": "brief_061",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "The Riviera Residences",
+    "objective": "conversion",
+    "kpi": "150 lượt đặt cọc giữ chỗ căn hộ",
+    "budget": 1200,
+    "startDate": "2026-09-01",
+    "endDate": "2026-12-15",
+    "notes": "Căn hộ hạng sang duy nhất tại TP.HCM, chỉ mở bán và quảng cáo trong phạm vi TP.HCM, không chạy các tỉnh/thành khác. Nhắm khách đã kết hôn, thu nhập top 5%."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7071",
+        "6a2df27adda0ba67f14c708b"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70d5",
+        "6a2df27adda0ba67f14c711d"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c715f"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Geo restricted to a single city is the conflicting call here — a nationwide-default agent would be visibly wrong for a single-tower launch.",
+    "targeting": {
+      "expected": {
+        "geo": [
+          "TP.HCM"
+        ],
+        "income": [
+          "Top 5%"
+        ],
+        "marital": [
+          "Married"
+        ]
+      },
+      "must_not_set": {
+        "geo": [
+          "Hà Nội",
+          "Đà Nẵng"
+        ]
+      },
+      "note": "Single-project HCM-only launch; notes are explicit that other cities should NOT be included, unlike a typical nationwide real-estate push."
+    }
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "targeting_labeled"
+  ]
+}

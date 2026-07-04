@@ -274,6 +274,17 @@ async def _creative_match(setup: SetupData, session_id: str) -> AgentResponse:
 
     zone_map = await get_zone_map()
     selected_zones = [zone_map[zid] for zid in zone_ids if zid in zone_map]
+
+    # Phase 3: measured creative facts beat filename heuristics when available
+    from config import config as _cfg
+    if _cfg.USE_VLM_CREATIVE:
+        try:
+            from creative_intel.service import get_intel
+            from tools.creative_match import enrich_files_with_intel
+            files = enrich_files_with_intel(files, await get_intel(session_id))
+        except Exception:
+            pass  # enrichment is advisory
+
     result = auto_assign(selected_zones, files)
 
     await update_form_state(session_id, "assignments", result["assignments"])
@@ -391,7 +402,26 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
         "targeting": final_targeting,
         "dmp": {"include": dmp_include, "exclude": []},
         "freqCap": "3",
+        # Phase 0 idempotency: frontend-provided key, or generated here as fallback
+        # (fallback still protects against the create_order internal retry).
+        "idempotencyKey": setup.idempotencyKey or f"agent_{session_id}_{__import__('uuid').uuid4().hex[:12]}",
     }
+
+    # ── Phase 0 order guard ⛔ — deterministic server-side validation.
+    # No payload reaches POST /api/orders without passing this, regardless of
+    # whether it came from the form flow or (Phase 1) the agentic loop.
+    from validation.order_guard import OrderValidationError, guard_order
+    from metrics import ORDERS_CREATED, ORDERS_REJECTED
+    try:
+        await guard_order(payload, session)
+    except OrderValidationError as ve:
+        ORDERS_REJECTED.labels(reason=ve.reasons[0][:40] if ve.reasons else "unknown").inc()
+        await log_event(session_id, "order_rejected", {"reasons": ve.reasons})
+        return AgentResponse(
+            text=ve.as_user_message(),
+            blocks=[{"type": "info", "text": "Anh/Chị kiểm tra lại các bước trước rồi thử lại nhé."}],
+            meta=ResponseMeta(tool="order_guard", model="none", step=3),
+        )
 
     await log_event(session_id, "api_call", {"endpoint": "POST /api/orders", "placements": zone_ids})
 
@@ -412,6 +442,7 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
         )
 
     order_id = result.get("id", "—")
+    ORDERS_CREATED.inc()
     await update_order_ids(session_id, [order_id])
 
     api_warnings = result.get("warnings", [])

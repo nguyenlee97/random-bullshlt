@@ -1,0 +1,60 @@
+{
+  "id": "brief_059",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Trường Mầm non Quốc tế Sunrise Kids",
+    "objective": "consideration",
+    "kpi": "300 lượt đăng ký tham quan trường",
+    "budget": 280,
+    "startDate": "2026-08-15",
+    "endDate": "2026-10-30",
+    "notes": "Trường mầm non quốc tế học phí cao, chỉ có 1 campus tại TP.HCM. Nhắm cha mẹ có con dưới 6 tuổi, thu nhập cao. Quảng cáo hướng tới phụ huynh, không hướng tới trẻ nhỏ."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c70da",
+        "6a48cc2381574c48dbd22c0b"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70d5",
+        "6a48cc2381574c48dbd22c08"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22bb6"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Geo=HCM-only is the conflicting call (single campus); must_not_set=Under 18 reflects that the buyer/decision-maker is the parent, not the (legally too young to be targeted) child.",
+    "targeting": {
+      "expected": {
+        "geo": [
+          "TP.HCM"
+        ],
+        "parental": [
+          "Have children under age 6"
+        ],
+        "income": [
+          "Top 5%",
+          "Top 5-10%"
+        ]
+      },
+      "must_not_set": {
+        "age": [
+          "Under 18"
+        ]
+      },
+      "note": "Single-campus HCM-only school explicitly conflicts with a nationwide default; the audience is parents, so age must never be set to the child's own bracket."
+    }
+  },
+  "tags": [
+    "consideration",
+    "vi",
+    "targeting_labeled"
+  ]
+}

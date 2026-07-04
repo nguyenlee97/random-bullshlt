@@ -1,0 +1,40 @@
+{
+  "id": "brief_071",
+  "lang": "en",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Voltway Family EV",
+    "objective": "consideration",
+    "kpi": "3,000 test-drive bookings",
+    "budget": 480,
+    "startDate": "2026-09-01",
+    "endDate": "2026-11-01",
+    "notes": "Family-sized electric SUV. Primary target: parents with young children who need space and safety. Secondary, lower-priority target: single tech-forward professionals drawn to the EV/green-tech angle rather than the family use-case."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c70da",
+        "6a48cc2381574c48dbd22c5e"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7141",
+        "6a48cc2381574c48dbd22c5b"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c5d"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Electric vehicle (the green-tech/single-professional angle) is kept to acceptable only, not must_include, since the brief names it explicitly as the lower-priority secondary audience."
+  },
+  "tags": [
+    "consideration",
+    "en",
+    "primary_secondary"
+  ]
+}

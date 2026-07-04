@@ -150,7 +150,7 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
       </div>
 
       {/* Recommended zones */}
-      <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-orange-50/60 overflow-hidden">
+      <div data-demo="reco-zones-section" className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-orange-50/60 overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-amber-200 bg-amber-100/60">
           <Sparkles className="w-4 h-4 text-amber-600" />
           <span className="text-xs font-bold text-amber-700">Gợi ý theo brief · {brief?.objective}</span>
@@ -170,7 +170,7 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
       </div>
 
       {/* Expand full list */}
-      <Button variant="outline" size="sm" onClick={() => setExpanded(e => !e)} className="w-full gap-2 text-xs h-9">
+      <Button data-demo="expand-zones-btn" variant="outline" size="sm" onClick={() => setExpanded(e => !e)} className="w-full gap-2 text-xs h-9">
         {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         {expanded ? 'Thu gọn' : `Xem thêm ${otherZones.length} zones khác`}
       </Button>

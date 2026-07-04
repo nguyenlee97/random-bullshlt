@@ -1,0 +1,39 @@
+{
+  "id": "brief_026",
+  "lang": "vi",
+  "brief": {
+    "brand": "Nội thất Nhà Xinh Studio",
+    "objective": "consideration",
+    "kpi": "25.000 lượt xem catalogue 3D, 1.500 lượt hẹn tư vấn",
+    "budget": 550,
+    "startDate": "2026-09-01",
+    "endDate": "2026-11-30",
+    "notes": "Bộ sưu tập nội thất mùa cưới, nhắm cặp đôi sắp cưới và gia đình trẻ vừa nhận nhà mới, quan tâm thiết kế nội thất trọn gói."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c711d",
+        "6a2df27adda0ba67f14c7071"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70db",
+        "6a2df27adda0ba67f14c70d5",
+        "6a2df27adda0ba67f14c715f"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7164"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Hip hop music had no discernible connection to a furniture brand and was the weakest, least-defensible exclude in the set — swapped to 'Camping (outdoors activities)': a mobile/outdoor-lifestyle interest is a (still weak, but at least coherent) mismatch against buyers furnishing a permanent home."
+  },
+  "tags": [
+    "consideration",
+    "vi"
+  ]
+}

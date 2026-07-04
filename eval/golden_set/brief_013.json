@@ -1,0 +1,40 @@
+{
+  "id": "brief_013",
+  "lang": "vi",
+  "brief": {
+    "brand": "Ngân hàng số TimoPlus",
+    "objective": "retention",
+    "kpi": "Tăng MAU active thêm 10% trong Q4",
+    "budget": 300,
+    "startDate": "2026-10-01",
+    "endDate": "2026-12-20",
+    "notes": ""
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7076",
+        "6a2df27adda0ba67f14c7088"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c708b",
+        "6a2df27adda0ba67f14c715f",
+        "6a2df27adda0ba67f14c718d"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c708f"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "empty_notes brief — must_exclude=Board games is a low-confidence generic default; no brief-specific signal is available to justify a stronger pick. Flagged rather than swapped, since any alternative would be equally speculative given zero information."
+  },
+  "tags": [
+    "retention",
+    "vi",
+    "empty_notes"
+  ]
+}

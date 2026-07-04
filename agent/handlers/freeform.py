@@ -323,10 +323,10 @@ def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int], curre
     lines.append("  KHÔNG chat hỏi lại ý kiến — gọi update_workspace trực tiếp rồi hỏi xác nhận.")
     lines.append("")
     lines.append("⚠️ QUAN TRỌNG — STEP ADVANCE:")
-    lines.append("- Để chuyển bước (ví dụ từ Audience sang Creative), HỀNH ĐỘNG DUY NHẤT là gọi update_workspace với đúng field.")
+    lines.append("- Để chuyển bước (ví dụ từ Audience sang Creative), HÀNH ĐỘNG DUY NHẤT là gọi update_workspace với đúng field.")
     lines.append("- Chỉ trả lời text mà KHÔNG gọi update_workspace sẽ KHÔNG chuyển được bước — hệ thống frontend chỉ lắng nghe update_workspace.")
-    lines.append("- Khi user duyệt/xác nhận/đồng ý với segment ở bước 1: GỎi update_workspace(field='segment', value=CURRENT_SEGMENT_DATA) ngay.")
-    lines.append("- Khi user duyệt/xác nhận/đồng ý với brief ở bước 0: GỎi update_workspace(field='brief', value=<brief hiện tại>) ngay.")
+    lines.append("- Khi user duyệt/xác nhận/đồng ý với segment ở bước 1: Gọi update_workspace(field='segment', value=CURRENT_SEGMENT_DATA) ngay.")
+    lines.append("- Khi user duyệt/xác nhận/đồng ý với brief ở bước 0: Gọi update_workspace(field='brief', value=<brief hiện tại>) ngay.")
     return "\n".join(lines)
 
 
@@ -369,7 +369,7 @@ async def handle_freeform(
     is_pure_step_nav = len(msg_lower) <= 80 and any(kw in msg_lower for kw in _NEXT_STEP_TRIGGERS)
     if is_pure_step_nav:
         _STEP_NEXT_MSG = [
-            "Anh/Chị đấn nút **Đồng ý & Tiếp tục** ở cuối panel phải để em chuyển sang bước tiếp theo nhé! 👉",
+            "Anh/Chị bấm nút **Đồng ý & Tiếp tục** ở cuối panel phải để em chuyển sang bước tiếp theo nhé! 👉",
             "Tiếp tục bằng cách bấm **Đồng ý & Tiếp tục** ở cuối workspace bên phải à anh/chị.",
         ]
         reply_text = _STEP_NEXT_MSG[step % len(_STEP_NEXT_MSG)] if step >= 0 else _STEP_NEXT_MSG[0]
@@ -662,6 +662,8 @@ async def handle_freeform(
 
             # Attempt 2: force text — do NOT pass tools so model can't call them again
             if not reply:
+                from metrics import FALLBACK_LEVEL
+                FALLBACK_LEVEL.labels(level="2").inc()
                 await alog(session_id, "fallback", {"attempt": 2, "tool": used_tool, "reason": "attempt1_empty"})
                 t2 = time.time()
                 forced = force_text_completion(messages=messages)  # no tools!
@@ -679,6 +681,8 @@ async def handle_freeform(
                     used_tool,
                     f"Em đã xử lý xong ({used_tool}). Anh/Chị hỏi thêm hoặc xem thông tin ở panel phải nhé!",
                 )
+                from metrics import FALLBACK_LEVEL as _FL3
+                _FL3.labels(level="3").inc()
                 await alog(session_id, "fallback", {"attempt": 3, "tool": used_tool, "using": "hardcoded", "reply": reply})
 
         else:

@@ -1,0 +1,40 @@
+{
+  "id": "brief_028",
+  "lang": "vi",
+  "brief": {
+    "brand": "VietFood - chiến dịch win-back",
+    "objective": "retention",
+    "kpi": "80.000 khách hàng cũ đặt lại đơn trong tháng 10",
+    "budget": 300,
+    "startDate": "2026-10-01",
+    "endDate": "2026-10-31",
+    "notes": "Chiến dịch kéo khách hàng đã 90 ngày không đặt món quay lại bằng voucher freeship. Nhắm nhóm hay đặt đồ ăn và săn ưu đãi."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7102",
+        "6a2df27adda0ba67f14c7108",
+        "6a2df27adda0ba67f14c715c"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c7109",
+        "6a2df27adda0ba67f14c715f",
+        "6a2df27adda0ba67f14c70ec"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7068"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Aviation kept: same frequent-traveler-vs-home-based-repeat-customer mismatch as brief_012."
+  },
+  "tags": [
+    "retention",
+    "vi"
+  ]
+}

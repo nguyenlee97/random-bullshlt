@@ -1,0 +1,40 @@
+{
+  "id": "brief_012",
+  "lang": "en",
+  "brief": {
+    "brand": "MonNow Food Delivery",
+    "objective": "conversion",
+    "kpi": "30,000 first orders with voucher redemption",
+    "budget": 700,
+    "startDate": "2026-08-05",
+    "endDate": "2026-09-20",
+    "notes": "New-user acquisition push in HCMC and Hanoi: 50% off first order. Target heavy food-delivery users and deal hunters aged 18-34."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a2df27adda0ba67f14c7102",
+        "6a2df27adda0ba67f14c7108",
+        "6a2df27adda0ba67f14c715c"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c715f",
+        "6a2df27adda0ba67f14c70ec",
+        "6a2df27adda0ba67f14c7109"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7068"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "must_exclude=Aviation kept: frequent flyers/business travelers are away from their delivery address often, a mismatch against a food-delivery first-order push that depends on being home to order."
+  },
+  "tags": [
+    "conversion",
+    "en"
+  ]
+}

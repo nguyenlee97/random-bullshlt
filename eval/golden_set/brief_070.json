@@ -1,0 +1,40 @@
+{
+  "id": "brief_070",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "Little Bloom Kids Wear",
+    "objective": "conversion",
+    "kpi": "6.000 đơn hàng quần áo trẻ em",
+    "budget": 220,
+    "startDate": "2026-09-05",
+    "endDate": "2026-10-25",
+    "notes": "Thời trang trẻ em 1-8 tuổi. Người mua chính và đối tượng ưu tiên số 1 là các mẹ. Các ông bố cũng là người mua nhưng chiếm tỉ trọng nhỏ hơn nhiều, coi là đối tượng phụ."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c0b",
+        "6a48cc2381574c48dbd22c64"
+      ],
+      "acceptable": [
+        "6a48cc2381574c48dbd22c08",
+        "6a2df27adda0ba67f14c70d5"
+      ],
+      "must_exclude": [
+        "6a2df27adda0ba67f14c7152"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Motherhood is must_include (stated primary buyer); Fatherhood is acceptable, not must_exclude, because fathers ARE a real (if secondary) buyer per the notes — excluding them outright would be an overcorrection."
+  },
+  "tags": [
+    "conversion",
+    "vi",
+    "primary_secondary"
+  ]
+}

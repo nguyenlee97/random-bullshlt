@@ -1,0 +1,40 @@
+{
+  "id": "brief_068",
+  "lang": "vi",
+  "schema_version": 2,
+  "brief": {
+    "brand": "IronCore Fitness",
+    "objective": "consideration",
+    "kpi": "4.000 lượt đăng ký tập thử",
+    "budget": 260,
+    "startDate": "2026-09-01",
+    "endDate": "2026-10-20",
+    "notes": "Chuỗi gym tập trung vào tập luyện nặng/gymer nghiêm túc là đối tượng chính. Ngoài ra có nhóm phụ là người mới bắt đầu tập nhẹ để giảm cân — ưu tiên thấp hơn, chỉ nên chiếm phần nhỏ ngân sách."
+  },
+  "labels": {
+    "audience": {
+      "must_include": [
+        "6a48cc2381574c48dbd22c0e",
+        "6a48cc2381574c48dbd22c0c"
+      ],
+      "acceptable": [
+        "6a2df27adda0ba67f14c70e1",
+        "6a2df27adda0ba67f14c70de"
+      ],
+      "must_exclude": [
+        "6a48cc2381574c48dbd22c80"
+      ]
+    },
+    "zones": {
+      "expected_top": [],
+      "forbidden": []
+    },
+    "expected_warnings": [],
+    "labeler_note": "Notes explicitly rank two audiences: serious lifters (primary, must_include) vs. casual weight-loss beginners (secondary, acceptable only) — tests that ranking is respected rather than treating both as equal must_includes."
+  },
+  "tags": [
+    "consideration",
+    "vi",
+    "primary_secondary"
+  ]
+}
