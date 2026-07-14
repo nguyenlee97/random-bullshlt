@@ -38,15 +38,23 @@ Required before claiming creative intelligence:
 
 Failure response: keep VLM advisory and do not market it as a safety guard.
 
-## Gate 4 — Agent candidate
+## Gate 4 — Copilot and Autopilot candidate
 
 Required before LangGraph becomes non-optional:
 
-- Multi-turn parity suite passes.
-- Checkpoint restart test passes.
-- Auto mode cannot create an order without confirmation.
+- At least 60 Vietnamese multi-turn Copilot scenarios pass.
+- The opening selector reliably creates either a Guided workspace or an Autopilot workspace, and Guided mode never starts a run implicitly.
+- Every chat mutation uses a validated proposal or an explicitly allowed policy action.
+- Workspace revision conflicts reject stale writes and return a current diff.
+- At least 30 non-linear scenarios produce the correct invalidation and reuse set.
+- Durable Autopilot task and checkpoint restart tests pass.
+- A mid-run user edit pauses, replans, and rejects late stale task output.
+- Autopilot cannot create an order without explicit final launch approval.
+- Duplicate launch approval creates exactly one order.
+- Creative `needs_review` and safety overrides always pause for an authenticated human.
 - Tool failures produce useful degraded responses.
-- No stale response or cross-session state leakage in soak testing.
+- Plan, progress, evidence, blockers, and approval requests are visible in the UI.
+- No stale response, stale artifact commit, unauthorized mutation, or cross-session state leakage occurs in soak testing.
 
 Failure response: flip `USE_LANGGRAPH_FREEFORM=false` and ship deterministic/freeform legacy path.
 

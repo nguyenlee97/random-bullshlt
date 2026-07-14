@@ -48,7 +48,8 @@ React workspace + chat
         v
 FastAPI agent gateway
   |-- deterministic form handlers
-  |-- LangGraph freeform/auto-mode
+  |-- transactional campaign workspace + dependency graph
+  |-- LangGraph Copilot + durable Autopilot runs
   |-- audience RAG orchestrator
   |-- creative analysis orchestrator
   |-- order guard + idempotency
@@ -65,7 +66,7 @@ FastAPI agent gateway
         +--> Langfuse + Prometheus/Grafana
 ```
 
-The architecture intentionally keeps the deterministic campaign workflow. LangGraph augments freeform and multi-step reasoning; it does not replace every handler.
+The architecture intentionally keeps deterministic validators, catalog tools, and order safety. LangGraph coordinates Copilot and multi-step Autopilot behavior around those proven capabilities; it does not replace them with prompt-only logic. The detailed interaction and state design is in `04-agentic-campaign-autopilot.md`.
 
 ## 4. Recommended timeline
 
@@ -77,7 +78,7 @@ The architecture intentionally keeps the deterministic campaign workflow. LangGr
 | 2 | Core-flow stabilization | Full local campaign succeeds repeatedly with automated smoke evidence |
 | 3 | Audience intelligence | RAG + reranker enabled and measurably better than prompt stuffing |
 | 4 | Creative intelligence | VLM runs before assignment/order and enforces review decisions |
-| 5 | Agent, security, and release automation | LangGraph stable; CI, auth, redaction, and failover in place |
+| 5 | Copilot, Autopilot, security, and release automation | Transactional workspace, non-linear recovery, durable agent runs, CI, auth, redaction, and failover |
 | 6 | New-hackathon adaptation and demo hardening | Theme-specific hero feature plus reliable showcase build |
 
 ### Compressed three-week plan
@@ -86,7 +87,7 @@ The architecture intentionally keeps the deterministic campaign workflow. LangGr
 - Week 2: Milestones 2 and 3.
 - Week 3: milestone 4 minimum security subset, one hero feature, and demo hardening.
 
-If time becomes tight, cut auto-mode sophistication, self-hosted Langfuse, Kubernetes, Databricks, and multiple hero features. Do not cut order safety, RAG evaluation, VLM gating, smoke tests, or rollback readiness.
+If time becomes tight, cut parallel Autopilot execution, self-hosted Langfuse, Kubernetes, Databricks, and multiple hero features. Keep a sequential order-ready-draft Autopilot. Do not cut transactional workspace safety, final launch approval, order safety, RAG evaluation, VLM gating, smoke tests, or rollback readiness.
 
 ## 5. Milestones
 
@@ -210,18 +211,33 @@ Definition of done:
 - The UI visibly explains why a file was approved or needs review.
 - A 20-image fixture set passes deterministic and VLM regression tests.
 
-## M4 — LangGraph stabilization, security, and release automation
+## M4 — Reliable Copilot, non-linear workspace, and Campaign Autopilot
 
-**Goal:** make the upgraded agent dependable enough to become the default release.
+**Goal:** make chat a safe control surface for the workspace and let one brief drive a durable, inspectable, human-gated campaign run.
 
-LangGraph work:
+Workspace and freeform foundation:
 
-- Restore all async test dependencies and run the six parity/regression tests.
-- Expand parity coverage to at least 30 multi-turn scenarios.
-- Add tests for pending proposals, negated confirmation, partial reset, restart, tool failure, token exhaustion, and stale checkpoints.
-- Keep auto-mode human-gated.
-- Persist every user-visible proactive message to history.
-- Decide whether legacy freeform remains a feature-flag rollback or is removed after a stable release.
+- Make a versioned MongoDB campaign workspace the source of truth instead of splitting authority between React, session form state, and graph checkpoints.
+- Replace unrestricted chat writes with typed proposals, domain validation, proposal IDs, approval records, and atomic revision checks.
+- Add dependency-aware invalidation so users can work non-linearly and recompute only affected artifacts.
+- Persist every visible message, proactive event, proposal, decision, and task result.
+- Expand freeform coverage to at least 60 Vietnamese multi-turn scenarios and 30 non-linear workflow scenarios.
+- Retain keyword intercepts only as unambiguous fast paths; structured intent and proposal identity govern mutations.
+
+Campaign Autopilot:
+
+- Add an opening mode selector before campaign work begins: Traditional Guided Workflow or Campaign Autopilot.
+- Preserve the existing step-by-step experience as Guided Workflow, with reliable Copilot chat available inside it.
+- Give Autopilot a separate brief-first intake and explicit start action; phrase triggers may remain as convenience aliases, not the only entry point.
+- Keep experience mode separate from the Autopilot approval policy: first choose the workflow, then choose how much reversible work may be auto-approved.
+- Convert Auto mode from an ephemeral summary into durable run/task records with plan revisions, worker leases, pause/resume/cancel, bounded retries, and restart recovery.
+- Support three approval policies: review every stage, review critical stages, and auto-build draft.
+- Run brief validation, strategy, RAG audience, targeting, creative analysis, placement ranking, assignment, forecast, order draft, guard, final approval, idempotent creation, verification, and report preparation.
+- Stream plan and task progress to the UI and expose evidence for each decision.
+- Replan after mid-run edits, reuse unaffected artifacts, and reject results computed from stale workspace revisions.
+- Never let policy auto-approve a creative safety override or final order launch.
+
+Detailed implementation slices, schemas, invariants, and eval targets are in `04-agentic-campaign-autopilot.md`.
 
 Security/reliability minimum:
 
@@ -244,6 +260,10 @@ Release automation:
 
 Definition of done:
 
+- Chat can safely inspect and propose changes to every supported campaign artifact with zero unauthorized or stale mutations in the regression suite.
+- Thirty non-linear scenarios preserve unaffected work and invalidate every affected artifact correctly.
+- A one-brief Autopilot run can survive restart, reach an order-ready draft, pause for final approval, and create exactly one order.
+- The UI shows plan, progress, evidence, review requests, blocked reasons, and replan impact.
 - CI passes on a clean clone.
 - No static credential is present in the browser bundle.
 - A red-team report and load-test report exist.
@@ -252,6 +272,8 @@ Definition of done:
 ## M5 — Next-hackathon product enhancement
 
 **Goal:** add one memorable capability that demonstrates business value, not a pile of disconnected AI features.
+
+Campaign Autopilot is the core interaction model delivered in M4, not the M5 hero feature. The selected hero feature should appear as a high-value capability or artifact inside an Autopilot run.
 
 Select exactly one primary hero feature after the new hackathon theme is known:
 
