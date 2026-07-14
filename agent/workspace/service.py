@@ -344,6 +344,39 @@ async def apply_mutation(
                 raw["applied_mutations"] + [{"key": key, "result": result}]
             )[-200:]
 
+    # Any still-pending proposal based on an older revision can no longer be
+    # approved safely. Remove it from normal confirmation routing while keeping
+    # the record for audit and explicit stale-click errors.
+    superseded_at = _now()
+    if await _ensure_store():
+        try:
+            await _proposals.update_many(
+                {
+                    "session_id": session_id,
+                    "status": "pending",
+                    "base_revision": {"$lt": result["workspace_revision"]},
+                },
+                {"$set": {
+                    "status": "superseded",
+                    "superseded_by_revision": result["workspace_revision"],
+                    "updated_at": superseded_at,
+                }},
+            )
+        except Exception:
+            pass
+    else:
+        for proposal in _mem_proposals.values():
+            if (
+                proposal.get("session_id") == session_id
+                and proposal.get("status") == "pending"
+                and proposal.get("base_revision", -1) < result["workspace_revision"]
+            ):
+                proposal.update(
+                    status="superseded",
+                    superseded_by_revision=result["workspace_revision"],
+                    updated_at=superseded_at,
+                )
+
     # Compatibility mirror. Canonical state has already committed atomically.
     await update_form_state(session_id, root, committed_value, sync_workspace=False)
     return result
@@ -420,6 +453,31 @@ async def _get_proposal(proposal_id: str) -> dict | None:
     return _mem_proposals.get(proposal_id)
 
 
+async def list_pending_proposals(session_id: str) -> list[dict]:
+    """Return every durable pending proposal for explicit confirmation routing."""
+    if await _ensure_store():
+        cursor = _proposals.find(
+            {"session_id": session_id, "status": "pending"}
+        ).sort("created_at", 1)
+        docs = await cursor.to_list(length=100)
+    else:
+        docs = sorted(
+            (
+                proposal for proposal in _mem_proposals.values()
+                if proposal.get("session_id") == session_id
+                and proposal.get("status") == "pending"
+            ),
+            key=lambda proposal: proposal.get("created_at") or _now(),
+        )
+    results = []
+    for doc in docs:
+        item = deepcopy(doc)
+        item["proposal_id"] = item.get("proposal_id") or item.get("_id")
+        item.pop("_id", None)
+        results.append(item)
+    return results
+
+
 async def approve_proposal(proposal_id: str, *, actor: str) -> dict:
     proposal = await _get_proposal(proposal_id)
     if not proposal:
@@ -443,7 +501,11 @@ async def approve_proposal(proposal_id: str, *, actor: str) -> dict:
         )
     else:
         proposal.update(status="approved", approved_by=actor, result=result, updated_at=_now())
-    return result
+    return {
+        **result,
+        "proposal_id": proposal_id,
+        "session_id": proposal["session_id"],
+    }
 
 
 async def reject_proposal(proposal_id: str, *, actor: str, reason: str) -> dict:
@@ -458,4 +520,10 @@ async def reject_proposal(proposal_id: str, *, actor: str, reason: str) -> dict:
         await _proposals.update_one({"_id": proposal_id}, {"$set": update})
     else:
         proposal.update(update)
-    return {"ok": True, "proposal_id": proposal_id, **update}
+    return {
+        "ok": True,
+        "proposal_id": proposal_id,
+        "session_id": proposal["session_id"],
+        "field": proposal["field"],
+        **update,
+    }

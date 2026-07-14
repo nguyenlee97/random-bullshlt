@@ -285,15 +285,20 @@ async def workspace_get(session_id: str = "default"):
 
 @agent_router.post("/workspace/proposals")
 async def workspace_create_proposal(request: _WorkspaceProposalRequest):
-    from workspace.service import WorkspaceConflict, create_proposal
+    from workspace.intent import resolve_legacy_update
+    from workspace.service import WorkspaceConflict, create_proposal, get_workspace
     try:
+        workspace = await get_workspace(request.session_id)
+        field, value, reason = await resolve_legacy_update(
+            request.field, request.value, workspace, request.reason
+        )
         return await create_proposal(
             request.session_id,
-            request.field,
-            request.value,
+            field,
+            value,
             base_revision=request.base_revision,
             actor=request.actor,
-            reason=request.reason,
+            reason=reason,
         )
     except WorkspaceConflict as exc:
         raise HTTPException(status_code=409, detail={
@@ -310,7 +315,21 @@ async def workspace_create_proposal(request: _WorkspaceProposalRequest):
 async def workspace_approve_proposal(proposal_id: str, request: _ProposalDecisionRequest):
     from workspace.service import WorkspaceConflict, approve_proposal
     try:
-        return await approve_proposal(proposal_id, actor=request.actor)
+        result = await approve_proposal(proposal_id, actor=request.actor)
+        from session import clear_pending_proposal, get_pending_proposal
+        pending = await get_pending_proposal(result.get("session_id", "")) if result.get("session_id") else None
+        if pending and pending.get("proposal_id") == proposal_id:
+            await clear_pending_proposal(result["session_id"])
+        from session import add_message, log_event
+        await add_message(
+            result["session_id"], "assistant",
+            f"[Hệ thống] Người dùng đã duyệt đề xuất `{proposal_id}` cho `{result['field']}`.",
+        )
+        await log_event(result["session_id"], "proposal_confirmed", {
+            "proposal_id": proposal_id, "field": result["field"],
+            "source": "proposal_api",
+        })
+        return result
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except WorkspaceConflict as exc:
@@ -328,9 +347,24 @@ async def workspace_approve_proposal(proposal_id: str, request: _ProposalDecisio
 async def workspace_reject_proposal(proposal_id: str, request: _ProposalDecisionRequest):
     from workspace.service import reject_proposal
     try:
-        return await reject_proposal(
+        result = await reject_proposal(
             proposal_id, actor=request.actor, reason=request.reason
         )
+        from session import clear_pending_proposal, get_pending_proposal
+        pending = await get_pending_proposal(result["session_id"])
+        if pending and pending.get("proposal_id") == proposal_id:
+            await clear_pending_proposal(result["session_id"])
+        from session import add_message, log_event
+        text = (
+            f"[Hệ thống] Người dùng đã từ chối đề xuất cập nhật `{result['field']}` "
+            "qua nút bấm. Không áp dụng thay đổi này."
+        )
+        await add_message(result["session_id"], "assistant", text)
+        await log_event(result["session_id"], "proposal_rejected", {
+            "proposal_id": proposal_id, "field": result["field"],
+            "reason": request.reason,
+        })
+        return result
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

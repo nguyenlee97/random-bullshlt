@@ -19,7 +19,6 @@ from handlers.freeform import (
     _build_workspace_diff,
     _build_workspace_snapshot,
     _field_to_step_index,
-    _is_confirm,
     _STEP_NAMES_VI,
 )
 from llm import chat_completion, force_text_completion, sanitize_response
@@ -27,7 +26,8 @@ from prompts.system import SYSTEM_PROMPT
 from session import add_message, get_history, set_pending_proposal
 from tools.registry import TOOL_DEFINITIONS, execute_tool
 from agent_logger import alog
-from workspace.service import approve_proposal, create_proposal, get_workspace, legacy_view
+from workspace.service import create_proposal, get_workspace, legacy_view
+from workspace.intent import InvalidWorkspaceIntent, resolve_legacy_update
 
 _TOOL_FALLBACKS = {
     "get_audience_list": "Đã tìm thấy các đối tượng phù hợp. Anh/Chị xem danh sách ở panel phải và chọn nhé!",
@@ -132,22 +132,36 @@ async def tools_node(state: AgentState) -> dict:
                 value = json.loads(value)
             except Exception:
                 pass
-        reply = _build_update_summary(field, value, first_args.get("reason", ""))
+        canonical = await get_workspace(session_id)
+        try:
+            field, value, reason = await resolve_legacy_update(
+                field, value, canonical, first_args.get("reason", "")
+            )
+        except InvalidWorkspaceIntent as exc:
+            reply = f"Em chưa thể tạo đề xuất an toàn: {exc}"
+            await add_message(session_id, "user", state["user_message"])
+            await add_message(session_id, "assistant", reply)
+            return {
+                "response_text": reply,
+                "response_blocks": [],
+                "used_tool": "workspace_clarification",
+            }
+
+        first_args.update({"field": field, "value": value, "reason": reason})
+        reply = _build_update_summary(field, value, reason)
         step_index = _field_to_step_index(field)
         is_locked = step_index in (state.get("confirmed_steps") or [])
-        is_confirm = _is_confirm(state["user_message"].lower().strip())
 
         await add_message(session_id, "user", state["user_message"])
         await add_message(session_id, "assistant", reply)
 
-        canonical = await get_workspace(session_id)
         proposal = await create_proposal(
             session_id,
             field,
             value,
             base_revision=canonical["revision"],
             actor="campaign_copilot",
-            reason=first_args.get("reason", ""),
+            reason=reason,
         )
         proposal_changes = {
             **first_args,
@@ -155,19 +169,6 @@ async def tools_node(state: AgentState) -> dict:
             "base_revision": proposal["base_revision"],
             "affected_artifacts": proposal["affected_artifacts"],
         }
-
-        if is_confirm and not is_locked:
-            mutation = await approve_proposal(
-                proposal["proposal_id"], actor="campaign_operator"
-            )
-            return {"response_text": reply,
-                    "response_blocks": [{"type": "info",
-                        "text": f"Workspace đã được cập nhật: `{field}`."}],
-                    "workspace_update": {"field": field, "value": value,
-                                         "reason": first_args.get("reason", ""),
-                                         "proposal_id": proposal["proposal_id"],
-                                         "workspace_revision": mutation["workspace_revision"]},
-                    "used_tool": "update_workspace"}
 
         warning = ""
         if is_locked and step_index >= 0:

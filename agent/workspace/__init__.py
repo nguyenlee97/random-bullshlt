@@ -6,6 +6,7 @@ from workspace.service import (
     approve_proposal,
     create_proposal,
     get_workspace,
+    list_pending_proposals,
     reject_proposal,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "approve_proposal",
     "create_proposal",
     "get_workspace",
+    "list_pending_proposals",
     "reject_proposal",
 ]

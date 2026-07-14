@@ -13,7 +13,8 @@ from session import add_message, set_pending_proposal
 from workspace.intent import (
     InvalidWorkspaceIntent,
     classify_workspace_intent,
-    validate_workspace_intent,
+    is_explicit_decline,
+    resolve_workspace_intent,
 )
 from workspace.service import WorkspaceConflict, create_proposal, get_workspace
 
@@ -21,10 +22,17 @@ from workspace.service import WorkspaceConflict, create_proposal, get_workspace
 async def workspace_intent_node(state: AgentState) -> dict:
     """Create a proposal for an explicit edit; otherwise leave chat untouched."""
     canonical = await get_workspace(state["session_id"])
-    current_brief = canonical["artifacts"]["brief"].get("value") or {}
-
+    if is_explicit_decline(state["user_message"]):
+        text = "Đã hiểu. Em sẽ không áp dụng thay đổi đó; workspace được giữ nguyên."
+        await add_message(state["session_id"], "user", state["user_message"])
+        await add_message(state["session_id"], "assistant", text)
+        return {
+            "response_text": text,
+            "response_blocks": [{"type": "info", "text": text}],
+            "used_tool": "workspace_no_change",
+        }
     try:
-        intent = await classify_workspace_intent(state["user_message"], current_brief)
+        intent = await classify_workspace_intent(state["user_message"], canonical)
     except Exception as exc:
         # Classification is an enhancement, not a new single point of failure.
         await alog(state["session_id"], "warn", {
@@ -36,8 +44,18 @@ async def workspace_intent_node(state: AgentState) -> dict:
     if intent is None:
         return {}
 
+    if intent.requires_clarification:
+        text = intent.clarification.strip() or "Anh/chị muốn thay đổi thành giá trị nào?"
+        await add_message(state["session_id"], "user", state["user_message"])
+        await add_message(state["session_id"], "assistant", text)
+        return {
+            "response_text": text,
+            "response_blocks": [{"type": "info", "text": text}],
+            "used_tool": "workspace_clarification",
+        }
+
     try:
-        command = validate_workspace_intent(intent, current_brief)
+        command = await resolve_workspace_intent(intent, canonical)
     except InvalidWorkspaceIntent as exc:
         text = str(exc)
         await add_message(state["session_id"], "user", state["user_message"])
@@ -96,6 +114,12 @@ async def workspace_intent_node(state: AgentState) -> dict:
         )
 
     reply = _build_update_summary(field, value, reason)
+    if proposal["affected_artifacts"]:
+        reply += (
+            "\n\nNếu áp dụng, các phần phụ thuộc sau sẽ được đánh dấu cần xem lại: "
+            + ", ".join(proposal["affected_artifacts"])
+            + "."
+        )
     await add_message(state["session_id"], "user", state["user_message"])
     await add_message(state["session_id"], "assistant", reply)
     await alog(state["session_id"], "info", {
@@ -115,6 +139,6 @@ async def workspace_intent_node(state: AgentState) -> dict:
             "warning": warning,
             "affected_artifacts": proposal["affected_artifacts"],
         }],
-        "suggestions": _WORKSPACE_SUGGESTIONS.get(field, []),
+        "suggestions": _WORKSPACE_SUGGESTIONS.get(field.split(".", 1)[0], []),
         "used_tool": "workspace_proposal",
     }

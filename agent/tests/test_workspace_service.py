@@ -97,6 +97,43 @@ async def test_rejected_proposal_never_mutates_workspace():
 
 
 @pytest.mark.asyncio
+async def test_pending_proposals_are_listed_until_decided():
+    first = await service.create_proposal(
+        "ws-pending-list", "brief.brand", "A", base_revision=0,
+        actor="copilot", reason="first",
+    )
+    second = await service.create_proposal(
+        "ws-pending-list", "brief.budget", 20, base_revision=0,
+        actor="copilot", reason="second",
+    )
+    pending = await service.list_pending_proposals("ws-pending-list")
+    assert [item["proposal_id"] for item in pending] == [
+        first["proposal_id"], second["proposal_id"]
+    ]
+    rejected = await service.reject_proposal(
+        first["proposal_id"], actor="user", reason="not wanted"
+    )
+    assert rejected["session_id"] == "ws-pending-list"
+    pending = await service.list_pending_proposals("ws-pending-list")
+    assert [item["proposal_id"] for item in pending] == [second["proposal_id"]]
+
+
+@pytest.mark.asyncio
+async def test_successful_mutation_supersedes_other_old_proposals():
+    first = await service.create_proposal(
+        "ws-supersede", "brief.brand", "A", base_revision=0,
+        actor="copilot", reason="first",
+    )
+    await service.create_proposal(
+        "ws-supersede", "brief.budget", 20, base_revision=0,
+        actor="copilot", reason="alternative",
+    )
+    approved = await service.approve_proposal(first["proposal_id"], actor="user")
+    assert approved["workspace_revision"] == 1
+    assert await service.list_pending_proposals("ws-supersede") == []
+
+
+@pytest.mark.asyncio
 async def test_graph_context_uses_canonical_artifacts_for_stale_client_snapshot():
     from graph.nodes.agent_node import context_node
 

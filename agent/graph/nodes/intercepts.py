@@ -25,6 +25,7 @@ from session import (
     update_form_state,
 )
 from agent_logger import alog
+from workspace.intent import is_explicit_decline
 
 
 async def intercepts_node(state: AgentState) -> dict:
@@ -71,6 +72,73 @@ async def intercepts_node(state: AgentState) -> dict:
     # 4. Confirm handling (pending proposal + step-1/step-3 auto-confirm) -------
     is_confirm = _is_confirm(msg_lower)
     pending = await get_pending_proposal(session_id)
+    from workspace.service import list_pending_proposals
+    durable_pending = await list_pending_proposals(session_id)
+
+    if len(durable_pending) == 1:
+        durable = durable_pending[0]
+        pending = {
+            "field": durable["field"],
+            "value": durable["value"],
+            "reason": durable.get("reason", ""),
+            "proposal_id": durable["proposal_id"],
+            "base_revision": durable["base_revision"],
+            "affected_artifacts": durable.get("affected_artifacts", []),
+        }
+
+    if is_explicit_decline(message) and len(durable_pending) > 1:
+        text = (
+            "Hiện có nhiều đề xuất đang chờ. Anh/chị bấm **Từ chối** trên đúng "
+            "đề xuất muốn bỏ; workspace chưa thay đổi."
+        )
+        await add_message(session_id, "user", message)
+        await add_message(session_id, "assistant", text)
+        return {
+            "response_text": text,
+            "response_blocks": [{"type": "info", "text": text}],
+            "used_tool": "workspace_clarification",
+        }
+
+    if is_explicit_decline(message) and pending:
+        proposal_id = pending.get("proposal_id")
+        if proposal_id:
+            from workspace.service import reject_proposal
+            await reject_proposal(
+                proposal_id, actor="campaign_operator", reason="rejected in chat"
+            )
+        await clear_pending_proposal(session_id)
+        await log_event(session_id, "proposal_rejected", {
+            "proposal_id": proposal_id, "changes": pending,
+        })
+        text = "Đã từ chối đề xuất. Workspace được giữ nguyên."
+        await add_message(session_id, "user", message)
+        await add_message(session_id, "assistant", text)
+        return {
+            "response_text": text,
+            "response_blocks": [{"type": "info", "text": text}],
+            "used_tool": "workspace_rejected",
+        }
+
+    if is_confirm and len(durable_pending) > 1:
+        choices = [
+            f"- `{item['proposal_id']}`: cập nhật `{item['field']}`"
+            for item in durable_pending
+        ]
+        text = (
+            "Hiện có nhiều đề xuất đang chờ duyệt nên câu **đồng ý** chưa đủ rõ. "
+            "Anh/chị chọn nút xác nhận trên đúng đề xuất muốn áp dụng:\n\n"
+            + "\n".join(choices)
+        )
+        await add_message(session_id, "user", message)
+        await add_message(session_id, "assistant", text)
+        return {
+            "response_text": text,
+            "response_blocks": [{
+                "type": "info",
+                "text": "Chọn đúng đề xuất cần áp dụng; hệ thống chưa thay đổi workspace.",
+            }],
+            "used_tool": "workspace_clarification",
+        }
 
     if is_confirm and pending:
         proposal_id = pending.get("proposal_id")
@@ -162,6 +230,19 @@ async def intercepts_node(state: AgentState) -> dict:
                     {"label": "🗑️ Bỏ zone", "action": "prefill", "text": "Bỏ zone "},
                 ],
             }
+
+    if is_confirm and not pending:
+        text = (
+            "Hiện không có đề xuất nào đang chờ duyệt. "
+            "Anh/chị hãy yêu cầu thay đổi cụ thể trước nhé."
+        )
+        await add_message(session_id, "user", message)
+        await add_message(session_id, "assistant", text)
+        return {
+            "response_text": text,
+            "response_blocks": [{"type": "info", "text": text}],
+            "used_tool": "workspace_clarification",
+        }
 
     # No intercept hit → carry confirm flag forward for the agent node
     return {"pending_proposal": pending, "used_tool": ""}

@@ -1,0 +1,1145 @@
+{
+  "label": "copilot-v2-full60-final",
+  "created_at": "2026-07-14T22:51:03.221185+00:00",
+  "summary": {
+    "cases": 60,
+    "passed": 60,
+    "failed": 0,
+    "turns": 65,
+    "mean_latency_s": 2.953,
+    "p95_latency_s": 13.793,
+    "unauthorized_mutations": 0
+  },
+  "results": [
+    {
+      "id": "copilot_001",
+      "session_id": "copilot_001_576f1a04",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 2.067,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **thương hiệu** thành **Sao Việt**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_002",
+      "session_id": "copilot_002_64650b52",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 2.584,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **ngân sách (triệu VND)** thành **80**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_003",
+      "session_id": "copilot_003_3d4ef758",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.689,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **mục tiêu** thành **conversion**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_004",
+      "session_id": "copilot_004_91bc0d6f",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.637,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **KPI** thành **CTR trên 1.5%**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_005",
+      "session_id": "copilot_005_36dfb7de",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 1.562,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Ngày kết thúc phải sau hoặc bằng ngày bắt đầu"
+        }
+      ]
+    },
+    {
+      "id": "copilot_006",
+      "session_id": "copilot_006_b077fd3a",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.616,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **ngày kết thúc** thành **2030-02-20**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_007",
+      "session_id": "copilot_007_cb63cbe6",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.397,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **ghi chú** thành **ưu tiên khách hàng tại TP.HCM**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_008",
+      "session_id": "copilot_008_40744e03",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.562,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đã tổng hợp thông tin brief. Anh/chị xác nhận để lưu:\n\n- Brand: **Demo Brand**\n- Objective: **Awareness**\n- Budget: **120 triệu VND**\n- KPI: **Reach 5 triệu**\n- Thời gian: **2030-01-01 → 2030-01-10**"
+        }
+      ]
+    },
+    {
+      "id": "copilot_009",
+      "session_id": "copilot_009_16133ae0",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.582,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **thương hiệu** thành **Mây Xanh**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_010",
+      "session_id": "copilot_010_6a249596",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.949,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **ngân sách (triệu VND)** thành **65**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_011",
+      "session_id": "copilot_011_7fc86f4f",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.43,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **ngân sách (triệu VND)** thành **150**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_012",
+      "session_id": "copilot_012_b2e3bf3f",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.734,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **mục tiêu** thành **retention**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_013",
+      "session_id": "copilot_013_0ffb0359",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.328,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Em đề xuất chọn **1 audience segment**: Travel. Audience ước tính **0 người**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_014",
+      "session_id": "copilot_014_02e83b86",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 1.441,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "segment chưa đủ cụ thể: Travel. Gợi ý: Travel, Aviation (air travel), Adventure travel (travel & tourism)"
+        }
+      ]
+    },
+    {
+      "id": "copilot_015",
+      "session_id": "copilot_015_3e0a8339",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.715,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Em đề xuất chọn **2 audience segment**: Banking (Finance), Credit cards (credit & lending). Audience ước tính **0 người**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_016",
+      "session_id": "copilot_016_cc4da90e",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.628,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất chọn **1 audience segment**: Banking (Finance). Audience ước tính **4,106,499 người**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_017",
+      "session_id": "copilot_017_141173cf",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.731,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất chọn **2 audience segment**: Travel, Credit cards (credit & lending). Audience ước tính **24,087,699 người**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_018",
+      "session_id": "copilot_018_7d65db56",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.529,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Em đề xuất chọn **1 audience segment**: Digital Activities. Audience ước tính **0 người**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_019",
+      "session_id": "copilot_019_26118e3c",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.522,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất chọn **1 audience segment**: Banking (Finance). Audience ước tính **4,106,499 người**. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_020",
+      "session_id": "copilot_020_bf3367fe",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 1.413,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Không tìm thấy segment trong catalog: FAKE-999"
+        }
+      ]
+    },
+    {
+      "id": "copilot_021",
+      "session_id": "copilot_021_004200d4",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.445,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Em đề xuất targeting:\n\n- **geo**: TP.HCM\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_022",
+      "session_id": "copilot_022_ca315917",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.45,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Em đề xuất targeting:\n\n- **age**: 25-34\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_023",
+      "session_id": "copilot_023_9205212b",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.655,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Em đề xuất targeting:\n\n- **gender**: Female\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_024",
+      "session_id": "copilot_024_e848646e",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.294,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất targeting:\n\n- **geo**: TP.HCM\n- **age**: 25-34\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_025",
+      "session_id": "copilot_025_254678ec",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.638,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Em đề xuất targeting:\n\n- **deviceOS**: Android\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_026",
+      "session_id": "copilot_026_dc0e5f7a",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.628,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Em đề xuất targeting:\n\n- **interest**: Travel\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_027",
+      "session_id": "copilot_027_a4c3c633",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.756,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Em đề xuất targeting:\n\n- **income**: Top 5%\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_028",
+      "session_id": "copilot_028_474427cb",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 1.708,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Targeting value không có trong catalog: age=19-29"
+        }
+      ]
+    },
+    {
+      "id": "copilot_029",
+      "session_id": "copilot_029_8ac06c23",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 1.52,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Targeting dimension không tồn tại: zodiac"
+        }
+      ]
+    },
+    {
+      "id": "copilot_030",
+      "session_id": "copilot_030_5d60ea93",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.56,
+          "before_revision": 0,
+          "after_revision": 0,
+          "errors": [],
+          "text": "Em đề xuất targeting:\n\n- **geo**: TP.HCM\n- **age**: 25-34\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_031",
+      "session_id": "copilot_031_5c1a415b",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.83,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất chọn **1 ad zone**: ZingNews_Masthead. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_032",
+      "session_id": "copilot_032_2ef89193",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.587,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất chọn **1 ad zone**: BaoMoi_Masthead. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_033",
+      "session_id": "copilot_033_a5e78f82",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.869,
+          "before_revision": 2,
+          "after_revision": 2,
+          "errors": [],
+          "text": "Em đề xuất chọn **1 ad zone**: ZingNews_Masthead. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_034",
+      "session_id": "copilot_034_eccb87ee",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.488,
+          "before_revision": 2,
+          "after_revision": 2,
+          "errors": [],
+          "text": "Em đề xuất chọn **2 ad zone**: ZingNews_Masthead, ZingNews_PrBox_2. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_035",
+      "session_id": "copilot_035_28f9da5c",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 14.258,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Không tìm thấy zone trong catalog: NOT_A_REAL_ZONE"
+        }
+      ]
+    },
+    {
+      "id": "copilot_036",
+      "session_id": "copilot_036_d0d9182e",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "no_mutation",
+          "tool": "freeform_chat",
+          "latency_s": 14.202,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Để thêm zone trong bước Setup Camp, anh/chị có 2 cách:\n\n### Cách 1: Tìm kiếm zone cụ thể\nNhập từ khóa vào ô tìm kiếm (VD: \"ZingNews\", \"banner 300x250\", \"Facebook\", \"YouTube\"...). Hệ thống sẽ hiển thị các zone phù hợp.\n\n### Cách 2: Xem toàn "
+        }
+      ]
+    },
+    {
+      "id": "copilot_037",
+      "session_id": "copilot_037_6c8df63b",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.931,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất chọn **2 ad zone**: ZingNews_Masthead, ZingNews_PrBox_2. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_038",
+      "session_id": "copilot_038_213cd5b5",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.819,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất chọn **1 ad zone**: ZingNews_Masthead. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_039",
+      "session_id": "copilot_039_a072c799",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 15.931,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất giữ lại **1 creative**: square.png. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_040",
+      "session_id": "copilot_040_cef63148",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.513,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất giữ lại **1 creative**: square.png. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_041",
+      "session_id": "copilot_041_0ce2a75e",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.414,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất giữ lại **1 creative**: hero.png. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_042",
+      "session_id": "copilot_042_5462f2d6",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 2.016,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Không tìm thấy creative hiện có trong catalog: new-banner.png"
+        }
+      ]
+    },
+    {
+      "id": "copilot_043",
+      "session_id": "copilot_043_88555a8d",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "no_mutation",
+          "tool": "freeform_chat",
+          "latency_s": 7.609,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Từ workspace, em thấy:\n\n| File | Loại | Trạng thái |\n|------|------|------------|\n| **hero.png** | image/png | ✅ Đã upload, **chưa gắn zone** |\n| square.png | image/png | ✅ Đã upload, **chưa gắn zone** |\n\nHiện tại anh/chị đang ở **Bước 4 - "
+        }
+      ]
+    },
+    {
+      "id": "copilot_044",
+      "session_id": "copilot_044_58abe422",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.679,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất giữ lại **1 creative**: square.png. Anh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_045",
+      "session_id": "copilot_045_fda5fbc7",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 4.467,
+          "before_revision": 2,
+          "after_revision": 2,
+          "errors": [],
+          "text": "Em đề xuất cách gắn creative:\n\n- `ZingNews_Masthead` → creative #2\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_046",
+      "session_id": "copilot_046_d6ec9ed4",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.612,
+          "before_revision": 2,
+          "after_revision": 2,
+          "errors": [],
+          "text": "Em đề xuất cách gắn creative:\n\n- `ZingNews_Masthead` → creative #1\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_047",
+      "session_id": "copilot_047_86078d4c",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.552,
+          "before_revision": 2,
+          "after_revision": 2,
+          "errors": [],
+          "text": "Em đề xuất cách gắn creative:\n\n- `ZingNews_Masthead` → creative #1\n- `ZingNews_PrBox_2` → creative #2\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_048",
+      "session_id": "copilot_048_31a89ab3",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 1.439,
+          "before_revision": 2,
+          "after_revision": 2,
+          "errors": [],
+          "text": "Zone không thuộc placements đã chọn: BaoMoi_Masthead"
+        }
+      ]
+    },
+    {
+      "id": "copilot_049",
+      "session_id": "copilot_049_a89703df",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.454,
+          "before_revision": 3,
+          "after_revision": 3,
+          "errors": [],
+          "text": "Em đề xuất cách gắn creative:\n\n\n\nAnh/chị xác nhận để áp dụng nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_050",
+      "session_id": "copilot_050_fdd1802e",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 1.276,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Bạn muốn đổi brand thành tên nào?"
+        }
+      ]
+    },
+    {
+      "id": "copilot_051",
+      "session_id": "copilot_051_51494c4f",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 1.648,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Bạn muốn đổi ngân sách thành bao nhiêu triệu VND?"
+        }
+      ]
+    },
+    {
+      "id": "copilot_052",
+      "session_id": "copilot_052_22a28283",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "no_mutation",
+          "tool": "workspace_no_change",
+          "latency_s": 0.065,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Đã hiểu. Em sẽ không áp dụng thay đổi đó; workspace được giữ nguyên."
+        }
+      ]
+    },
+    {
+      "id": "copilot_053",
+      "session_id": "copilot_053_5d2ddcf7",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "no_mutation",
+          "tool": "freeform_chat",
+          "latency_s": 13.793,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Anh/chị đang ở bước **Brief đã xác nhận** rồi. Để đổi budget, em cần lưu ý:\n\n**Cách đổi:** Anh/chị bấm vào nút **\"Sửa\"** (biểu tượng cây bút) ở phần Brief trên panel bên phải, sau đó chỉnh sửa budget và xác nhận lại.\n\n**⚠️ Cảnh báo:** Vì Br"
+        }
+      ]
+    },
+    {
+      "id": "copilot_054",
+      "session_id": "copilot_054_9434528c",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "no_mutation",
+          "tool": "freeform_chat",
+          "latency_s": 13.375,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Brand hiện tại trong workspace là **Demo Brand** ạ."
+        }
+      ]
+    },
+    {
+      "id": "copilot_055",
+      "session_id": "copilot_055_88c6fc88",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "no_mutation",
+          "tool": "freeform_chat",
+          "latency_s": 13.352,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "## Giải thích Audience đã chọn\n\n### Segment hiện tại: **Travel** (BEH001)\n\n| Thông tin | Chi tiết |\n|-----------|----------|\n| **Loại** | Behavior (Hành vi) |\n| **Category** | Travel |\n| **Size ước tính** | ~22.1 - 26 triệu người |\n\n### Ý n"
+        }
+      ]
+    },
+    {
+      "id": "copilot_056",
+      "session_id": "copilot_056_b9c8b067",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "no_mutation",
+          "tool": "workspace_no_change",
+          "latency_s": 0.08,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Đã hiểu. Em sẽ không áp dụng thay đổi đó; workspace được giữ nguyên."
+        }
+      ]
+    },
+    {
+      "id": "copilot_057",
+      "session_id": "copilot_057_c12a98bd",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 13.209,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **thương hiệu** thành **Bình Minh**. Anh/chị xác nhận để áp dụng nhé!"
+        },
+        {
+          "index": 2,
+          "kind": "approval",
+          "tool": "workspace_confirmed",
+          "latency_s": 0.081,
+          "before_revision": 1,
+          "after_revision": 2,
+          "errors": [],
+          "text": "✅ Đã áp dụng thay đổi cho `brief.brand`. Anh/Chị xem panel phải nhé!"
+        }
+      ]
+    },
+    {
+      "id": "copilot_058",
+      "session_id": "copilot_058_e6bd06e6",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.73,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **thương hiệu** thành **Lựa Chọn A**. Anh/chị xác nhận để áp dụng nhé!"
+        },
+        {
+          "index": 2,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.562,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **ngân sách (triệu VND)** thành **90**. Anh/chị xác nhận để áp dụng nhé!"
+        },
+        {
+          "index": 3,
+          "kind": "clarification",
+          "tool": "workspace_clarification",
+          "latency_s": 0.063,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Hiện có nhiều đề xuất đang chờ duyệt nên câu **đồng ý** chưa đủ rõ. Anh/chị chọn nút xác nhận trên đúng đề xuất muốn áp dụng:\n\n- `wpr_e670952778054b3a8feb24b79ad5ae69`: cập nhật `brief.brand`\n- `wpr_8fc4d23131ed4358a17b8a93dda05170`: cập nh"
+        }
+      ]
+    },
+    {
+      "id": "copilot_059",
+      "session_id": "copilot_059_3300aeb1",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.609,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **thương hiệu** thành **Đề Xuất Cũ**. Anh/chị xác nhận để áp dụng nhé!"
+        },
+        {
+          "index": 3,
+          "kind": "conflict",
+          "tool": "workspace_conflict",
+          "latency_s": 0.062,
+          "before_revision": 2,
+          "after_revision": 2,
+          "errors": [],
+          "text": "⚠ Workspace đã thay đổi sau khi đề xuất này được tạo. Em chưa áp dụng để tránh ghi đè dữ liệu mới; Anh/Chị xem lại đề xuất nhé."
+        }
+      ]
+    },
+    {
+      "id": "copilot_060",
+      "session_id": "copilot_060_825074cc",
+      "ok": true,
+      "errors": [],
+      "turns": [
+        {
+          "index": 1,
+          "kind": "proposal",
+          "tool": "workspace_proposal",
+          "latency_s": 1.555,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Em đề xuất đổi **thương hiệu** thành **Không Dùng**. Anh/chị xác nhận để áp dụng nhé!"
+        },
+        {
+          "index": 3,
+          "kind": "no_mutation",
+          "tool": "workspace_clarification",
+          "latency_s": 0.067,
+          "before_revision": 1,
+          "after_revision": 1,
+          "errors": [],
+          "text": "Hiện không có đề xuất nào đang chờ duyệt. Anh/chị hãy yêu cầu thay đổi cụ thể trước nhé."
+        }
+      ]
+    }
+  ]
+}
