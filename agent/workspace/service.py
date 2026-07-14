@@ -17,7 +17,13 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from config import config
 from session import get_or_create_session, update_form_state
-from workspace.dependencies import ARTIFACTS, artifact_for_field, downstream
+from workspace.dependencies import (
+    ARTIFACTS,
+    artifact_for_field,
+    build_recompute_plan,
+    direct_inputs,
+    downstream,
+)
 
 
 _client = None
@@ -108,6 +114,15 @@ class WorkspaceConflict(Exception):
         self.workspace = workspace
 
 
+class StaleTaskResult(Exception):
+    """A background result was computed from artifact revisions no longer current."""
+
+    def __init__(self, artifact: str, mismatches: dict[str, dict]):
+        super().__init__(f"stale task result for {artifact}")
+        self.artifact = artifact
+        self.mismatches = mismatches
+
+
 def _public(doc: dict) -> dict:
     result = deepcopy(doc)
     result.pop("applied_mutations", None)
@@ -154,6 +169,78 @@ async def get_workspace(session_id: str) -> dict:
             session_id, session.get("form_state", {})
         )
     return _public(_mem_workspaces[session_id])
+
+
+async def get_recompute_plan(session_id: str) -> dict:
+    return build_recompute_plan(await get_workspace(session_id))
+
+
+def _task_input_snapshot(workspace: dict, artifact: str) -> dict[str, int]:
+    if artifact not in ARTIFACTS:
+        raise ValueError(f"unsupported artifact: {artifact}")
+    artifacts = workspace.get("artifacts", {})
+    return {
+        dependency: int(artifacts.get(dependency, {}).get("revision", 0))
+        for dependency in direct_inputs(artifact)
+        if artifacts.get(dependency, {}).get("status") != "missing"
+        and artifacts.get(dependency, {}).get("value") not in (None, {}, [])
+    }
+
+
+async def get_task_context(session_id: str, artifact: str) -> dict:
+    workspace = await get_workspace(session_id)
+    input_revisions = _task_input_snapshot(workspace, artifact)
+    return {
+        "workspace_id": workspace["workspace_id"],
+        "session_id": session_id,
+        "artifact": artifact,
+        "workspace_revision": workspace["revision"],
+        "artifact_revision": int(
+            workspace.get("artifacts", {}).get(artifact, {}).get("revision", 0)
+        ),
+        "input_revisions": input_revisions,
+        "inputs": {
+            name: deepcopy(workspace.get("artifacts", {}).get(name, {}))
+            for name in input_revisions
+        },
+    }
+
+
+def _validate_task_inputs(
+    workspace: dict,
+    artifact: str,
+    input_revisions: dict[str, int],
+    base_artifact_revision: int,
+) -> None:
+    expected = _task_input_snapshot(workspace, artifact)
+    mismatches: dict[str, dict] = {}
+    for dependency, current_revision in expected.items():
+        supplied = input_revisions.get(dependency)
+        status = workspace.get("artifacts", {}).get(dependency, {}).get("status")
+        if supplied != current_revision or status == "stale":
+            mismatches[dependency] = {
+                "expected_revision": supplied,
+                "actual_revision": current_revision,
+                "status": status,
+            }
+    for dependency, supplied in input_revisions.items():
+        if dependency not in expected:
+            current = workspace.get("artifacts", {}).get(dependency, {})
+            mismatches[dependency] = {
+                "expected_revision": supplied,
+                "actual_revision": current.get("revision", 0),
+                "status": current.get("status", "missing"),
+            }
+    current_output = workspace.get("artifacts", {}).get(artifact, {})
+    actual_output_revision = int(current_output.get("revision", 0))
+    if actual_output_revision != base_artifact_revision:
+        mismatches["$output"] = {
+            "expected_revision": base_artifact_revision,
+            "actual_revision": actual_output_revision,
+            "status": current_output.get("status", "missing"),
+        }
+    if mismatches:
+        raise StaleTaskResult(artifact, mismatches)
 
 
 def _impact(doc: dict, artifact: str) -> list[str]:
@@ -379,6 +466,219 @@ async def apply_mutation(
 
     # Compatibility mirror. Canonical state has already committed atomically.
     await update_form_state(session_id, root, committed_value, sync_workspace=False)
+    return result
+
+
+def _task_result_event(
+    workspace_id: str,
+    revision: int,
+    artifact: str,
+    actor: str,
+    reason: str,
+    task_id: str,
+    input_revisions: dict[str, int],
+    base_artifact_revision: int,
+    affected: list[str],
+) -> dict:
+    return {
+        "event_id": f"wev_{uuid.uuid4().hex}",
+        "workspace_id": workspace_id,
+        "revision": revision,
+        "type": "artifact_result_committed",
+        "artifact": artifact,
+        "actor": actor,
+        "reason": reason,
+        "task_id": task_id,
+        "input_revisions": deepcopy(input_revisions),
+        "base_artifact_revision": base_artifact_revision,
+        "affected_artifacts": affected,
+        "created_at": _now(),
+    }
+
+
+async def commit_artifact_result(
+    session_id: str,
+    artifact: str,
+    value: Any,
+    *,
+    task_id: str,
+    input_revisions: dict[str, int],
+    base_artifact_revision: int,
+    actor: str,
+    reason: str = "",
+) -> dict:
+    """Commit a task result iff every artifact input still matches its snapshot.
+
+    Global workspace revision changes caused by unrelated edits are allowed.
+    Results are rejected only when one of their declared inputs changed or
+    became stale, preventing late workers from resurrecting obsolete output.
+    """
+    if artifact not in ARTIFACTS:
+        raise ValueError(f"unsupported artifact: {artifact}")
+    if not task_id.strip():
+        raise ValueError("task_id is required")
+    key = f"task:{task_id.strip()}"
+    current = await get_workspace(session_id)
+    workspace_id = current["workspace_id"]
+
+    if await _ensure_store():
+        raw = await _workspaces.find_one({"_id": workspace_id})
+        duplicate = next(
+            (item for item in raw.get("applied_mutations", []) if item.get("key") == key),
+            None,
+        )
+        if duplicate:
+            return {**duplicate["result"], "duplicate": True}
+        _validate_task_inputs(
+            _public(raw), artifact, input_revisions, base_artifact_revision
+        )
+        expected = raw["revision"]
+        new_revision = expected + 1
+        affected = _impact(raw, artifact)
+        event = _task_result_event(
+            workspace_id, new_revision, artifact, actor, reason, task_id,
+            input_revisions, base_artifact_revision, affected,
+        )
+        result = {
+            "ok": True,
+            "workspace_id": workspace_id,
+            "workspace_revision": new_revision,
+            "artifact": artifact,
+            "affected_artifacts": affected,
+            "event_id": event["event_id"],
+            "task_id": task_id,
+            "duplicate": False,
+        }
+        sets = {
+            "revision": new_revision,
+            "updated_at": event["created_at"],
+            f"artifacts.{artifact}": {
+                "status": "approved",
+                "revision": new_revision,
+                "value": deepcopy(value),
+                "updated_at": event["created_at"],
+                "updated_by": actor,
+                "task_id": task_id,
+                "input_revisions": deepcopy(input_revisions),
+                "base_artifact_revision": base_artifact_revision,
+            },
+        }
+        for name in affected:
+            sets[f"artifacts.{name}.status"] = "stale"
+            sets[f"artifacts.{name}.stale_at_revision"] = new_revision
+            sets[f"artifacts.{name}.stale_reason"] = f"{artifact} changed"
+        update = await _workspaces.update_one(
+            {
+                "_id": workspace_id,
+                "revision": expected,
+                "applied_mutations.key": {"$ne": key},
+            },
+            {
+                "$set": sets,
+                "$push": {
+                    "events": {"$each": [event], "$slice": -200},
+                    "applied_mutations": {
+                        "$each": [{"key": key, "result": result}], "$slice": -200
+                    },
+                },
+            },
+        )
+        if update.modified_count != 1:
+            latest = await _workspaces.find_one({"_id": workspace_id})
+            duplicate = next(
+                (item for item in latest.get("applied_mutations", []) if item.get("key") == key),
+                None,
+            )
+            if duplicate:
+                return {**duplicate["result"], "duplicate": True}
+            _validate_task_inputs(
+                _public(latest), artifact, input_revisions, base_artifact_revision
+            )
+            raise WorkspaceConflict(expected, latest["revision"], _public(latest))
+        try:
+            await _events.insert_one(event)
+        except Exception:
+            pass
+    else:
+        lock = _locks.setdefault(session_id, asyncio.Lock())
+        async with lock:
+            raw = _mem_workspaces[session_id]
+            duplicate = next(
+                (item for item in raw["applied_mutations"] if item["key"] == key), None
+            )
+            if duplicate:
+                return {**duplicate["result"], "duplicate": True}
+            _validate_task_inputs(
+                _public(raw), artifact, input_revisions, base_artifact_revision
+            )
+            new_revision = raw["revision"] + 1
+            affected = _impact(raw, artifact)
+            event = _task_result_event(
+                workspace_id, new_revision, artifact, actor, reason, task_id,
+                input_revisions, base_artifact_revision, affected,
+            )
+            result = {
+                "ok": True,
+                "workspace_id": workspace_id,
+                "workspace_revision": new_revision,
+                "artifact": artifact,
+                "affected_artifacts": affected,
+                "event_id": event["event_id"],
+                "task_id": task_id,
+                "duplicate": False,
+            }
+            raw["revision"] = new_revision
+            raw["updated_at"] = event["created_at"]
+            raw["artifacts"][artifact] = {
+                "status": "approved",
+                "revision": new_revision,
+                "value": deepcopy(value),
+                "updated_at": event["created_at"],
+                "updated_by": actor,
+                "task_id": task_id,
+                "input_revisions": deepcopy(input_revisions),
+                "base_artifact_revision": base_artifact_revision,
+            }
+            for name in affected:
+                raw["artifacts"][name]["status"] = "stale"
+                raw["artifacts"][name]["stale_at_revision"] = new_revision
+                raw["artifacts"][name]["stale_reason"] = f"{artifact} changed"
+            raw["events"] = (raw["events"] + [event])[-200:]
+            raw["applied_mutations"] = (
+                raw["applied_mutations"] + [{"key": key, "result": result}]
+            )[-200:]
+
+    # A task result is a canonical revision too, so proposals based on older
+    # revisions cannot remain eligible for a later bare confirmation.
+    superseded_at = _now()
+    if await _ensure_store():
+        try:
+            await _proposals.update_many(
+                {
+                    "session_id": session_id,
+                    "status": "pending",
+                    "base_revision": {"$lt": result["workspace_revision"]},
+                },
+                {"$set": {
+                    "status": "superseded",
+                    "superseded_by_revision": result["workspace_revision"],
+                    "updated_at": superseded_at,
+                }},
+            )
+        except Exception:
+            pass
+    else:
+        for proposal in _mem_proposals.values():
+            if (
+                proposal.get("session_id") == session_id
+                and proposal.get("status") == "pending"
+                and proposal.get("base_revision", -1) < result["workspace_revision"]
+            ):
+                proposal.update(
+                    status="superseded",
+                    superseded_by_revision=result["workspace_revision"],
+                    updated_at=superseded_at,
+                )
     return result
 
 

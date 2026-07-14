@@ -11,7 +11,7 @@ import SetupStep from '@/steps/SetupStep'
 import SuccessStep from '@/steps/SuccessStep'
 import ReportStep from '@/steps/ReportStep'
 import EmailStep from '@/steps/EmailStep'
-import { LayoutDashboard } from 'lucide-react'
+import { AlertTriangle, LayoutDashboard } from 'lucide-react'
 
 const STEP_DESCS = [
   'Điền brief khách hàng — agent chuẩn hóa về JSON schema và đề xuất KPI.',
@@ -24,7 +24,7 @@ const STEP_DESCS = [
 ]
 
 const WorkspacePane = forwardRef(function WorkspacePane(
-  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat },
+  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, onOpenRecompute },
   ref
 ) {
   const bodyRef = useRef(null)
@@ -42,6 +42,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
 
   const step = steps[currentStep]
   const isDone = stepStatuses[currentStep] === 'done'
+  const isStale = stepStatuses[currentStep] === 'stale'
 
   const updateFormSlice = useCallback((slice, val) => {
     setFormState(prev => ({ ...prev, [slice]: val }))
@@ -110,6 +111,9 @@ const WorkspacePane = forwardRef(function WorkspacePane(
         <LayoutDashboard className="w-4 h-4 text-violet-500" />
         <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Workspace</span>
         <span className="ml-1 text-xs text-muted-foreground">· Form & kết quả · bước hiện tại</span>
+        {workspaceRevision != null && (
+          <span className="ml-auto text-[10px] font-mono text-muted-foreground">rev {workspaceRevision}</span>
+        )}
       </div>
 
       {/* Stepper */}
@@ -119,6 +123,27 @@ const WorkspacePane = forwardRef(function WorkspacePane(
         stepStatuses={stepStatuses}
         onStepJump={onStepJump}
       />
+
+      {recomputePlan?.has_changes && (
+        <div className="mx-3 sm:mx-5 mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-amber-900">
+              Kế hoạch cần cập nhật {recomputePlan.recompute?.length || 0} phần
+            </p>
+            <p className="text-[10px] leading-relaxed text-amber-800 mt-0.5">
+              Tái sử dụng {recomputePlan.reuse_count || 0} phần không bị ảnh hưởng · Thứ tự: {(recomputePlan.recompute_order || []).join(' → ')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenRecompute}
+            className="text-[10px] font-bold text-amber-900 border border-amber-300 bg-white hover:bg-amber-100 rounded-lg px-2.5 py-1.5 flex-shrink-0"
+          >
+            Xử lý
+          </button>
+        </div>
+      )}
 
       {/* Step body */}
       <ScrollArea className="flex-1" ref={bodyRef}>
@@ -137,6 +162,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
                 <Badge variant="violet" className="text-[10px]">{step.heroLabel}</Badge>
               )}
               {isDone && <Badge variant="green" className="text-[10px]">Hoàn thành</Badge>}
+              {isStale && <Badge variant="amber" className="text-[10px]">Cần xem lại</Badge>}
             </div>
           </div>
           <p className="text-xs text-muted-foreground mb-4 ml-11">{STEP_DESCS[currentStep]}</p>
@@ -145,12 +171,14 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           {renderStep()}
 
           {/* Re-edit banner for completed input steps (brief, creative, audience) */}
-          {isDone && currentStep <= 2 && onPartialReset && (
+          {(isDone || isStale) && currentStep <= 3 && onPartialReset && (
             <div className="mt-4 flex items-center gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50">
               <div className="flex-1">
-                <p className="text-xs font-semibold text-amber-800">Muốn chỉnh sửa lại bước này?</p>
+                <p className="text-xs font-semibold text-amber-800">
+                  {isStale ? 'Phần này cần được kiểm tra lại' : 'Muốn chỉnh sửa lại bước này?'}
+                </p>
                 <p className="text-[10px] text-amber-700 mt-0.5">
-                  Các bước sau ({steps.slice(currentStep + 1).map(s => s.title).join(', ')}) sẽ được reset.
+                  Dữ liệu hiện tại được giữ lại. Khi xác nhận thay đổi, chỉ phần phụ thuộc mới được đánh dấu cần cập nhật.
                 </p>
               </div>
               <button

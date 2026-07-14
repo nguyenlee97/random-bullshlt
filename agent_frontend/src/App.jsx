@@ -10,6 +10,12 @@ import { MessageSquare, LayoutDashboard } from 'lucide-react'
 import { DemoProvider } from '@/demo/DemoEngine'
 import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { canApproveWorkflowStep } from '@/lib/workflowValidation'
+import {
+  deriveStepStatuses,
+  firstRecomputeStep,
+  isStepReachable,
+  workspacePatchTarget,
+} from '@/lib/nonLinearWorkflow'
 
 // ─── Steps meta — NEW ORDER: Brief → Audience → Creative → Setup → Result ─────
 export const STEPS = [
@@ -46,17 +52,6 @@ const initialState = {
   email: { sent: false },
 }
 
-// Step key order matches STEPS array
-const STEP_KEYS = ['brief', 'segment', 'creative', 'setup', 'success', 'report', 'email']
-const STEP_DEFAULTS = [
-  initialBrief,
-  { attrs: [], size: 0 },
-  initialCreative,
-  { initialized: false, recoZones: [], selectedZoneIds: [], created: false, submitted: false, phase: 'zones', assignments: {} },
-  {},
-  { analyzed: false },
-  { sent: false },
-]
 const STEP_NAMES_VI = ['Brief', 'Audience', 'Creative', 'Setup Camp', 'Kết quả', 'Report', 'Email']
 
 // Steps that auto-navigate to Workspace tab after agent update (2.5s delay)
@@ -106,6 +101,8 @@ export default function App() {
   const [formState, setFormState] = useState(initialState)
   const [workspaceEvents, setWorkspaceEvents] = useState([])
   const [workspaceConflict, setWorkspaceConflict] = useState(null)
+  const [canonicalWorkspace, setCanonicalWorkspace] = useState(null)
+  const [recomputePlan, setRecomputePlan] = useState(null)
   const workspaceRef = useRef(null)
   const mainRef = useRef(null)
 
@@ -121,8 +118,6 @@ export default function App() {
   useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
   const currentStepRef = useRef(currentStep)
   useEffect(() => { currentStepRef.current = currentStep }, [currentStep])
-
-  useEffect(() => { AgentAPI.getWorkspace() }, [])
 
   // ── Demo-active flag ───────────────────────────────────────────────────────
   // While the guided demo is running it is the sole controller of the mobile
@@ -178,32 +173,49 @@ export default function App() {
     setWorkspaceEvents([])
   }, [])
 
-  const reloadCanonicalWorkspace = useCallback(async () => {
-    const workspace = await AgentAPI.getWorkspace()
+  const hydrateCanonicalWorkspace = useCallback((workspace) => {
     if (!workspace) return
     const artifacts = workspace.artifacts || {}
+    setCanonicalWorkspace(workspace)
     setFormState(prev => ({
       ...prev,
       ...(artifacts.brief?.value ? { brief: artifacts.brief.value } : {}),
-      ...(artifacts.audience?.value ? {
+      ...((artifacts.audience?.value || artifacts.targeting?.value) ? {
         segment: {
           ...prev.segment,
-          ...artifacts.audience.value,
+          ...(artifacts.audience?.value || {}),
           targeting: artifacts.targeting?.value || prev.segment?.targeting || {},
         },
       } : {}),
       ...(artifacts.creative?.value ? { creative: artifacts.creative.value } : {}),
-      ...(artifacts.placements?.value ? {
+      ...((artifacts.placements?.value || artifacts.assignments?.value) ? {
         setup: {
           ...prev.setup,
-          ...artifacts.placements.value,
-          assignments: artifacts.assignments?.value || artifacts.placements.value.assignments || {},
+          ...(artifacts.placements?.value || {}),
+          assignments: artifacts.assignments?.value || artifacts.placements?.value?.assignments || {},
         },
       } : {}),
     }))
+    setStepStatuses(prev => deriveStepStatuses(prev, workspace))
     setWorkspaceConflict(null)
+    AgentAPI.getRecomputePlan().then(plan => {
+      if (plan) setRecomputePlan(plan)
+    })
+  }, [])
+
+  const reloadCanonicalWorkspace = useCallback(async () => {
+    const workspace = await AgentAPI.getWorkspace()
+    if (!workspace) return
+    hydrateCanonicalWorkspace(workspace)
     pushWorkspaceEvent(`Đã tải lại workspace phiên bản ${workspace.revision} từ máy chủ`)
-  }, [pushWorkspaceEvent])
+  }, [hydrateCanonicalWorkspace, pushWorkspaceEvent])
+
+  useEffect(() => {
+    const handler = event => hydrateCanonicalWorkspace(event.detail)
+    window.addEventListener('agent:canonical_workspace', handler)
+    AgentAPI.getWorkspace().then(hydrateCanonicalWorkspace)
+    return () => window.removeEventListener('agent:canonical_workspace', handler)
+  }, [hydrateCanonicalWorkspace])
 
   // ── setFormState wrapper that diffs and emits workspace events ─────────────
   // Use a ref to track the previous state for diffing
@@ -277,15 +289,10 @@ export default function App() {
   const handleWorkspaceUpdate = useCallback((patch) => {
     // patch = { field, value, reason }
     if (!patch?.field) return
-    let field = patch.field
+    const target = workspacePatchTarget(patch.field)
+    let field = target.path
     let value = patch.value
-
-    // Normalize field aliases — LLM sometimes uses "audience" instead of "segment"
-    const FIELD_ALIASES = { audience: 'segment', targeting: 'segment', dmp: 'segment' }
-    if (FIELD_ALIASES[field]) {
-      log.workspace(`field alias: "${field}" → "${FIELD_ALIASES[field]}"`)
-      field = FIELD_ALIASES[field]
-    }
+    if (field !== patch.field) log.workspace(`field mapping: "${patch.field}" → "${field}"`)
 
     // The model sometimes JSON-stringifies the value — parse it back
     if (typeof value === 'string') {
@@ -625,46 +632,54 @@ export default function App() {
     approveStep(currentStep, data)
   }, [currentStep, formState, approveStep])
 
-  const maxReached = stepStatuses.reduce((max, s, i) => s === 'done' ? i + 1 : max, 0)
-
   const handleStepJump = useCallback((i) => {
     if (busy) return
-    if (i <= currentStep || stepStatuses[i] === 'done' || i <= maxReached) {
+    if (i >= 0 && i < STEPS.length && isStepReachable(i, currentStep, stepStatuses)) {
       log.step(`stepJump: ${currentStep} → ${i}`)
       setCurrentStep(i)
       workspaceRef.current?.flash?.()
     }
-  }, [busy, currentStep, stepStatuses, maxReached])
+  }, [busy, currentStep, stepStatuses])
 
-  // Partial reset: wipe form data + statuses from fromStep onward
+  // Non-linear edit: preserve every artifact. The canonical mutation will mark
+  // only real dependents stale; unaffected work stays reusable.
   const handlePartialReset = useCallback((fromStep) => {
-    log.step(`handlePartialReset from step ${fromStep} (${STEP_NAMES_VI[fromStep]})`)
-    // Allow entry probes to re-trigger when their steps are reset
+    log.step(`openNonLinearEdit at step ${fromStep} (${STEP_NAMES_VI[fromStep]})`)
     if (fromStep <= 1) audienceEntryFiredRef.current = false
     if (fromStep <= 3) setupEntryFiredRef.current = false
     if (fromStep <= 5) reportEntryFiredRef.current = false
-    // Emit a workspace event so the agent knows
     pushWorkspaceEvent(
-      `Đã bấm 'Chỉnh sửa lại' ở bước ${STEP_NAMES_VI[fromStep]} — ` +
-      `các bước ${STEP_NAMES_VI.slice(fromStep).join(', ')} đã được reset`
+      `Đã mở chỉnh sửa lại bước ${STEP_NAMES_VI[fromStep]}; ` +
+      `giữ nguyên dữ liệu khác cho đến khi thay đổi được xác nhận`
     )
-    setFormState(prev => {
-      const next = { ...prev }
-      STEP_KEYS.forEach((key, i) => {
-        if (i >= fromStep) next[key] = STEP_DEFAULTS[i]
-      })
-      return next
-    })
-    setStepStatuses(prev => prev.map((s, i) => i >= fromStep ? 'pending' : s))
+    setStepStatuses(prev => prev.map((status, index) => (
+      index === fromStep ? 'pending' : status
+    )))
     setCurrentStep(fromStep)
   }, [pushWorkspaceEvent])
 
-  const handleReset = useCallback(() => handlePartialReset(0), [handlePartialReset])
+  const resetLocalCampaign = useCallback(() => {
+    audienceEntryFiredRef.current = false
+    setupEntryFiredRef.current = false
+    reportEntryFiredRef.current = false
+    setFormState(initialState)
+    setStepStatuses(STEPS.map(() => 'pending'))
+    setCanonicalWorkspace(null)
+    setRecomputePlan(null)
+    setWorkspaceEvents([])
+    setCurrentStep(0)
+  }, [])
+
+  const handleReset = useCallback(() => {
+    resetLocalCampaign()
+    AgentAPI.newSession()
+    AgentAPI.getWorkspace()
+  }, [resetLocalCampaign])
 
   const handleNewChat = useCallback(() => {
-    handlePartialReset(0)
+    resetLocalCampaign()
     newChat()
-  }, [handlePartialReset, newChat])
+  }, [resetLocalCampaign, newChat])
 
   // Listen for agent:reset event from BlockRenderer ActionResetBlock
   useEffect(() => {
@@ -784,55 +799,45 @@ export default function App() {
 
   // Listen for agent:workspace_confirm — user clicked Đồng ý on a proposal block
   useEffect(() => {
-    const STEP_PRIMARY_FIELDS = { 0: 'brief', 1: 'segment', 2: 'creative', 3: 'setup' }
     const handler = async (e) => {
       log.event('agent:workspace_confirm received', e.detail)
       if (e.detail?.patch) {
         handleWorkspaceUpdate(e.detail.patch)
-        const topField = (e.detail.patch.field || '').split('.')[0]
-        const stepEntry = Object.entries(STEP_PRIMARY_FIELDS).find(([, v]) => v === topField)
-        if (stepEntry) {
-          const stepNum = Number(stepEntry[0])
-          // ── Persist to MongoDB so audience-entry (and other downstream calls)
-          // can read the confirmed value immediately. Without this, the button only
-          // updates frontend state — backend session stays empty → brief_not_set.
-          const persisted = e.detail.patch.proposal_id
-            ? await AgentAPI.approveWorkspaceProposal(e.detail.patch.proposal_id)
-            : await AgentAPI.commitWorkspace(topField, e.detail.patch.value)
-          log.workspace(`persistWorkspace(${topField}) →`, persisted?.ok ? 'ok' : 'failed')
-          if (!persisted?.ok) return
-          if (stepStatuses[stepNum] !== 'done') {
-            log.step(`workspace_confirm → marking step ${stepNum} done for field "${topField}"`)
-            // Setup step is special — it has 3 sub-phases (zones→assign→confirm).
-            // It must NOT be marked done here; it advances only when formState.setup.submitted
-            // becomes true (handled by the dedicated useEffect below).
-            if (topField === 'setup') {
-              log.step('workspace_confirm(setup) — skipping markStepDone; sub-phase flow handles advance')
-              return
-            }
-            // Parse value if LLM returned it as a JSON string (not an object)
-            const _rawPatchVal = e.detail.patch.value
-            const _patchVal = typeof _rawPatchVal === 'string'
-              ? (() => { try { return JSON.parse(_rawPatchVal) } catch { return {} } })()
-              : (_rawPatchVal || {})
-            const confirmMessages = {
-              brief: '✅ Brief đã được lưu! Em sẽ chuyển sang bước **Audience** để gợi ý segments phù hợp.',
-              segment: `✅ Audience đã xác nhận! ${(_patchVal.attrs || []).length} segments được áp dụng — em sẽ chuyển sang bước **Creative**.`,
-              creative: '✅ Creative đã xác nhận! Em sẽ chuyển sang bước **Setup Camp**.',
-            }
-            const confirmText = confirmMessages[topField] || `✅ Bước ${topField} đã xác nhận.`
-            window.dispatchEvent(new CustomEvent('agent:inject_message', {
-              detail: {
-                id: `confirm_${topField}_${Date.now()}`,
-                role: 'assistant',
-                content: confirmText,
-                blocks: [],
-                timestamp: new Date().toISOString(),
-                metadata: { tool: 'workspace_confirmed', model: 'none', step: stepNum },
-              }
-            }))
-            setTimeout(() => markStepDone(stepNum), 700)
+        const originalField = e.detail.patch.field || ''
+        const target = workspacePatchTarget(originalField)
+        // Persist every typed proposal, including targeting, creative files,
+        // placements and assignments. The previous step-only map silently
+        // skipped those proposal classes.
+        const persisted = e.detail.patch.proposal_id
+          ? await AgentAPI.approveWorkspaceProposal(e.detail.patch.proposal_id)
+          : await AgentAPI.commitWorkspace(originalField, e.detail.patch.value)
+        log.workspace(`persistWorkspace(${originalField}) →`, persisted?.ok ? 'ok' : 'failed')
+        if (!persisted?.ok || target.step == null) return
+
+        const stepNum = target.step
+        if (stepStatuses[stepNum] !== 'done' && stepStatuses[stepNum] !== 'stale') {
+          // Setup has multiple sub-phases and is completed only after safe order creation.
+          if (stepNum === 3) return
+          const rawValue = e.detail.patch.value
+          const patchValue = typeof rawValue === 'string'
+            ? (() => { try { return JSON.parse(rawValue) } catch { return {} } })()
+            : (rawValue || {})
+          const confirmMessages = {
+            0: '✅ Brief đã được lưu! Em sẽ chuyển sang bước **Audience** để gợi ý segments phù hợp.',
+            1: `✅ Audience đã xác nhận! ${(patchValue.attrs || []).length || 'Các'} segments được áp dụng — em sẽ chuyển sang bước **Creative**.`,
+            2: '✅ Creative đã xác nhận! Em sẽ chuyển sang bước **Setup Camp**.',
           }
+          window.dispatchEvent(new CustomEvent('agent:inject_message', {
+            detail: {
+              id: `confirm_${stepNum}_${Date.now()}`,
+              role: 'assistant',
+              content: confirmMessages[stepNum] || '✅ Đã áp dụng thay đổi workspace.',
+              blocks: [],
+              timestamp: new Date().toISOString(),
+              metadata: { tool: 'workspace_confirmed', model: 'none', step: stepNum },
+            }
+          }))
+          setTimeout(() => markStepDone(stepNum), 700)
         }
       }
     }
@@ -904,6 +909,14 @@ export default function App() {
   }, [])
 
   const canApprove = canApproveWorkflowStep(currentStep, formState, stepStatuses)
+
+  const openFirstRecomputeStep = useCallback(() => {
+    const step = firstRecomputeStep(recomputePlan)
+    if (step != null && step >= 0 && !busy) {
+      setCurrentStep(step)
+      workspaceRef.current?.flash?.()
+    }
+  }, [recomputePlan, busy])
 
   // ── isMobile helper (used for conditional inline styles) ──────────────────
   // Read at render-time. Tailwind md: breakpoints handle the class-based
@@ -977,6 +990,9 @@ export default function App() {
             onPartialReset={handlePartialReset}
             recoFromChat={audienceRecommendation}
             onSendChat={sendMessage}
+            recomputePlan={recomputePlan}
+            workspaceRevision={canonicalWorkspace?.revision}
+            onOpenRecompute={openFirstRecomputeStep}
           />
         </div>
 

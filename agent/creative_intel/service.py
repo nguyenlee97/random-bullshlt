@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -40,6 +41,11 @@ def _fetch_url(url: str) -> str:
 
 
 def effective_status(doc: dict) -> str:
+    workspace_status = doc.get("workspace_status")
+    if workspace_status == "stale":
+        return "stale"
+    if workspace_status == "pending" and doc.get("status") in TERMINAL_STATUSES:
+        return "committing"
     override = doc.get("override") or {}
     if doc.get("status") == "needs_review" and override.get("approved"):
         return "approved_override"
@@ -102,6 +108,17 @@ async def get_intel_by_ids(session_id: str, analysis_ids: list[str]) -> dict[str
 
 async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
     """Persist jobs before returning. Existing terminal verdicts are reused."""
+    from workspace.service import get_task_context
+
+    task_context = await get_task_context(session_id, "creative_verdict")
+    urls = sorted((file.get("url") or "").strip() for file in files or [] if file.get("url"))
+    batch_seed = json.dumps({
+        "session_id": session_id,
+        "urls": urls,
+        "creative_revision": task_context["input_revisions"].get("creative", 0),
+        "verdict_revision": task_context["artifact_revision"],
+    }, sort_keys=True)
+    batch_id = f"cib_{hashlib.sha256(batch_seed.encode()).hexdigest()[:24]}"
     jobs: list[dict] = []
     for file in files or []:
         url = (file.get("url") or "").strip()
@@ -116,6 +133,9 @@ async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
                 "intended_format": file.get(
                     "intendedFormat", existing.get("intended_format", "")
                 ),
+                "batch_id": batch_id,
+                "task_context": task_context,
+                "workspace_status": "pending",
                 "updated_at": _now(),
             })
             await _save(existing)
@@ -135,13 +155,88 @@ async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
             "url": url,
             "fetch_url": _fetch_url(url),
             "status": "queued",
+            "batch_id": batch_id,
+            "task_context": task_context,
+            "workspace_status": "pending",
             "attempts": (existing or {}).get("attempts", 0),
             "created_at": created_at,
             "updated_at": _now(),
         }
         await _save(doc)
         jobs.append(_public(doc))
+    await _commit_batch_if_complete(session_id, batch_id)
+    if jobs:
+        refreshed = {item["analysis_id"]: item for item in await get_intel(session_id)}
+        jobs = [refreshed.get(item["analysis_id"], item) for item in jobs]
     return jobs
+
+
+async def _batch_docs(session_id: str, batch_id: str) -> list[dict]:
+    col = await _col()
+    if col is not None:
+        return await col.find({
+            "session_id": session_id, "batch_id": batch_id
+        }).sort("created_at", 1).to_list(None)
+    docs = [
+        doc for doc in _mem.values()
+        if doc.get("session_id") == session_id and doc.get("batch_id") == batch_id
+    ]
+    return sorted(docs, key=lambda doc: doc.get("created_at") or _now())
+
+
+async def _commit_batch_if_complete(session_id: str, batch_id: str) -> bool:
+    docs = await _batch_docs(session_id, batch_id)
+    if not docs or any(doc.get("status") not in TERMINAL_STATUSES for doc in docs):
+        return False
+    context = docs[0].get("task_context") or {}
+    if not {"input_revisions", "artifact_revision"}.issubset(context):
+        # Verdicts created before the workspace migration remain readable but
+        # cannot be promoted as fresh canonical task output.
+        return False
+    from workspace.service import (
+        StaleTaskResult,
+        WorkspaceConflict,
+        commit_artifact_result,
+    )
+
+    verdict = {
+        "batch_id": batch_id,
+        "files": [_public(doc) for doc in docs],
+    }
+    try:
+        result = await commit_artifact_result(
+            session_id,
+            "creative_verdict",
+            verdict,
+            task_id=f"creative-batch:{batch_id}",
+            input_revisions=context["input_revisions"],
+            base_artifact_revision=context["artifact_revision"],
+            actor="creative_intel_worker",
+            reason="creative analysis batch completed",
+        )
+    except (StaleTaskResult, WorkspaceConflict) as exc:
+        mismatch = getattr(exc, "mismatches", {"workspace": str(exc)})
+        for doc in docs:
+            doc.update(
+                workspace_status="stale",
+                workspace_mismatches=mismatch,
+                updated_at=_now(),
+            )
+            await _save(doc)
+        await alog(session_id, "creative_intel_stale_result", {
+            "batch_id": batch_id,
+            "mismatches": mismatch,
+        })
+        return False
+
+    for doc in docs:
+        doc.update(
+            workspace_status="committed",
+            workspace_revision=result["workspace_revision"],
+            updated_at=_now(),
+        )
+        await _save(doc)
+    return True
 
 
 async def approve_override(
@@ -320,6 +415,8 @@ async def process_next_job() -> bool:
     doc["completed_at"] = _now()
     doc["updated_at"] = _now()
     await _save(doc)
+    if doc.get("batch_id"):
+        await _commit_batch_if_complete(doc["session_id"], doc["batch_id"])
     await alog(doc["session_id"], "creative_intel", {
         "analysis_id": doc["_id"],
         "status": doc["status"],

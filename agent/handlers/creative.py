@@ -2,6 +2,7 @@
 Creative handler — Step 1. Rule-based validation, NO LLM.
 Validates format, dimensions, file size. Suggests matching zones by ratio.
 """
+import hashlib
 import re
 from models import AgentResponse, CreativeData, ResponseMeta
 from session import update_form_state, log_event
@@ -69,6 +70,40 @@ async def handle_creative(creative: CreativeData, session_id: str) -> AgentRespo
             if verdict.get("effective_status") not in {"auto_approved", "approved_override"}:
                 reasons = "; ".join(verdict.get("review_reasons") or [])
                 blocked.append(f"{f.name}: {reasons or verdict.get('status')}")
+        if len(verdicts) == len(analysis_ids) and analysis_ids:
+            # update_form_state above committed the final creative metadata and
+            # therefore invalidated the worker's earlier verdict artifact. Re-
+            # publish the already verified verdicts against this exact creative
+            # revision before allowing Setup to consume them.
+            from workspace.service import (
+                StaleTaskResult,
+                WorkspaceConflict,
+                commit_artifact_result,
+                get_task_context,
+            )
+
+            context = await get_task_context(session_id, "creative_verdict")
+            task_seed = ":".join(sorted(analysis_ids)) + ":" + str(
+                context["input_revisions"].get("creative", 0)
+            )
+            try:
+                await commit_artifact_result(
+                    session_id,
+                    "creative_verdict",
+                    {"files": [verdicts[analysis_id] for analysis_id in analysis_ids]},
+                    task_id=(
+                        "creative-final:"
+                        + hashlib.sha256(task_seed.encode()).hexdigest()[:24]
+                    ),
+                    input_revisions=context["input_revisions"],
+                    base_artifact_revision=context["artifact_revision"],
+                    actor="creative_handler",
+                    reason="final creative selection validated",
+                )
+            except (StaleTaskResult, WorkspaceConflict):
+                blocked.append(
+                    "Workspace đã thay đổi trong lúc xác nhận creative; vui lòng phân tích lại"
+                )
         if blocked:
             return AgentResponse(
                 text="⚠ Creative cần được phân tích và duyệt trước khi sang bước Setup.",

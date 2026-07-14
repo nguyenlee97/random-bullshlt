@@ -94,6 +94,12 @@ async def test_job_is_persisted_processed_and_override_is_audited(monkeypatch):
     verdict = (await service.get_intel("sess-test"))[0]
     assert verdict["status"] == "needs_review"
     assert verdict["effective_status"] == "needs_review"
+    from workspace.service import get_workspace
+    workspace = await get_workspace("sess-test")
+    assert workspace["artifacts"]["creative_verdict"]["status"] == "approved"
+    assert workspace["artifacts"]["creative_verdict"]["value"]["files"][0][
+        "analysis_id"
+    ] == verdict["analysis_id"]
 
     approved = await service.approve_override(
         "sess-test", verdict["analysis_id"], "Đã kiểm tra nội dung thủ công", "reviewer-1"
@@ -101,6 +107,50 @@ async def test_job_is_persisted_processed_and_override_is_audited(monkeypatch):
     assert approved["effective_status"] == "approved_override"
     assert approved["override"]["actor"] == "reviewer-1"
     assert approved["override"]["original_reasons"] == ["low confidence"]
+
+
+@pytest.mark.asyncio
+async def test_worker_marks_verdict_stale_when_creative_changes_mid_analysis(monkeypatch):
+    import creative_intel.service as service
+    from workspace.service import apply_mutation, get_workspace
+
+    async def no_mongo():
+        return None
+
+    async def fake_analysis(_doc):
+        return {
+            "status": "auto_approved",
+            "review_reasons": [],
+            "deterministic": {"width": 1200, "height": 628},
+        }
+
+    async def no_log(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(service, "_col", no_mongo)
+    monkeypatch.setattr(service, "_analyze_job", fake_analysis)
+    monkeypatch.setattr(service, "alog", no_log)
+    service._mem.clear()
+    sid = "creative-stale-workspace"
+    await apply_mutation(
+        sid, "creative", {"files": [{"id": "f1", "url": "http://x/one.png"}]},
+        base_revision=0, actor="operator",
+    )
+    await service.enqueue_analysis(sid, [{
+        "id": "f1", "name": "one.png", "type": "image/png",
+        "url": "http://x/one.png",
+    }])
+    await apply_mutation(
+        sid, "creative", {"files": [{"id": "f2", "url": "http://x/two.png"}]},
+        base_revision=1, actor="operator",
+    )
+
+    assert await service.process_next_job() is True
+    verdict = (await service.get_intel(sid))[0]
+    assert verdict["effective_status"] == "stale"
+    workspace = await get_workspace(sid)
+    assert workspace["revision"] == 2
+    assert workspace["artifacts"]["creative_verdict"]["value"] is None
 
 
 @pytest.mark.asyncio

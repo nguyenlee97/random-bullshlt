@@ -277,10 +277,74 @@ class _ProposalDecisionRequest(BaseModel):
     reason: str = ""
 
 
+class _ArtifactResultRequest(BaseModel):
+    session_id: str = "default"
+    artifact: str
+    value: object = None
+    task_id: str
+    input_revisions: dict[str, int]
+    base_artifact_revision: int
+    actor: str = "campaign_worker"
+    reason: str = ""
+
+
 @agent_router.get("/workspace")
 async def workspace_get(session_id: str = "default"):
     from workspace.service import get_workspace
     return await get_workspace(session_id)
+
+
+@agent_router.get("/workspace/recompute-plan")
+async def workspace_recompute_plan(session_id: str = "default"):
+    from workspace.service import get_recompute_plan
+    try:
+        return await get_recompute_plan(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@agent_router.get("/workspace/task-context/{artifact}")
+async def workspace_task_context(artifact: str, session_id: str = "default"):
+    from workspace.service import get_task_context
+    try:
+        return await get_task_context(session_id, artifact)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@agent_router.post("/workspace/artifact-results")
+async def workspace_artifact_result(request: _ArtifactResultRequest):
+    from workspace.service import (
+        StaleTaskResult,
+        WorkspaceConflict,
+        commit_artifact_result,
+    )
+    try:
+        return await commit_artifact_result(
+            request.session_id,
+            request.artifact,
+            request.value,
+            task_id=request.task_id,
+            input_revisions=request.input_revisions,
+            base_artifact_revision=request.base_artifact_revision,
+            actor=request.actor,
+            reason=request.reason,
+        )
+    except StaleTaskResult as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "stale_task_result",
+            "artifact": exc.artifact,
+            "mismatches": exc.mismatches,
+        }) from exc
+    except WorkspaceConflict as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "workspace_revision_conflict",
+            "expected_revision": exc.expected,
+            "actual_revision": exc.actual,
+            "workspace": jsonable_encoder(exc.workspace),
+        }) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @agent_router.post("/workspace/proposals")

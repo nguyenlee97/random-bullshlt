@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils'
-import { Check } from 'lucide-react'
+import { Check, RefreshCw } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
+import { isStepReachable } from '@/lib/nonLinearWorkflow'
 
 export default function Stepper({ steps, currentStep, stepStatuses, onStepJump }) {
   const doneCount = stepStatuses.filter(s => s === 'done').length
@@ -12,8 +13,9 @@ export default function Stepper({ steps, currentStep, stepStatuses, onStepJump }
       <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 mb-2.5">
         {steps.map((step, i) => {
           const isDone = stepStatuses[i] === 'done'
+          const isStale = stepStatuses[i] === 'stale'
           const isCurrent = i === currentStep
-          const isReachable = isDone || i <= currentStep
+          const isReachable = isStepReachable(i, currentStep, stepStatuses)
           return (
             <button
               key={step.id}
@@ -22,20 +24,27 @@ export default function Stepper({ steps, currentStep, stepStatuses, onStepJump }
               className={cn(
                 'flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 border',
                 isDone && 'bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100',
+                isStale && 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100',
                 isCurrent && !isDone && 'bg-brand-500 border-brand-500 text-white shadow-sm',
-                !isDone && !isCurrent && isReachable && 'bg-white border-border text-muted-foreground hover:bg-muted/50',
+                !isDone && !isStale && !isCurrent && isReachable && 'bg-white border-border text-muted-foreground hover:bg-muted/50',
                 !isReachable && 'bg-white border-border text-muted-foreground/40 cursor-not-allowed opacity-60',
               )}
             >
               <span className={cn(
                 'w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0',
                 isDone && 'bg-brand-500 text-white',
+                isStale && 'bg-amber-500 text-white',
                 isCurrent && !isDone && 'bg-white text-brand-600',
-                !isDone && !isCurrent && 'bg-muted text-muted-foreground',
+                !isDone && !isStale && !isCurrent && 'bg-muted text-muted-foreground',
               )}>
-                {isDone ? <Check className="w-2.5 h-2.5" /> : i + 1}
+                {isDone
+                  ? <Check className="w-2.5 h-2.5" />
+                  : isStale
+                    ? <RefreshCw className="w-2.5 h-2.5" />
+                    : i + 1}
               </span>
               {step.title}
+              {isStale && <span className="text-[9px] font-bold">Cần xem lại</span>}
               {step.heroLabel && (
                 <span className="text-[9px] font-bold bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full flex-shrink-0">
                   {step.heroLabel}

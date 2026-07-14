@@ -828,6 +828,24 @@ export async function prepareCreativeFiles(files, onProgress = () => {}) {
     onProgress([...prepared, ...(files || []).slice(index + 1)])
   }
 
+  // Establish the authoritative creative input revision before workers start.
+  // Their verdicts are accepted only if this exact file set is still current.
+  const creativeDraft = {
+    files: prepared.map(({ dataUrl, ...file }) => ({
+      ...file,
+      analysisStatus: 'queued',
+    })),
+    uploaded: prepared.length > 0,
+  }
+  const creativeCommit = await AgentAPI.commitWorkspace('creative', creativeDraft)
+  if (!creativeCommit?.ok) {
+    throw new Error(
+      creativeCommit?.conflict
+        ? 'Creative đã thay đổi ở nơi khác; vui lòng tải lại workspace'
+        : 'Không thể khóa phiên bản creative trước khi phân tích'
+    )
+  }
+
   const queued = await analyzeCreatives(prepared.map(file => ({
     id: file.id,
     name: file.name,
@@ -1131,6 +1149,7 @@ export const AgentAPI = {
       }
       if (!res.ok) return { ok: false, status: res.status, ...data }
       WORKSPACE_REVISION = data.workspace_revision ?? WORKSPACE_REVISION
+      await this.getWorkspace()
       return data
     } catch (e) {
       console.warn('[commitWorkspace] failed:', e.message)
@@ -1147,6 +1166,11 @@ export const AgentAPI = {
       if (!res.ok) return null
       const workspace = await res.json()
       WORKSPACE_REVISION = workspace.revision
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('agent:canonical_workspace', {
+          detail: workspace,
+        }))
+      }
       return workspace
     } catch (e) {
       console.warn('[getWorkspace] failed:', e.message)
@@ -1174,6 +1198,7 @@ export const AgentAPI = {
       }
       if (!res.ok) return { ok: false, status: res.status, ...data }
       WORKSPACE_REVISION = data.workspace_revision ?? WORKSPACE_REVISION
+      await this.getWorkspace()
       return data
     } catch (e) {
       console.warn('[approveWorkspaceProposal] failed:', e.message)
@@ -1196,6 +1221,60 @@ export const AgentAPI = {
       return res.ok ? await res.json() : { ok: false, status: res.status }
     } catch (e) {
       console.warn('[rejectWorkspaceProposal] failed:', e.message)
+      return { ok: false }
+    }
+  },
+
+  async getRecomputePlan() {
+    try {
+      const res = await agentFetch(
+        `${AGENT_URL}/api/agent/workspace/recompute-plan?session_id=${encodeURIComponent(SESSION_ID)}`,
+        { signal: AbortSignal.timeout(5000) },
+      )
+      return res.ok ? await res.json() : null
+    } catch (e) {
+      console.warn('[getRecomputePlan] failed:', e.message)
+      return null
+    }
+  },
+
+  async getTaskContext(artifact) {
+    try {
+      const res = await agentFetch(
+        `${AGENT_URL}/api/agent/workspace/task-context/${encodeURIComponent(artifact)}?session_id=${encodeURIComponent(SESSION_ID)}`,
+        { signal: AbortSignal.timeout(5000) },
+      )
+      return res.ok ? await res.json() : null
+    } catch (e) {
+      console.warn('[getTaskContext] failed:', e.message)
+      return null
+    }
+  },
+
+  async commitArtifactResult({ artifact, value, taskId, inputRevisions, baseArtifactRevision, reason = '' }) {
+    try {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/workspace/artifact-results`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: SESSION_ID,
+          artifact,
+          value,
+          task_id: taskId,
+          input_revisions: inputRevisions,
+          base_artifact_revision: baseArtifactRevision,
+          actor: 'campaign_worker',
+          reason,
+        }),
+        signal: AbortSignal.timeout(10000),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) return { ok: false, status: res.status, ...(data.detail || data) }
+      WORKSPACE_REVISION = data.workspace_revision ?? WORKSPACE_REVISION
+      await this.getWorkspace()
+      return data
+    } catch (e) {
+      console.warn('[commitArtifactResult] failed:', e.message)
       return { ok: false }
     }
   },
