@@ -112,6 +112,9 @@ async def readiness():
     if config.USE_VLM_CREATIVE:
         from creative_intel.service import worker_running
         checks["creative_worker"] = worker_running()
+    if config.USE_CAMPAIGN_AUTOPILOT:
+        from autopilot.worker import worker_running as autopilot_worker_running
+        checks["autopilot_worker"] = autopilot_worker_running()
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             response = await client.get(f"{config.BACKEND_URL.rstrip('/')}/api/health")
@@ -142,10 +145,16 @@ async def _start_creative_worker():
     if config.USE_VLM_CREATIVE:
         from creative_intel.service import start_worker
         await start_worker()
+    if config.USE_CAMPAIGN_AUTOPILOT:
+        from autopilot.worker import start_worker as start_autopilot_worker
+        await start_autopilot_worker()
 
 
 @app.on_event("shutdown")
 async def _stop_creative_worker():
+    if config.USE_CAMPAIGN_AUTOPILOT:
+        from autopilot.worker import stop_worker as stop_autopilot_worker
+        await stop_autopilot_worker()
     if config.USE_VLM_CREATIVE:
         from creative_intel.service import stop_worker
         await stop_worker()

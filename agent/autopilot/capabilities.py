@@ -1,0 +1,434 @@
+"""Allowlisted Campaign Autopilot capabilities.
+
+Every function returns typed data. Workspace commits, review gating, retries,
+and leases are owned by the durable worker rather than hidden inside prompts.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date
+from typing import Any
+
+from models import BriefData
+from session import get_or_create_session
+from workspace.service import get_workspace
+
+
+@dataclass
+class CapabilityResult:
+    value: Any = None
+    evidence: list[dict] = field(default_factory=list)
+    force_review: bool = False
+    externally_committed: bool = False
+
+
+def _artifact(workspace: dict, name: str, default=None):
+    value = workspace.get("artifacts", {}).get(name, {}).get("value")
+    return default if value is None else value
+
+
+def _placement_ids(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if not isinstance(value, dict):
+        return []
+    if value.get("selectedZoneIds"):
+        return [str(item) for item in value["selectedZoneIds"]]
+    return [str(item.get("id")) for item in value.get("zones", []) if item.get("id")]
+
+
+def _audience_attrs(value: Any) -> list[dict]:
+    if isinstance(value, list):
+        return value
+    if not isinstance(value, dict):
+        return []
+    return value.get("attrs") or value.get("recommendations") or []
+
+
+async def _normalize_brief(run: dict, workspace: dict) -> CapabilityResult:
+    raw = _artifact(workspace, "brief", {})
+    brief = BriefData.model_validate(raw).model_dump()
+    return CapabilityResult(
+        value=brief,
+        evidence=[{"type": "workspace_artifact", "artifact": "brief",
+                   "revision": workspace["artifacts"]["brief"]["revision"]}],
+    )
+
+
+async def _validate_brief(run: dict, workspace: dict) -> CapabilityResult:
+    brief = BriefData.model_validate(_artifact(workspace, "brief", {})).model_dump()
+    errors = []
+    if not brief["brand"].strip():
+        errors.append("Thiếu tên thương hiệu")
+    if brief["objective"] not in {"awareness", "consideration", "conversion", "retention"}:
+        errors.append("Mục tiêu chiến dịch không hợp lệ")
+    if brief["budget"] <= 0:
+        errors.append("Ngân sách phải lớn hơn 0")
+    try:
+        start = date.fromisoformat(brief["startDate"][:10])
+        end = date.fromisoformat(brief["endDate"][:10])
+        if start > end:
+            errors.append("Ngày bắt đầu phải trước ngày kết thúc")
+        if end < date.today():
+            errors.append("Ngày kết thúc đã ở quá khứ")
+    except (TypeError, ValueError):
+        errors.append("Ngày chạy phải có định dạng YYYY-MM-DD")
+    if errors:
+        return CapabilityResult(
+            value={"valid": False, "errors": errors, "review_action": "retry"},
+            evidence=[{"type": "validation", "passed": False, "errors": errors}],
+            force_review=True,
+        )
+    return CapabilityResult(
+        value={"valid": True, "brief": brief},
+        evidence=[{"type": "validation", "passed": True}],
+    )
+
+
+async def _generate_strategy(run: dict, workspace: dict) -> CapabilityResult:
+    brief = _artifact(workspace, "brief", {})
+    objective = brief.get("objective", "awareness")
+    options = [
+        {
+            "id": "balanced", "label": "Cân bằng",
+            "budget_share": {"premium": 40, "reach": 40, "test": 20},
+            "rationale": "Cân bằng độ phủ, chất lượng hiển thị và khả năng thử nghiệm.",
+        },
+        {
+            "id": "reach_first", "label": "Ưu tiên độ phủ",
+            "budget_share": {"premium": 25, "reach": 60, "test": 15},
+            "rationale": "Tối đa hóa lượng người tiếp cận trong ngân sách đã duyệt.",
+        },
+        {
+            "id": "quality_first", "label": "Ưu tiên chất lượng",
+            "budget_share": {"premium": 60, "reach": 25, "test": 15},
+            "rationale": "Ưu tiên vị trí có viewability và tương tác cao.",
+        },
+    ]
+    selected = "reach_first" if objective == "awareness" else (
+        "quality_first" if objective == "conversion" else "balanced"
+    )
+    return CapabilityResult(
+        value={"options": options, "selected": selected, "objective": objective},
+        evidence=[{"type": "brief_field", "field": "objective", "value": objective}],
+    )
+
+
+async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
+    from handlers.audience import handle_dmp_recommend
+    recommendation = await handle_dmp_recommend(run["session_id"])
+    attrs = recommendation.get("recommendations") or []
+    if not attrs:
+        raise RuntimeError("audience retrieval returned no catalog-backed segments")
+    attrs = attrs[:15]
+    size = sum(
+        int(((item.get("sizeMin") or 0) + (item.get("sizeMax") or 0)) / 2)
+        for item in attrs
+    )
+    return CapabilityResult(
+        value={"attrs": attrs, "size": size,
+               "retrieval": recommendation.get("retrieval", {})},
+        evidence=[{
+            "type": "catalog_segments", "count": len(attrs),
+            "ids": [item.get("_id") for item in attrs if item.get("_id")],
+        }],
+    )
+
+
+async def _derive_targeting(run: dict, workspace: dict) -> CapabilityResult:
+    from handlers.audience import _normalize_targeting
+    from tools.targeting_options import get_targeting_options
+    options = await get_targeting_options()
+    # Deterministic, catalog-validated fallback. The model-assisted targeting
+    # selector can later enrich this without weakening the source boundary.
+    targeting = _normalize_targeting({
+        "geo": ["Hà Nội", "TP.HCM", "Đà Nẵng"],
+        "age": ["25-34", "35-44"],
+        "gender": ["Male", "Female"],
+    }, options)
+    return CapabilityResult(
+        value=targeting,
+        evidence=[{"type": "targeting_catalog", "dimensions": list(targeting)}],
+    )
+
+
+async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
+    from creative_intel.service import enqueue_analysis, get_intel
+    creative = _artifact(workspace, "creative", {})
+    files = creative.get("files", []) if isinstance(creative, dict) else []
+    if not files:
+        return CapabilityResult(
+            value={
+                "ready": False, "reason": "missing_creative",
+                "message": "Hãy tải ít nhất một creative để Autopilot phân tích.",
+                "review_action": "retry",
+            },
+            evidence=[{"type": "input_required", "artifact": "creative"}],
+            force_review=True,
+        )
+    docs = await get_intel(run["session_id"])
+    known_urls = {doc.get("url") for doc in docs}
+    pending_files = [item for item in files if item.get("url") not in known_urls]
+    if pending_files:
+        await enqueue_analysis(run["session_id"], pending_files)
+        docs = await get_intel(run["session_id"])
+    statuses = {doc.get("effective_status") for doc in docs}
+    if statuses & {"queued", "analyzing", "committing"}:
+        return CapabilityResult(
+            value={
+                "ready": False, "reason": "analysis_in_progress",
+                "message": "Creative đang được phân tích. Tiếp tục sau khi có verdict.",
+                "review_action": "retry",
+            },
+            evidence=[{"type": "creative_jobs", "statuses": sorted(statuses)}],
+            force_review=True,
+        )
+    review_docs = [doc for doc in docs
+                   if doc.get("effective_status") not in {"auto_approved", "approved_override"}]
+    if review_docs:
+        return CapabilityResult(
+            value={
+                "ready": False, "reason": "creative_needs_review",
+                "analysis_ids": [doc.get("analysis_id") for doc in review_docs],
+                "message": "Creative cần được người dùng duyệt hoặc thay thế.",
+                "review_action": "retry",
+            },
+            evidence=[{"type": "creative_review", "count": len(review_docs)}],
+            force_review=True,
+        )
+    current = await get_workspace(run["session_id"])
+    current_verdict = _artifact(current, "creative_verdict")
+    return CapabilityResult(
+        value=current_verdict or {"files": docs},
+        evidence=[{"type": "creative_verdicts", "count": len(docs),
+                   "analysis_ids": [doc.get("analysis_id") for doc in docs]}],
+        externally_committed=bool(current_verdict),
+    )
+
+
+async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
+    from tools.order_api import fetch_zone_conflicts
+    from tools.zone_ranker import rank_zones
+    brief = _artifact(workspace, "brief", {})
+    creative = _artifact(workspace, "creative", {})
+    ranked = await rank_zones(
+        objective=brief.get("objective", "awareness"),
+        budget=brief.get("budget", 0), kpi=brief.get("kpi", ""),
+        creative_files=(creative or {}).get("files", []), limit=12,
+    )
+    conflicts = await fetch_zone_conflicts(
+        brief.get("startDate", ""), brief.get("endDate", "")
+    )
+    available = [zone for zone in ranked if not conflicts.get(zone["id"])][:6]
+    if not available:
+        raise RuntimeError("no available placement remains after conflict check")
+    return CapabilityResult(
+        value={"selectedZoneIds": [zone["id"] for zone in available],
+               "zones": available, "phase": "zones"},
+        evidence=[{"type": "zone_catalog", "ids": [zone["id"] for zone in available]},
+                  {"type": "conflict_check", "excluded": len(ranked) - len(available)}],
+    )
+
+
+async def _assign_creatives(run: dict, workspace: dict) -> CapabilityResult:
+    from creative_intel.service import get_intel
+    from tools.creative_match import auto_assign, enrich_files_with_intel
+    from tools.zone_catalog import get_zone_map
+    creative = _artifact(workspace, "creative", {})
+    files = (creative or {}).get("files", [])
+    files = enrich_files_with_intel(files, await get_intel(run["session_id"]))
+    placement_value = _artifact(workspace, "placements", {})
+    zone_ids = _placement_ids(placement_value)
+    zone_map = await get_zone_map()
+    zones = [zone_map[zone_id] for zone_id in zone_ids if zone_id in zone_map]
+    result = auto_assign(zones, files)
+    if len(result["assignments"]) != len(zones):
+        return CapabilityResult(
+            value={**result, "review_action": "retry",
+                   "message": "Chưa có creative đã duyệt cho mọi placement."},
+            evidence=[{"type": "assignment_gap", "assigned": len(result["assignments"]),
+                       "placements": len(zones)}],
+            force_review=True,
+        )
+    return CapabilityResult(
+        value=result,
+        evidence=[{"type": "creative_assignment", "count": len(result["assignments"])}],
+    )
+
+
+async def _forecast(run: dict, workspace: dict) -> CapabilityResult:
+    brief = _artifact(workspace, "brief", {})
+    placements = _artifact(workspace, "placements", {})
+    zones = placements.get("zones", []) if isinstance(placements, dict) else []
+    budget_vnd = float(brief.get("budget", 0)) * 1_000_000
+    avg_cpm = sum(float(zone.get("cpm", 0)) for zone in zones) / max(len(zones), 1)
+    impressions = round(budget_vnd / avg_cpm * 1000) if avg_cpm > 0 else 0
+    reach_cap = sum(int(zone.get("reach", 0)) for zone in zones)
+    reach = min(reach_cap, round(impressions / 3))
+    risk = "medium" if not zones or impressions <= 0 else "low"
+    return CapabilityResult(
+        value={"budget_vnd": budget_vnd, "estimated_impressions": impressions,
+               "estimated_reach": reach, "average_cpm": round(avg_cpm),
+               "risk": risk, "is_estimate": True},
+        evidence=[{"type": "forecast_inputs", "zone_count": len(zones),
+                   "budget_vnd": budget_vnd}],
+        force_review=risk != "low",
+    )
+
+
+def _build_creatives(files: list[dict], assignments: dict, zone_ids: list[str]) -> list[dict]:
+    by_file: dict[int, list[str]] = {}
+    for zone_id in zone_ids:
+        if zone_id in assignments:
+            by_file.setdefault(int(assignments[zone_id]), []).append(zone_id)
+    creatives = []
+    for file_idx, assigned_zones in by_file.items():
+        file = files[file_idx] if file_idx < len(files) else {}
+        intel = file.get("intel") or {}
+        width = intel.get("width") or file.get("width", 0)
+        height = intel.get("height") or file.get("height", 0)
+        creatives.append({
+            "groupId": f"g_{file_idx}", "name": file.get("name", ""),
+            "size": f"{width}x{height}", "format": "banner",
+            "url": file.get("url", ""), "zones": assigned_zones,
+            "analysisId": file.get("analysisId") or intel.get("analysis_id", ""),
+        })
+    return creatives
+
+
+async def _build_order_draft(run: dict, workspace: dict) -> CapabilityResult:
+    from creative_intel.service import get_intel
+    from tools.creative_match import enrich_files_with_intel
+    brief = _artifact(workspace, "brief", {})
+    audience = _audience_attrs(_artifact(workspace, "audience", {}))
+    targeting = _artifact(workspace, "targeting", {})
+    creative = _artifact(workspace, "creative", {})
+    files = enrich_files_with_intel(
+        (creative or {}).get("files", []), await get_intel(run["session_id"])
+    )
+    placements = _placement_ids(_artifact(workspace, "placements", {}))
+    assignments_value = _artifact(workspace, "assignments", {})
+    assignments = assignments_value.get("assignments", assignments_value)
+    payload = {
+        "brand": brief.get("brand", ""),
+        "advertiser": brief.get("advertiser") or brief.get("brand", ""),
+        "objective": brief.get("objective", "awareness"),
+        "status": "pending", "budget": brief.get("budget", 0) * 1_000_000,
+        "daily": 0, "rate": 0, "rateType": "CPM",
+        "startDate": brief.get("startDate", ""), "endDate": brief.get("endDate", ""),
+        "placements": placements, "targeting": targeting,
+        "dmp": {"include": [item.get("_id") for item in audience if item.get("_id")],
+                "exclude": []},
+        "freqCap": "3", "idempotencyKey": f"autopilot:{run['run_id']}:launch",
+    }
+    payload["creatives"] = _build_creatives(files, assignments, placements)
+    payload["creative"] = payload["creatives"][0] if payload["creatives"] else {}
+    return CapabilityResult(
+        value={"payload": payload, "status": "draft"},
+        evidence=[{"type": "order_draft", "placements": len(placements),
+                   "creatives": len(payload["creatives"]),
+                   "idempotency_key": payload["idempotencyKey"]}],
+    )
+
+
+async def _run_order_guard(run: dict, workspace: dict) -> CapabilityResult:
+    from validation.order_guard import OrderValidationError, guard_order
+    draft = _artifact(workspace, "order_draft", {})
+    payload = draft.get("payload", {}) if isinstance(draft, dict) else {}
+    session = await get_or_create_session(run["session_id"])
+    try:
+        await guard_order(payload, session)
+    except OrderValidationError as exc:
+        return CapabilityResult(
+            value={"passed": False, "reasons": exc.reasons,
+                   "review_action": "retry"},
+            evidence=[{"type": "order_guard", "passed": False,
+                       "reasons": exc.reasons}], force_review=True,
+        )
+    return CapabilityResult(
+        value={"passed": True},
+        evidence=[{"type": "order_guard", "passed": True}],
+    )
+
+
+async def _launch_approval(run: dict, workspace: dict) -> CapabilityResult:
+    draft = _artifact(workspace, "order_draft", {})
+    payload = draft.get("payload", {}) if isinstance(draft, dict) else {}
+    return CapabilityResult(
+        value={"ready": True, "requires_explicit_approval": True,
+               "summary": {"brand": payload.get("brand"),
+                           "budget": payload.get("budget"),
+                           "placements": payload.get("placements", [])}},
+        evidence=[{"type": "launch_boundary", "auto_approvable": False}],
+        force_review=True,
+    )
+
+
+async def _create_order(run: dict, workspace: dict) -> CapabilityResult:
+    from tools.order_api import create_order
+    from validation.order_guard import guard_order
+    draft = _artifact(workspace, "order_draft", {})
+    payload = draft.get("payload", {}) if isinstance(draft, dict) else {}
+    # Recheck live catalogs/conflicts immediately before the side effect.
+    await guard_order(payload, await get_or_create_session(run["session_id"]))
+    result = await create_order(payload)
+    if result.get("error"):
+        raise RuntimeError(f"order API rejected launch: {result}")
+    return CapabilityResult(
+        value={"order": result, "idempotency_key": payload["idempotencyKey"]},
+        evidence=[{"type": "order_api", "order_id": result.get("id") or result.get("_id"),
+                   "idempotency_key": payload["idempotencyKey"]}],
+    )
+
+
+async def _verify_order(run: dict, workspace: dict) -> CapabilityResult:
+    from tools.order_api import fetch_order
+    current = _artifact(workspace, "order", {})
+    order = current.get("order", current) if isinstance(current, dict) else {}
+    order_id = order.get("id") or order.get("_id")
+    if not order_id:
+        raise RuntimeError("created order has no id")
+    verified = await fetch_order(str(order_id))
+    return CapabilityResult(
+        value={"order": verified, "verified": True,
+               "idempotency_key": current.get("idempotency_key")},
+        evidence=[{"type": "order_verification", "order_id": order_id}],
+    )
+
+
+async def _create_setup_report(run: dict, workspace: dict) -> CapabilityResult:
+    order = _artifact(workspace, "order", {})
+    forecast = _artifact(workspace, "forecast", {})
+    return CapabilityResult(
+        value={"kind": "setup_report", "order": order, "forecast": forecast,
+               "performance_data_available": False,
+               "note": "Báo cáo hiệu suất sẽ chỉ được tạo khi có dữ liệu thực."},
+        evidence=[{"type": "workspace_artifacts", "artifacts": ["order", "forecast"]}],
+    )
+
+
+CAPABILITIES = {
+    "normalize_brief": _normalize_brief,
+    "validate_brief": _validate_brief,
+    "generate_strategy_options": _generate_strategy,
+    "retrieve_and_rank_audience": _retrieve_audience,
+    "derive_targeting_and_exclusions": _derive_targeting,
+    "analyze_creatives": _analyze_creatives,
+    "rank_available_placements": _rank_placements,
+    "assign_creatives_to_placements": _assign_creatives,
+    "forecast_reach_cost_and_risk": _forecast,
+    "build_order_draft": _build_order_draft,
+    "run_order_guard": _run_order_guard,
+    "request_launch_approval": _launch_approval,
+    "create_order_idempotently": _create_order,
+    "verify_order": _verify_order,
+    "create_setup_report": _create_setup_report,
+}
+
+
+async def execute(task: dict, run: dict) -> CapabilityResult:
+    capability = CAPABILITIES.get(task["capability"])
+    if capability is None:
+        raise ValueError(f"unsupported capability: {task['capability']}")
+    workspace = await get_workspace(run["session_id"])
+    return await capability(run, workspace)

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from models import ChatRequest, AgentResponse
 from ratelimit import limiter, CHAT_LIMIT, RECOMMEND_LIMIT
@@ -288,10 +289,42 @@ class _ArtifactResultRequest(BaseModel):
     reason: str = ""
 
 
+class _WorkspacePreferencesRequest(BaseModel):
+    session_id: str = "default"
+    experience_mode: str | None = None
+    approval_policy: str | None = None
+    base_revision: int | None = None
+    actor: str = "campaign_operator"
+    idempotency_key: str = ""
+
+
 @agent_router.get("/workspace")
 async def workspace_get(session_id: str = "default"):
     from workspace.service import get_workspace
     return await get_workspace(session_id)
+
+
+@agent_router.post("/workspace/preferences")
+async def workspace_preferences(request: _WorkspacePreferencesRequest):
+    from workspace.service import WorkspaceConflict, set_preferences
+    try:
+        return await set_preferences(
+            request.session_id,
+            experience_mode=request.experience_mode,
+            approval_policy=request.approval_policy,
+            base_revision=request.base_revision,
+            actor=request.actor,
+            idempotency_key=request.idempotency_key,
+        )
+    except WorkspaceConflict as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "workspace_revision_conflict",
+            "expected_revision": exc.expected,
+            "actual_revision": exc.actual,
+            "workspace": jsonable_encoder(exc.workspace),
+        }) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @agent_router.get("/workspace/recompute-plan")
@@ -502,6 +535,125 @@ async def commit_workspace(request: _WorkspaceMutationRequest):
     value_summary = list(value.keys()) if isinstance(value, dict) else str(value)[:60]
     await log_event(sid, "commit_workspace", {"field": field, "value_keys": value_summary})
     return mutation
+
+
+# ─── Durable Campaign Autopilot ──────────────────────────────────────────────
+
+class _AutopilotStartRequest(BaseModel):
+    session_id: str = "default"
+    approval_policy: str = "critical_only"
+    actor: str = "campaign_operator"
+    idempotency_key: str = ""
+
+
+class _AutopilotActionRequest(BaseModel):
+    actor: str = "campaign_operator"
+    reason: str = ""
+
+
+class _AutopilotReviewRequest(_AutopilotActionRequest):
+    approved: bool
+
+
+def _autopilot_error(exc: Exception) -> HTTPException:
+    from autopilot.service import RunConflict
+    if isinstance(exc, KeyError):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, RunConflict):
+        return HTTPException(status_code=409, detail=str(exc))
+    return HTTPException(status_code=422, detail=str(exc))
+
+
+@agent_router.post("/autopilot/runs", status_code=201)
+async def autopilot_start(request: _AutopilotStartRequest):
+    from autopilot.service import RunConflict, create_run
+    try:
+        return await create_run(
+            request.session_id,
+            approval_policy=request.approval_policy,
+            actor=request.actor,
+            idempotency_key=request.idempotency_key,
+        )
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.get("/autopilot/runs/{run_id}")
+async def autopilot_get(run_id: str):
+    from autopilot.service import RunConflict, get_run
+    try:
+        return await get_run(run_id)
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.post("/autopilot/runs/{run_id}/pause")
+async def autopilot_pause(run_id: str, request: _AutopilotActionRequest):
+    from autopilot.service import RunConflict, pause_run
+    try:
+        return await pause_run(run_id, actor=request.actor)
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.post("/autopilot/runs/{run_id}/resume")
+async def autopilot_resume(run_id: str, request: _AutopilotActionRequest):
+    from autopilot.service import RunConflict, resume_run
+    try:
+        return await resume_run(run_id, actor=request.actor)
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.post("/autopilot/runs/{run_id}/cancel")
+async def autopilot_cancel(run_id: str, request: _AutopilotActionRequest):
+    from autopilot.service import RunConflict, cancel_run
+    try:
+        return await cancel_run(run_id, actor=request.actor)
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.post("/autopilot/runs/{run_id}/tasks/{task_id}/review")
+async def autopilot_review(
+    run_id: str, task_id: str, request: _AutopilotReviewRequest
+):
+    from autopilot.service import RunConflict, review_task
+    try:
+        return await review_task(
+            run_id, task_id, approved=request.approved,
+            actor=request.actor, reason=request.reason,
+        )
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.get("/autopilot/runs/{run_id}/events")
+async def autopilot_events(run_id: str, request: Request, follow: bool = True):
+    """Stream durable run events. ``follow=false`` returns the current backlog."""
+    import asyncio
+    import json
+    from autopilot.service import get_run, list_events
+    try:
+        await get_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    async def stream():
+        cursor = None
+        while True:
+            events = await list_events(run_id, after=cursor)
+            for event in events:
+                cursor = event["created_at"]
+                payload = json.dumps(jsonable_encoder(event), ensure_ascii=False)
+                yield f"id: {event['event_id']}\nevent: {event['type']}\ndata: {payload}\n\n"
+            if not follow or await request.is_disconnected():
+                break
+            if not events:
+                yield ": keepalive\n\n"
+            await asyncio.sleep(1)
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 # ─── Image generation ─────────────────────────────────────────────────────────

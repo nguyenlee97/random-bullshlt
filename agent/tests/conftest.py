@@ -55,4 +55,13 @@ def reset_session_col(monkeypatch):
         monkeypatch.setattr(workspace_service, "_locks", {}, raising=False)
     except ImportError:
         pass
+    try:
+        from autopilot import service as autopilot_service
+        monkeypatch.setattr(autopilot_service, "_mem_runs", {}, raising=False)
+        monkeypatch.setattr(autopilot_service, "_mem_tasks", {}, raising=False)
+        monkeypatch.setattr(autopilot_service, "_mem_events", [], raising=False)
+        monkeypatch.setattr(autopilot_service, "_lock", __import__("asyncio").Lock(),
+                            raising=False)
+    except ImportError:
+        pass
     yield

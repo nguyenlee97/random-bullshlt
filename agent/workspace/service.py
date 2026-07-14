@@ -171,6 +171,113 @@ async def get_workspace(session_id: str) -> dict:
     return _public(_mem_workspaces[session_id])
 
 
+async def set_preferences(
+    session_id: str,
+    *,
+    experience_mode: str | None = None,
+    approval_policy: str | None = None,
+    base_revision: int | None = None,
+    actor: str = "campaign_operator",
+    idempotency_key: str = "",
+) -> dict:
+    """Persist workflow preferences without invalidating campaign artifacts."""
+    if experience_mode not in {None, "guided", "autopilot"}:
+        raise ValueError("experience_mode must be guided or autopilot")
+    if approval_policy not in {
+        None, "review_every_stage", "critical_only", "auto_build_draft"
+    }:
+        raise ValueError("unsupported approval_policy")
+    if experience_mode is None and approval_policy is None:
+        raise ValueError("at least one preference is required")
+
+    current = await get_workspace(session_id)
+    expected = current["revision"] if base_revision is None else base_revision
+    workspace_id = current["workspace_id"]
+    key = idempotency_key or f"pref_{uuid.uuid4().hex}"
+    changed = {
+        name: value for name, value in {
+            "experience_mode": experience_mode,
+            "approval_policy": approval_policy,
+        }.items() if value is not None and current.get(name) != value
+    }
+    if not changed:
+        return {
+            "ok": True, "workspace_id": workspace_id,
+            "workspace_revision": current["revision"], "changed": {},
+            "duplicate": False,
+        }
+    event = {
+        "event_id": f"wev_{uuid.uuid4().hex}",
+        "workspace_id": workspace_id,
+        "revision": expected + 1,
+        "type": "workspace_preferences_changed",
+        "actor": actor,
+        "changes": deepcopy(changed),
+        "idempotency_key": key,
+        "created_at": _now(),
+    }
+    result = {
+        "ok": True, "workspace_id": workspace_id,
+        "workspace_revision": expected + 1, "changed": deepcopy(changed),
+        "event_id": event["event_id"], "duplicate": False,
+    }
+
+    if await _ensure_store():
+        raw = await _workspaces.find_one({"_id": workspace_id})
+        duplicate = next(
+            (item for item in raw.get("applied_mutations", []) if item.get("key") == key),
+            None,
+        )
+        if duplicate:
+            return {**duplicate["result"], "duplicate": True}
+        if raw["revision"] != expected:
+            raise WorkspaceConflict(expected, raw["revision"], _public(raw))
+        update = await _workspaces.update_one(
+            {"_id": workspace_id, "revision": expected,
+             "applied_mutations.key": {"$ne": key}},
+            {"$set": {**changed, "revision": expected + 1,
+                      "updated_at": event["created_at"]},
+             "$push": {
+                 "events": {"$each": [event], "$slice": -200},
+                 "applied_mutations": {
+                     "$each": [{"key": key, "result": result}], "$slice": -200
+                 },
+             }},
+        )
+        if update.modified_count != 1:
+            latest = await _workspaces.find_one({"_id": workspace_id})
+            duplicate = next(
+                (item for item in latest.get("applied_mutations", [])
+                 if item.get("key") == key), None,
+            )
+            if duplicate:
+                return {**duplicate["result"], "duplicate": True}
+            raise WorkspaceConflict(expected, latest["revision"], _public(latest))
+        try:
+            await _events.insert_one(event)
+        except Exception:
+            pass
+    else:
+        lock = _locks.setdefault(session_id, asyncio.Lock())
+        async with lock:
+            raw = _mem_workspaces[session_id]
+            duplicate = next(
+                (item for item in raw["applied_mutations"] if item["key"] == key), None
+            )
+            if duplicate:
+                return {**duplicate["result"], "duplicate": True}
+            if raw["revision"] != expected:
+                raise WorkspaceConflict(expected, raw["revision"], _public(raw))
+            raw.update(changed)
+            raw["revision"] = expected + 1
+            raw["updated_at"] = event["created_at"]
+            raw["events"] = (raw["events"] + [event])[-200:]
+            raw["applied_mutations"] = (
+                raw["applied_mutations"] + [{"key": key, "result": result}]
+            )[-200:]
+    return result
+
+
 async def get_recompute_plan(session_id: str) -> dict:
     return build_recompute_plan(await get_workspace(session_id))
 

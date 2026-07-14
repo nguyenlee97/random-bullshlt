@@ -48,6 +48,20 @@ class Config:
     USE_LANGGRAPH_FREEFORM: bool = os.getenv("USE_LANGGRAPH_FREEFORM", "false").lower() == "true"
     # Hard token cap per chat request — agentic loop can never spend unbounded.
     TOKEN_BUDGET_PER_REQUEST: int = int(os.getenv("TOKEN_BUDGET_PER_REQUEST", "60000"))
+    # Durable Campaign Autopilot worker. The API remains available while the
+    # flag is false, but no background task is claimed automatically.
+    USE_CAMPAIGN_AUTOPILOT: bool = (
+        os.getenv("USE_CAMPAIGN_AUTOPILOT", "false").lower() == "true"
+    )
+    AUTOPILOT_WORKER_POLL_SECONDS: float = float(
+        os.getenv("AUTOPILOT_WORKER_POLL_SECONDS", "0.5")
+    )
+    AUTOPILOT_TASK_LEASE_SECONDS: int = int(
+        os.getenv("AUTOPILOT_TASK_LEASE_SECONDS", "90")
+    )
+    AUTOPILOT_TASK_MAX_ATTEMPTS: int = int(
+        os.getenv("AUTOPILOT_TASK_MAX_ATTEMPTS", "3")
+    )
     # Critic / judge model (different family+provider than generator — see ADR).
     CRITIC_BASE_URL: str = os.getenv("CRITIC_BASE_URL", "")
     CRITIC_API_KEY: str = os.getenv("CRITIC_API_KEY", "") or os.getenv("JUDGE_API_KEY", "")

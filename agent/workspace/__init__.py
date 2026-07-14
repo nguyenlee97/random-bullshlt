@@ -10,6 +10,7 @@ from workspace.service import (
     get_recompute_plan,
     get_task_context,
     get_workspace,
+    set_preferences,
     list_pending_proposals,
     reject_proposal,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "get_recompute_plan",
     "get_task_context",
     "get_workspace",
+    "set_preferences",
     "list_pending_proposals",
     "reject_proposal",
 ]

@@ -80,4 +80,7 @@ BUILD_FEATURES = [
     "setup-entry-history-fix",        # proactive setup message is persisted before next chat turn
     "dependency-aware-readiness",     # /ready verifies MongoDB + backend before receiving traffic
     "reproducible-local-stack",       # frontend + seeded backend + agent + observability via Compose
+    "transactional-campaign-workspace", # revisioned canonical artifacts + typed proposals
+    "nonlinear-artifact-recompute",     # dependency-aware stale/reuse orchestration
+    "durable-campaign-autopilot",       # persisted runs/tasks, leases, review, pause/resume/cancel
 ]
