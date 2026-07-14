@@ -56,7 +56,13 @@ app.use('/api/reports',        require('./routes/reports'));
 
 // ── HEALTH ────────────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, ts: new Date().toISOString(), env: process.env.NODE_ENV });
+  const dbReady = mongoose.connection.readyState === 1;
+  res.status(dbReady ? 200 : 503).json({
+    ok: dbReady,
+    db: dbReady ? 'connected' : 'disconnected',
+    ts: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+  });
 });
 
 // ── 404 ───────────────────────────────────────────────────────────────────────

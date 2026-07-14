@@ -16,7 +16,7 @@ from starlette.responses import JSONResponse
 
 from config import config
 
-EXEMPT_PATHS = {"/api/health", "/health", "/api/version", "/metrics"}
+EXEMPT_PATHS = {"/api/health", "/health", "/ready", "/api/version", "/metrics"}
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):

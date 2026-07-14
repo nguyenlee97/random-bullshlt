@@ -5,7 +5,7 @@ Phase 1: Creative assignment (auto_assign)
 Phase 2: Order creation (single POST /api/orders with all zones + creatives[])
 """
 from models import AgentResponse, SetupData, ResponseMeta
-from session import get_or_create_session, update_form_state, update_order_ids, log_event
+from session import add_message, get_or_create_session, update_form_state, update_order_ids, log_event
 from tools.zone_ranker import rank_zones
 from tools.creative_match import auto_assign
 from tools.order_api import create_order
@@ -156,6 +156,11 @@ async def handle_setup_entry(session_id: str) -> dict:
         {"label": "➕ Thêm zone",           "action": "prefill", "text": "Thêm zone "},
         {"label": "🗑️ Bỏ zone",             "action": "prefill", "text": "Bỏ zone "},
     ]
+
+    # Proactive messages are part of the conversation too. Persisting this is
+    # essential: otherwise the next free-form turn sees incomplete history and
+    # may answer as if the user were still on an earlier campaign step.
+    await add_message(session_id, "assistant", reply_text)
 
     return {
         "skip": False,

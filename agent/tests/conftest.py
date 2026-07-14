@@ -31,7 +31,16 @@ def reset_session_col(monkeypatch):
     on the current test's loop (which points to the unreachable address → in-memory fallback).
     """
     import session
-    # Reset both the collection reference and the in-memory store so tests are isolated
+    # Never let unit tests reuse a Motor client/collection created on another
+    # pytest event loop.  Mark Mongo unavailable instead of reconnecting: these
+    # tests exercise agent logic, while Mongo integration is covered separately.
+    client = getattr(session, "_client", None)
+    if client is not None:
+        client.close()
+    monkeypatch.setattr(session, "_client", None, raising=False)
     monkeypatch.setattr(session, "_sessions_col", None, raising=False)
-    monkeypatch.setattr(session, "_mem_store", {}, raising=False)
+    monkeypatch.setattr(session, "_logs_col", None, raising=False)
+    monkeypatch.setattr(session, "_mongo_ok", False, raising=False)
+    monkeypatch.setattr(session, "_mem", {}, raising=False)
+    monkeypatch.setattr(session, "_mem_logs", [], raising=False)
     yield

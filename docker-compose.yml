@@ -8,6 +8,21 @@
 # Production migration path (⛔ don't break the demo): run this ALONGSIDE PM2 first,
 # flip nginx upstreams to container ports after 48h healthy, then retire PM2.
 services:
+  frontend:
+    build:
+      context: ./agent_frontend
+      args:
+        VITE_AGENT_URL: http://localhost:8080
+        VITE_BACKEND_URL: http://localhost:3000
+        VITE_AGENT_API_KEY: ${AGENT_API_KEY:-}
+    ports: ["5175:80"]
+    depends_on:
+      agent:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
   agent:
     build: ./agent
     ports: ["8080:8080"]
@@ -18,7 +33,13 @@ services:
       - QDRANT_URL=http://qdrant:6333              # Phase 2 vector store
     volumes:
       - hf_cache:/root/.cache/huggingface          # embedding models survive rebuilds
-    depends_on: [mongo, backend, qdrant]
+    depends_on:
+      mongo:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
     restart: unless-stopped
 
   backend:
@@ -27,13 +48,33 @@ services:
     environment:
       - MONGODB_URI=mongodb://mongo:27017/adspilot
       - PORT=3000
-    depends_on: [mongo]
+    depends_on:
+      mongo:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+  seed:
+    build: ./backend
+    command: ["sh", "-c", "node seed/index.js && node seed/seed-audience-missing.js"]
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/adspilot
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: "no"
 
   mongo:
     image: mongo:8
     ports: ["27017:27017"]
     volumes: [mongo_data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     restart: unless-stopped
 
   qdrant:                                          # Phase 2 vector store (idle until then)

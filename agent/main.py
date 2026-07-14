@@ -1,11 +1,26 @@
 """
 E4b Agent Backend — FastAPI app entry point.
 """
+import sys
 import uvicorn
 from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import config
+
+
+def _configure_stdio() -> None:
+    """Keep Vietnamese/emoji logs from crashing Windows cp1252 consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, OSError):
+                pass
+
+
+_configure_stdio()
 
 # Build version lives in version.py so handlers can import it without touching
 # main.py (kills the main→router→boot→main circular import when running
@@ -73,6 +88,31 @@ async def health():
 @app.get("/health")
 async def health_root():
     return {"status": "ok", "version": BUILD_VERSION}
+
+
+@app.get("/ready")
+async def readiness():
+    """Dependency-aware readiness used by Compose and deployment checks."""
+    import httpx
+    from session import _ensure_mongo
+
+    checks = {"mongo": False, "backend": False}
+    try:
+        checks["mongo"] = await _ensure_mongo()
+    except Exception:
+        pass
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{config.BACKEND_URL.rstrip('/')}/api/health")
+            checks["backend"] = response.is_success
+    except Exception:
+        pass
+
+    ready = all(checks.values())
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "not_ready", "checks": checks},
+    )
 
 
 @app.get("/api/version")

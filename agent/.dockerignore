@@ -3,6 +3,8 @@
 !.env.example
 .gitignore
 __pycache__/
+.pytest_cache/
+venv/
 *.pyc
 *.pyo
 .DS_Store
@@ -10,3 +12,4 @@ __pycache__/
 README.md
 check_syntax.py
 setup_mongo_for_agent.sh
+tests/

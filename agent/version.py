@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-04.5"
+BUILD_VERSION = "2026-07-14.1"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -70,4 +70,7 @@ BUILD_FEATURES = [
     "phase2-rag-audience",            # hybrid retrieve→rerank→LLM behind USE_RAG_AUDIENCE
     "phase2-rerank-live",             # qwen3-reranker-8b via MaaS /v1/rerank
     "phase3-creative-intel",          # PIL deterministic pass + review queue + optional VLM
+    "setup-entry-history-fix",        # proactive setup message is persisted before next chat turn
+    "dependency-aware-readiness",     # /ready verifies MongoDB + backend before receiving traffic
+    "reproducible-local-stack",       # frontend + seeded backend + agent + observability via Compose
 ]
