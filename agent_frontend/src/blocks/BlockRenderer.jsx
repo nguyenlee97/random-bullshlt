@@ -309,7 +309,9 @@ function WorkspaceProposalBlock({ block }) {
       // Setup is special: do NOT apply the stale proposal value (which has all recommended
       // zones regardless of what the user deselected). Instead dispatch a dedicated event
       // so App.jsx advances the sub-phase to 'assign' using the CURRENT workspace selection.
-      window.dispatchEvent(new CustomEvent('agent:setup_zones_confirmed'))
+      window.dispatchEvent(new CustomEvent('agent:setup_zones_confirmed', {
+        detail: { proposal_id: changes.proposal_id }
+      }))
     } else {
       window.dispatchEvent(new CustomEvent('agent:workspace_confirm', {
         detail: { patch: changes }
@@ -319,7 +321,9 @@ function WorkspaceProposalBlock({ block }) {
 
   const handleCancel = () => {
     log.block('workspace_proposal CANCEL', { field })
-    window.dispatchEvent(new CustomEvent('agent:workspace_cancel', { detail: { field } }))
+    window.dispatchEvent(new CustomEvent('agent:workspace_cancel', {
+      detail: { field, proposal_id: changes.proposal_id }
+    }))
   }
 
   return (

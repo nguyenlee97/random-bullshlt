@@ -73,8 +73,31 @@ async def intercepts_node(state: AgentState) -> dict:
     pending = await get_pending_proposal(session_id)
 
     if is_confirm and pending:
+        proposal_id = pending.get("proposal_id")
+        mutation = None
+        if proposal_id:
+            from workspace.service import WorkspaceConflict, approve_proposal
+            try:
+                mutation = await approve_proposal(
+                    proposal_id, actor="campaign_operator"
+                )
+            except WorkspaceConflict as exc:
+                return {
+                    "response_text": (
+                        "⚠ Workspace đã thay đổi sau khi đề xuất này được tạo. "
+                        "Em chưa áp dụng để tránh ghi đè dữ liệu mới; Anh/Chị xem lại đề xuất nhé."
+                    ),
+                    "response_blocks": [{
+                        "type": "workspace_conflict",
+                        "expected_revision": exc.expected,
+                        "actual_revision": exc.actual,
+                    }],
+                    "used_tool": "workspace_conflict",
+                }
         await clear_pending_proposal(session_id)
-        await log_event(session_id, "proposal_confirmed", {"changes": pending})
+        await log_event(session_id, "proposal_confirmed", {
+            "proposal_id": proposal_id, "changes": pending,
+        })
         await add_message(session_id, "user", message)
         field = pending.get("field", "")
         value = pending.get("value")
@@ -84,13 +107,19 @@ async def intercepts_node(state: AgentState) -> dict:
                 value = _j.loads(value)
             except Exception:
                 pass
-        await update_form_state(session_id, field, value)
+        if not proposal_id:
+            await update_form_state(session_id, field, value)
         text = f"✅ Đã áp dụng thay đổi cho `{field}`. Anh/Chị xem panel phải nhé!"
         await add_message(session_id, "assistant", text)
         return {
             "response_text": text,
             "response_blocks": [{"type": "info", "text": f"Workspace đã cập nhật: `{field}`."}],
-            "workspace_update": {"field": field, "value": value},
+            "workspace_update": {
+                "field": field,
+                "value": value,
+                "proposal_id": proposal_id,
+                "workspace_revision": mutation.get("workspace_revision") if mutation else None,
+            },
             "used_tool": "workspace_confirmed",
         }
 

@@ -640,6 +640,22 @@ function _genSessionId() {
   return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
 let SESSION_ID = _genSessionId()
+let WORKSPACE_REVISION = null
+const _workspaceMutationKeys = new Map()
+
+function _mutationKey(field, value) {
+  const signature = `${field}:${JSON.stringify(value)}`
+  const now = Date.now()
+  for (const [key, entry] of _workspaceMutationKeys.entries()) {
+    if (now - entry.createdAt > 60_000) _workspaceMutationKeys.delete(key)
+  }
+  if (!_workspaceMutationKeys.has(signature)) {
+    const id = globalThis.crypto?.randomUUID?.()
+      || `wmut_${now}_${Math.random().toString(36).slice(2)}`
+    _workspaceMutationKeys.set(signature, { id, createdAt: now })
+  }
+  return _workspaceMutationKeys.get(signature).id
+}
 
 // Expose to window so ChatPane export can reference it
 if (typeof window !== 'undefined') window.__AGENT_SESSION_ID__ = SESSION_ID
@@ -972,9 +988,13 @@ export const AgentAPI = {
       step: currentStep,
       message: text,
       workspace: compactWorkspace,
+      workspace_revision: WORKSPACE_REVISION,
       confirmed_steps: confirmedSteps,
       workspace_events: workspaceEvents || [],
     })
+    if (real?.workspace_update || real?.metadata?.tool === 'targeting_autopick') {
+      await this.getWorkspace()
+    }
     return real ?? AGENT_SCENARIOS.chat(text, currentStep, formState)
   },
 
@@ -985,6 +1005,7 @@ export const AgentAPI = {
       message: '',
       formData: { brief: briefData },
     })
+    if (real) await this.getWorkspace()
     return real ?? AGENT_SCENARIOS.approveBrief(briefData)
   },
 
@@ -997,6 +1018,7 @@ export const AgentAPI = {
       formData: { creative: creativeData },
     })
     if (!real) throw new Error('Agent không lưu được creative đã phân tích')
+    await this.getWorkspace()
     return real
   },
 
@@ -1008,6 +1030,7 @@ export const AgentAPI = {
       message: '',
       formData: { segment: segmentData },
     })
+    if (real) await this.getWorkspace()
     return real ?? AGENT_SCENARIOS.approveAudience(segmentData)
   },
 
@@ -1039,6 +1062,8 @@ export const AgentAPI = {
   /** Generate a fresh session ID — call before newChat() to get a clean backend context. */
   newSession() {
     SESSION_ID = _genSessionId()
+    WORKSPACE_REVISION = null
+    _workspaceMutationKeys.clear()
     if (typeof window !== 'undefined') window.__AGENT_SESSION_ID__ = SESSION_ID
     _agentReachable = null   // re-probe health on next call
     return SESSION_ID
@@ -1079,15 +1104,98 @@ export const AgentAPI = {
    */
   async commitWorkspace(field, value) {
     try {
+      if (WORKSPACE_REVISION == null) await this.getWorkspace()
+      const idempotencyKey = _mutationKey(field, value)
       const res = await agentFetch(`${AGENT_URL}/api/agent/commit-workspace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: SESSION_ID, field, value }),
+        body: JSON.stringify({
+          session_id: SESSION_ID,
+          field,
+          value,
+          base_revision: WORKSPACE_REVISION,
+          idempotency_key: idempotencyKey,
+          actor: 'campaign_operator',
+          reason: 'guided_workspace_confirmation',
+        }),
         signal: AbortSignal.timeout(5000),
       })
-      return res.ok ? await res.json() : { ok: false }
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 409) {
+        const conflict = data?.detail || data
+        WORKSPACE_REVISION = conflict?.actual_revision ?? WORKSPACE_REVISION
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('agent:workspace_conflict', { detail: conflict }))
+        }
+        return { ok: false, conflict: true, ...conflict }
+      }
+      if (!res.ok) return { ok: false, status: res.status, ...data }
+      WORKSPACE_REVISION = data.workspace_revision ?? WORKSPACE_REVISION
+      return data
     } catch (e) {
       console.warn('[commitWorkspace] failed:', e.message)
+      return { ok: false }
+    }
+  },
+
+  async getWorkspace() {
+    try {
+      const res = await agentFetch(
+        `${AGENT_URL}/api/agent/workspace?session_id=${encodeURIComponent(SESSION_ID)}`,
+        { signal: AbortSignal.timeout(5000) },
+      )
+      if (!res.ok) return null
+      const workspace = await res.json()
+      WORKSPACE_REVISION = workspace.revision
+      return workspace
+    } catch (e) {
+      console.warn('[getWorkspace] failed:', e.message)
+      return null
+    }
+  },
+
+  async approveWorkspaceProposal(proposalId) {
+    try {
+      const res = await agentFetch(
+        `${AGENT_URL}/api/agent/workspace/proposals/${encodeURIComponent(proposalId)}/approve`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actor: 'campaign_operator' }),
+          signal: AbortSignal.timeout(5000),
+        },
+      )
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 409) {
+        const conflict = data?.detail || data
+        WORKSPACE_REVISION = conflict?.actual_revision ?? WORKSPACE_REVISION
+        window.dispatchEvent(new CustomEvent('agent:workspace_conflict', { detail: conflict }))
+        return { ok: false, conflict: true, ...conflict }
+      }
+      if (!res.ok) return { ok: false, status: res.status, ...data }
+      WORKSPACE_REVISION = data.workspace_revision ?? WORKSPACE_REVISION
+      return data
+    } catch (e) {
+      console.warn('[approveWorkspaceProposal] failed:', e.message)
+      return { ok: false }
+    }
+  },
+
+  async rejectWorkspaceProposal(proposalId, reason = 'user_rejected') {
+    if (!proposalId) return { ok: true }
+    try {
+      const res = await agentFetch(
+        `${AGENT_URL}/api/agent/workspace/proposals/${encodeURIComponent(proposalId)}/reject`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actor: 'campaign_operator', reason }),
+          signal: AbortSignal.timeout(5000),
+        },
+      )
+      return res.ok ? await res.json() : { ok: false, status: res.status }
+    } catch (e) {
+      console.warn('[rejectWorkspaceProposal] failed:', e.message)
       return { ok: false }
     }
   },

@@ -76,7 +76,9 @@ async def get_or_create_session(session_id: str) -> dict:
         return _mem[session_id]
 
 
-async def update_form_state(session_id: str, key: str, data) -> None:
+async def update_form_state(
+    session_id: str, key: str, data, *, sync_workspace: bool = True
+) -> None:
     if await _ensure_mongo():
         await _sessions_col.update_one(
             {"_id": session_id},
@@ -87,6 +89,11 @@ async def update_form_state(session_id: str, key: str, data) -> None:
         s = _mem.setdefault(session_id, _default_session(session_id))
         s["form_state"][key] = data
         s["updated_at"] = _now()
+    if sync_workspace:
+        # Lazy import avoids a module cycle: workspace.service mirrors back to
+        # this function with sync_workspace=False after its canonical commit.
+        from workspace.service import sync_from_legacy
+        await sync_from_legacy(session_id, key, data)
 
 
 async def update_order_ids(session_id: str, order_ids: list) -> None:
@@ -178,4 +185,3 @@ async def clear_pending_proposal(session_id: str) -> None:
         )
     else:
         _mem.get(session_id, {}).pop("pending_proposal", None)
-

@@ -81,6 +81,7 @@ async def handle_freeform_graph(
     step: int,
     session_id: str,
     workspace: dict | None = None,
+    workspace_revision: int | None = None,
     confirmed_steps: list[int] | None = None,
     workspace_events: list[str] | None = None,
 ) -> AgentResponse:
@@ -93,6 +94,7 @@ async def handle_freeform_graph(
         "step": step,
         "user_message": message,
         "workspace": workspace or {},
+        "workspace_revision": workspace_revision,
         "confirmed_steps": confirmed_steps or [],
         "workspace_events": workspace_events or [],
         "mode": mode,

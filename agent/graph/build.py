@@ -18,6 +18,7 @@ from langgraph.graph import END, StateGraph
 
 from graph.state import MAX_TOOL_ROUNDS, AgentState
 from graph.nodes.intercepts import intercepts_node
+from graph.nodes.workspace_intent import workspace_intent_node
 from graph.nodes.agent_node import (
     agent_node,
     context_node,
@@ -28,6 +29,10 @@ from graph.nodes.agent_node import (
 
 
 def _route_after_intercepts(state: AgentState) -> str:
+    return "respond" if state.get("response_text") else "workspace_intent"
+
+
+def _route_after_workspace_intent(state: AgentState) -> str:
     return "respond" if state.get("response_text") else "context"
 
 
@@ -50,6 +55,7 @@ def _route_after_tools(state: AgentState) -> str:
 def build_chat_graph(checkpointer=None):
     g = StateGraph(AgentState)
     g.add_node("intercepts", intercepts_node)
+    g.add_node("workspace_intent", workspace_intent_node)
     g.add_node("context", context_node)
     g.add_node("agent", agent_node)
     g.add_node("tools", tools_node)
@@ -58,6 +64,8 @@ def build_chat_graph(checkpointer=None):
 
     g.set_entry_point("intercepts")
     g.add_conditional_edges("intercepts", _route_after_intercepts,
+                            {"respond": "respond", "workspace_intent": "workspace_intent"})
+    g.add_conditional_edges("workspace_intent", _route_after_workspace_intent,
                             {"respond": "respond", "context": "context"})
     g.add_edge("context", "agent")
     g.add_conditional_edges("agent", _route_after_agent,

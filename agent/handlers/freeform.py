@@ -346,6 +346,7 @@ async def handle_freeform(
     step: int,
     session_id: str,
     workspace: dict | None = None,
+    workspace_revision: int | None = None,
     confirmed_steps: list[int] | None = None,
     workspace_events: list[str] | None = None,
 ) -> AgentResponse:

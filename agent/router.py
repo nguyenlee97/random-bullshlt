@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from models import ChatRequest, AgentResponse
 from ratelimit import limiter, CHAT_LIMIT, RECOMMEND_LIMIT
@@ -128,6 +129,7 @@ async def chat(request: Request, req: ChatRequest) -> AgentResponse:
             req.step,
             sid,
             workspace=req.workspace,
+            workspace_revision=req.workspace_revision,
             confirmed_steps=req.confirmed_steps,
             workspace_events=req.workspace_events,
         )
@@ -256,21 +258,100 @@ async def email_entry_endpoint(session_id: str = "default"):
     """
     return await handle_email_entry(session_id)
 
+class _WorkspaceMutationRequest(BaseModel):
+    session_id: str = "default"
+    field: str
+    value: object = None
+    base_revision: int | None = None
+    actor: str = "campaign_operator"
+    reason: str = ""
+    idempotency_key: str = ""
+
+
+class _WorkspaceProposalRequest(_WorkspaceMutationRequest):
+    base_revision: int
+
+
+class _ProposalDecisionRequest(BaseModel):
+    actor: str = "campaign_operator"
+    reason: str = ""
+
+
+@agent_router.get("/workspace")
+async def workspace_get(session_id: str = "default"):
+    from workspace.service import get_workspace
+    return await get_workspace(session_id)
+
+
+@agent_router.post("/workspace/proposals")
+async def workspace_create_proposal(request: _WorkspaceProposalRequest):
+    from workspace.service import WorkspaceConflict, create_proposal
+    try:
+        return await create_proposal(
+            request.session_id,
+            request.field,
+            request.value,
+            base_revision=request.base_revision,
+            actor=request.actor,
+            reason=request.reason,
+        )
+    except WorkspaceConflict as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "workspace_revision_conflict",
+            "expected_revision": exc.expected,
+            "actual_revision": exc.actual,
+            "workspace": jsonable_encoder(exc.workspace),
+        }) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@agent_router.post("/workspace/proposals/{proposal_id}/approve")
+async def workspace_approve_proposal(proposal_id: str, request: _ProposalDecisionRequest):
+    from workspace.service import WorkspaceConflict, approve_proposal
+    try:
+        return await approve_proposal(proposal_id, actor=request.actor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except WorkspaceConflict as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "workspace_revision_conflict",
+            "expected_revision": exc.expected,
+            "actual_revision": exc.actual,
+            "workspace": jsonable_encoder(exc.workspace),
+        }) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@agent_router.post("/workspace/proposals/{proposal_id}/reject")
+async def workspace_reject_proposal(proposal_id: str, request: _ProposalDecisionRequest):
+    from workspace.service import reject_proposal
+    try:
+        return await reject_proposal(
+            proposal_id, actor=request.actor, reason=request.reason
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @agent_router.post("/commit-workspace")
-async def commit_workspace(request: dict):
+async def commit_workspace(request: _WorkspaceMutationRequest):
     """
-    Commit a workspace field directly to session form_state.
+    Commit a workspace field through the canonical revisioned workspace, then
+    mirror it to legacy session form_state during migration.
     Called by frontend when user clicks 'Đồng ý' button or footer 'Đồng ý & Tiếp tục',
     bypassing the chat confirm flow (which would require a round-trip LLM call).
-    Body: { session_id, field, value }
+    Body: { session_id, field, value, base_revision, idempotency_key }
     """
     import json as _j
-    from session import update_form_state, get_pending_proposal, clear_pending_proposal, log_event
-    sid = request.get("session_id", "default")
-    field = request.get("field", "")
-    value = request.get("value")
-    if not field:
-        return {"ok": False, "error": "field required"}
+    from session import get_pending_proposal, clear_pending_proposal, log_event
+    from workspace.service import WorkspaceConflict, apply_mutation
+    sid = request.session_id
+    field = request.field
+    value = request.value
 
     # value may arrive as a JSON string if the frontend double-serialized it
     if isinstance(value, str):
@@ -279,7 +360,28 @@ async def commit_workspace(request: dict):
         except Exception:
             pass  # keep as string
 
-    await update_form_state(sid, field, value)
+    try:
+        mutation = await apply_mutation(
+            sid,
+            field,
+            value,
+            base_revision=request.base_revision,
+            actor=request.actor,
+            reason=request.reason,
+            idempotency_key=request.idempotency_key,
+        )
+    except WorkspaceConflict as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "workspace_revision_conflict",
+            "expected_revision": exc.expected,
+            "actual_revision": exc.actual,
+            "workspace": jsonable_encoder(exc.workspace),
+        }) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if mutation.get("duplicate"):
+        return mutation
 
     # Clear pending_proposal for this field if any
     pending = await get_pending_proposal(sid)
@@ -301,7 +403,7 @@ async def commit_workspace(request: dict):
 
     value_summary = list(value.keys()) if isinstance(value, dict) else str(value)[:60]
     await log_event(sid, "commit_workspace", {"field": field, "value_keys": value_summary})
-    return {"ok": True, "field": field}
+    return mutation
 
 
 # ─── Image generation ─────────────────────────────────────────────────────────

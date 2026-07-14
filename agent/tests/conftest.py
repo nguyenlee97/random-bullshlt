@@ -43,4 +43,16 @@ def reset_session_col(monkeypatch):
     monkeypatch.setattr(session, "_mongo_ok", False, raising=False)
     monkeypatch.setattr(session, "_mem", {}, raising=False)
     monkeypatch.setattr(session, "_mem_logs", [], raising=False)
+    try:
+        from workspace import service as workspace_service
+        workspace_client = getattr(workspace_service, "_client", None)
+        if workspace_client is not None:
+            workspace_client.close()
+        monkeypatch.setattr(workspace_service, "_client", None, raising=False)
+        monkeypatch.setattr(workspace_service, "_mongo_ok", False, raising=False)
+        monkeypatch.setattr(workspace_service, "_mem_workspaces", {}, raising=False)
+        monkeypatch.setattr(workspace_service, "_mem_proposals", {}, raising=False)
+        monkeypatch.setattr(workspace_service, "_locks", {}, raising=False)
+    except ImportError:
+        pass
     yield

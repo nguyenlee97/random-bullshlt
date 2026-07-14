@@ -24,9 +24,10 @@ from handlers.freeform import (
 )
 from llm import chat_completion, force_text_completion, sanitize_response
 from prompts.system import SYSTEM_PROMPT
-from session import add_message, get_history, set_pending_proposal, update_form_state
+from session import add_message, get_history, set_pending_proposal
 from tools.registry import TOOL_DEFINITIONS, execute_tool
 from agent_logger import alog
+from workspace.service import approve_proposal, create_proposal, get_workspace, legacy_view
 
 _TOOL_FALLBACKS = {
     "get_audience_list": "Đã tìm thấy các đối tượng phù hợp. Anh/Chị xem danh sách ở panel phải và chọn nhé!",
@@ -37,9 +38,20 @@ _TOOL_FALLBACKS = {
 
 async def context_node(state: AgentState) -> dict:
     """Build the message array. Snapshot is fresh every request (never stored)."""
-    workspace = state.get("workspace") or {}
+    client_workspace = state.get("workspace") or {}
+    canonical = await get_workspace(state["session_id"])
+    client_revision = state.get("workspace_revision")
+    canonical_revision = canonical["revision"]
+    stale_client = client_revision is not None and client_revision != canonical_revision
+    workspace = legacy_view(canonical) if stale_client or not client_workspace else client_workspace
     messages: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": (
+            f"WORKSPACE CANONICAL REVISION: {canonical_revision}. "
+            f"Client revision: {client_revision if client_revision is not None else 'migration/unknown'}. "
+            + ("Client snapshot is stale; canonical server artifacts are authoritative."
+               if stale_client else "Client snapshot is current for this turn.")
+        )},
         {"role": "system", "content": _build_workspace_snapshot(
             workspace, state.get("confirmed_steps") or [], current_step=state["step"])},
     ]
@@ -48,7 +60,8 @@ async def context_node(state: AgentState) -> dict:
         messages.append({"role": "system", "content": diff})
     messages.extend(await get_history(state["session_id"]))  # CONTEXT_WINDOW-trimmed
     messages.append({"role": "user", "content": state["user_message"]})
-    return {"messages": messages, "tool_rounds": 0, "fallback_level": 0}
+    return {"messages": messages, "tool_rounds": 0, "fallback_level": 0,
+            "workspace": workspace, "workspace_revision": canonical_revision}
 
 
 async def agent_node(state: AgentState) -> dict:
@@ -127,13 +140,33 @@ async def tools_node(state: AgentState) -> dict:
         await add_message(session_id, "user", state["user_message"])
         await add_message(session_id, "assistant", reply)
 
+        canonical = await get_workspace(session_id)
+        proposal = await create_proposal(
+            session_id,
+            field,
+            value,
+            base_revision=canonical["revision"],
+            actor="campaign_copilot",
+            reason=first_args.get("reason", ""),
+        )
+        proposal_changes = {
+            **first_args,
+            "proposal_id": proposal["proposal_id"],
+            "base_revision": proposal["base_revision"],
+            "affected_artifacts": proposal["affected_artifacts"],
+        }
+
         if is_confirm and not is_locked:
-            await update_form_state(session_id, field, value)
+            mutation = await approve_proposal(
+                proposal["proposal_id"], actor="campaign_operator"
+            )
             return {"response_text": reply,
                     "response_blocks": [{"type": "info",
                         "text": f"Workspace đã được cập nhật: `{field}`."}],
                     "workspace_update": {"field": field, "value": value,
-                                         "reason": first_args.get("reason", "")},
+                                         "reason": first_args.get("reason", ""),
+                                         "proposal_id": proposal["proposal_id"],
+                                         "workspace_revision": mutation["workspace_revision"]},
                     "used_tool": "update_workspace"}
 
         warning = ""
@@ -142,10 +175,11 @@ async def tools_node(state: AgentState) -> dict:
             if downstream:
                 warning = (f"⚠️ Bước {_STEP_NAMES_VI[step_index]} đã được xác nhận. Nếu thay đổi, "
                            f"các bước sau ({', '.join(downstream)}) sẽ bị reset.")
-        await set_pending_proposal(session_id, first_args)
+        await set_pending_proposal(session_id, proposal_changes)
         return {"response_text": reply,
-                "response_blocks": [{"type": "workspace_proposal", "changes": first_args,
-                                     "is_locked": is_locked, "warning": warning}],
+                "response_blocks": [{"type": "workspace_proposal", "changes": proposal_changes,
+                                     "is_locked": is_locked, "warning": warning,
+                                     "affected_artifacts": proposal["affected_artifacts"]}],
                 "suggestions": _WORKSPACE_SUGGESTIONS.get(field, []),
                 "used_tool": "update_workspace"}
 

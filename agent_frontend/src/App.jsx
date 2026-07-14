@@ -105,6 +105,7 @@ export default function App() {
   const [stepStatuses, setStepStatuses] = useState(STEPS.map(() => 'pending'))
   const [formState, setFormState] = useState(initialState)
   const [workspaceEvents, setWorkspaceEvents] = useState([])
+  const [workspaceConflict, setWorkspaceConflict] = useState(null)
   const workspaceRef = useRef(null)
   const mainRef = useRef(null)
 
@@ -120,6 +121,8 @@ export default function App() {
   useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
   const currentStepRef = useRef(currentStep)
   useEffect(() => { currentStepRef.current = currentStep }, [currentStep])
+
+  useEffect(() => { AgentAPI.getWorkspace() }, [])
 
   // ── Demo-active flag ───────────────────────────────────────────────────────
   // While the guided demo is running it is the sole controller of the mobile
@@ -144,6 +147,13 @@ export default function App() {
       window.visualViewport.removeEventListener('scroll', update)
     }
   }, [])
+
+  useEffect(() => {
+    const handler = (event) => setWorkspaceConflict(event.detail || {})
+    window.addEventListener('agent:workspace_conflict', handler)
+    return () => window.removeEventListener('agent:workspace_conflict', handler)
+  }, [])
+
   // ── Tab notification state ───────────────────────────────────────────────
   // chatHasNew      → new agent message while user is on Workspace tab
   // workspaceHasNew → agent updated workspace while user is on Chat tab
@@ -167,6 +177,33 @@ export default function App() {
     log.workspace('events cleared (sent)')
     setWorkspaceEvents([])
   }, [])
+
+  const reloadCanonicalWorkspace = useCallback(async () => {
+    const workspace = await AgentAPI.getWorkspace()
+    if (!workspace) return
+    const artifacts = workspace.artifacts || {}
+    setFormState(prev => ({
+      ...prev,
+      ...(artifacts.brief?.value ? { brief: artifacts.brief.value } : {}),
+      ...(artifacts.audience?.value ? {
+        segment: {
+          ...prev.segment,
+          ...artifacts.audience.value,
+          targeting: artifacts.targeting?.value || prev.segment?.targeting || {},
+        },
+      } : {}),
+      ...(artifacts.creative?.value ? { creative: artifacts.creative.value } : {}),
+      ...(artifacts.placements?.value ? {
+        setup: {
+          ...prev.setup,
+          ...artifacts.placements.value,
+          assignments: artifacts.assignments?.value || artifacts.placements.value.assignments || {},
+        },
+      } : {}),
+    }))
+    setWorkspaceConflict(null)
+    pushWorkspaceEvent(`Đã tải lại workspace phiên bản ${workspace.revision} từ máy chủ`)
+  }, [pushWorkspaceEvent])
 
   // ── setFormState wrapper that diffs and emits workspace events ─────────────
   // Use a ref to track the previous state for diffing
@@ -748,7 +785,7 @@ export default function App() {
   // Listen for agent:workspace_confirm — user clicked Đồng ý on a proposal block
   useEffect(() => {
     const STEP_PRIMARY_FIELDS = { 0: 'brief', 1: 'segment', 2: 'creative', 3: 'setup' }
-    const handler = (e) => {
+    const handler = async (e) => {
       log.event('agent:workspace_confirm received', e.detail)
       if (e.detail?.patch) {
         handleWorkspaceUpdate(e.detail.patch)
@@ -759,9 +796,11 @@ export default function App() {
           // ── Persist to MongoDB so audience-entry (and other downstream calls)
           // can read the confirmed value immediately. Without this, the button only
           // updates frontend state — backend session stays empty → brief_not_set.
-          AgentAPI.commitWorkspace(topField, e.detail.patch.value)
-            .then(r => log.workspace(`commitWorkspace(${topField}) →`, r?.ok ? 'ok' : 'failed'))
-            .catch(err => log.error('commitWorkspace failed', err?.message))
+          const persisted = e.detail.patch.proposal_id
+            ? await AgentAPI.approveWorkspaceProposal(e.detail.patch.proposal_id)
+            : await AgentAPI.commitWorkspace(topField, e.detail.patch.value)
+          log.workspace(`persistWorkspace(${topField}) →`, persisted?.ok ? 'ok' : 'failed')
+          if (!persisted?.ok) return
           if (stepStatuses[stepNum] !== 'done') {
             log.step(`workspace_confirm → marking step ${stepNum} done for field "${topField}"`)
             // Setup step is special — it has 3 sub-phases (zones→assign→confirm).
@@ -805,7 +844,13 @@ export default function App() {
   // clicks "✅ Duyệt các zones này". This advances the setup sub-phase to 'assign' using
   // the CURRENT formState.setup selection (not the stale proposal value).
   useEffect(() => {
-    const handler = () => {
+    const handler = async (event) => {
+      const proposalId = event.detail?.proposal_id
+      if (proposalId) {
+        await AgentAPI.rejectWorkspaceProposal(
+          proposalId, 'operator_changed_zone_selection_before_confirmation'
+        )
+      }
       setFormState(prev => {
         const currentSetup = prev.setup
         const selectedIds = currentSetup.selectedZoneIds || []
@@ -841,6 +886,9 @@ export default function App() {
     const handler = (e) => {
       log.event('agent:workspace_cancel received', e.detail)
       const field = e.detail?.field
+      if (e.detail?.proposal_id) {
+        AgentAPI.rejectWorkspaceProposal(e.detail.proposal_id)
+      }
       // For audience proposals: "Tự chọn" should clear the AI-applied segments
       // so the user starts with an empty selection and picks manually.
       if (field === 'segment') {
@@ -873,6 +921,22 @@ export default function App() {
     >
     <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 to-brand-50/30 overflow-hidden">
       <TopBar onReset={handleReset} onNewChat={handleNewChat} showDemo={!hasUserStarted} />
+
+      {workspaceConflict && (
+        <div className="flex items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          <span>
+            Workspace trên máy chủ đã thay đổi (phiên bản {workspaceConflict.actual_revision}).
+            Tải lại để tránh ghi đè dữ liệu mới hơn.
+          </span>
+          <button
+            type="button"
+            onClick={reloadCanonicalWorkspace}
+            className="shrink-0 rounded-lg bg-amber-900 px-3 py-1.5 font-semibold text-white hover:bg-amber-800"
+          >
+            Tải lại workspace
+          </button>
+        </div>
+      )}
 
       {/* Mobile-only Tab Bar — hidden on desktop (md:hidden) */}
       <div className="md:hidden flex-shrink-0">

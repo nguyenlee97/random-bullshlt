@@ -87,6 +87,7 @@ class ChatRequest(BaseModel):
     message: str = ""              # Free-form text
     formData: FormData | None = None
     workspace: dict | None = None          # Live formState from frontend (compact, no dataUrls)
+    workspace_revision: int | None = None  # Optimistic-concurrency revision of that snapshot
     confirmed_steps: list[int] | None = None   # Step indices that are "done" (locked)
     workspace_events: list[str] | None = None  # Human-readable descriptions of direct UI changes
 
