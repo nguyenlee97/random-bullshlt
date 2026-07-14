@@ -275,6 +275,17 @@ Definition of done:
 
 Campaign Autopilot is the core interaction model delivered in M4, not the M5 hero feature. The selected hero feature should appear as a high-value capability or artifact inside an Autopilot run.
 
+### Product identity revamp — Advertising Agent
+
+Before final demo polish:
+
+- Rename the user-facing product to **Advertising Agent**.
+- Replace the current green brand theme with a blue, conversational visual system inspired by the familiarity of Zalo while retaining an original identity.
+- Add centralized semantic design tokens; keep green only for success and retain amber/red for review, warning, blocked, and danger states.
+- Apply the identity consistently to the opening mode selector, Guided Workflow, Copilot chat, Campaign Autopilot, creative review, reports, result screens, exports, and demo assets.
+- Keep API paths, Docker services, database collections, environment variables, and other internal identifiers unchanged during the visual rebrand.
+- Meet accessibility and visual-regression requirements in `05-advertising-agent-rebrand.md`.
+
 Select exactly one primary hero feature after the new hackathon theme is known:
 
 ### Option A — Campaign strategy simulator (recommended default)
@@ -321,6 +332,7 @@ Definition of done:
 
 Required work:
 
+- Capture final Advertising Agent screenshots and verify no old user-facing name or primary green branding remains.
 - Prewarm embeddings, Qdrant, model connections, Playwright, and demo assets.
 - Maintain a deterministic guided path with no hidden production mutations.
 - Add a demo/staging namespace so judge orders cannot conflict with real data.

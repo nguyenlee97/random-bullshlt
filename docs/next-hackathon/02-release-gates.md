@@ -76,6 +76,8 @@ Failure response: staging remains private.
 
 Required:
 
+- User-facing product name is Advertising Agent and the blue identity is consistent across Guided Workflow, Campaign Autopilot, reports, exports, and demo assets.
+- Primary green branding has been removed while semantic success/warning/danger states remain distinguishable and accessible.
 - Immutable image tags and release tag.
 - Five consecutive rehearsals pass.
 - Demo data reset succeeds.
