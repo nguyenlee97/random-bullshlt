@@ -121,7 +121,7 @@ async def handle_email_send(
             f"📎 **File đính kèm:** PDF{att_str}\n"
             f"🆔 **Message ID:** `{message_id}`\n\n"
             f"Báo cáo chiến dịch **{brand}** đã được tổng hợp đầy đủ. "
-            f"Cảm ơn anh/chị đã sử dụng Camp Ads Agent! 🎉"
+            f"Cảm ơn bạn đã sử dụng Advertising Agent! 🎉"
         )
 
         await add_message(session_id, "assistant", success_text)

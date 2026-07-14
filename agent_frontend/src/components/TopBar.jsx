@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useDemo } from '@/demo/DemoEngine'
 
-export default function TopBar({ onReset, onNewChat, showDemo }) {
+export default function TopBar({ onReset, onNewChat, showDemo, experienceMode }) {
   const demo = useDemo()
 
   return (
@@ -15,9 +15,8 @@ export default function TopBar({ onReset, onNewChat, showDemo }) {
           <Bot className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
         </div>
         <div className="hidden sm:flex items-baseline gap-1.5">
-          <span className="font-black text-base text-brand-700 tracking-tight">Camp</span>
-          <span className="font-black text-base text-amber-500 tracking-tight">Ads</span>
-          <span className="font-black text-base text-brand-700 tracking-tight">Agent</span>
+          <span className="font-black text-base text-slate-900 tracking-tight">Advertising</span>
+          <span className="font-black text-base text-brand-600 tracking-tight">Agent</span>
         </div>
       </div>
 
@@ -25,7 +24,7 @@ export default function TopBar({ onReset, onNewChat, showDemo }) {
 
       <Badge variant="muted" className="gap-1.5 text-[11px] hidden sm:flex">
         <div className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-        v2.1.1 · AdsPilot
+        {experienceMode === 'autopilot' ? 'Campaign Autopilot' : 'Guided Workflow'}
       </Badge>
 
       <Badge variant="model-qwen" className="text-[11px] hidden sm:flex">

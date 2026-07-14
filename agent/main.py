@@ -28,7 +28,7 @@ _configure_stdio()
 from version import BUILD_VERSION, BUILD_FEATURES
 
 app = FastAPI(
-    title="Camp Ads Agent",
+    title="Advertising Agent",
     version=BUILD_VERSION,
     description="AI Agent for autonomous ad campaign planning (E4b)",
 )
@@ -159,7 +159,7 @@ async def _stop_creative_worker():
         from creative_intel.service import stop_worker
         await stop_worker()
 
-print(f"\n🚀 Camp Ads Agent v{BUILD_VERSION} starting on port {config.AGENT_PORT}")
+print(f"\n🚀 Advertising Agent v{BUILD_VERSION} starting on port {config.AGENT_PORT}")
 print(f"   GreenNode AgentBase: listening on 0.0.0.0:{config.AGENT_PORT}, health at /health")
 print(f"   Features: {', '.join(BUILD_FEATURES)}\n")
 

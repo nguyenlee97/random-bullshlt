@@ -89,7 +89,7 @@ function KpiChips({ value, onChange }) {
 }
 
 export default function BriefStep({ data, onChange, isDone }) {
-  const update = (key, val) => onChange({ ...data, [key]: val })
+  const update = (key, val) => onChange(prev => ({ ...prev, [key]: val }))
 
   // Auto-compute duration from dates
   const computeDuration = (start, end) => {

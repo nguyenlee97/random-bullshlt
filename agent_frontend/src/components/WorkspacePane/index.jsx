@@ -45,7 +45,10 @@ const WorkspacePane = forwardRef(function WorkspacePane(
   const isStale = stepStatuses[currentStep] === 'stale'
 
   const updateFormSlice = useCallback((slice, val) => {
-    setFormState(prev => ({ ...prev, [slice]: val }))
+    setFormState(prev => ({
+      ...prev,
+      [slice]: typeof val === 'function' ? val(prev[slice]) : val,
+    }))
   }, [setFormState])
 
   // For CreativeStep: onChange may be a value OR a functional updater

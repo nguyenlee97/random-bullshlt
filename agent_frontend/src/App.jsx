@@ -3,6 +3,8 @@ import { useChat } from '@/hooks/useChat'
 import TopBar from '@/components/TopBar'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
+import ExperienceSelector from '@/components/ExperienceSelector'
+import AutopilotPanel from '@/components/AutopilotPanel'
 import { AgentAPI, getSetupEntry } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
@@ -96,6 +98,9 @@ function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew }) {
 }
 
 export default function App() {
+  const [experienceMode, setExperienceMode] = useState(null)
+  const [modeSelectionBusy, setModeSelectionBusy] = useState(false)
+  const [modeSelectionError, setModeSelectionError] = useState('')
   const [currentStep, setCurrentStep] = useState(0)
   const [stepStatuses, setStepStatuses] = useState(STEPS.map(() => 'pending'))
   const [formState, setFormState] = useState(initialState)
@@ -461,7 +466,27 @@ export default function App() {
     }
   }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { boot() }, [boot])
+  const selectExperience = useCallback(async (mode) => {
+    setModeSelectionBusy(true)
+    setModeSelectionError('')
+    try {
+      const result = await AgentAPI.setWorkspacePreferences(
+        mode,
+        mode === 'autopilot' ? 'critical_only' : 'review_every_stage',
+      )
+      if (!result?.ok) throw new Error(result?.detail || 'Không thể lưu chế độ làm việc.')
+      setExperienceMode(mode)
+      setHasUserStarted(true)
+    } catch (error) {
+      setModeSelectionError(error.message)
+    } finally {
+      setModeSelectionBusy(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (experienceMode) boot()
+  }, [boot, experienceMode])
 
   // Audience-entry: when user reaches step 1 with brief done → proactive recommendation in chat
   const audienceEntryFiredRef = useRef(false)
@@ -679,6 +704,8 @@ export default function App() {
   const handleNewChat = useCallback(() => {
     resetLocalCampaign()
     newChat()
+    setExperienceMode(null)
+    setModeSelectionError('')
   }, [resetLocalCampaign, newChat])
 
   // Listen for agent:reset event from BlockRenderer ActionResetBlock
@@ -922,6 +949,16 @@ export default function App() {
   // Read at render-time. Tailwind md: breakpoints handle the class-based
   // layout switching automatically on resize.
 
+  if (!experienceMode) {
+    return (
+      <ExperienceSelector
+        onSelect={selectExperience}
+        busy={modeSelectionBusy}
+        error={modeSelectionError}
+      />
+    )
+  }
+
   return (
     <DemoProvider
       busy={busy}
@@ -933,7 +970,24 @@ export default function App() {
       onActiveChange={(active) => { isDemoActiveRef.current = active }}
     >
     <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 to-brand-50/30 overflow-hidden">
-      <TopBar onReset={handleReset} onNewChat={handleNewChat} showDemo={!hasUserStarted} />
+      <TopBar
+        onReset={handleReset}
+        onNewChat={handleNewChat}
+        showDemo={!hasUserStarted}
+        experienceMode={experienceMode}
+      />
+
+      {experienceMode === 'autopilot' && (
+        <AutopilotPanel
+          brief={formState.brief}
+          onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
+          onOpenCreative={() => {
+            setCurrentStep(2)
+            setActiveTab('workspace')
+            workspaceRef.current?.flash?.()
+          }}
+        />
+      )}
 
       {workspaceConflict && (
         <div className="flex items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">

@@ -197,7 +197,7 @@ export const AGENT_SCENARIOS = {
   async boot() {
     await delay(600)
     return agentMessage(
-      'Chào anh/chị 👋 Em là **Camp Ads Agent**, trợ lý AI giúp anh/chị thiết lập và tối ưu chiến dịch quảng cáo.\n\nEm sẽ dẫn anh/chị qua **7 bước**: Brief → Creative → Audience → Setup Camp → Kết quả → Phân tích Report → Gửi Email tổng kết.\n\nAnh/Chị điền thông tin Brief ở panel phải để bắt đầu nhé!',
+      'Xin chào 👋 Tôi là **Advertising Agent**, trợ lý AI giúp bạn xây dựng và vận hành chiến dịch quảng cáo.\n\nBạn có thể làm theo từng bước hoặc dùng **Campaign Autopilot** để Agent xây dựng bản campaign và chờ bạn duyệt. Hãy bắt đầu bằng Brief nhé!',
       [],
       { tool: 'agent_boot', model: 'minimax', step: 0 }
     )
@@ -456,10 +456,10 @@ export const AGENT_SCENARIOS = {
           type: 'email_preview',
           to: 'account@adtima.vn, adopt@adtima.vn',
           cc: `${(brief.brand || 'brand').toLowerCase().replace(/\s/g, '')}-pm@adtima.vn`,
-          subject: `[Camp Ads Agent] Báo cáo & đề xuất ${brief.brand}`,
+          subject: `[Advertising Agent] Báo cáo & đề xuất ${brief.brand}`,
           body: `Hi Account & Ad Opt teams,
 
-Camp Ads Agent đã hoàn tất setup + phân tích chiến dịch ${brief.brand}.
+Advertising Agent đã hoàn tất setup + phân tích chiến dịch ${brief.brand}.
 
 Tóm tắt:
 • ${campaigns.length} campaigns đang chạy · Budget ${brief.budget}M · ${brief.duration} tuần
@@ -471,7 +471,7 @@ Tóm tắt:
 3. Re-test creative cho 96 camp 'watch'
 4. Shift budget sang zone Du lịch
 
-— Camp Ads Agent`
+— Advertising Agent`
         }
       ],
       { tool: 'email_compose + smtp_send', model: 'minimax', step: 6 }
@@ -1176,6 +1176,102 @@ export const AgentAPI = {
       console.warn('[getWorkspace] failed:', e.message)
       return null
     }
+  },
+
+  async setWorkspacePreferences(experienceMode, approvalPolicy = null) {
+    try {
+      if (WORKSPACE_REVISION == null) await this.getWorkspace()
+      const res = await agentFetch(`${AGENT_URL}/api/agent/workspace/preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: SESSION_ID,
+          experience_mode: experienceMode,
+          approval_policy: approvalPolicy,
+          base_revision: WORKSPACE_REVISION,
+          actor: 'campaign_operator',
+          idempotency_key: `experience:${SESSION_ID}:${experienceMode}:${approvalPolicy || ''}`,
+        }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) return { ok: false, status: res.status, ...(data.detail || data) }
+      WORKSPACE_REVISION = data.workspace_revision ?? WORKSPACE_REVISION
+      await this.getWorkspace()
+      return data
+    } catch (e) {
+      console.warn('[setWorkspacePreferences] failed:', e.message)
+      return { ok: false, detail: e.message }
+    }
+  },
+
+  async startAutopilot(approvalPolicy = 'critical_only') {
+    try {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: SESSION_ID,
+          approval_policy: approvalPolicy,
+          actor: 'campaign_operator',
+          idempotency_key: `autopilot-start:${SESSION_ID}`,
+        }),
+        signal: AbortSignal.timeout(10000),
+      })
+      const data = await res.json().catch(() => ({}))
+      return res.ok ? data : { ok: false, status: res.status, ...(data.detail || data) }
+    } catch (e) {
+      return { ok: false, detail: e.message }
+    }
+  },
+
+  async getAutopilotRun(runId) {
+    try {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}`, {
+        signal: AbortSignal.timeout(5000),
+      })
+      return res.ok ? await res.json() : null
+    } catch (e) {
+      console.warn('[getAutopilotRun] failed:', e.message)
+      return null
+    }
+  },
+
+  async autopilotAction(runId, action) {
+    try {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/${action}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actor: 'campaign_operator' }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const data = await res.json().catch(() => ({}))
+      return res.ok ? data : { ok: false, status: res.status, ...(data.detail || data) }
+    } catch (e) {
+      return { ok: false, detail: e.message }
+    }
+  },
+
+  async reviewAutopilotTask(runId, taskId, approved, reason = '') {
+    try {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/review`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved, actor: 'campaign_operator', reason }),
+        signal: AbortSignal.timeout(10000),
+      })
+      const data = await res.json().catch(() => ({}))
+      return res.ok ? data : { ok: false, status: res.status, ...(data.detail || data) }
+    } catch (e) {
+      return { ok: false, detail: e.message }
+    }
+  },
+
+  subscribeAutopilot(runId, onEvent) {
+    if (typeof EventSource === 'undefined' || AGENT_API_KEY) return () => {}
+    const source = new EventSource(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/events`)
+    const handler = () => onEvent?.()
+    ;['run_created', 'task_started', 'task_completed', 'task_waiting_review', 'task_approved', 'task_rejected', 'task_retry_scheduled', 'task_failed', 'run_paused', 'run_resumed', 'run_cancelled'].forEach(type => source.addEventListener(type, handler))
+    source.onerror = () => source.close()
+    return () => source.close()
   },
 
   async approveWorkspaceProposal(proposalId) {

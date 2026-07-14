@@ -1,5 +1,5 @@
 /**
- * Centralized frontend logger for Camp Ads Agent.
+ * Centralized frontend logger for Advertising Agent.
  * All log lines are prefixed with a category tag for easy filtering in DevTools.
  *
  * Usage:
