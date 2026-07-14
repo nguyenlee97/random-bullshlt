@@ -1,4 +1,4 @@
-from eval.run_eval import rec_segment_ids, resolve_segments
+from eval_utils import rec_segment_ids, resolve_segments
 
 
 def test_recommendations_join_on_segment_id_before_display_label():

@@ -95,7 +95,15 @@ def validate_order_payload(payload: dict, ctx: GuardContext) -> list[str]:
         reasons.append(f"Zone không tồn tại trong catalog: {', '.join(map(str, unknown_zones))}")
 
     # ── 4. Zone booking conflicts (re-checked at creation time — TOCTOU guard) ─
-    conflicted = [z for z in placements if ctx.conflict_map.get(z)]
+    request_key = payload.get("idempotencyKey") or ""
+    conflicted = [
+        z for z in placements
+        if ctx.conflict_map.get(z)
+        and not (
+            request_key
+            and ctx.conflict_map[z].get("idempotencyKey") == request_key
+        )
+    ]
     if conflicted:
         details = ", ".join(
             f"{z} (đã đặt bởi {ctx.conflict_map[z].get('orderId', '?')})" for z in conflicted

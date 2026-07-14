@@ -66,7 +66,7 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
         return AgentResponse(
             text="⚠ Anh/Chị chưa chọn audience segment nào.",
             blocks=[{"type": "info", "text": "Vui lòng chọn ít nhất 1 segment từ thư viện DMP."}],
-            meta=ResponseMeta(tool="audience_handler", model="none", step=2),
+            meta=ResponseMeta(tool="audience_validate", model="none", step=1),
         )
 
     # ── Calculate audience size ───────────────────────────────────────────────
@@ -573,6 +573,5 @@ async def handle_audience_entry(session_id: str, brief_hint: dict | None = None)
             {"label": "🔍 Tìm thêm segments",   "action": "prefill", "text": "Tìm thêm segments liên quan đến "},
         ],
     }
-
 
 

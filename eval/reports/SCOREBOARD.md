@@ -58,9 +58,51 @@ measured only on the safe demo set and does not yet establish unsafe-content
 recall. Skin routing uses explicit `intendedFormat`; raw VLM skin prediction is
 diagnostic because isolated rails lack page context.
 
+### Safety and queue gates
+
+| Gate | Result |
+|---|---:|
+| Unsafe direct-classification recall | 90% |
+| Unsafe block-or-review recall | **100%** |
+| Review-required escapes | **0** |
+| OCR prompt-injection escapes | **0** |
+| Safe auto-approve candidate rate | 100% |
+| Safety fixture p95 | 5.88 s |
+| HTTP queue terminal rate (20 files) | **100%** |
+| HTTP queue within 20 seconds | **100%** |
+| HTTP queue end-to-end p95 | **9.43 s** |
+| Missing analysis IDs | **0** |
+
+The video smoke accepted a real MP4, extracted 640x360 H.264 and two-second
+duration metadata, and required manual review. The browser control proved that
+review blocks Setup and that an operator reason creates a durable override
+before the workflow can advance.
+
 Verdict: Gemma remains primary. Qwen is rejected because its full-set schema
-success regressed to 40% despite a strong five-case sample. Gate 3 remains open
-for unsafe/borderline fixtures, video extraction, browser E2E, and queue load.
+success regressed to 40% despite a strong five-case sample. **Local Gate 3
+passes.** Authenticated override identity remains part of M4 before any
+multi-user deployment.
 
 Authoritative reports: `creative-v1-deterministic.json`,
-`creative-v2-gemma-optimized.json`, and `creative-v1-qwen.json`.
+`creative-v2-gemma-optimized.json`, `creative-v1-qwen.json`,
+`creative-safety-gemma-v3.json`, and
+`creative-http-queue-20-v3-concurrency6.json`. The single-worker
+`creative-http-queue-20-v1.json` report is retained as before/after evidence.
+
+## Full local campaign smoke
+
+Evaluation date: 2026-07-15
+
+| Gate | Result |
+|---|---:|
+| Complete flows | **3/3** |
+| Duplicate retries returned original order | **3/3** |
+| Unique orders across flows | **3/3** |
+| Disposable artifacts cleaned up | **3/3** |
+| End-to-end p95 | **6.08 s** |
+
+Each flow used the live local catalog and RAG endpoint, committed a real source
+segment, uploaded and analyzed a safe creative, assigned it to a real banner
+placement, created an order through the server-side guard, retried with the
+same idempotency key, fetched the result/report, and removed only its own test
+artifacts. Authoritative report: `full-campaign-smoke.json`.

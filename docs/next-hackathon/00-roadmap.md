@@ -4,11 +4,15 @@
 >
 > Purpose: turn the current split state—working older deployment plus unfinished local production upgrade—into one dependable, measurable product that can be adapted for the next hackathon.
 
-> Progress update (2026-07-15): M0 and M1 are locally stable; M2 audience RAG
-> is enabled and measured; M3 has a working pre-booking creative-intelligence
-> candidate. Gate 3 remains open for unsafe-image recall, video handling,
-> browser E2E, and the recorded restart/load drills. See
-> `03-m3-creative-intelligence-evidence.md`.
+> Progress update (2026-07-15): M0 and the reproducible-stack portion of M1 are
+> locally stable. Three fresh automated campaign flows passed, including real
+> audience retrieval, creative analysis, guarded order creation, duplicate
+> retry idempotency, result/report generation, and cleanup. M2 audience RAG is
+> enabled and measured; M3 creative intelligence has passed its local safety,
+> video, browser override, restart, and HTTP queue-load gates. The remaining M1
+> conversation-restart/observability evidence and M2 human-label/soak work are
+> the next closure items. See `03-m3-creative-intelligence-evidence.md` and
+> `eval/reports/full-campaign-smoke.json`.
 
 ## 1. Starting point
 

@@ -84,6 +84,25 @@ def test_conflict_recheck_blocks():
     assert any("ORD-2026-004" in r for r in reasons)
 
 
+def test_own_idempotent_retry_is_not_treated_as_a_zone_conflict():
+    key = "same-confirmation-key"
+    ctx = make_ctx(conflict_map={
+        "ZN-002": {"orderId": "ORD-2026-004", "idempotencyKey": key}
+    })
+    reasons = validate_order_payload(make_payload(idempotencyKey=key), ctx)
+    assert not any("ORD-2026-004" in reason for reason in reasons)
+
+
+def test_different_idempotency_key_still_conflicts():
+    ctx = make_ctx(conflict_map={
+        "ZN-002": {"orderId": "ORD-2026-004", "idempotencyKey": "first-key"}
+    })
+    reasons = validate_order_payload(
+        make_payload(idempotencyKey="different-key"), ctx
+    )
+    assert any("ORD-2026-004" in reason for reason in reasons)
+
+
 # ── dates ─────────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize(
     "start,end,frag",

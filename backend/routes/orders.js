@@ -11,13 +11,45 @@ function nextOrderId(seq) {
 }
 
 async function getSeq() {
-  // Scan ALL docs including soft-deleted so orderId sequence never reuses a number.
-  const last = await Campaign.findOne({}, { orderId: 1 })
-    .sort({ createdAt: -1 })
-    .lean();
-  if (!last) return 4; // seed has 3 orders
-  const match = last.orderId.match(/(\d+)$/);
-  return match ? parseInt(match[1], 10) + 1 : 4;
+  // createdAt is not a sequence: seed rows may share a timestamp, and two
+  // concurrent requests can read the same "latest" row. Establish the current
+  // year's maximum once, then advance it atomically in MongoDB.
+  const year = new Date().getFullYear();
+  const prefix = `ORD-${year}-`;
+  const existing = await Campaign.find(
+    { orderId: { $regex: `^${prefix}` } },
+    { orderId: 1 }
+  ).lean();
+  const baseline = existing.reduce((highest, item) => {
+    const match = String(item.orderId || '').match(/(\d+)$/);
+    return match ? Math.max(highest, parseInt(match[1], 10)) : highest;
+  }, 0);
+
+  const result = await Campaign.db.collection('counters').findOneAndUpdate(
+    { _id: `campaign_order_${year}` },
+    [{
+      $set: {
+        seq: {
+          $add: [
+            {
+              $cond: [
+                { $gt: [{ $ifNull: ['$seq', 0] }, baseline] },
+                { $ifNull: ['$seq', 0] },
+                baseline,
+              ],
+            },
+            1,
+          ],
+        },
+      },
+    }],
+    { upsert: true, returnDocument: 'after' }
+  );
+  const counter = result && (result.value || result);
+  if (!counter || !Number.isInteger(counter.seq)) {
+    throw new Error('Could not allocate an order sequence');
+  }
+  return counter.seq;
 }
 
 async function getZonePlacements() {
@@ -81,6 +113,7 @@ function formatOrder(doc) {
     placements: doc.placements,
     targeting:  doc.targeting,
     dmp:        doc.dmp,
+    idempotencyKey: doc.idempotencyKey,
     warnings:   doc.warnings || [],
     createdAt:  doc.createdAt,
     updatedAt:  doc.updatedAt,

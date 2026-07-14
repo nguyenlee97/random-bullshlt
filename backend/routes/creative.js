@@ -20,9 +20,14 @@ const ALLOWED_TYPES = new Set([
     'image/png',
     'image/webp',
     'image/gif',
+    'video/mp4',
+    'video/webm',
+    'video/quicktime',
 ]);
 
-const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const ALLOWED_EXTENSIONS = new Set([
+    '.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp4', '.webm', '.mov'
+]);
 
 // ── Unique filename generator ──────────────────────────────────────────────
 function uniqueName(originalname) {
@@ -45,7 +50,9 @@ const upload = multer({
         if (ALLOWED_TYPES.has(file.mimetype)) {
             cb(null, true);
         } else {
-            cb(new Error(`Unsupported file type: ${file.mimetype}. Allowed: JPEG, PNG, WEBP, GIF`));
+            cb(new Error(
+                `Unsupported file type: ${file.mimetype}. Allowed: JPEG, PNG, WEBP, GIF, MP4, WEBM, MOV`
+            ));
         }
     },
 });
@@ -107,7 +114,14 @@ router.post('/upload-base64', (req, res) => {
     // Determine file extension from provided mimeType or filename
     let ext = '.jpg';
     if (mimeType && ALLOWED_TYPES.has(mimeType)) {
-        ext = { 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }[mimeType] || '.jpg';
+        ext = {
+            'image/png': '.png',
+            'image/webp': '.webp',
+            'image/gif': '.gif',
+            'video/mp4': '.mp4',
+            'video/webm': '.webm',
+            'video/quicktime': '.mov',
+        }[mimeType] || '.jpg';
     } else if (rawName) {
         const candidate = path.extname(rawName).toLowerCase();
         if (ALLOWED_EXTENSIONS.has(candidate)) ext = candidate;

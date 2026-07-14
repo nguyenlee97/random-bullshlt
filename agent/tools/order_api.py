@@ -103,6 +103,7 @@ async def fetch_zone_conflicts(start_date: str, end_date: str) -> dict[str, dict
                         "campaignName": campaign_name,
                         "startDate": str(o_start),
                         "endDate": str(o_end),
+                        "idempotencyKey": order.get("idempotencyKey", ""),
                     }
 
     return conflicts

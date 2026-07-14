@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { AgentAPI, AGENT_SCENARIOS, fetchDmpAttributes, matchDmpByKeywords, extractTargetingKeywords, extractTargetingMap, prepareCreativeFiles } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
+import { responseAllowsAdvance } from '@/lib/workflowValidation'
 
 
 function userMessage(text) {
@@ -298,6 +299,7 @@ export function useChat({
       // Step 0 — Brief
       case 0:
         response = await AgentAPI.approveBrief(stepData.brief)
+        shouldAdvance = responseAllowsAdvance(response)
         break
 
       // Step 1 — Audience (NEW: was step 2)
@@ -306,6 +308,7 @@ export function useChat({
           attrs: stepData.attrs || [],
           size: stepData.size || 0,
         })
+        shouldAdvance = responseAllowsAdvance(response)
         break
 
       case 2: {

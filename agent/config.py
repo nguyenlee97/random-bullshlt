@@ -85,9 +85,11 @@ class Config:
     # Below this confidence (or any safety flag) → needs_review, not auto-approve
     VLM_CONFIDENCE_THRESHOLD: float = float(os.getenv("VLM_CONFIDENCE_THRESHOLD", "0.8"))
     CREATIVE_ANALYSIS_TIMEOUT_SECONDS: float = float(
-        os.getenv("CREATIVE_ANALYSIS_TIMEOUT_SECONDS", "20"))
+        os.getenv("CREATIVE_ANALYSIS_TIMEOUT_SECONDS", "15"))
     CREATIVE_WORKER_POLL_SECONDS: float = float(
         os.getenv("CREATIVE_WORKER_POLL_SECONDS", "0.5"))
+    CREATIVE_WORKER_CONCURRENCY: int = int(
+        os.getenv("CREATIVE_WORKER_CONCURRENCY", "6"))
     CREATIVE_JOB_STALE_SECONDS: int = int(
         os.getenv("CREATIVE_JOB_STALE_SECONDS", "90"))
 

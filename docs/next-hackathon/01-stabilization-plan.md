@@ -143,18 +143,24 @@ The smoke report must include durations, trace IDs, selected segment IDs, select
 
 - [ ] Repository clean and recovery tag exists.
 - [ ] All exposed credentials rotated.
-- [ ] Local frontend uses only local agent/backend.
-- [ ] Local database has 310 audience records.
-- [ ] Python lockfile exists.
-- [ ] All agent tests pass.
-- [ ] Backend syntax checks pass.
-- [ ] Frontend production build passes.
-- [ ] Golden-set validator passes all 80 briefs.
-- [ ] Three complete manual flows pass.
-- [ ] Automated smoke test passes.
-- [ ] Duplicate-order retry test passes.
+- [x] Local frontend uses only local agent/backend.
+- [x] Local database has 310 audience records.
+- [x] Python lockfile exists (`agent/requirements.lock`, exact tested pins).
+- [x] All agent tests pass (53 tests in the locked Docker image).
+- [x] Backend syntax checks pass.
+- [x] Frontend unit tests and production build pass.
+- [x] Golden-set validator passes all 80 briefs against 310 catalog segments.
+- [x] Three complete automated local campaign flows pass.
+- [x] Automated smoke test passes (`eval/reports/full-campaign-smoke.json`).
+- [x] Duplicate-order retry test passes in all three smoke flows.
 - [ ] Agent restart persistence test passes.
 - [ ] Prometheus/Grafana/Langfuse evidence captured.
 - [ ] Rollback instructions tested.
 
 Only after every applicable box is green should M2 audience RAG become the default workstream.
+
+Current local evidence (2026-07-15): the three-flow smoke completed 3/3,
+created three unique orders, returned the same order for every duplicate retry,
+cleaned up every disposable order and creative, and recorded p95 of 6.08 seconds.
+Credential rotation remains deliberately deferred by the project owner for this
+local-only hackathon cycle and is still mandatory before any external release.

@@ -31,6 +31,8 @@ services:
       - MONGODB_URI=mongodb://mongo:27017          # container-internal mongo
       - BACKEND_URL=http://backend:3000
       - QDRANT_URL=http://qdrant:6333              # Phase 2 vector store
+      - CREATIVE_ANALYSIS_TIMEOUT_SECONDS=${CREATIVE_ANALYSIS_TIMEOUT_SECONDS:-15}
+      - CREATIVE_WORKER_CONCURRENCY=${CREATIVE_WORKER_CONCURRENCY:-6}
     volumes:
       - hf_cache:/root/.cache/huggingface          # embedding models survive rebuilds
     depends_on:

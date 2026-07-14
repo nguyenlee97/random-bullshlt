@@ -9,6 +9,7 @@ import log from '@/lib/logger'
 import { MessageSquare, LayoutDashboard } from 'lucide-react'
 import { DemoProvider } from '@/demo/DemoEngine'
 import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
+import { canApproveWorkflowStep } from '@/lib/workflowValidation'
 
 // ─── Steps meta — NEW ORDER: Brief → Audience → Creative → Setup → Result ─────
 export const STEPS = [
@@ -854,17 +855,7 @@ export default function App() {
     return () => window.removeEventListener('agent:workspace_cancel', handler)
   }, [])
 
-  const canApprove = (() => {
-    if (stepStatuses[currentStep] === 'done') return false
-    switch (currentStep) {
-      case 1: return formState.segment.attrs.length > 0   // Audience is step 1
-      case 2: return (formState.creative.files || []).length > 0  // Creative is step 2
-      case 3: return false  // Setup: handled by internal button
-      case 5: return formState.report.analyzed
-      case 6: return formState.email.sent
-      default: return true
-    }
-  })()
+  const canApprove = canApproveWorkflowStep(currentStep, formState, stepStatuses)
 
   // ── isMobile helper (used for conditional inline styles) ──────────────────
   // Read at render-time. Tailwind md: breakpoints handle the class-based

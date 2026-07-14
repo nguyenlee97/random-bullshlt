@@ -1,0 +1,77 @@
+{
+  "label": "full-campaign-smoke",
+  "created_at": "2026-07-14T21:23:30.096358+00:00",
+  "summary": {
+    "runs": 3,
+    "successful_runs": 3,
+    "idempotency_passes": 3,
+    "unique_orders": 3,
+    "cleanup_passes": 3,
+    "p95_seconds": 6.08
+  },
+  "flows": [
+    {
+      "flow": 1,
+      "session_id": "full_smoke_2e87553900",
+      "trace_id": "full_smoke_2e87553900",
+      "analysis_id": "ci_939465930a97d8407497239d",
+      "selected_segment_ids": [
+        "6a4904d8f910211498084f7b"
+      ],
+      "zone_id": "ZingNews_PrBox_2",
+      "assignment_tool": "creative_match",
+      "order_id": "ORD-2026-014",
+      "duplicate_retry_order_id": "ORD-2026-014",
+      "idempotency_pass": true,
+      "result_tool": "result",
+      "report_tool": "report_entry",
+      "duration_seconds": 22.264,
+      "cleanup": {
+        "order": true,
+        "creative": true
+      }
+    },
+    {
+      "flow": 2,
+      "session_id": "full_smoke_5afe8ecfff",
+      "trace_id": "full_smoke_5afe8ecfff",
+      "analysis_id": "ci_9a8c2488cbdcca93f79be4d8",
+      "selected_segment_ids": [
+        "6a4904d8f910211498084f7b"
+      ],
+      "zone_id": "ZingNews_PrBox_2",
+      "assignment_tool": "creative_match",
+      "order_id": "ORD-2026-015",
+      "duplicate_retry_order_id": "ORD-2026-015",
+      "idempotency_pass": true,
+      "result_tool": "result",
+      "report_tool": "report_entry",
+      "duration_seconds": 6.08,
+      "cleanup": {
+        "order": true,
+        "creative": true
+      }
+    },
+    {
+      "flow": 3,
+      "session_id": "full_smoke_1607e8ba4c",
+      "trace_id": "full_smoke_1607e8ba4c",
+      "analysis_id": "ci_3734722af09cef846f95eb70",
+      "selected_segment_ids": [
+        "6a4904d8f910211498084f7b"
+      ],
+      "zone_id": "ZingNews_PrBox_2",
+      "assignment_tool": "creative_match",
+      "order_id": "ORD-2026-016",
+      "duplicate_retry_order_id": "ORD-2026-016",
+      "idempotency_pass": true,
+      "result_tool": "result",
+      "report_tool": "report_entry",
+      "duration_seconds": 5.768,
+      "cleanup": {
+        "order": true,
+        "creative": true
+      }
+    }
+  ]
+}

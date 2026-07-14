@@ -12,4 +12,3 @@ venv/
 README.md
 check_syntax.py
 setup_mongo_for_agent.sh
-tests/

@@ -19,7 +19,7 @@ from config import config
 
 TERMINAL_STATUSES = {"auto_approved", "needs_review"}
 _mem: dict[str, dict] = {}
-_worker_task: asyncio.Task | None = None
+_worker_tasks: list[asyncio.Task] = []
 _stop_event: asyncio.Event | None = None
 
 
@@ -231,7 +231,9 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
 
     url = doc.get("fetch_url") or _fetch_url(doc.get("url", ""))
     name = doc.get("name", "")
-    deterministic = await analyze_url(url, name=name)
+    deterministic = await analyze_url(
+        url, name=name, mime_type=doc.get("mime_type", "")
+    )
     reasons: list[str] = []
 
     if deterministic.get("fetch_error") or deterministic.get("decode_error"):
@@ -245,8 +247,19 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
             "tối thiểu 300×50px)"
         )
 
+    is_video = deterministic.get("kind") == "video"
+    if is_video and not deterministic.get("decode_error"):
+        reasons.append(
+            "Video đã trích xuất metadata nhưng cần người duyệt nội dung trước khi chạy"
+        )
+
     result: dict[str, Any] = {"deterministic": deterministic}
-    if config.VLM_MODEL and not deterministic.get("fetch_error") and not deterministic.get("decode_error"):
+    if (
+        config.VLM_MODEL
+        and not is_video
+        and not deterministic.get("fetch_error")
+        and not deterministic.get("decode_error")
+    ):
         from metrics import VLM_CALLS, VLM_SECONDS
 
         started = asyncio.get_running_loop().time()
@@ -266,9 +279,13 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
                 brief,
             )
             result["vlm"] = vlm.model_dump()
+            from creative_intel.policy import contains_prompt_injection
+
             flags = [flag for flag, value in vlm.safety.model_dump().items() if value]
             if flags:
                 reasons.append(f"Cờ an toàn: {', '.join(flags)}")
+            if contains_prompt_injection(vlm.ocr_text):
+                reasons.append("Phát hiện câu lệnh đáng ngờ trong nội dung OCR")
             if vlm.confidence < config.VLM_CONFIDENCE_THRESHOLD:
                 reasons.append(f"Độ tin cậy VLM thấp ({vlm.confidence:.2f})")
             if vlm.brief_match_score <= 2:
@@ -332,30 +349,39 @@ async def _worker_loop() -> None:
 
 
 async def start_worker() -> None:
-    global _worker_task, _stop_event
-    if _worker_task and not _worker_task.done():
+    global _worker_tasks, _stop_event
+    if any(not task.done() for task in _worker_tasks):
         return
     # One worker process owns this collection in the current deployment. After
     # a restart no previous process can still own an analyzing job, so recover
     # all of them immediately instead of waiting for the stale timeout.
     recovered = await recover_stale_jobs(force=True)
     _stop_event = asyncio.Event()
-    _worker_task = asyncio.create_task(_worker_loop(), name="creative-intel-worker")
-    print(f"[creative-intel] worker started; recovered={recovered}")
+    concurrency = max(1, min(config.CREATIVE_WORKER_CONCURRENCY, 8))
+    _worker_tasks = [
+        asyncio.create_task(_worker_loop(), name=f"creative-intel-worker-{index + 1}")
+        for index in range(concurrency)
+    ]
+    print(
+        f"[creative-intel] workers started; concurrency={concurrency}; recovered={recovered}"
+    )
 
 
 def worker_running() -> bool:
-    return bool(_worker_task and not _worker_task.done())
+    return bool(_worker_tasks) and all(not task.done() for task in _worker_tasks)
 
 
 async def stop_worker() -> None:
-    global _worker_task, _stop_event
+    global _worker_tasks, _stop_event
     if _stop_event:
         _stop_event.set()
-    if _worker_task:
+    if _worker_tasks:
         try:
-            await asyncio.wait_for(_worker_task, timeout=2.0)
+            await asyncio.wait_for(
+                asyncio.gather(*_worker_tasks, return_exceptions=True), timeout=2.0
+            )
         except (asyncio.TimeoutError, asyncio.CancelledError):
-            _worker_task.cancel()
-    _worker_task = None
+            for task in _worker_tasks:
+                task.cancel()
+    _worker_tasks = []
     _stop_event = None

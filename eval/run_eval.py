@@ -30,6 +30,11 @@ import httpx
 ROOT = Path(__file__).resolve().parent
 GOLDEN = ROOT / "golden_set"
 REPORTS = ROOT / "reports"
+AGENT_DIR = ROOT.parent / "agent"
+if str(AGENT_DIR) not in sys.path:
+    sys.path.insert(0, str(AGENT_DIR))
+
+from eval_utils import rec_segment_ids, resolve_segments
 
 # Map recommendation fullLabels back to _ids using the FULL live catalog (310+ segments;
 # AUTHORING-GUIDE.md v2 — the old 71-item audience_library.json dump is a subset and would
@@ -48,21 +53,6 @@ def load_catalog_maps() -> tuple[dict[str, str], dict[str, str]]:
         {it["segmentId"]: it["fullLabel"] for it in items
          if it.get("segmentId") and it.get("fullLabel")},
     )
-
-
-def resolve_segments(ids: list[str], golden_to_segment: dict[str, str]) -> set[str]:
-    return {golden_to_segment.get(value, value) for value in ids}
-
-
-def rec_segment_ids(recommendations: list[dict], label_to_segment: dict[str, str]) -> list[str]:
-    values = []
-    for rec in recommendations:
-        value = rec.get("segmentId")
-        if not value:
-            value = label_to_segment.get(rec.get("fullLabel") or rec.get("name", ""))
-        if value:
-            values.append(value)
-    return values
 
 
 async def get_recommendation(client: httpx.AsyncClient, url: str, headers: dict,
