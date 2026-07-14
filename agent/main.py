@@ -101,6 +101,14 @@ async def readiness():
         checks["mongo"] = await _ensure_mongo()
     except Exception:
         pass
+
+    if config.USE_RAG_AUDIENCE:
+        checks["rag_index"] = False
+        try:
+            from rag.index import inspect_index
+            checks["rag_index"] = (await inspect_index())["ready"]
+        except Exception:
+            pass
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             response = await client.get(f"{config.BACKEND_URL.rstrip('/')}/api/health")

@@ -22,7 +22,9 @@ if os.getenv("LANGFUSE_PUBLIC_KEY"):
     try:
         from langfuse import Langfuse
         _langfuse = Langfuse()  # picks up LANGFUSE_PUBLIC_KEY / SECRET_KEY / HOST
-        print("[llm] Langfuse tracing enabled →", os.getenv("LANGFUSE_HOST"))
+        # Keep startup output ASCII-safe: Windows cp1252 terminals can raise on
+        # the arrow character, which used to be caught as a Langfuse init error.
+        print("[llm] Langfuse tracing enabled ->", os.getenv("LANGFUSE_HOST"))
     except Exception as _lf_err:
         print(f"[llm] Langfuse init failed, tracing disabled: {_lf_err}")
 

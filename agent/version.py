@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-14.1"
+BUILD_VERSION = "2026-07-14.2"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -67,8 +67,12 @@ BUILD_FEATURES = [
     "phase1-auto-mode",               # planner→executor→critic subgraph, human-gated
     "phase1-stale-channel-fix",       # per-turn reset of transient graph channels + per-graph threads
     "session-default-merge",          # get_or_create_session always returns full doc shape
-    "phase2-rag-audience",            # hybrid retrieve→rerank→LLM behind USE_RAG_AUDIENCE
-    "phase2-rerank-live",             # qwen3-reranker-8b via MaaS /v1/rerank
+    "phase2-rag-audience",            # versioned hybrid retrieve→LLM behind USE_RAG_AUDIENCE
+    "phase2-rag-query-rewrite",       # raw+coverage-preserving rewrites behind separate flag
+    "phase2-rag-index-integrity",     # catalog fingerprint + model/runtime metadata readiness
+    "phase2-rerank-integrated",       # Qwen MaaS adapter retained; disabled after eval regression
+    "phase2-rag-eval-gates",          # stable segmentId metrics + retrieval/end-to-end reports
+    "langfuse-windows-console-fix",   # tracing init no longer fails on cp1252 console output
     "phase3-creative-intel",          # PIL deterministic pass + review queue + optional VLM
     "setup-entry-history-fix",        # proactive setup message is persisted before next chat turn
     "dependency-aware-readiness",     # /ready verifies MongoDB + backend before receiving traffic

@@ -14,10 +14,13 @@ import asyncio
 import json
 import time
 
+from pydantic import BaseModel, Field
+
 from config import config
 from agent_logger import alog
 from llm import parse_json_response, simple_generate
-from metrics import RAG_HALLUCINATED, RAG_REQUESTS
+from metrics import (RAG_CANDIDATES, RAG_GUARD_REJECTED, RAG_HALLUCINATED, RAG_REQUESTS,
+                     RAG_RERANK, RAG_STAGE_SECONDS)
 from prompts.audience import DMP_RECOMMEND_SYSTEM, DMP_RECOMMEND_USER
 from rag.index import ensure_index, get_qdrant
 from rag.rerank import rerank as rerank_docs
@@ -25,6 +28,67 @@ from rag.rerank import rerank as rerank_docs
 
 class RagUnavailable(Exception):
     pass
+
+
+class _SelectedRecommendation(BaseModel):
+    fullLabel: str
+    reason: str
+
+
+class _SelectionOut(BaseModel):
+    recommendations: list[_SelectedRecommendation] = Field(min_length=6, max_length=6)
+
+
+def _raw_query(brief: dict) -> str:
+    """Build one deterministic query that preserves all audience signals."""
+    fields = (brief.get("brand"), brief.get("objective"), brief.get("kpi"), brief.get("notes"))
+    return " | ".join(str(value) for value in fields if value) or "general audience"
+
+
+def _rank_merged(merged: dict[str, dict]) -> list[dict]:
+    """Coverage-first ordering for already merged per-query candidates."""
+    ordered = sorted(
+        merged.values(),
+        key=lambda x: (x["_rank"], -x["_query_hits"], -x["_fusion_score"]),
+    )
+    for rank, item in enumerate(ordered):
+        item["_rank"] = rank
+    return ordered
+
+
+def _guard_reason(brief: dict, segment: dict) -> str | None:
+    """Deterministic taxonomy guards for explicit business/consumer conflicts."""
+    notes = str(brief.get("notes") or "").casefold()
+    industrial_b2b = "b2b" in notes and any(
+        marker in notes for marker in ("industrial", "procurement", "mro"))
+    rejects_leisure = any(
+        marker in notes for marker in ("not leisure", "không nhắm khách du lịch",
+                                       "không phải khách du lịch"))
+    consumer_travel = (
+        str(segment.get("category") or "").casefold() == "hobbies and activities"
+        and str(segment.get("subcategory") or "").casefold().startswith("travel"))
+    if industrial_b2b and rejects_leisure and consumer_travel:
+        return "b2b_consumer_leisure"
+    return None
+
+
+async def _select(prompt: str) -> tuple[list[dict], str]:
+    """Structured critic selection with the legacy generator as fallback."""
+    if (config.RAG_USE_CRITIC_SELECTOR and config.CRITIC_BASE_URL
+            and config.CRITIC_MODEL and config.CRITIC_API_KEY):
+        try:
+            from graph.structured import structured
+            output, _ = await asyncio.to_thread(
+                structured,
+                [{"role": "system", "content": DMP_RECOMMEND_SYSTEM},
+                 {"role": "user", "content": prompt}],
+                _SelectionOut, "audience_selection", "critic", 1600)
+            return [item.model_dump() for item in output.recommendations], "critic"
+        except Exception:
+            pass
+
+    raw = await asyncio.to_thread(simple_generate, DMP_RECOMMEND_SYSTEM, prompt)
+    return parse_json_response(raw).get("recommendations", []), "generator"
 
 
 async def _hybrid_search(queries: list[str], limit: int) -> list[dict]:
@@ -53,9 +117,22 @@ async def _hybrid_search(queries: list[str], limit: int) -> list[dict]:
         )
         for rank, p in enumerate(res.points):
             key = p.payload.get("_id") or p.payload.get("fullLabel")
-            if key not in merged or rank < merged[key]["_rank"]:
-                merged[key] = {**p.payload, "_rank": rank}
-    return sorted(merged.values(), key=lambda x: x["_rank"])
+            if key not in merged:
+                merged[key] = {
+                    **p.payload,
+                    "_rank": rank,
+                    "_fusion_score": 0.0,
+                    "_query_hits": 0,
+                }
+            # Preserve aspect coverage across rewritten queries. Pure summed
+            # RRF over-rewarded generic segments present in every query and
+            # buried strong single-aspect matches (for example Beer in a
+            # soccer + beer campaign). Best rank is primary; agreement only
+            # breaks ties between equally strong per-query results.
+            merged[key]["_rank"] = min(merged[key]["_rank"], rank)
+            merged[key]["_fusion_score"] += 1.0 / (60 + rank + 1)
+            merged[key]["_query_hits"] += 1
+    return _rank_merged(merged)
 
 
 async def recommend_rag(session_id: str, brief: dict) -> dict:
@@ -63,13 +140,24 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
     if not await ensure_index(session_id):
         raise RagUnavailable("qdrant index unavailable")
 
-    # 1. query rewrite (never fatal — has internal fallback)
-    from rag.query_rewrite import rewrite
-    queries = await rewrite(brief)
+    # 1. Always retain the original brief. Coverage-preserving rewrites improve
+    # the 80-case candidate benchmark, but remain optional because they add an
+    # external model dependency and must pass the end-to-end release gate.
+    stage_t0 = time.time()
+    queries = [_raw_query(brief)]
+    if config.RAG_QUERY_REWRITE:
+        from rag.query_rewrite import rewrite
+        rewritten = await rewrite(brief)
+        queries.extend(q for q in rewritten if q and q not in queries)
+    rewrite_s = time.time() - stage_t0
+    RAG_STAGE_SECONDS.labels(stage="rewrite").observe(rewrite_s)
 
     # 2. hybrid retrieve
     try:
+        stage_t0 = time.time()
         candidates = await _hybrid_search(queries, config.RAG_TOP_RETRIEVE)
+        retrieval_s = time.time() - stage_t0
+        RAG_STAGE_SECONDS.labels(stage="retrieve").observe(retrieval_s)
     except Exception as e:
         raise RagUnavailable(f"retrieval failed: {str(e)[:120]}") from e
     if not candidates:
@@ -77,9 +165,17 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
 
     # 3. rerank (graceful skip → keep RRF order)
     brief_text = " | ".join(str(brief.get(k) or "") for k in ("brand", "objective", "kpi", "notes"))
-    order = await rerank_docs(brief_text, [c["_text"] for c in candidates])
+    stage_t0 = time.time()
+    if config.RAG_USE_RERANK:
+        order = await rerank_docs(brief_text, [c["_text"] for c in candidates])
+    else:
+        RAG_RERANK.labels(outcome="disabled").inc()
+        order = None
+    rerank_s = time.time() - stage_t0
+    RAG_STAGE_SECONDS.labels(stage="rerank").observe(rerank_s)
     reranked = [candidates[i] for i in order] if order else candidates
     top = reranked[: config.RAG_TOP_FINAL]
+    RAG_CANDIDATES.observe(len(top))
 
     # 4. LLM reasons over candidates only (same prompt family as old path)
     labels = [c.get("fullLabel") or c.get("name", "") for c in top]
@@ -88,16 +184,24 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
         kpi=brief.get("kpi", "?"), notes=brief.get("notes", "(trống)"),
         segments_json=json.dumps(labels, ensure_ascii=False),
     )
-    raw = await asyncio.to_thread(simple_generate, DMP_RECOMMEND_SYSTEM, prompt)
-    recs = parse_json_response(raw).get("recommendations", [])
+    stage_t0 = time.time()
+    recs, selector = await _select(prompt)
+    generation_s = time.time() - stage_t0
+    RAG_STAGE_SECONDS.labels(stage="generate").observe(generation_s)
 
     # 5. candidate-ID validation ⛔ — LLM may not invent segments
     label_map = {(c.get("fullLabel") or c.get("name", "")): c for c in top}
-    enriched, dropped = [], 0
+    enriched, dropped, guard_rejected = [], 0, 0
     for rec in recs:
         seg = label_map.get(rec.get("fullLabel", ""))
         if seg:
-            seg = {k: v for k, v in seg.items() if k not in ("_rank", "_text")}
+            guard_reason = _guard_reason(brief, seg)
+            if guard_reason:
+                RAG_GUARD_REJECTED.labels(reason=guard_reason).inc()
+                guard_rejected += 1
+                continue
+            internal = {"_rank", "_text", "_fusion_score", "_query_hits", "_rag_index"}
+            seg = {k: v for k, v in seg.items() if k not in internal}
             enriched.append({**seg, "reason": rec.get("reason", "")})
         else:
             dropped += 1
@@ -107,7 +211,24 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
     RAG_REQUESTS.labels(outcome="ok").inc()
     await alog(session_id, "info", {
         "rag": "recommend_done", "queries": queries, "candidates": len(candidates),
-        "reranked": bool(order), "returned": len(enriched), "dropped_hallucinated": dropped,
-        "duration_ms": int((time.time() - t0) * 1000)})
+        "rewrite_enabled": config.RAG_QUERY_REWRITE,
+        "rerank_enabled": config.RAG_USE_RERANK,
+        "selector": selector,
+        "reranked": bool(order), "returned": len(enriched),
+        "dropped_hallucinated": dropped, "guard_rejected": guard_rejected,
+        "duration_ms": int((time.time() - t0) * 1000),
+        "stage_ms": {"rewrite": int(rewrite_s * 1000),
+                     "retrieve": int(retrieval_s * 1000),
+                     "rerank": int(rerank_s * 1000),
+                     "generate": int(generation_s * 1000)}})
     return {"recommendations": enriched, "total_segments": len(candidates),
-            "rag": {"queries": queries, "candidates": len(candidates), "reranked": bool(order)}}
+            "rag": {"queries": queries, "candidates": len(candidates),
+                    "rewrite_enabled": config.RAG_QUERY_REWRITE,
+                    "rerank_enabled": config.RAG_USE_RERANK,
+                    "selector": selector,
+                    "guard_rejected": guard_rejected,
+                    "reranked": bool(order),
+                    "stage_ms": {"rewrite": int(rewrite_s * 1000),
+                                 "retrieve": int(retrieval_s * 1000),
+                                 "rerank": int(rerank_s * 1000),
+                                 "generate": int(generation_s * 1000)}}}

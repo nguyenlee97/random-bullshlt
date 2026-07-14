@@ -77,7 +77,7 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  qdrant:                                          # Phase 2 vector store (idle until then)
+  qdrant:                                          # Keep server aligned with qdrant-client
     image: qdrant/qdrant:v1.12.4
     ports: ["6333:6333"]
     volumes: [qdrant_data:/qdrant/storage]

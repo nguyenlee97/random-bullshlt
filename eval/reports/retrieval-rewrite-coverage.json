@@ -1,0 +1,3568 @@
+{
+  "label": "retrieval-rewrite-coverage",
+  "created_at": "2026-07-14T17:00:13.444774+00:00",
+  "config": {
+    "dense_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "sparse_model": "Qdrant/bm25",
+    "rerank_model": null,
+    "rewrite": true,
+    "raw_query_mode": null,
+    "retrieve_k": 50,
+    "final_k": 15,
+    "index": {
+      "ready": true,
+      "reason": "ok",
+      "count": 310,
+      "expected_count": 310,
+      "stored": {
+        "schema": 2,
+        "catalog_fingerprint": "41db459023c120608a0b312447fd2f1682e00ebad360b7679e3d8fb5b0de8535",
+        "dense_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "sparse_model": "Qdrant/bm25",
+        "fastembed_version": "0.8.0",
+        "segment_count": 310
+      },
+      "expected": {
+        "schema": 2,
+        "catalog_fingerprint": "41db459023c120608a0b312447fd2f1682e00ebad360b7679e3d8fb5b0de8535",
+        "dense_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "sparse_model": "Qdrant/bm25",
+        "fastembed_version": "0.8.0",
+        "segment_count": 310
+      }
+    }
+  },
+  "summary": {
+    "n": 80,
+    "errors": 0,
+    "mean_retrieval_recall@50": 0.848,
+    "mean_must_recall@15": 0.696,
+    "mean_mrr@15": 0.68,
+    "mean_ndcg@15": 0.509,
+    "exclusion_violations_total": 10,
+    "unknown_labels_total": 0,
+    "rerank_successes": 0,
+    "p50_latency_s": 1.42,
+    "p95_latency_s": 2.729
+  },
+  "results": [
+    {
+      "id": "brief_001",
+      "tags": [
+        "awareness",
+        "vi"
+      ],
+      "queries": [
+        "Soccer",
+        "Food and drink",
+        "Sports bar"
+      ],
+      "retrieval_recall": 0.6666666666666666,
+      "must_recall_at_50": 0.5,
+      "must_recall_at_15": 0.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.1797,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Sports (sports)",
+        "Soccer",
+        "Fast food (food & drink)",
+        "Basketball (sport)",
+        "Association football (Soccer)",
+        "Cooking (food & drink)",
+        "Baseball (sport)",
+        "Friends of Soccer fans",
+        "Organic food (food & drink)",
+        "Triathlons (athletics)",
+        "Soccer fans (high content engagement)",
+        "Cuisine (food & drink)",
+        "Tennis (sport)",
+        "Soccer fans (moderate content engagement)",
+        "Seafood (food & drink)"
+      ],
+      "latency_s": {
+        "rewrite": 2.971,
+        "retrieve": 3.326,
+        "rerank": 0.0,
+        "total": 6.298
+      }
+    },
+    {
+      "id": "brief_002",
+      "tags": [
+        "conversion",
+        "vi"
+      ],
+      "queries": [
+        "Online shopping, E-commerce",
+        "Bill payment, Mobile payment",
+        "Cashback, Banking"
+      ],
+      "retrieval_recall": 0.8571428571428571,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.6123,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Personal finance (banking)",
+        "Online shopping (retail)",
+        "Mobile phones (smart phone)",
+        "Shops admins",
+        "Investment banking (banking)",
+        "Shopping (retail)",
+        "Online banking (banking)",
+        "New Active Business (< 24 months)",
+        "Shopping malls (retail)",
+        "Retail banking (banking)",
+        "Toys",
+        "Digital Activities",
+        "Mortgage loans (banking)",
+        "Social media (online media)",
+        "New Active Business (< 12 months)"
+      ],
+      "latency_s": {
+        "rewrite": 3.56,
+        "retrieve": 2.783,
+        "rerank": 0.0,
+        "total": 6.343
+      }
+    },
+    {
+      "id": "brief_003",
+      "tags": [
+        "awareness",
+        "en"
+      ],
+      "queries": [
+        "Travel",
+        "Online shopping",
+        "Food and drink"
+      ],
+      "retrieval_recall": 0.6666666666666666,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.3333333333333333,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.3679,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Travel",
+        "Online shopping (retail)",
+        "Fast food (food & drink)",
+        "Adventure travel (travel & tourism)",
+        "Shopping malls (retail)",
+        "Cooking (food & drink)",
+        "Travel (travel & tourism)",
+        "Shopping (retail)",
+        "Organic food (food & drink)",
+        "Toys",
+        "Ecotourism (travel & tourism)",
+        "Cuisine (food & drink)",
+        "Cruises (travel & tourism business)",
+        "Discount stores (retail)",
+        "Seafood (food & drink)"
+      ],
+      "latency_s": {
+        "rewrite": 1.916,
+        "retrieve": 0.051,
+        "rerank": 0.0,
+        "total": 1.967
+      }
+    },
+    {
+      "id": "brief_004",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "queries": [
+        "Food and drink + Organic food",
+        "Yoga + Healthy lifestyle",
+        "Online shopping + Women 25-40"
+      ],
+      "retrieval_recall": 0.8333333333333334,
+      "must_recall_at_50": 0.5,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.5701,
+      "exclusion_violations": [
+        "Fast food (food & drink)"
+      ],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Yoga (fitness)",
+        "Organic food (food & drink)",
+        "Online shopping (retail)",
+        "Bodybuilding (sport)",
+        "Fast food (food & drink)",
+        "Toys",
+        "Physical exercise (fitness)",
+        "Cuisine (food & drink)",
+        "Women's clothing (apparel)",
+        "Physical fitness (fitness)",
+        "Seafood (food & drink)",
+        "Shopping (retail)",
+        "Cooking (food & drink)",
+        "Running (sport)",
+        "Shopping malls (retail)"
+      ],
+      "latency_s": {
+        "rewrite": 1.982,
+        "retrieve": 0.073,
+        "rerank": 0.0,
+        "total": 2.056
+      }
+    },
+    {
+      "id": "brief_005",
+      "tags": [
+        "conversion",
+        "vi",
+        "tiny_budget"
+      ],
+      "queries": [
+        "Coffee lovers",
+        "Food and drink",
+        "Cafe goers"
+      ],
+      "retrieval_recall": 0.6,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.6688,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Coffeehouses (coffee)",
+        "Fast food (food & drink)",
+        "Cooking (food & drink)",
+        "Restaurants (dining)",
+        "Coffee (food & drink)",
+        "Fast casual restaurants (restaurant)",
+        "Organic food (food & drink)",
+        "Cuisine (food & drink)",
+        "Diners (restaurant)",
+        "Tea (nonalcoholic beverage)",
+        "Fast food restaurants (dining)",
+        "Seafood (food & drink)",
+        "Food (food & drink)",
+        "Baking (cooking)",
+        "Spanish cuisine (food & drink)"
+      ],
+      "latency_s": {
+        "rewrite": 1.281,
+        "retrieve": 0.097,
+        "rerank": 0.0,
+        "total": 1.378
+      }
+    },
+    {
+      "id": "brief_006",
+      "tags": [
+        "awareness",
+        "vi"
+      ],
+      "queries": [
+        "Gaming mobile nam 18-35",
+        "Action games tiên hiệp",
+        "Mobile game RPG male"
+      ],
+      "retrieval_recall": 0.8,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 0.1667,
+      "ndcg_at_15": 0.2234,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Word games (games)",
+        "Strategy games (games)",
+        "Action games (video games)",
+        "Massively multiplayer online role-playing games (video games)",
+        "New Active Business (< 24 months)",
+        "Board games (games)",
+        "Video games (gaming)",
+        "Massively multiplayer online games (video games)",
+        "First-person shooter games (video games)",
+        "New Active Business (< 12 months)",
+        "Simulation games (video games)",
+        "Puzzle video games (video games)",
+        "Shops admins",
+        "New Active Business (< 6 months)",
+        "Card games (games)"
+      ],
+      "latency_s": {
+        "rewrite": 1.492,
+        "retrieve": 0.055,
+        "rerank": 0.0,
+        "total": 1.547
+      }
+    },
+    {
+      "id": "brief_007",
+      "tags": [
+        "retention",
+        "vi"
+      ],
+      "queries": [
+        "Smartphone users",
+        "Online shopping",
+        "Gaming"
+      ],
+      "retrieval_recall": 0.8333333333333334,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.6476,
+      "exclusion_violations": [
+        "New Active Business (< 12 months)"
+      ],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Smartphones (consumer electronics)",
+        "Online shopping (retail)",
+        "Strategy games (games)",
+        "Shops admins",
+        "Online poker (gambling)",
+        "Shopping malls (retail)",
+        "Massively multiplayer online games (video games)",
+        "Digital Activities",
+        "Shopping (retail)",
+        "New Active Business (< 24 months)",
+        "Toys",
+        "Board games (games)",
+        "New Active Business (< 12 months)",
+        "Discount stores (retail)",
+        "Video games (gaming)"
+      ],
+      "latency_s": {
+        "rewrite": 1.353,
+        "retrieve": 0.03,
+        "rerank": 0.0,
+        "total": 1.383
+      }
+    },
+    {
+      "id": "brief_008",
+      "tags": [
+        "consideration",
+        "en"
+      ],
+      "queries": [
+        "Online shopping, Automotive, Family",
+        "Technology, Charging stations, Electric vehicles",
+        "Urban lifestyle, Commuting, Parenting"
+      ],
+      "retrieval_recall": 0.8,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.4367,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Electric vehicle (vehicle)",
+        "Parenting (children & parenting)",
+        "Online shopping (retail)",
+        "Minivans (vehicle)",
+        "Car rentals (transportation)",
+        "Toys",
+        "Fatherhood (children & parenting)",
+        "Shopping malls (retail)",
+        "Portable media players (audio equipment)",
+        "Vehicles (transportation)",
+        "Trucks (vehicles)",
+        "Shopping (retail)",
+        "SUVs (vehicles)",
+        "Motherhood (children & parenting)",
+        "Social media (online media)"
+      ],
+      "latency_s": {
+        "rewrite": 1.519,
+        "retrieve": 0.061,
+        "rerank": 0.0,
+        "total": 1.58
+      }
+    },
+    {
+      "id": "brief_009",
+      "tags": [
+        "conversion",
+        "vi",
+        "kpi_budget_conflict"
+      ],
+      "queries": [
+        "Online shopping women 18-30",
+        "Coupon hunters fashion",
+        "E-commerce apparel buyers"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.6835,
+      "exclusion_violations": [
+        "Men's clothing (apparel)"
+      ],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Toys",
+        "Women's clothing (apparel)",
+        "Online shopping (retail)",
+        "Clothing (apparel)",
+        "Fashion accessories (accessories)",
+        "Coupons (coupons & discounts)",
+        "Shopping (retail)",
+        "Men's clothing (apparel)",
+        "Jewelry (apparel)",
+        "Shopping malls (retail)",
+        "Children's clothing (apparel)",
+        "Dresses (apparel)",
+        "Shops admins",
+        "Boutiques (retailers)",
+        "Handbags (accessories)"
+      ],
+      "latency_s": {
+        "rewrite": 1.225,
+        "retrieve": 0.048,
+        "rerank": 0.0,
+        "total": 1.274
+      }
+    },
+    {
+      "id": "brief_010",
+      "tags": [
+        "awareness",
+        "vi",
+        "ambiguous_notes"
+      ],
+      "queries": [
+        "Healthy food",
+        "Eco-friendly",
+        "Outdoor activities"
+      ],
+      "retrieval_recall": 0.5,
+      "must_recall_at_50": 0.5,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.4583,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Veganism (diets)",
+        "Organic food (food & drink)",
+        "Outdoor recreation (outdoors activities)",
+        "Vegetarianism (diets)",
+        "Friends of Soccer fans",
+        "Fishing (outdoors activities)",
+        "Home and garden",
+        "Fast food (food & drink)",
+        "Camping (outdoors activities)",
+        "Gardening (outdoor activities)",
+        "Do it yourself (DIY)",
+        "Restaurants (dining)",
+        "Pizza (food & drink)",
+        "Boating (outdoors activities)",
+        "Barbecue (cooking)"
+      ],
+      "latency_s": {
+        "rewrite": 1.195,
+        "retrieve": 0.029,
+        "rerank": 0.0,
+        "total": 1.224
+      }
+    },
+    {
+      "id": "brief_011",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "queries": [
+        "Travel enthusiasts",
+        "Online shopping",
+        "Weekend getaway"
+      ],
+      "retrieval_recall": 0.6,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 0.1429,
+      "ndcg_at_15": 0.2046,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Travel (travel & tourism)",
+        "Online shopping (retail)",
+        "Car rentals (transportation)",
+        "Adventure travel (travel & tourism)",
+        "Shopping malls (retail)",
+        "Theme parks (leisure)",
+        "Travel",
+        "Shopping (retail)",
+        "Toys",
+        "Ecotourism (travel & tourism)",
+        "Vehicles (transportation)",
+        "Air travel (transportation)",
+        "Discount stores (retail)",
+        "Cruises (travel & tourism business)",
+        "Vacations (social concept)"
+      ],
+      "latency_s": {
+        "rewrite": 2.669,
+        "retrieve": 0.06,
+        "rerank": 0.0,
+        "total": 2.729
+      }
+    },
+    {
+      "id": "brief_012",
+      "tags": [
+        "conversion",
+        "en"
+      ],
+      "queries": [
+        "Food and drink",
+        "Online shopping",
+        "Deal hunters"
+      ],
+      "retrieval_recall": 0.8333333333333334,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.4576,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Toys",
+        "Online shopping (retail)",
+        "Fast food (food & drink)",
+        "Shops admins",
+        "Shopping malls (retail)",
+        "Cooking (food & drink)",
+        "Shopping (retail)",
+        "Organic food (food & drink)",
+        "Cuisine (food & drink)",
+        "Travel",
+        "Discount stores (retail)",
+        "Seafood (food & drink)",
+        "Expats",
+        "Boutiques (retailers)",
+        "Coupons (coupons & discounts)"
+      ],
+      "latency_s": {
+        "rewrite": 1.217,
+        "retrieve": 0.089,
+        "rerank": 0.0,
+        "total": 1.306
+      }
+    },
+    {
+      "id": "brief_013",
+      "tags": [
+        "retention",
+        "vi",
+        "empty_notes"
+      ],
+      "queries": [
+        "Online shopping",
+        "Mobile banking users",
+        "Cashback seekers"
+      ],
+      "retrieval_recall": 0.8,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.6925,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Personal finance (banking)",
+        "Online shopping (retail)",
+        "Investment banking (banking)",
+        "Expats",
+        "Shopping malls (retail)",
+        "Online banking (banking)",
+        "Shopping (retail)",
+        "Credit cards (credit & lending)",
+        "Retail banking (banking)",
+        "Toys",
+        "Mortgage loans (banking)",
+        "Banking (Finance)",
+        "Discount stores (retail)",
+        "Shops admins",
+        "Boutiques (retailers)"
+      ],
+      "latency_s": {
+        "rewrite": 1.203,
+        "retrieve": 0.034,
+        "rerank": 0.0,
+        "total": 1.237
+      }
+    },
+    {
+      "id": "brief_014",
+      "tags": [
+        "awareness",
+        "vi",
+        "adversarial"
+      ],
+      "queries": [
+        "Sports enthusiasts",
+        "Running",
+        "Electrolyte drinks"
+      ],
+      "retrieval_recall": 0.5,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.5264,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Sports (sports)",
+        "Marathons (running event)",
+        "Coffee (food & drink)",
+        "Running (sport)",
+        "Baseball (sport)",
+        "Energy drinks (nonalcoholic beverage)",
+        "Soccer",
+        "Basketball (sport)",
+        "Recipes (food & drink)",
+        "Expats",
+        "Juice (nonalcoholic beverage)",
+        "Triathlons (athletics)",
+        "Tennis (sport)",
+        "Chocolate (food & drink)",
+        "Volleyball (sport)"
+      ],
+      "latency_s": {
+        "rewrite": 1.177,
+        "retrieve": 0.099,
+        "rerank": 0.0,
+        "total": 1.276
+      }
+    },
+    {
+      "id": "brief_015",
+      "tags": [
+        "consideration",
+        "vi",
+        "long_rambling_notes"
+      ],
+      "queries": [
+        "Career development, Business, Marketing",
+        "Office workers, Entrepreneurship, Investment",
+        "Job search, English learning, Professional growth"
+      ],
+      "retrieval_recall": 0.8333333333333334,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.7784,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Marketing (business & finance)",
+        "Entrepreneurship (business & finance)",
+        "Search engine optimization (software",
+        "Higher education (education)",
+        "Email marketing (marketing)",
+        "Investment banking (banking)",
+        "Construction (industry)",
+        "Web development (websites)",
+        "Digital marketing (marketing)",
+        "Advertising (marketing)",
+        "Investment (business & finance)",
+        "Management (business & finance)",
+        "E-books (publications)",
+        "Social media marketing (marketing)",
+        "Online (computing)"
+      ],
+      "latency_s": {
+        "rewrite": 1.298,
+        "retrieve": 0.067,
+        "rerank": 0.0,
+        "total": 1.366
+      }
+    },
+    {
+      "id": "brief_016",
+      "tags": [
+        "conversion",
+        "vi"
+      ],
+      "queries": [
+        "Online shopping women 20-38",
+        "Natural beauty skincare",
+        "Eco-friendly cosmetics"
+      ],
+      "retrieval_recall": 0.8571428571428571,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 0.3333,
+      "ndcg_at_15": 0.3866,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Fragrances (cosmetics)",
+        "Tattoos (body art)",
+        "Online shopping (retail)",
+        "Beauty salons (cosmetics)",
+        "Women's clothing (apparel)",
+        "Cosmetics (personal care)",
+        "Shopping (retail)",
+        "Beauty (social concept)",
+        "Shops admins",
+        "Shopping malls (retail)",
+        "Friends of Soccer fans",
+        "Toys",
+        "Sunglasses (eyewear)",
+        "Hair products (hair care)",
+        "Fashion accessories (accessories)"
+      ],
+      "latency_s": {
+        "rewrite": 1.382,
+        "retrieve": 0.054,
+        "rerank": 0.0,
+        "total": 1.436
+      }
+    },
+    {
+      "id": "brief_017",
+      "tags": [
+        "awareness",
+        "en"
+      ],
+      "queries": [
+        "Mobile photography",
+        "Online shopping",
+        "Gaming"
+      ],
+      "retrieval_recall": 0.6666666666666666,
+      "must_recall_at_50": 0.5,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.5837,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Photography (visual art)",
+        "Online shopping (retail)",
+        "Strategy games (games)",
+        "Online poker (gambling)",
+        "Cameras (photography)",
+        "Shopping malls (retail)",
+        "Massively multiplayer online games (video games)",
+        "Graphic design (visual art)",
+        "Shopping (retail)",
+        "Toys",
+        "Mobile phones (smart phone)",
+        "Board games (games)",
+        "Shops admins",
+        "Discount stores (retail)",
+        "Video games (gaming)"
+      ],
+      "latency_s": {
+        "rewrite": 1.454,
+        "retrieve": 0.042,
+        "rerank": 0.0,
+        "total": 1.496
+      }
+    },
+    {
+      "id": "brief_018",
+      "tags": [
+        "retention",
+        "vi"
+      ],
+      "queries": [
+        "Gaming RPG",
+        "MMORPG",
+        "Online gaming"
+      ],
+      "retrieval_recall": 0.6,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 0.1667,
+      "ndcg_at_15": 0.2093,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Massively multiplayer online role-playing games (video games)",
+        "Digital Activities",
+        "Strategy games (games)",
+        "Online games (video games)",
+        "Massively multiplayer online games (video games)",
+        "Board games (games)",
+        "Online poker (gambling)",
+        "Shops admins",
+        "Video games (gaming)",
+        "Browser games (video games)",
+        "Online (computing)",
+        "Word games (games)",
+        "First-person shooter games (video games)",
+        "Racing games (video game)",
+        "Simulation games (video games)"
+      ],
+      "latency_s": {
+        "rewrite": 1.381,
+        "retrieve": 0.086,
+        "rerank": 0.0,
+        "total": 1.468
+      }
+    },
+    {
+      "id": "brief_019",
+      "tags": [
+        "consideration",
+        "vi",
+        "kpi_budget_conflict"
+      ],
+      "queries": [
+        "Real estate investment",
+        "Home loan",
+        "Family"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.6026,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Mortgage loans (banking)",
+        "Real estate (industry)",
+        "Family (social concept)",
+        "Home improvement (home & garden)",
+        "Investment banking (banking)",
+        "Fatherhood (children & parenting)",
+        "Furniture (home furnishings)",
+        "Architecture (architecture)",
+        "Weddings (weddings)",
+        "Investment (business & finance)",
+        "Motherhood (children & parenting)",
+        "Credit cards (credit & lending)",
+        "Home and garden",
+        "Home Appliances (consumer electronics)",
+        "Parenting (children & parenting)"
+      ],
+      "latency_s": {
+        "rewrite": 1.318,
+        "retrieve": 0.04,
+        "rerank": 0.0,
+        "total": 1.358
+      }
+    },
+    {
+      "id": "brief_020",
+      "tags": [
+        "conversion",
+        "vi",
+        "tiny_budget"
+      ],
+      "queries": [
+        "Pet owners Hà Nội",
+        "Online shopping cat food",
+        "Cat lovers behavior"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.8813,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Pets (animals)",
+        "Purchase behavior (Purchase behavior)",
+        "Online shopping (retail)",
+        "Cats (animals)",
+        "Pet food (pet supplies)",
+        "Toys",
+        "Dogs (animals)",
+        "Expats",
+        "Fast food (food & drink)",
+        "Rabbits (animals)",
+        "Soccer",
+        "Reptiles (animals)",
+        "Travel",
+        "Organic food (food & drink)",
+        "Horses (animals)"
+      ],
+      "latency_s": {
+        "rewrite": 3.373,
+        "retrieve": 0.089,
+        "rerank": 0.0,
+        "total": 3.463
+      }
+    },
+    {
+      "id": "brief_021",
+      "tags": [
+        "awareness",
+        "vi"
+      ],
+      "queries": [
+        "Soccer fans",
+        "Football + Personal finance",
+        "Vietnamese football fans"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.5708,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Friends of Soccer fans",
+        "Personal finance (banking)",
+        "Association football (Soccer)",
+        "Soccer fans (high content engagement)",
+        "Investment (business & finance)",
+        "Soccer fans (moderate content engagement)",
+        "Insurance (business & finance",
+        "American football (sport)",
+        "Soccer",
+        "College football (college sports)",
+        "Vietnamese cuisine (food & drink)",
+        "Sports (sports)",
+        "Mortgage loans (banking)",
+        "Volleyball (sport)",
+        "Banking (Finance)"
+      ],
+      "latency_s": {
+        "rewrite": 2.072,
+        "retrieve": 0.059,
+        "rerank": 0.0,
+        "total": 2.13
+      }
+    },
+    {
+      "id": "brief_022",
+      "tags": [
+        "consideration",
+        "en",
+        "ambiguous_notes"
+      ],
+      "queries": [
+        "Stress relief",
+        "Wellness",
+        "Travel"
+      ],
+      "retrieval_recall": 0.8333333333333334,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.5758,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Travel",
+        "Yoga (fitness)",
+        "Running (sport)",
+        "Weight training (weightlifting)",
+        "Adventure travel (travel & tourism)",
+        "Physical fitness (fitness)",
+        "Travel (travel & tourism)",
+        "Physical exercise (fitness)",
+        "Ecotourism (travel & tourism)",
+        "Bodybuilding (sport)",
+        "Cruises (travel & tourism business)",
+        "Air travel (transportation)",
+        "Car rentals (transportation)",
+        "Spas (personal care)",
+        "Volunteering (social causes)"
+      ],
+      "latency_s": {
+        "rewrite": 1.299,
+        "retrieve": 0.033,
+        "rerank": 0.0,
+        "total": 1.333
+      }
+    },
+    {
+      "id": "brief_023",
+      "tags": [
+        "conversion",
+        "vi"
+      ],
+      "queries": [
+        "Technology enthusiasts",
+        "Online shopping",
+        "Commuting"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.0,
+      "mrr_at_15": 0.0,
+      "ndcg_at_15": 0.0,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Vehicles (transportation)",
+        "Online shopping (retail)",
+        "Computers (computers & electronics)",
+        "Online (computing)",
+        "Car rentals (transportation)",
+        "Shopping malls (retail)",
+        "Shopping (retail)",
+        "Consumer electronics (computers & electronics)",
+        "Travel",
+        "Toys",
+        "Engineering (science)",
+        "Air travel (transportation)",
+        "Cameras (photography)",
+        "Discount stores (retail)",
+        "Hybrids (vehicle)"
+      ],
+      "latency_s": {
+        "rewrite": 3.138,
+        "retrieve": 0.055,
+        "rerank": 0.0,
+        "total": 3.193
+      }
+    },
+    {
+      "id": "brief_024",
+      "tags": [
+        "retention",
+        "en"
+      ],
+      "queries": [
+        "Frequent flyers",
+        "Premium leisure travelers",
+        "Travel loyalty program"
+      ],
+      "retrieval_recall": 0.6666666666666666,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 0.1667,
+      "ndcg_at_15": 0.2765,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Travel (travel & tourism)",
+        "Soccer fans (high content engagement)",
+        "Theme parks (leisure)",
+        "Adventure travel (travel & tourism)",
+        "Shops admins",
+        "Travel",
+        "Car rentals (transportation)",
+        "Ecotourism (travel & tourism)",
+        "Soccer fans (moderate content engagement)",
+        "Cruises (travel & tourism business)",
+        "Digital Activities",
+        "Air travel (transportation)",
+        "Online poker (gambling)",
+        "Advertising (marketing)",
+        "Hotels (lodging)"
+      ],
+      "latency_s": {
+        "rewrite": 1.484,
+        "retrieve": 0.071,
+        "rerank": 0.0,
+        "total": 1.556
+      }
+    },
+    {
+      "id": "brief_025",
+      "tags": [
+        "awareness",
+        "vi",
+        "empty_notes"
+      ],
+      "queries": [
+        "Food and drink",
+        "Online shopping",
+        "Cooking"
+      ],
+      "retrieval_recall": 0.6,
+      "must_recall_at_50": 0.5,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 0.25,
+      "ndcg_at_15": 0.3155,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Fast food (food & drink)",
+        "Baking (cooking)",
+        "Online shopping (retail)",
+        "Cooking (food & drink)",
+        "Barbecue (cooking)",
+        "Shopping malls (retail)",
+        "Organic food (food & drink)",
+        "Shopping (retail)",
+        "Cuisine (food & drink)",
+        "Recipes (food & drink)",
+        "Toys",
+        "Seafood (food & drink)",
+        "Vietnamese cuisine (food & drink)",
+        "Discount stores (retail)",
+        "Restaurants (dining)"
+      ],
+      "latency_s": {
+        "rewrite": 1.333,
+        "retrieve": 0.029,
+        "rerank": 0.0,
+        "total": 1.362
+      }
+    },
+    {
+      "id": "brief_026",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "queries": [
+        "Home decor",
+        "Online shopping",
+        "Newlyweds"
+      ],
+      "retrieval_recall": 0.8,
+      "must_recall_at_50": 0.5,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.64,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Furniture (home furnishings)",
+        "Marriage (weddings)",
+        "Online shopping (retail)",
+        "Weddings (weddings)",
+        "Home improvement (home & garden)",
+        "Shopping malls (retail)",
+        "Motherhood (children & parenting)",
+        "Home Appliances (consumer electronics)",
+        "Shopping (retail)",
+        "Toys",
+        "Home and garden",
+        "Fatherhood (children & parenting)",
+        "Do it yourself (DIY)",
+        "Discount stores (retail)",
+        "Friendship (relationships)"
+      ],
+      "latency_s": {
+        "rewrite": 1.278,
+        "retrieve": 0.092,
+        "rerank": 0.0,
+        "total": 1.371
+      }
+    },
+    {
+      "id": "brief_027",
+      "tags": [
+        "conversion",
+        "vi",
+        "adversarial"
+      ],
+      "queries": [
+        "Financial planning",
+        "Investment",
+        "Personal finance"
+      ],
+      "retrieval_recall": 0.8333333333333334,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.8596,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Personal finance (banking)",
+        "Investment (business & finance)",
+        "Investment banking (banking)",
+        "Banking (Finance)",
+        "Insurance (business & finance",
+        "Mortgage loans (banking)",
+        "Credit cards (credit & lending)",
+        "Economics (economics)",
+        "Management (business & finance)",
+        "Online banking (banking)",
+        "Real estate (industry)",
+        "Entrepreneurship (business & finance)",
+        "Architecture (architecture)",
+        "Retail banking (banking)",
+        "Business (business & finance)"
+      ],
+      "latency_s": {
+        "rewrite": 1.168,
+        "retrieve": 0.077,
+        "rerank": 0.0,
+        "total": 1.245
+      }
+    },
+    {
+      "id": "brief_028",
+      "tags": [
+        "retention",
+        "vi"
+      ],
+      "queries": [
+        "Food and drink",
+        "Online shopping",
+        "Voucher hunters"
+      ],
+      "retrieval_recall": 0.8333333333333334,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.3333333333333333,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.4034,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Pets (animals)",
+        "Fast food (food & drink)",
+        "Online shopping (retail)",
+        "Cooking (food & drink)",
+        "Shopping malls (retail)",
+        "Expats",
+        "Shopping (retail)",
+        "Organic food (food & drink)",
+        "Travel",
+        "Toys",
+        "Cuisine (food & drink)",
+        "Birds (animals)",
+        "Seafood (food & drink)",
+        "Discount stores (retail)",
+        "Horses (animals)"
+      ],
+      "latency_s": {
+        "rewrite": 1.28,
+        "retrieve": 0.088,
+        "rerank": 0.0,
+        "total": 1.367
+      }
+    },
+    {
+      "id": "brief_029",
+      "tags": [
+        "awareness",
+        "vi",
+        "long_rambling_notes"
+      ],
+      "queries": [
+        "Family parenting urban",
+        "Motorcycle commuters urban",
+        "Car loan finance"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.3383,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Motorcycles (vehicles)",
+        "Motherhood (children & parenting)",
+        "Mortgage loans (banking)",
+        "Scooters (vehicle)",
+        "Parenting (children & parenting)",
+        "Personal finance (banking)",
+        "Vehicles (transportation)",
+        "Fatherhood (children & parenting)",
+        "Investment (business & finance)",
+        "Hybrids (vehicle)",
+        "Family (social concept)",
+        "Banking (Finance)",
+        "SUVs (vehicles)",
+        "Friendship (relationships)",
+        "Credit cards (credit & lending)"
+      ],
+      "latency_s": {
+        "rewrite": 1.419,
+        "retrieve": 0.086,
+        "rerank": 0.0,
+        "total": 1.505
+      }
+    },
+    {
+      "id": "brief_030",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "queries": [
+        "Food and drink Japanese cuisine",
+        "Fine dining restaurant visitors",
+        "Online shopping high income"
+      ],
+      "retrieval_recall": 0.6,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.6248,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Japanese cuisine (food & drink)",
+        "Fast food restaurants (dining)",
+        "Online shopping (retail)",
+        "Restaurants (dining)",
+        "Korean cuisine (food & drink)",
+        "Shopping (retail)",
+        "French cuisine (food & drink)",
+        "Fast casual restaurants (restaurant)",
+        "Shopping malls (retail)",
+        "Thai cuisine (food & drink)",
+        "Diners (restaurant)",
+        "Toys",
+        "Chinese cuisine (food & drink)",
+        "Coffeehouses (coffee)",
+        "Social media (online media)"
+      ],
+      "latency_s": {
+        "rewrite": 1.23,
+        "retrieve": 0.098,
+        "rerank": 0.0,
+        "total": 1.328
+      }
+    },
+    {
+      "id": "brief_031",
+      "tags": [
+        "conversion",
+        "en",
+        "kpi_budget_conflict"
+      ],
+      "queries": [
+        "Gaming, Shooter, Esports",
+        "Mobile gaming, Action games",
+        "Video games, Esports fans"
+      ],
+      "retrieval_recall": 0.5,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.3333333333333333,
+      "mrr_at_15": 0.25,
+      "ndcg_at_15": 0.1585,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Action games (video games)",
+        "First-person shooter games (video games)",
+        "Puzzle video games (video games)",
+        "Video games (gaming)",
+        "Massively multiplayer online role-playing games (video games)",
+        "Massively multiplayer online games (video games)",
+        "Online poker (gambling)",
+        "Racing games (video game)",
+        "Card games (games)",
+        "Simulation games (video games)",
+        "Gambling (gambling)",
+        "Online games (video games)",
+        "Word games (games)",
+        "Board games (games)",
+        "Browser games (video games)"
+      ],
+      "latency_s": {
+        "rewrite": 1.922,
+        "retrieve": 0.064,
+        "rerank": 0.0,
+        "total": 1.986
+      }
+    },
+    {
+      "id": "brief_032",
+      "tags": [
+        "retention",
+        "vi"
+      ],
+      "queries": [
+        "Beauty & Cosmetics",
+        "Skincare",
+        "Online shopping"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.5286,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Fragrances (cosmetics)",
+        "Cosmetics (personal care)",
+        "Online shopping (retail)",
+        "Beauty salons (cosmetics)",
+        "Hair products (hair care)",
+        "Shopping malls (retail)",
+        "Tattoos (body art)",
+        "Shopping (retail)",
+        "Toys",
+        "Spas (personal care)",
+        "Beauty (social concept)",
+        "Discount stores (retail)",
+        "Boutiques (retailers)",
+        "Children's clothing (apparel)",
+        "Social media (online media)"
+      ],
+      "latency_s": {
+        "rewrite": 1.084,
+        "retrieve": 0.069,
+        "rerank": 0.0,
+        "total": 1.153
+      }
+    },
+    {
+      "id": "brief_033",
+      "tags": [
+        "awareness",
+        "vi",
+        "tiny_budget"
+      ],
+      "queries": [
+        "Food and drink, Office workers",
+        "Food and drink, Young adults",
+        "Breakfast, Street food"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.8523,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Fast food (food & drink)",
+        "Organic food (food & drink)",
+        "Cooking (food & drink)",
+        "Restaurants (dining)",
+        "Cuisine (food & drink)",
+        "Barbecue (cooking)",
+        "Seafood (food & drink)",
+        "Desserts (food & drink)",
+        "Pizza (food & drink)",
+        "Food (food & drink)",
+        "Coffeehouses (coffee)",
+        "Recipes (food & drink)",
+        "Coffee (food & drink)",
+        "Alcoholic beverages (food & drink)",
+        "Chocolate (food & drink)"
+      ],
+      "latency_s": {
+        "rewrite": 1.32,
+        "retrieve": 0.035,
+        "rerank": 0.0,
+        "total": 1.355
+      }
+    },
+    {
+      "id": "brief_034",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "queries": [
+        "Fitness enthusiasts",
+        "Weight loss",
+        "Healthy food"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.7112,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Physical fitness (fitness)",
+        "Weight training (weightlifting)",
+        "Organic food (food & drink)",
+        "Bodybuilding (sport)",
+        "Vegetarianism (diets)",
+        "Friends of Soccer fans",
+        "Running (sport)",
+        "Fast food (food & drink)",
+        "Yoga (fitness)",
+        "Veganism (diets)",
+        "Physical exercise (fitness)",
+        "Pizza (food & drink)",
+        "Barbecue (cooking)",
+        "Triathlons (athletics)",
+        "Seafood (food & drink)"
+      ],
+      "latency_s": {
+        "rewrite": 1.604,
+        "retrieve": 0.052,
+        "rerank": 0.0,
+        "total": 1.656
+      }
+    },
+    {
+      "id": "brief_035",
+      "tags": [
+        "conversion",
+        "vi"
+      ],
+      "queries": [
+        "Marketing",
+        "Online shopping",
+        "Business and entrepreneurship"
+      ],
+      "retrieval_recall": 0.8333333333333334,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 0.3333,
+      "ndcg_at_15": 0.2758,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Advertising (marketing)",
+        "Online shopping (retail)",
+        "Entrepreneurship (business & finance)",
+        "Digital marketing (marketing)",
+        "Shopping malls (retail)",
+        "Small business (business & finance)",
+        "Shopping (retail)",
+        "Email marketing (marketing)",
+        "Business (business & finance)",
+        "Toys",
+        "Social media marketing (marketing)",
+        "Management (business & finance)",
+        "Online advertising (marketing)",
+        "Sales (business & finance)",
+        "Discount stores (retail)"
+      ],
+      "latency_s": {
+        "rewrite": 1.248,
+        "retrieve": 0.058,
+        "rerank": 0.0,
+        "total": 1.307
+      }
+    },
+    {
+      "id": "brief_036",
+      "tags": [
+        "awareness",
+        "en",
+        "adversarial"
+      ],
+      "queries": [
+        "Travel luxury resort",
+        "Honeymoon travel",
+        "Food and drink"
+      ],
+      "retrieval_recall": 0.8333333333333334,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 0.1429,
+      "ndcg_at_15": 0.2387,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Travel (travel & tourism)",
+        "Fast food (food & drink)",
+        "Adventure travel (travel & tourism)",
+        "Cooking (food & drink)",
+        "Ecotourism (travel & tourism)",
+        "Organic food (food & drink)",
+        "Hotels (lodging)",
+        "Travel",
+        "Cuisine (food & drink)",
+        "Cruises (travel & tourism business)",
+        "Seafood (food & drink)",
+        "Theme parks (leisure)",
+        "Food (food & drink)",
+        "Vacations (social concept)",
+        "Mountains (places)"
+      ],
+      "latency_s": {
+        "rewrite": 1.38,
+        "retrieve": 0.096,
+        "rerank": 0.0,
+        "total": 1.476
+      }
+    },
+    {
+      "id": "brief_037",
+      "tags": [
+        "consideration",
+        "vi",
+        "ambiguous_notes"
+      ],
+      "queries": [
+        "Japan culture",
+        "Language learning",
+        "Anime manga"
+      ],
+      "retrieval_recall": 0.5,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.25,
+      "ndcg_at_15": 0.3313,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Manga (anime & manga)",
+        "Reading (communication)",
+        "Anime movies (movies)",
+        "Travel",
+        "Japanese cuisine (food & drink)",
+        "Korean cuisine (food & drink)",
+        "Dogs (animals)",
+        "Soccer",
+        "Animated movies (movies)",
+        "Toys",
+        "Higher education (education)",
+        "Rabbits (animals)",
+        "Comics (comics & cartoons)",
+        "Beauty (social concept)",
+        "Expats"
+      ],
+      "latency_s": {
+        "rewrite": 1.236,
+        "retrieve": 0.051,
+        "rerank": 0.0,
+        "total": 1.287
+      }
+    },
+    {
+      "id": "brief_038",
+      "tags": [
+        "conversion",
+        "vi"
+      ],
+      "queries": [
+        "Online shopping, coupon hunters",
+        "E-commerce, deal seekers",
+        "Flash sale, bargain hunters"
+      ],
+      "retrieval_recall": 0.42857142857142855,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.5964,
+      "exclusion_violations": [
+        "Shops admins"
+      ],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Coupons (coupons & discounts)",
+        "Sales (business & finance)",
+        "E-books (publications)",
+        "Toys",
+        "Online shopping (retail)",
+        "Online (computing)",
+        "Shopping (retail)",
+        "E-book readers (consumer electronics)",
+        "Boutiques (retailers)",
+        "Digital marketing (marketing)",
+        "Shopping malls (retail)",
+        "Email marketing (marketing)",
+        "Shops admins",
+        "Social media (online media)",
+        "Web hosting (computing)"
+      ],
+      "latency_s": {
+        "rewrite": 1.743,
+        "retrieve": 0.078,
+        "rerank": 0.0,
+        "total": 1.821
+      }
+    },
+    {
+      "id": "brief_039",
+      "tags": [
+        "retention",
+        "en",
+        "empty_notes"
+      ],
+      "queries": [
+        "Online shopping",
+        "Gaming",
+        "Food and drink"
+      ],
+      "retrieval_recall": 0.3333333333333333,
+      "must_recall_at_50": 0.0,
+      "must_recall_at_15": 0.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.2026,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Online shopping (retail)",
+        "Strategy games (games)",
+        "Fast food (food & drink)",
+        "Online poker (gambling)",
+        "Shopping malls (retail)",
+        "Cooking (food & drink)",
+        "Massively multiplayer online games (video games)",
+        "Shopping (retail)",
+        "Organic food (food & drink)",
+        "Toys",
+        "Board games (games)",
+        "Cuisine (food & drink)",
+        "Discount stores (retail)",
+        "Video games (gaming)",
+        "Seafood (food & drink)"
+      ],
+      "latency_s": {
+        "rewrite": 1.39,
+        "retrieve": 0.093,
+        "rerank": 0.0,
+        "total": 1.484
+      }
+    },
+    {
+      "id": "brief_040",
+      "tags": [
+        "conversion",
+        "en",
+        "long_rambling_notes"
+      ],
+      "queries": [
+        "Office workers 22-35",
+        "Coffee and tea lovers",
+        "Online shopping app users"
+      ],
+      "retrieval_recall": 0.7142857142857143,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.5838,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Soccer fans (high content engagement)",
+        "Coffeehouses (coffee)",
+        "Online shopping (retail)",
+        "Shops admins",
+        "New Active Business (< 24 months)",
+        "Coffee (food & drink)",
+        "New Active Business (< 6 months)",
+        "Tea (nonalcoholic beverage)",
+        "Shopping malls (retail)",
+        "New Active Business (< 12 months)",
+        "Cooking (food & drink)",
+        "Shopping (retail)",
+        "Restaurants (dining)",
+        "Toys",
+        "Social media (online media)"
+      ],
+      "latency_s": {
+        "rewrite": 1.339,
+        "retrieve": 0.09,
+        "rerank": 0.0,
+        "total": 1.429
+      }
+    },
+    {
+      "id": "brief_041",
+      "tags": [
+        "conversion",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Online shopping, E-commerce, Mobile banking",
+        "Credit card users, Digital payments, Cashless payment",
+        "Office workers, Urban professionals, Salary earners"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.84,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Online banking (banking)",
+        "Credit cards (credit & lending)",
+        "Construction (industry)",
+        "Online shopping (retail)",
+        "Digital Activities",
+        "Higher education (education)",
+        "Online (computing)",
+        "Personal finance (banking)",
+        "Vehicles (transportation)",
+        "Web hosting (computing)",
+        "Retail banking (banking)",
+        "Shops admins",
+        "Digital marketing (marketing)",
+        "Web development (websites)",
+        "Mortgage loans (banking)"
+      ],
+      "latency_s": {
+        "rewrite": 1.545,
+        "retrieve": 0.068,
+        "rerank": 0.0,
+        "total": 1.613
+      }
+    },
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Small business owners",
+        "Business and finance",
+        "Entrepreneurship"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.7183,
+      "exclusion_violations": [
+        "Investment (business & finance)"
+      ],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Entrepreneurship (business & finance)",
+        "Management (business & finance)",
+        "Small business (business & finance)",
+        "Investment (business & finance)",
+        "Business (business & finance)",
+        "Higher education (education)",
+        "Marketing (business & finance)",
+        "Sales (business & finance)",
+        "Banking (Finance)",
+        "New Active Business (< 24 months)",
+        "Agriculture (industry)",
+        "Retail (industry)",
+        "New Active Business (< 12 months)",
+        "Insurance (business & finance",
+        "Personal finance (banking)"
+      ],
+      "latency_s": {
+        "rewrite": 1.165,
+        "retrieve": 0.053,
+        "rerank": 0.0,
+        "total": 1.219
+      }
+    },
+    {
+      "id": "brief_043",
+      "tags": [
+        "awareness",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Online shopping website owners",
+        "Digital marketing business owners",
+        "SEO web design"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.5702,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Web design (websites)",
+        "Digital marketing (marketing)",
+        "Online shopping (retail)",
+        "Shops admins",
+        "Search engine optimization (software",
+        "Web development (websites)",
+        "Marketing (business & finance)",
+        "New Active Business (< 24 months)",
+        "Shopping (retail)",
+        "Interior design (design)",
+        "Email marketing (marketing)",
+        "Fashion design (design)",
+        "Boutiques (retailers)",
+        "New Active Business (< 12 months)",
+        "Design (design)"
+      ],
+      "latency_s": {
+        "rewrite": 1.407,
+        "retrieve": 0.029,
+        "rerank": 0.0,
+        "total": 1.436
+      }
+    },
+    {
+      "id": "brief_044",
+      "tags": [
+        "consideration",
+        "en",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Small business owners",
+        "Online advertising",
+        "Email marketing"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.8886,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Email marketing (marketing)",
+        "Online advertising (marketing)",
+        "Small business (business & finance)",
+        "Advertising (marketing)",
+        "Digital marketing (marketing)",
+        "Entrepreneurship (business & finance)",
+        "Social media (online media)",
+        "Management (business & finance)",
+        "Social media marketing (marketing)",
+        "Business (business & finance)",
+        "Sales (business & finance)",
+        "Online (computing)",
+        "Marketing (business & finance)",
+        "New Active Business (< 24 months)",
+        "E-books (publications)"
+      ],
+      "latency_s": {
+        "rewrite": 1.713,
+        "retrieve": 0.071,
+        "rerank": 0.0,
+        "total": 1.784
+      }
+    },
+    {
+      "id": "brief_045",
+      "tags": [
+        "conversion",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Food and drink Korean cuisine",
+        "Family dining Weekend dining",
+        "Seafood BBQ restaurant"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.5461,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Restaurants (dining)",
+        "Fast casual restaurants (restaurant)",
+        "Korean cuisine (food & drink)",
+        "Fast food restaurants (dining)",
+        "Barbecue (cooking)",
+        "Japanese cuisine (food & drink)",
+        "French cuisine (food & drink)",
+        "Diners (restaurant)",
+        "Family (social concept)",
+        "Greek cuisine (food & drink)",
+        "Weddings (weddings)",
+        "Thai cuisine (food & drink)",
+        "Spanish cuisine (food & drink)",
+        "Chinese cuisine (food & drink)",
+        "Marriage (weddings)"
+      ],
+      "latency_s": {
+        "rewrite": 1.263,
+        "retrieve": 0.056,
+        "rerank": 0.0,
+        "total": 1.319
+      }
+    },
+    {
+      "id": "brief_046",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Food and drink, Family",
+        "Food and drink, Office workers",
+        "Wine, Italian food"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.547,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Fast food (food & drink)",
+        "Italian cuisine (food & drink)",
+        "Cooking (food & drink)",
+        "Greek cuisine (food & drink)",
+        "Organic food (food & drink)",
+        "Wine (alcoholic drinks)",
+        "Cuisine (food & drink)",
+        "Spanish cuisine (food & drink)",
+        "Seafood (food & drink)",
+        "Desserts (food & drink)",
+        "Food (food & drink)",
+        "French cuisine (food & drink)",
+        "Pizza (food & drink)",
+        "Chocolate (food & drink)",
+        "Coffee (food & drink)"
+      ],
+      "latency_s": {
+        "rewrite": 1.125,
+        "retrieve": 0.047,
+        "rerank": 0.0,
+        "total": 1.172
+      }
+    },
+    {
+      "id": "brief_047",
+      "tags": [
+        "awareness",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Photography",
+        "Videography",
+        "Online shopping"
+      ],
+      "retrieval_recall": 0.4,
+      "must_recall_at_50": 0.3333333333333333,
+      "must_recall_at_15": 0.3333333333333333,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.3665,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Photography (visual art)",
+        "Online shopping (retail)",
+        "Graphic design (visual art)",
+        "Cameras (photography)",
+        "Shopping malls (retail)",
+        "Shopping (retail)",
+        "Digital Activities",
+        "Toys",
+        "Drawing (visual art)",
+        "Painting (visual art)",
+        "Science (science)",
+        "Discount stores (retail)",
+        "Arts and music (art)",
+        "Boutiques (retailers)",
+        "Fine art (visual art)"
+      ],
+      "latency_s": {
+        "rewrite": 1.34,
+        "retrieve": 0.027,
+        "rerank": 0.0,
+        "total": 1.367
+      }
+    },
+    {
+      "id": "brief_048",
+      "tags": [
+        "conversion",
+        "en",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Gaming hardware enthusiasts",
+        "Online shopping PC components",
+        "Technology reviewers"
+      ],
+      "retrieval_recall": 0.4,
+      "must_recall_at_50": 0.0,
+      "must_recall_at_15": 0.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.1969,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Computers (computers & electronics)",
+        "Strategy games (games)",
+        "Online shopping (retail)",
+        "Shops admins",
+        "Digital Activities",
+        "Online poker (gambling)",
+        "Consumer electronics (computers & electronics)",
+        "Board games (games)",
+        "Shopping malls (retail)",
+        "Cameras (photography)",
+        "Search engine optimization (software",
+        "Gambling (gambling)",
+        "Online (computing)",
+        "Video games (gaming)",
+        "Engineering (science)"
+      ],
+      "latency_s": {
+        "rewrite": 1.308,
+        "retrieve": 0.036,
+        "rerank": 0.0,
+        "total": 1.344
+      }
+    },
+    {
+      "id": "brief_049",
+      "tags": [
+        "awareness",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Running",
+        "Marathon",
+        "Triathlon"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.839,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Marathons (running event)",
+        "Triathlons (athletics)",
+        "Running (sport)",
+        "Bodybuilding (sport)",
+        "Soccer",
+        "Mountain biking (cycling)",
+        "Expats",
+        "Friends of Soccer fans",
+        "Sports (sports)",
+        "Physical exercise (fitness)",
+        "Hunting (sport)",
+        "Physical fitness (fitness)",
+        "Auto racing (motor sports)",
+        "Travel",
+        "Swimming (water sport)"
+      ],
+      "latency_s": {
+        "rewrite": 2.193,
+        "retrieve": 0.102,
+        "rerank": 0.0,
+        "total": 2.295
+      }
+    },
+    {
+      "id": "brief_050",
+      "tags": [
+        "retention",
+        "en",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Sports fans NFL college football",
+        "Food and drink loyalty",
+        "Expats international district"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.8774,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Expats",
+        "College football (college sports)",
+        "Fast food (food & drink)",
+        "American football (sport)",
+        "Cooking (food & drink)",
+        "Travel (travel & tourism)",
+        "Association football (Soccer)",
+        "Organic food (food & drink)",
+        "Car rentals (transportation)",
+        "Friends of Soccer fans",
+        "Food (food & drink)",
+        "Vehicles (transportation)",
+        "Golf (sport)",
+        "Seafood (food & drink)",
+        "Aviation (air travel)"
+      ],
+      "latency_s": {
+        "rewrite": 1.581,
+        "retrieve": 0.072,
+        "rerank": 0.0,
+        "total": 1.653
+      }
+    },
+    {
+      "id": "brief_051",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Luxury fashion, Online shopping, Beauty",
+        "Women 25-44, Fashion accessories, High income",
+        "Jewelry, Handbags, Brand lovers"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.7948,
+      "exclusion_violations": [
+        "Toys"
+      ],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Clothing (apparel)",
+        "Jewelry (apparel)",
+        "Online shopping (retail)",
+        "Handbags (accessories)",
+        "Fashion accessories (accessories)",
+        "Beauty (social concept)",
+        "Toys",
+        "Beauty salons (cosmetics)",
+        "Dresses (apparel)",
+        "Luxury goods (retail)",
+        "Sunglasses (eyewear)",
+        "Fragrances (cosmetics)",
+        "Women's clothing (apparel)",
+        "Tattoos (body art)",
+        "Cosmetics (personal care)"
+      ],
+      "latency_s": {
+        "rewrite": 2.629,
+        "retrieve": 0.059,
+        "rerank": 0.0,
+        "total": 2.689
+      }
+    },
+    {
+      "id": "brief_052",
+      "tags": [
+        "conversion",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Automotive enthusiasts",
+        "Family car buyers",
+        "Off-road driving"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.25,
+      "ndcg_at_15": 0.4151,
+      "exclusion_violations": [
+        "Scooters (vehicle)"
+      ],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Hybrids (vehicle)",
+        "Family (social concept)",
+        "Hard drives (computer hardware)",
+        "SUVs (vehicles)",
+        "Vehicles (transportation)",
+        "Motherhood (children & parenting)",
+        "Motorcycles (vehicles)",
+        "Fatherhood (children & parenting)",
+        "Automobiles (vehicles)",
+        "Trucks (vehicles)",
+        "Friendship (relationships)",
+        "Electric vehicle (vehicle)",
+        "Parenting (children & parenting)",
+        "Scooters (vehicle)",
+        "Weddings (weddings)"
+      ],
+      "latency_s": {
+        "rewrite": 1.243,
+        "retrieve": 0.073,
+        "rerank": 0.0,
+        "total": 1.315
+      }
+    },
+    {
+      "id": "brief_053",
+      "tags": [
+        "awareness",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Reptiles OR Exotic pets",
+        "Birds OR Aquarium fish",
+        "Pet supplies OR Online shopping"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.8015,
+      "exclusion_violations": [
+        "Cats (animals)"
+      ],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Fish (animals)",
+        "Pet food (pet supplies)",
+        "Reptiles (animals)",
+        "Pets (animals)",
+        "Birds (animals)",
+        "Online shopping (retail)",
+        "Rabbits (animals)",
+        "Toys",
+        "Fishing (outdoors activities)",
+        "Shopping malls (retail)",
+        "Cats (animals)",
+        "Horses (animals)",
+        "Shopping (retail)",
+        "Dogs (animals)",
+        "Social media (online media)"
+      ],
+      "latency_s": {
+        "rewrite": 1.548,
+        "retrieve": 0.097,
+        "rerank": 0.0,
+        "total": 1.645
+      }
+    },
+    {
+      "id": "brief_054",
+      "tags": [
+        "conversion",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Home improvement DIY",
+        "Interior design",
+        "Online shopping"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.6666666666666666,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.5066,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Interior design (design)",
+        "Home improvement (home & garden)",
+        "Online shopping (retail)",
+        "Furniture (home furnishings)",
+        "Shopping malls (retail)",
+        "Graphic design (visual art)",
+        "Shopping (retail)",
+        "Do it yourself (DIY)",
+        "Fashion design (design)",
+        "Toys",
+        "Home and garden",
+        "Design (design)",
+        "Discount stores (retail)",
+        "Architecture (architecture)",
+        "Home Appliances (consumer electronics)"
+      ],
+      "latency_s": {
+        "rewrite": 2.175,
+        "retrieve": 0.062,
+        "rerank": 0.0,
+        "total": 2.237
+      }
+    },
+    {
+      "id": "brief_055",
+      "tags": [
+        "retention",
+        "vi",
+        "full_catalog_only"
+      ],
+      "queries": [
+        "Gaming board games",
+        "Food and drink coffee",
+        "Loyal customers behavior"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.2,
+      "ndcg_at_15": 0.3523,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Board games (games)",
+        "Coffee (food & drink)",
+        "Purchase behavior (Purchase behavior)",
+        "Shops admins",
+        "Puzzle video games (video games)",
+        "Coffeehouses (coffee)",
+        "Massively multiplayer online games (video games)",
+        "Fast food (food & drink)",
+        "Expats",
+        "Strategy games (games)",
+        "Cooking (food & drink)",
+        "Travel",
+        "Soccer fans (high content engagement)",
+        "Card games (games)",
+        "Organic food (food & drink)"
+      ],
+      "latency_s": {
+        "rewrite": 1.459,
+        "retrieve": 0.086,
+        "rerank": 0.0,
+        "total": 1.546
+      }
+    },
+    {
+      "id": "brief_056",
+      "tags": [
+        "conversion",
+        "vi",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Beauty & skincare women 25-34",
+        "Online shopping women 25-34",
+        "Health & wellness women 25-34"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.6445,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Beauty salons (cosmetics)",
+        "Yoga (fitness)",
+        "Online shopping (retail)",
+        "Cosmetics (personal care)",
+        "Bodybuilding (sport)",
+        "Shops admins",
+        "Women's clothing (apparel)",
+        "Tattoos (body art)",
+        "Running (sport)",
+        "Beauty (social concept)",
+        "Shopping (retail)",
+        "Physical fitness (fitness)",
+        "Spas (personal care)",
+        "Toys",
+        "Weight training (weightlifting)"
+      ],
+      "latency_s": {
+        "rewrite": 1.295,
+        "retrieve": 0.049,
+        "rerank": 0.0,
+        "total": 1.344
+      }
+    },
+    {
+      "id": "brief_057",
+      "tags": [
+        "awareness",
+        "vi",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Nam 25-45 Soccer",
+        "Nam 25-45 Food and drink",
+        "Nam 25-45 Gaming"
+      ],
+      "retrieval_recall": 0.75,
+      "must_recall_at_50": 0.5,
+      "must_recall_at_15": 0.0,
+      "mrr_at_15": 0.1429,
+      "ndcg_at_15": 0.0795,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Soccer",
+        "Strategy games (games)",
+        "Fast food (food & drink)",
+        "Online poker (gambling)",
+        "Friends of Soccer fans",
+        "Cooking (food & drink)",
+        "Association football (Soccer)",
+        "Organic food (food & drink)",
+        "Board games (games)",
+        "Soccer fans (high content engagement)",
+        "Vietnamese cuisine (food & drink)",
+        "Gambling (gambling)",
+        "Soccer fans (moderate content engagement)",
+        "Seafood (food & drink)",
+        "Video games (gaming)"
+      ],
+      "latency_s": {
+        "rewrite": 1.457,
+        "retrieve": 0.054,
+        "rerank": 0.0,
+        "total": 1.511
+      }
+    },
+    {
+      "id": "brief_058",
+      "tags": [
+        "conversion",
+        "vi",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Online shopping",
+        "Mobile apps",
+        "Personal finance"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.6813,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Online shopping (retail)",
+        "Mobile phones (smart phone)",
+        "Personal finance (banking)",
+        "Shops admins",
+        "Shopping malls (retail)",
+        "Investment (business & finance)",
+        "New Active Business (< 12 months)",
+        "Shopping (retail)",
+        "Insurance (business & finance",
+        "Toys",
+        "Digital Activities",
+        "Mortgage loans (banking)",
+        "New Active Business (< 24 months)",
+        "Discount stores (retail)",
+        "Credit cards (credit & lending)"
+      ],
+      "latency_s": {
+        "rewrite": 1.16,
+        "retrieve": 0.057,
+        "rerank": 0.0,
+        "total": 1.217
+      }
+    },
+    {
+      "id": "brief_059",
+      "tags": [
+        "consideration",
+        "vi",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Parenting",
+        "Luxury goods",
+        "Education"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.5606,
+      "exclusion_violations": [
+        "Higher education (education)"
+      ],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Higher education (education)",
+        "Fatherhood (children & parenting)",
+        "Luxury goods (retail)",
+        "Toys",
+        "Parenting (children & parenting)",
+        "Reading (communication)",
+        "Motherhood (children & parenting)",
+        "E-books (publications)",
+        "Fashion accessories (accessories)",
+        "Books (publications)",
+        "Family (social concept)",
+        "Clothing (apparel)",
+        "Literature (publications)",
+        "Friendship (relationships)",
+        "Jewelry (apparel)"
+      ],
+      "latency_s": {
+        "rewrite": 1.241,
+        "retrieve": 0.071,
+        "rerank": 0.0,
+        "total": 1.311
+      }
+    },
+    {
+      "id": "brief_060",
+      "tags": [
+        "awareness",
+        "vi",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Sinh viên đại học",
+        "Online shopping",
+        "Commuting"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.2385,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Vehicles (transportation)",
+        "Online shopping (retail)",
+        "Higher education (education)",
+        "Expats",
+        "Car rentals (transportation)",
+        "Shopping malls (retail)",
+        "Travel",
+        "Shopping (retail)",
+        "Toys",
+        "Science (science)",
+        "Air travel (transportation)",
+        "Engineering (science)",
+        "Discount stores (retail)",
+        "Hybrids (vehicle)",
+        "Travel (travel & tourism)"
+      ],
+      "latency_s": {
+        "rewrite": 2.191,
+        "retrieve": 0.032,
+        "rerank": 0.0,
+        "total": 2.223
+      }
+    },
+    {
+      "id": "brief_061",
+      "tags": [
+        "conversion",
+        "vi",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Luxury real estate",
+        "Married",
+        "High income"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.477,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Real estate (industry)",
+        "Marriage (weddings)",
+        "Soccer fans (high content engagement)",
+        "Personal finance (banking)",
+        "Weddings (weddings)",
+        "Luxury goods (retail)",
+        "Higher education (education)",
+        "Hotels (lodging)",
+        "Friendship (relationships)",
+        "Insurance (business & finance",
+        "Spas (personal care)",
+        "Motherhood (children & parenting)",
+        "Toys",
+        "Fatherhood (children & parenting)",
+        "Banking (Finance)"
+      ],
+      "latency_s": {
+        "rewrite": 1.364,
+        "retrieve": 0.078,
+        "rerank": 0.0,
+        "total": 1.442
+      }
+    },
+    {
+      "id": "brief_062",
+      "tags": [
+        "consideration",
+        "en",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Online shopping, Food and drink",
+        "Business, Career development",
+        "Social networking, Dating"
+      ],
+      "retrieval_recall": 0.75,
+      "must_recall_at_50": 0.5,
+      "must_recall_at_15": 0.0,
+      "mrr_at_15": 0.25,
+      "ndcg_at_15": 0.1693,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Fast food (food & drink)",
+        "Web development (websites)",
+        "Volunteering (social causes)",
+        "Online shopping (retail)",
+        "Higher education (education)",
+        "Family (social concept)",
+        "Organic food (food & drink)",
+        "Entrepreneurship (business & finance)",
+        "Friendship (relationships)",
+        "Toys",
+        "Business (business & finance)",
+        "Beauty (social concept)",
+        "Desserts (food & drink)",
+        "Small business (business & finance)",
+        "Charity and causes (social causes)"
+      ],
+      "latency_s": {
+        "rewrite": 1.583,
+        "retrieve": 0.065,
+        "rerank": 0.0,
+        "total": 1.648
+      }
+    },
+    {
+      "id": "brief_063",
+      "tags": [
+        "conversion",
+        "vi",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Mẹ bỉm sữa",
+        "Online shopping",
+        "Food and drink"
+      ],
+      "retrieval_recall": 0.5,
+      "must_recall_at_50": 0.5,
+      "must_recall_at_15": 0.0,
+      "mrr_at_15": 0.1667,
+      "ndcg_at_15": 0.085,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Food (food & drink)",
+        "Fast food (food & drink)",
+        "Online shopping (retail)",
+        "Cooking (food & drink)",
+        "Shopping malls (retail)",
+        "Organic food (food & drink)",
+        "Expats",
+        "Shopping (retail)",
+        "Cuisine (food & drink)",
+        "Toys",
+        "Seafood (food & drink)",
+        "Baking (cooking)",
+        "Discount stores (retail)",
+        "Beverages (food & drink)",
+        "Boutiques (retailers)"
+      ],
+      "latency_s": {
+        "rewrite": 1.266,
+        "retrieve": 0.066,
+        "rerank": 0.0,
+        "total": 1.332
+      }
+    },
+    {
+      "id": "brief_064",
+      "tags": [
+        "retention",
+        "vi",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Golf",
+        "Luxury lifestyle",
+        "High income professionals"
+      ],
+      "retrieval_recall": 0.75,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.5064,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Soccer fans (high content engagement)",
+        "Golf (sport)",
+        "Luxury goods (retail)",
+        "Sports (sports)",
+        "Toys",
+        "Higher education (education)",
+        "Clothing (apparel)",
+        "Tennis (sport)",
+        "Online (computing)",
+        "Spas (personal care)",
+        "Baseball (sport)",
+        "Engineering (science)",
+        "Online poker (gambling)",
+        "Beauty (social concept)",
+        "Personal finance (banking)"
+      ],
+      "latency_s": {
+        "rewrite": 1.356,
+        "retrieve": 0.063,
+        "rerank": 0.0,
+        "total": 1.42
+      }
+    },
+    {
+      "id": "brief_065",
+      "tags": [
+        "consideration",
+        "vi",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Office workers",
+        "Online shopping",
+        "Men's fashion"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 0.3333,
+      "ndcg_at_15": 0.4165,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Shops admins",
+        "Online shopping (retail)",
+        "Men's clothing (apparel)",
+        "Fashion accessories (accessories)",
+        "Online (computing)",
+        "Shopping malls (retail)",
+        "Shopping (retail)",
+        "Clothing (apparel)",
+        "Construction (industry)",
+        "Toys",
+        "Jewelry (apparel)",
+        "Engineering (science)",
+        "Discount stores (retail)",
+        "Computer servers (computing)",
+        "Boutiques (retailers)"
+      ],
+      "latency_s": {
+        "rewrite": 1.283,
+        "retrieve": 0.06,
+        "rerank": 0.0,
+        "total": 1.343
+      }
+    },
+    {
+      "id": "brief_066",
+      "tags": [
+        "awareness",
+        "en",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Parenting, Education",
+        "Online shopping, Parenting",
+        "Kids education, Family"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.4409,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Fatherhood (children & parenting)",
+        "Higher education (education)",
+        "Online shopping (retail)",
+        "Parenting (children & parenting)",
+        "Toys",
+        "Family (social concept)",
+        "Motherhood (children & parenting)",
+        "Marriage (weddings)",
+        "Friendship (relationships)",
+        "Shopping malls (retail)",
+        "Shopping (retail)",
+        "Weddings (weddings)",
+        "Social media (online media)",
+        "Children's clothing (apparel)",
+        "Boutiques (retailers)"
+      ],
+      "latency_s": {
+        "rewrite": 1.446,
+        "retrieve": 0.08,
+        "rerank": 0.0,
+        "total": 1.526
+      }
+    },
+    {
+      "id": "brief_067",
+      "tags": [
+        "awareness",
+        "vi",
+        "targeting_labeled"
+      ],
+      "queries": [
+        "Food and drink wine fine dining",
+        "Luxury shopping high income",
+        "Gourmet cooking premium brands"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.1667,
+      "ndcg_at_15": 0.3705,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Restaurants (dining)",
+        "Baking (cooking)",
+        "Luxury goods (retail)",
+        "Barbecue (cooking)",
+        "Toys",
+        "Wine (alcoholic drinks)",
+        "Fast food restaurants (dining)",
+        "Cooking (food & drink)",
+        "Shopping (retail)",
+        "French cuisine (food & drink)",
+        "Recipes (food & drink)",
+        "Clothing (apparel)",
+        "Alcoholic beverages (food & drink)",
+        "Vietnamese cuisine (food & drink)",
+        "Shopping malls (retail)"
+      ],
+      "latency_s": {
+        "rewrite": 1.266,
+        "retrieve": 0.032,
+        "rerank": 0.0,
+        "total": 1.298
+      }
+    },
+    {
+      "id": "brief_068",
+      "tags": [
+        "consideration",
+        "vi",
+        "primary_secondary"
+      ],
+      "queries": [
+        "Fitness",
+        "Weight training",
+        "Weight loss"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.951,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Weight training (weightlifting)",
+        "Physical fitness (fitness)",
+        "Bodybuilding (sport)",
+        "Running (sport)",
+        "Friends of Soccer fans",
+        "Yoga (fitness)",
+        "Physical exercise (fitness)",
+        "Triathlons (athletics)",
+        "Snowboarding (skiing & snowboarding)",
+        "Soccer fans (high content engagement)",
+        "Sports (sports)",
+        "Soccer",
+        "Skiing (skiing & snowboarding)",
+        "Expats",
+        "Soccer fans (moderate content engagement)"
+      ],
+      "latency_s": {
+        "rewrite": 1.22,
+        "retrieve": 0.066,
+        "rerank": 0.0,
+        "total": 1.286
+      }
+    },
+    {
+      "id": "brief_069",
+      "tags": [
+        "awareness",
+        "vi",
+        "primary_secondary"
+      ],
+      "queries": [
+        "Backpacking Travel",
+        "Budget Travel",
+        "Frequent Business Travelers"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.3333,
+      "ndcg_at_15": 0.5176,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Travel (travel & tourism)",
+        "Cruises (travel & tourism business)",
+        "Adventure travel (travel & tourism)",
+        "Travel",
+        "Ecotourism (travel & tourism)",
+        "Aviation (air travel)",
+        "Car rentals (transportation)",
+        "Air travel (transportation)",
+        "Business (business & finance)",
+        "Hotels (lodging)",
+        "Mountains (places)",
+        "Theme parks (leisure)",
+        "Nature (science)",
+        "Small business (business & finance)",
+        "Tourism (industry)"
+      ],
+      "latency_s": {
+        "rewrite": 1.231,
+        "retrieve": 0.039,
+        "rerank": 0.0,
+        "total": 1.271
+      }
+    },
+    {
+      "id": "brief_070",
+      "tags": [
+        "conversion",
+        "vi",
+        "primary_secondary"
+      ],
+      "queries": [
+        "Mẹ bỉm sữa",
+        "Online shopping",
+        "Parenting"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.4535,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Fatherhood (children & parenting)",
+        "Food (food & drink)",
+        "Online shopping (retail)",
+        "Parenting (children & parenting)",
+        "Cooking (food & drink)",
+        "Shopping malls (retail)",
+        "Expats",
+        "Motherhood (children & parenting)",
+        "Shopping (retail)",
+        "Toys",
+        "Cuisine (food & drink)",
+        "Family (social concept)",
+        "Baking (cooking)",
+        "Discount stores (retail)",
+        "Friendship (relationships)"
+      ],
+      "latency_s": {
+        "rewrite": 1.375,
+        "retrieve": 0.051,
+        "rerank": 0.0,
+        "total": 1.426
+      }
+    },
+    {
+      "id": "brief_071",
+      "tags": [
+        "consideration",
+        "en",
+        "primary_secondary"
+      ],
+      "queries": [
+        "Parenting, Kids, Family",
+        "Automotive, Electric vehicles",
+        "Technology, Green living"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.4583,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Live events (entertainment)",
+        "Electric vehicle (vehicle)",
+        "Fatherhood (children & parenting)",
+        "Home Appliances (consumer electronics)",
+        "Hybrids (vehicle)",
+        "Parenting (children & parenting)",
+        "Motorcycles (vehicles)",
+        "Motherhood (children & parenting)",
+        "Ballet (dance)",
+        "SUVs (vehicles)",
+        "Home and garden",
+        "Family (social concept)",
+        "Automobiles (vehicles)",
+        "Computers (computers & electronics)",
+        "Friendship (relationships)"
+      ],
+      "latency_s": {
+        "rewrite": 1.279,
+        "retrieve": 0.042,
+        "rerank": 0.0,
+        "total": 1.32
+      }
+    },
+    {
+      "id": "brief_072",
+      "tags": [
+        "retention",
+        "vi",
+        "primary_secondary"
+      ],
+      "queries": [
+        "Food and drink + Students",
+        "Coffee shop frequent visitors",
+        "Online shopping + Office workers"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 0.0,
+      "mrr_at_15": 0.3333,
+      "ndcg_at_15": 0.1193,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Online shopping (retail)",
+        "Coffeehouses (coffee)",
+        "Fast food (food & drink)",
+        "Shops admins",
+        "Cooking (food & drink)",
+        "Shopping (retail)",
+        "Organic food (food & drink)",
+        "Online (computing)",
+        "Shopping malls (retail)",
+        "Restaurants (dining)",
+        "Seafood (food & drink)",
+        "Boutiques (retailers)",
+        "Cuisine (food & drink)",
+        "Social media (online media)",
+        "Discount stores (retail)"
+      ],
+      "latency_s": {
+        "rewrite": 1.501,
+        "retrieve": 0.033,
+        "rerank": 0.0,
+        "total": 1.534
+      }
+    },
+    {
+      "id": "brief_073",
+      "tags": [
+        "awareness",
+        "en",
+        "near_miss"
+      ],
+      "queries": [
+        "Business travel",
+        "B2B procurement",
+        "Engineering"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.5111,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Search engine optimization (software",
+        "Engineering (science)",
+        "Cruises (travel & tourism business)",
+        "Online (computing)",
+        "Travel (travel & tourism)",
+        "Design (design)",
+        "Architecture (architecture)",
+        "Aviation (air travel)",
+        "Construction (industry)",
+        "Travel",
+        "Science (science)",
+        "Adventure travel (travel & tourism)",
+        "Car rentals (transportation)",
+        "Interior design (design)",
+        "Business (business & finance)"
+      ],
+      "latency_s": {
+        "rewrite": 2.063,
+        "retrieve": 0.031,
+        "rerank": 0.0,
+        "total": 2.094
+      }
+    },
+    {
+      "id": "brief_074",
+      "tags": [
+        "conversion",
+        "vi",
+        "near_miss"
+      ],
+      "queries": [
+        "Running",
+        "Gym",
+        "Soccer"
+      ],
+      "retrieval_recall": 0.75,
+      "must_recall_at_50": 0.5,
+      "must_recall_at_15": 0.5,
+      "mrr_at_15": 0.25,
+      "ndcg_at_15": 0.2665,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Soccer",
+        "Marathons (running event)",
+        "Bodybuilding (sport)",
+        "Running (sport)",
+        "Association football (Soccer)",
+        "Friends of Soccer fans",
+        "Yoga (fitness)",
+        "Soccer fans (high content engagement)",
+        "Weight training (weightlifting)",
+        "Expats",
+        "Triathlons (athletics)",
+        "Physical exercise (fitness)",
+        "Soccer fans (moderate content engagement)",
+        "Sports (sports)",
+        "Volleyball (sport)"
+      ],
+      "latency_s": {
+        "rewrite": 1.105,
+        "retrieve": 0.063,
+        "rerank": 0.0,
+        "total": 1.168
+      }
+    },
+    {
+      "id": "brief_075",
+      "tags": [
+        "consideration",
+        "vi",
+        "near_miss"
+      ],
+      "queries": [
+        "Personal finance",
+        "Budgeting",
+        "Saving money"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.9066,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Personal finance (banking)",
+        "Investment (business & finance)",
+        "Insurance (business & finance",
+        "Banking (Finance)",
+        "Coupons (coupons & discounts)",
+        "Mortgage loans (banking)",
+        "Credit cards (credit & lending)",
+        "Shopping (retail)",
+        "Management (business & finance)",
+        "Online banking (banking)",
+        "Toys",
+        "Small business (business & finance)",
+        "Entrepreneurship (business & finance)",
+        "Home and garden",
+        "Business (business & finance)"
+      ],
+      "latency_s": {
+        "rewrite": 1.154,
+        "retrieve": 0.059,
+        "rerank": 0.0,
+        "total": 1.213
+      }
+    },
+    {
+      "id": "brief_076",
+      "tags": [
+        "conversion",
+        "vi",
+        "near_miss"
+      ],
+      "queries": [
+        "Luxury living",
+        "Home decor",
+        "Real estate"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.7979,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Furniture (home furnishings)",
+        "Live events (entertainment)",
+        "Real estate (industry)",
+        "Hotels (lodging)",
+        "Home improvement (home & garden)",
+        "Architecture (architecture)",
+        "Home and garden",
+        "Home Appliances (consumer electronics)",
+        "Dancehalls (music)",
+        "Spas (personal care)",
+        "Gardening (outdoor activities)",
+        "Do it yourself (DIY)",
+        "Parties (event)",
+        "Interior design (design)",
+        "Luxury goods (retail)"
+      ],
+      "latency_s": {
+        "rewrite": 1.277,
+        "retrieve": 0.085,
+        "rerank": 0.0,
+        "total": 1.362
+      }
+    },
+    {
+      "id": "brief_077",
+      "tags": [
+        "consideration",
+        "vi",
+        "near_miss"
+      ],
+      "queries": [
+        "Fashion accessories",
+        "Online shopping",
+        "Luxury goods"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 1.0,
+      "ndcg_at_15": 0.8129,
+      "exclusion_violations": [
+        "Jewelry (apparel)"
+      ],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Fashion accessories (accessories)",
+        "Luxury goods (retail)",
+        "Online shopping (retail)",
+        "Toys",
+        "Handbags (accessories)",
+        "Shopping malls (retail)",
+        "Shopping (retail)",
+        "Jewelry (apparel)",
+        "Clothing (apparel)",
+        "Dresses (apparel)",
+        "Discount stores (retail)",
+        "Sunglasses (eyewear)",
+        "Boutiques (retailers)",
+        "Social media (online media)",
+        "Shoes (footwear)"
+      ],
+      "latency_s": {
+        "rewrite": 1.251,
+        "retrieve": 0.073,
+        "rerank": 0.0,
+        "total": 1.324
+      }
+    },
+    {
+      "id": "brief_078",
+      "tags": [
+        "conversion",
+        "vi",
+        "adversarial"
+      ],
+      "queries": [
+        "Soccer fans 25-45",
+        "Food and drink beer",
+        "Watch football with friends"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.6479,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Friends of Soccer fans",
+        "Beer (alcoholic drinks)",
+        "Soccer fans (high content engagement)",
+        "Association football (Soccer)",
+        "Alcoholic beverages (food & drink)",
+        "Soccer fans (moderate content engagement)",
+        "American football (sport)",
+        "Fast food (food & drink)",
+        "Soccer",
+        "College football (college sports)",
+        "Cooking (food & drink)",
+        "Organic food (food & drink)",
+        "New Active Business (< 24 months)",
+        "Beverages (food & drink)",
+        "Sports (sports)"
+      ],
+      "latency_s": {
+        "rewrite": 1.389,
+        "retrieve": 0.063,
+        "rerank": 0.0,
+        "total": 1.453
+      }
+    },
+    {
+      "id": "brief_079",
+      "tags": [
+        "conversion",
+        "vi",
+        "adversarial"
+      ],
+      "queries": [
+        "Skincare beauty",
+        "Sensitive skin",
+        "Online shopping women 20-35"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.25,
+      "ndcg_at_15": 0.5151,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Tattoos (body art)",
+        "Online shopping (retail)",
+        "Beauty salons (cosmetics)",
+        "Cosmetics (personal care)",
+        "Toys",
+        "Fragrances (cosmetics)",
+        "Women's clothing (apparel)",
+        "Beauty (social concept)",
+        "Shopping (retail)",
+        "Hair products (hair care)",
+        "Shopping malls (retail)",
+        "Spas (personal care)",
+        "Shops admins",
+        "Boutiques (retailers)",
+        "Clothing (apparel)"
+      ],
+      "latency_s": {
+        "rewrite": 1.303,
+        "retrieve": 0.063,
+        "rerank": 0.0,
+        "total": 1.366
+      }
+    },
+    {
+      "id": "brief_080",
+      "tags": [
+        "awareness",
+        "en",
+        "adversarial"
+      ],
+      "queries": [
+        "Photography enthusiasts",
+        "Audio equipment enthusiasts",
+        "Online shopping electronics"
+      ],
+      "retrieval_recall": 1.0,
+      "must_recall_at_50": 1.0,
+      "must_recall_at_15": 1.0,
+      "mrr_at_15": 0.5,
+      "ndcg_at_15": 0.6015,
+      "exclusion_violations": [],
+      "unknown_labels": [],
+      "reranked": false,
+      "top_labels": [
+        "Portable media players (audio equipment)",
+        "Photography (visual art)",
+        "Online shopping (retail)",
+        "Audio equipment (electronics)",
+        "Cameras (photography)",
+        "Shops admins",
+        "Graphic design (visual art)",
+        "Drums (instruments)",
+        "GPS devices (consumer electronics)",
+        "Drawing (visual art)",
+        "Electronic music (music)",
+        "Painting (visual art)",
+        "Guitar (instruments)",
+        "Camcorders (consumer electronics)",
+        "Arts and music (art)"
+      ],
+      "latency_s": {
+        "rewrite": 1.621,
+        "retrieve": 0.046,
+        "rerank": 0.0,
+        "total": 1.667
+      }
+    }
+  ]
+}

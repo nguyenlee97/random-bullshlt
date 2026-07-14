@@ -23,6 +23,17 @@ try:
         "agent_rag_requests_total", "RAG audience recommendations", ["outcome"])
     RAG_HALLUCINATED = Counter(
         "agent_rag_hallucinated_label_total", "LLM cited labels outside candidate set")
+    RAG_GUARD_REJECTED = Counter(
+        "agent_rag_guard_rejected_total", "Selected candidates rejected by deterministic guard",
+        ["reason"])
+    RAG_RERANK = Counter(
+        "agent_rag_rerank_total", "RAG reranker outcomes", ["outcome"])
+    RAG_STAGE_SECONDS = Histogram(
+        "agent_rag_stage_seconds", "RAG stage duration seconds", ["stage"],
+        buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 8, 15, 30, 60))
+    RAG_CANDIDATES = Histogram(
+        "agent_rag_candidates", "Candidates entering final RAG generation",
+        buckets=(1, 5, 10, 15, 25, 50, 75, 100))
     SESSION_COST = Histogram(
         "agent_llm_call_seconds", "LLM call duration seconds",
         buckets=(0.5, 1, 2, 4, 8, 15, 30, 60, 120))
@@ -35,7 +46,8 @@ except ImportError:  # prometheus_client not installed — everything no-ops
         def observe(self, *a, **k): pass
     LLM_CALLS = LLM_TOKENS = TOOL_CALLS = FALLBACK_LEVEL = _Noop()
     ORDERS_CREATED = ORDERS_REJECTED = SESSION_COST = _Noop()
-    RAG_REQUESTS = RAG_HALLUCINATED = _Noop()
+    RAG_REQUESTS = RAG_HALLUCINATED = RAG_GUARD_REJECTED = RAG_RERANK = _Noop()
+    RAG_STAGE_SECONDS = RAG_CANDIDATES = _Noop()
     ENABLED = False
 
 

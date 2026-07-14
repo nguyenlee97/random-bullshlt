@@ -63,7 +63,13 @@ class Config:
         "RAG_DENSE_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     RAG_SPARSE_MODEL: str = os.getenv("RAG_SPARSE_MODEL", "Qdrant/bm25")
     RAG_TOP_RETRIEVE: int = int(os.getenv("RAG_TOP_RETRIEVE", "50"))
-    RAG_TOP_FINAL: int = int(os.getenv("RAG_TOP_FINAL", "15"))
+    RAG_TOP_FINAL: int = int(os.getenv("RAG_TOP_FINAL", "25"))
+    # Keep model-assisted ranking stages independently controllable. Retrieval
+    # remains available if a provider regresses or is temporarily unavailable.
+    RAG_QUERY_REWRITE: bool = os.getenv("RAG_QUERY_REWRITE", "false").lower() == "true"
+    RAG_USE_RERANK: bool = os.getenv("RAG_USE_RERANK", "false").lower() == "true"
+    RAG_USE_CRITIC_SELECTOR: bool = (
+        os.getenv("RAG_USE_CRITIC_SELECTOR", "false").lower() == "true")
     # GreenNode MaaS reranker (from docs/maas-catalog.md). Empty model = skip rerank.
     RERANK_URL: str = os.getenv("RERANK_URL", "")     # e.g. <LLM_BASE_URL>/rerank
     RERANK_MODEL: str = os.getenv("RERANK_MODEL", "")

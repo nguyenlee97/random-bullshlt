@@ -4,3 +4,6 @@ prototype-n8n-build
 test-ad-image
 greennode-ref
 node_modules
+__pycache__/
+*.py[cod]
+.pytest_cache/
