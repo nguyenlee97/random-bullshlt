@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { AgentAPI, AGENT_SCENARIOS, fetchDmpAttributes, matchDmpByKeywords, extractTargetingKeywords, extractTargetingMap } from '@/api/agentApi'
+import { AgentAPI, AGENT_SCENARIOS, fetchDmpAttributes, matchDmpByKeywords, extractTargetingKeywords, extractTargetingMap, prepareCreativeFiles } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
 
@@ -33,6 +33,7 @@ export function useChat({
   onStepApproved,
   onAutoSelectAudience,
   onWorkspaceUpdate,
+  onCreativePrepared,
   onSnapshotRequest,   // () => { formState, stepStatuses, currentStep } — called before each send
   onRestoreSnapshot,  // (snapshot) => void — called on retry to revert external state
 }) {
@@ -292,6 +293,7 @@ export function useChat({
     })
 
     let response
+    let shouldAdvance = true
     switch (stepIndex) {
       // Step 0 — Brief
       case 0:
@@ -306,19 +308,42 @@ export function useChat({
         })
         break
 
-      // Step 2 — Creative: pure upload step — no agent action needed.
-      // The files are already on the CDN; sending them to the agent would be
-      // a no-op and causes 413 if dataUrls are included in the payload.
       case 2: {
-        const fileCount = stepData.creative?.files?.length || 0
-        response = {
-          id: generateId(),
-          role: 'assistant',
-          content: `✅ **${fileCount} creative** đã upload thành công! Chuyển sang bước **Setup** để chọn ad zones và gán creative nhé.`,
-          blocks: [],
-          timestamp: new Date().toISOString(),
-          metadata: { tool: 'creative_confirm', model: 'none', step: 2 },
-          suggestions: [],
+        try {
+          const prepared = await prepareCreativeFiles(
+            stepData.creative?.files || [],
+            files => onCreativePrepared?.(files),
+          )
+          onCreativePrepared?.(prepared)
+          const reviewFiles = prepared.filter(file => file.analysisStatus === 'needs_review')
+          if (reviewFiles.length) {
+            shouldAdvance = false
+            response = {
+              id: generateId(),
+              role: 'assistant',
+              content: `⚠ **${reviewFiles.length} creative cần duyệt thủ công.** Xem lý do ở workspace, nhập lý do phê duyệt rồi xác nhận lại.`,
+              blocks: [],
+              timestamp: new Date().toISOString(),
+              metadata: { tool: 'creative_blocked', model: 'none', step: 2 },
+              suggestions: [],
+            }
+          } else {
+            const compactFiles = prepared.map(({ dataUrl, ...file }) => file)
+            response = await AgentAPI.approveCreative({ files: compactFiles })
+            if (!response) throw new Error('Agent không lưu được creative đã phân tích')
+            shouldAdvance = response?.metadata?.tool !== 'creative_blocked'
+          }
+        } catch (error) {
+          shouldAdvance = false
+          response = {
+            id: generateId(),
+            role: 'assistant',
+            content: `⚠ Không thể hoàn tất phân tích creative: ${error.message}`,
+            blocks: [],
+            timestamp: new Date().toISOString(),
+            metadata: { tool: 'creative_analysis_error', model: 'none', step: 2 },
+            suggestions: [],
+          }
         }
         break
       }
@@ -379,9 +404,8 @@ export function useChat({
       blocks: response?.blocks?.map(b => b.type),
     })
     setBusy(false)
-    if (onStepApproved) onStepApproved(stepIndex)
-  }, [busy, startThinking, stopThinking, onStepApproved])
+    if (shouldAdvance && onStepApproved) onStepApproved(stepIndex)
+  }, [busy, startThinking, stopThinking, onStepApproved, onCreativePrepared])
 
   return { messages, busy, boot, newChat, sendMessage, approveStep, retryLastMessage, canRetry: !!lastSentRef.current }
 }
-

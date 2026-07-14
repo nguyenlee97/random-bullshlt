@@ -41,3 +41,26 @@ The final RAG candidate improves recall by 4.0 percentage points and cuts p95 re
 Briefs 041–080 are machine-authored and have not received the same explicit human sign-off as the original 40. These results are valid engineering diagnostics, but they are not sufficient by themselves to approve a production release.
 
 Authoritative reports: `legacy-310.json`, `retrieval-raw-plus-rewrite-k25.json`, `rag-critic-k25-final.json`, and `rag-qdrant-fallback-smoke.json`.
+
+## Creative intelligence candidate
+
+Evaluation date: 2026-07-15
+Set: 20 real demo creatives across five brands and four placement formats.
+
+| Model/pipeline | Schema success | OCR non-empty* | Brand* | Safe-set safety* | Brief match* | Raw skin* | Format routing | p50 | p95 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Qwen full fixture | 40% | 100% | 100% | 100% | 100% | 62.5% | 100% | 4.43 s | 5.14 s |
+| **Gemma optimized** | **95%** | **100%** | **100%** | **100%** | **100%** | 73.7% | **100%** | **2.11 s** | **3.14 s** |
+
+`*` Semantic percentages are calculated on schema-valid responses. An invalid
+or incomplete structured response fails closed to `needs_review`. Safety was
+measured only on the safe demo set and does not yet establish unsafe-content
+recall. Skin routing uses explicit `intendedFormat`; raw VLM skin prediction is
+diagnostic because isolated rails lack page context.
+
+Verdict: Gemma remains primary. Qwen is rejected because its full-set schema
+success regressed to 40% despite a strong five-case sample. Gate 3 remains open
+for unsafe/borderline fixtures, video extraction, browser E2E, and queue load.
+
+Authoritative reports: `creative-v1-deterministic.json`,
+`creative-v2-gemma-optimized.json`, and `creative-v1-qwen.json`.

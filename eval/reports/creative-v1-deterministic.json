@@ -1,0 +1,160 @@
+{
+  "label": "creative-v1-deterministic",
+  "created_at": "2026-07-14T19:40:05.394695+00:00",
+  "summary": {
+    "n": 20,
+    "live_vlm": false,
+    "dimension_accuracy": 1.0,
+    "min_size_pass_rate": 1.0,
+    "vlm_success_rate": null,
+    "ocr_nonempty_rate": null,
+    "brand_accuracy": null,
+    "safety_accuracy": null,
+    "skin_accuracy": null,
+    "brief_match_pass_rate": null,
+    "latency_p50_s": null,
+    "latency_p95_s": null
+  },
+  "cases": [
+    {
+      "id": "elsa-top",
+      "path": "agent_frontend/public/demo-creatives/elsa/znews-top-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "elsa-side",
+      "path": "agent_frontend/public/demo-creatives/elsa/znews-side-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "elsa-middle",
+      "path": "agent_frontend/public/demo-creatives/elsa/znews-middle-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "elsa-bg",
+      "path": "agent_frontend/public/demo-creatives/elsa/znews-Background.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vietjet-top",
+      "path": "agent_frontend/public/demo-creatives/vietjet/znews-top-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vietjet-side",
+      "path": "agent_frontend/public/demo-creatives/vietjet/znews-side-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vietjet-middle",
+      "path": "agent_frontend/public/demo-creatives/vietjet/znews-middle-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vietjet-bg",
+      "path": "agent_frontend/public/demo-creatives/vietjet/znews-Background.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vinfast-top",
+      "path": "agent_frontend/public/demo-creatives/vinfast/znews-top-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vinfast-side",
+      "path": "agent_frontend/public/demo-creatives/vinfast/znews-side-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vinfast-middle",
+      "path": "agent_frontend/public/demo-creatives/vinfast/znews-middle-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vinfast-bg",
+      "path": "agent_frontend/public/demo-creatives/vinfast/znews-Background.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vpbank-top",
+      "path": "agent_frontend/public/demo-creatives/vpbank-neo/znews-top-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vpbank-side",
+      "path": "agent_frontend/public/demo-creatives/vpbank-neo/znews-side-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vpbank-middle",
+      "path": "agent_frontend/public/demo-creatives/vpbank-neo/znews-middle-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "vpbank-bg",
+      "path": "agent_frontend/public/demo-creatives/vpbank-neo/znews-Background.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "cocoon-top",
+      "path": "agent_frontend/public/demo-creatives/cocoon/znews-top-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "cocoon-side",
+      "path": "agent_frontend/public/demo-creatives/cocoon/znews-side-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "cocoon-middle",
+      "path": "agent_frontend/public/demo-creatives/cocoon/znews-middle-banner.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    },
+    {
+      "id": "cocoon-bg",
+      "path": "agent_frontend/public/demo-creatives/cocoon/znews-Background.png",
+      "dimensions_ok": true,
+      "min_size_ok": true,
+      "vlm_ok": null
+    }
+  ]
+}

@@ -34,6 +34,11 @@ try:
     RAG_CANDIDATES = Histogram(
         "agent_rag_candidates", "Candidates entering final RAG generation",
         buckets=(1, 5, 10, 15, 25, 50, 75, 100))
+    VLM_CALLS = Counter(
+        "agent_vlm_calls_total", "Creative VLM calls", ["model", "outcome"])
+    VLM_SECONDS = Histogram(
+        "agent_vlm_call_seconds", "Creative VLM call duration seconds", ["model"],
+        buckets=(0.5, 1, 2, 4, 8, 15, 20, 30, 60))
     SESSION_COST = Histogram(
         "agent_llm_call_seconds", "LLM call duration seconds",
         buckets=(0.5, 1, 2, 4, 8, 15, 30, 60, 120))
@@ -48,6 +53,7 @@ except ImportError:  # prometheus_client not installed — everything no-ops
     ORDERS_CREATED = ORDERS_REJECTED = SESSION_COST = _Noop()
     RAG_REQUESTS = RAG_HALLUCINATED = RAG_GUARD_REJECTED = RAG_RERANK = _Noop()
     RAG_STAGE_SECONDS = RAG_CANDIDATES = _Noop()
+    VLM_CALLS = VLM_SECONDS = _Noop()
     ENABLED = False
 
 

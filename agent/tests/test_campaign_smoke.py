@@ -42,6 +42,7 @@ async def test_campaign_form_flow_persists_state_and_creates_one_guarded_order(m
 
     monkeypatch.setattr(order_guard, "guard_order", fake_guard)
     monkeypatch.setattr(setup_handler, "create_order", fake_create)
+    monkeypatch.setattr("config.config.USE_VLM_CREATIVE", False)
 
     sid = "smoke_campaign_flow"
     tomorrow = date.today() + timedelta(days=1)

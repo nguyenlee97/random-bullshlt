@@ -24,11 +24,26 @@ def enrich_files_with_intel(files: list[dict], intel_docs: list[dict]) -> list[d
         if doc:
             det = doc.get("deterministic") or {}
             vlm = doc.get("vlm") or {}
-            is_skin = vlm.get("is_skin_takeover") if vlm else det.get("is_skin_layout")
+            intended_format = doc.get("intended_format") or f.get("intendedFormat")
+            if intended_format in {"skin", "banner", "video"}:
+                is_skin = intended_format == "skin"
+            else:
+                is_skin = vlm.get("is_skin_takeover") if vlm else det.get("is_skin_layout")
             f = {**f, "intel": {
                 "is_skin": is_skin,
+                "intended_format": intended_format,
                 "width": det.get("width"), "height": det.get("height"),
                 "status": doc.get("status"),
+                "effective_status": doc.get("effective_status", doc.get("status")),
+                "analysis_id": doc.get("analysis_id"),
+                "review_reasons": doc.get("review_reasons") or [],
+                "override": doc.get("override") or {},
+            }}
+        else:
+            f = {**f, "intel": {
+                "status": "missing",
+                "effective_status": "missing",
+                "review_reasons": ["Chưa có creative-intel verdict"],
             }}
         out.append(f)
     return out
@@ -42,7 +57,7 @@ def score_file_for_zone(file: dict, zone: dict) -> tuple[int, list[str]]:
     intel = file.get("intel") or {}
 
     # Phase 3: files flagged needs_review may not be auto-assigned silently
-    if intel.get("status") == "needs_review":
+    if intel.get("effective_status", intel.get("status")) == "needs_review":
         warnings.append("Creative đang chờ review (creative-intel) — kiểm tra trước khi book")
         score -= 3
 
@@ -113,7 +128,21 @@ def auto_assign(zones: list[dict], files: list[dict]) -> dict:
         zid = zone["id"]
         best_score, best_idx, zone_warnings = -999, 0, []
 
-        for idx, f in enumerate(files):
+        eligible = [
+            (idx, f) for idx, f in enumerate(files)
+            if (f.get("intel") or {}).get(
+                "effective_status", (f.get("intel") or {}).get("status", "auto_approved")
+            ) in {"auto_approved", "approved_override"}
+        ]
+        if not eligible:
+            all_warnings.append({
+                "zoneId": zid,
+                "message": "Không có creative đã được phân tích và duyệt để tự động gán",
+            })
+            scores.setdefault(zid, {})
+            continue
+
+        for idx, f in eligible:
             s, w = score_file_for_zone(f, zone)
             scores.setdefault(zid, {})[idx] = s
             if s > best_score:

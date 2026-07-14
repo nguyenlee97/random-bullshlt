@@ -356,6 +356,13 @@ export default function App() {
     })
   }, [setFormStateWithEvents])
 
+  const handleCreativePrepared = useCallback((files) => {
+    setFormState(prev => ({
+      ...prev,
+      creative: { ...prev.creative, files, uploaded: files.length > 0 },
+    }))
+  }, [])
+
   const { messages, busy, boot, newChat, sendMessage, approveStep, retryLastMessage, canRetry } = useChat({
     currentStep,
     formState,
@@ -365,6 +372,7 @@ export default function App() {
     onStepApproved: markStepDone,
     onAutoSelectAudience: handleAutoSelectAudience,
     onWorkspaceUpdate: handleWorkspaceUpdate,
+    onCreativePrepared: handleCreativePrepared,
 
     // Full state snapshot for retry — capture formState+step BEFORE each send
     onSnapshotRequest: useCallback(() => ({
@@ -943,4 +951,3 @@ export default function App() {
     </DemoProvider>
   )
 }
-

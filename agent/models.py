@@ -21,12 +21,21 @@ class BriefData(BaseModel):
 
 
 class CreativeFile(BaseModel):
+    id: str = ""
     name: str = ""
     type: str = ""                 # MIME type e.g. "image/png"
     size: int = 0                  # bytes
     width: int = 0
     height: int = 0
     url: str = ""                  # VPS upload URL from POST /api/creative/upload
+    analysisId: str = ""
+    analysisStatus: str = ""
+    reviewReasons: list[str] = []
+    deterministic: dict = {}
+    vlm: dict = {}
+    override: dict = {}
+    formatId: str = ""
+    intendedFormat: str = ""
 
 
 class CreativeData(BaseModel):

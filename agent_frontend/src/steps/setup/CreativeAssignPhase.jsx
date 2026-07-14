@@ -6,18 +6,23 @@ import { cn } from '@/lib/utils'
 import { Check, AlertTriangle, CheckCircle2, Layers, ArrowRight, Film, Wand2 } from 'lucide-react'
 import { checkMismatch, canCheckRatio, scoreFile, getSelectedZones } from './setupUtils'
 
+const isCreativeApproved = (file) =>
+  ['auto_approved', 'approved_override'].includes(file.analysisStatus)
+
 // ─── Single creative thumbnail option ─────────────────────────────────────────
 function CreativeOption({ file, zone, selected, onSelect, rank }) {
   const mismatch = checkMismatch(zone, file)
   const isBest = rank === 0
+  const approved = isCreativeApproved(file)
 
   return (
     <button
-      onClick={() => onSelect(selected ? null : file.id)}
+      onClick={() => approved && onSelect(selected ? null : file.id)}
+      disabled={!approved}
       className={cn(
         'relative flex flex-col rounded-lg border-2 overflow-hidden text-left transition-all duration-150',
         selected ? 'border-brand-500 shadow-md ring-2 ring-brand-200' : 'border-border hover:border-brand-300',
-        mismatch && !selected && 'opacity-75',
+        (mismatch && !selected) || !approved ? 'opacity-50 cursor-not-allowed' : '',
       )}
       title={file.name}
     >
@@ -48,6 +53,9 @@ function CreativeOption({ file, zone, selected, onSelect, rank }) {
           <div className="absolute top-1 right-1">
             <AlertTriangle className="w-3.5 h-3.5 text-red-500 drop-shadow" />
           </div>
+        )}
+        {!approved && (
+          <p className="text-[9px] text-amber-600 leading-tight mt-0.5">Chưa được duyệt</p>
         )}
       </div>
 
@@ -155,10 +163,11 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones, r
 
   // Auto-assign: pick best scored file for each zone
   const handleAutoAssign = () => {
-    if (files.length === 0) return
+    const approvedFiles = files.filter(isCreativeApproved)
+    if (approvedFiles.length === 0) return
     const newAssignments = { ...assignments }
     selectedZones.forEach(zone => {
-      const best = [...files]
+      const best = [...approvedFiles]
         .map(f => ({ ...f, _score: scoreFile(f, zone) }))
         .sort((a, b) => b._score - a._score)[0]
       if (best) newAssignments[zone.id] = best.id

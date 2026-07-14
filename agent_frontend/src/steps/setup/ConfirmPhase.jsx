@@ -8,7 +8,7 @@ import {
   FileText, Users, LayoutGrid, DollarSign, XCircle,
 } from 'lucide-react'
 import { checkMismatch, getSelectedZones, fmtVnd, fmtImp, estImpressions } from './setupUtils'
-import { createCampaignOrder, uploadCreativeFile } from '@/api/agentApi'
+import { createCampaignOrder } from '@/api/agentApi'
 
 const OBJECTIVE_LABELS = {
   awareness: 'Awareness — Tăng nhận biết',
@@ -35,7 +35,7 @@ function SectionCard({ icon: Icon, title, iconClass, children }) {
 
 export default function ConfirmPhase({ data, onChange, brief, segment, files, allZones, recoZones }) {
   const [submitting, setSubmitting] = useState(false)
-  const [uploadStatus, setUploadStatus] = useState('')  // upload progress label
+  const [submitError, setSubmitError] = useState('')
 
   const selectedZones = getSelectedZones(data.selectedZoneIds || [], allZones || null, recoZones || null)
   const assignments = data.assignments || {}
@@ -52,39 +52,38 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
 
   const handleCreate = async () => {
     setSubmitting(true)
+    setSubmitError('')
 
-    // 1. Convert assignments: fileId → fileIndex
-    const assignmentsAsIndex = {}
-    const uniqueFileIndexes = new Set()
-    for (const [zoneId, fileId] of Object.entries(data.assignments || {})) {
-      const idx = files.findIndex(f => f.id === fileId)
-      const safeIdx = idx >= 0 ? idx : 0
-      assignmentsAsIndex[zoneId] = safeIdx
-      uniqueFileIndexes.add(safeIdx)
-    }
-
-    // 2. Upload each unique creative to AdsPilot VPS to get a real URL
-    const fileUrls = {}
-    let uploadsDone = 0
-    const totalUploads = [...uniqueFileIndexes].filter(idx => files[idx]?.dataUrl).length
-    for (const idx of uniqueFileIndexes) {
-      const f = files[idx]
-      if (!f) continue
-      if (f.url) {
-        // Already has a URL (previously uploaded)
-        fileUrls[String(idx)] = f.url
-      } else if (f.dataUrl) {
-        uploadsDone++
-        setUploadStatus(`Đang tải creative ${uploadsDone}/${totalUploads}...`)
-        const url = await uploadCreativeFile(f.dataUrl, f.name, f.type)
-        if (url) fileUrls[String(idx)] = url
+    try {
+      const assignmentsAsIndex = {}
+      const fileUrls = {}
+      for (const [zoneId, fileId] of Object.entries(data.assignments || {})) {
+        const idx = files.findIndex(file => file.id === fileId)
+        if (idx < 0) throw new Error(`Zone ${zoneId} chưa được gán creative hợp lệ`)
+        const file = files[idx]
+        if (!['auto_approved', 'approved_override'].includes(file.analysisStatus)) {
+          throw new Error(`Creative ${file.name} chưa được phân tích và duyệt`)
+        }
+        if (!file.url) throw new Error(`Creative ${file.name} chưa có URL đã upload`)
+        assignmentsAsIndex[zoneId] = idx
+        fileUrls[String(idx)] = file.url
       }
-    }
-    setUploadStatus('')
+      if (Object.keys(assignmentsAsIndex).length !== (data.selectedZoneIds || []).length) {
+        throw new Error('Mỗi zone phải được gán một creative đã duyệt')
+      }
 
-    // 3. Create the order with resolved creative URLs
-    await createCampaignOrder(data.selectedZoneIds || [], assignmentsAsIndex, fileUrls)
-    onChange({ ...data, submitted: true })
+      const response = await createCampaignOrder(
+        data.selectedZoneIds || [], assignmentsAsIndex, fileUrls,
+      )
+      if (response?.metadata?.tool !== 'order_create') {
+        throw new Error(response?.content || 'Order guard từ chối tạo chiến dịch')
+      }
+      onChange({ ...data, submitted: true })
+    } catch (error) {
+      setSubmitError(error.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const dateRange = brief?.startDate && brief?.endDate
@@ -248,6 +247,14 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
       )}
 
       {/* ── Create button ──────────────────────────────────────────────────────── */}
+      {submitError && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="py-3 flex items-start gap-2">
+            <XCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-700">{submitError}</p>
+          </CardContent>
+        </Card>
+      )}
       {!data.submitted ? (
         <Button
           onClick={handleCreate}
@@ -258,7 +265,7 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
           {submitting ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              {uploadStatus || 'Đang gọi Agent API · Tạo chiến dịch...'}
+              Đang kiểm tra an toàn · Tạo chiến dịch...
             </>
           ) : (
             <>

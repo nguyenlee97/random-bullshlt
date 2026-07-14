@@ -24,7 +24,7 @@ def make_payload(**over) -> dict:
         "placements": ["ZN-001", "ZN-002"],
         "dmp": {"include": ["64aa01"], "exclude": []},
         "creatives": [
-            {"name": "banner.png", "zones": ["ZN-001"], "url": "https://api.pawgrammers.io.vn/up/banner.png"}
+            {"name": "banner.png", "zones": ["ZN-001", "ZN-002"], "url": "https://api.pawgrammers.io.vn/up/banner.png"}
         ],
     }
     p.update(over)
@@ -136,6 +136,51 @@ def test_creative_foreign_url_rejected():
         make_ctx(),
     )
     assert any("host cho phép" in r for r in reasons)
+
+
+def test_every_placement_requires_a_creative():
+    reasons = validate_order_payload(
+        make_payload(creatives=[{
+            "name": "b.png", "zones": ["ZN-001"],
+            "url": "https://api.pawgrammers.io.vn/up/b.png",
+        }]),
+        make_ctx(),
+    )
+    assert any("ZN-002" in r and "chưa được gán" in r for r in reasons)
+
+
+def test_server_side_creative_verdict_is_required_when_enabled():
+    creative = {
+        "name": "b.png",
+        "zones": ["ZN-001", "ZN-002"],
+        "url": "https://api.pawgrammers.io.vn/up/b.png",
+        "analysisId": "ci-1",
+    }
+    blocked = validate_order_payload(
+        make_payload(creatives=[creative]),
+        make_ctx(require_creative_verdict=True, creative_verdicts={
+            "ci-1": {"url": creative["url"], "status": "needs_review", "effective_status": "needs_review",
+                     "review_reasons": ["low confidence"]},
+        }),
+    )
+    assert any("chưa được duyệt" in reason for reason in blocked)
+
+    passed = validate_order_payload(
+        make_payload(creatives=[creative]),
+        make_ctx(require_creative_verdict=True, creative_verdicts={
+            "ci-1": {"url": creative["url"], "status": "needs_review", "effective_status": "approved_override"},
+        }),
+    )
+    assert passed == []
+
+    substituted = validate_order_payload(
+        make_payload(creatives=[creative]),
+        make_ctx(require_creative_verdict=True, creative_verdicts={
+            "ci-1": {"url": "https://api.pawgrammers.io.vn/up/other.png",
+                     "status": "auto_approved", "effective_status": "auto_approved"},
+        }),
+    )
+    assert any("không khớp URL" in reason for reason in substituted)
 
 
 # ── error type ────────────────────────────────────────────────────────────────

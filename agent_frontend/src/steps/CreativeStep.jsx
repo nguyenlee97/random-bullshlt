@@ -3,12 +3,21 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { Upload, FileText, X, ZoomIn, CheckCircle2, AlertCircle, Sparkles, Wand2 } from 'lucide-react'
+import { Upload, FileText, X, ZoomIn, CheckCircle2, AlertCircle, Sparkles, Wand2, Loader2 } from 'lucide-react'
 import AdImageGenerator from './creative/AdImageGenerator'
+import { overrideCreative } from '@/api/agentApi'
 
 function fmtSize(bytes) {
   if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
   return (bytes / 1024).toFixed(0) + ' KB'
+}
+
+const SKIN_FORMAT_IDS = new Set(['zuma-Left', 'zuma-Right', 'znews-Background'])
+const inferIntendedFormat = (file) => {
+  if (file.intendedFormat) return file.intendedFormat
+  if (SKIN_FORMAT_IDS.has(file.formatId)) return 'skin'
+  if (file.type?.startsWith('video/')) return 'video'
+  return 'banner'
 }
 
 // ─── Read image/video resolution on frontend ──────────────────────────────────
@@ -31,11 +40,40 @@ function readResolution(file, dataUrl) {
 }
 
 // ─── File card (shared between upload + AI gallery) ───────────────────────────
-function FileCard({ file, onRemove, onPreview }) {
+function FileCard({ file, onRemove, onPreview, onOverride, onFormat }) {
+  const [overrideReason, setOverrideReason] = useState('')
+  const [overrideError, setOverrideError] = useState('')
+  const [overriding, setOverriding] = useState(false)
   const isImage = file.type?.startsWith('image/')
   const isVideo = file.type?.startsWith('video/')
   const canPreview = isImage || isVideo
   const res = file.width && file.height ? `${file.width}×${file.height}px` : null
+  const status = file.analysisStatus
+  const statusUi = {
+    uploading: { label: 'Đang tải lên', cls: 'bg-blue-100 text-blue-700' },
+    queued: { label: 'Đang chờ phân tích', cls: 'bg-blue-100 text-blue-700' },
+    analyzing: { label: 'Đang phân tích', cls: 'bg-blue-100 text-blue-700' },
+    auto_approved: { label: 'Đã duyệt', cls: 'bg-emerald-100 text-emerald-700' },
+    needs_review: { label: 'Cần duyệt thủ công', cls: 'bg-amber-100 text-amber-800' },
+    approved_override: { label: 'Đã duyệt thủ công', cls: 'bg-violet-100 text-violet-700' },
+  }[status]
+
+  const submitOverride = async () => {
+    if (overrideReason.trim().length < 5) {
+      setOverrideError('Vui lòng nhập lý do ít nhất 5 ký tự.')
+      return
+    }
+    setOverriding(true)
+    setOverrideError('')
+    try {
+      const verdict = await overrideCreative(file.analysisId, overrideReason.trim())
+      onOverride(file.id, verdict)
+    } catch (error) {
+      setOverrideError(error.message)
+    } finally {
+      setOverriding(false)
+    }
+  }
 
   return (
     <div className="group relative rounded-xl border border-border bg-white overflow-hidden hover:border-brand-300 hover:shadow-sm transition-all">
@@ -80,6 +118,58 @@ function FileCard({ file, onRemove, onPreview }) {
             <span className="text-[10px] text-muted-foreground">{fmtSize(file.size)}</span>
           )}
         </div>
+        {!status || ['uploading', 'queued', 'needs_review'].includes(status) ? (
+          <select
+            value={inferIntendedFormat(file)}
+            onChange={event => onFormat(file.id, event.target.value)}
+            className="mt-2 w-full rounded-md border border-border bg-white px-1.5 py-1 text-[10px] text-foreground"
+            aria-label={`Định dạng dự kiến cho ${file.name}`}
+          >
+            <option value="banner">Banner</option>
+            <option value="skin">Skin / Background</option>
+            <option value="video">Video</option>
+          </select>
+        ) : (
+          <p className="mt-1.5 text-[10px] text-muted-foreground">
+            Định dạng: {inferIntendedFormat(file)}
+          </p>
+        )}
+        {statusUi && (
+          <div className="mt-2 space-y-1.5">
+            <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold', statusUi.cls)}>
+              {['uploading', 'queued', 'analyzing'].includes(status) && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+              {statusUi.label}
+            </span>
+            {(file.reviewReasons || []).map((reason, index) => (
+              <p key={index} className="text-[10px] leading-snug text-amber-700">• {reason}</p>
+            ))}
+            {(file.vlm?.ocr_text || []).length > 0 && (
+              <details className="text-[10px] text-muted-foreground">
+                <summary className="cursor-pointer font-semibold">OCR · {file.vlm.ocr_text.length} dòng</summary>
+                <p className="mt-1 break-words">{file.vlm.ocr_text.join(' · ')}</p>
+              </details>
+            )}
+            {status === 'needs_review' && (
+              <div className="space-y-1.5 pt-1">
+                <input
+                  value={overrideReason}
+                  onChange={event => setOverrideReason(event.target.value)}
+                  placeholder="Lý do phê duyệt thủ công"
+                  className="w-full rounded-md border border-amber-200 px-2 py-1.5 text-[10px] outline-none focus:border-amber-400"
+                />
+                <button
+                  type="button"
+                  onClick={submitOverride}
+                  disabled={overriding}
+                  className="w-full rounded-md bg-amber-500 px-2 py-1.5 text-[10px] font-bold text-white hover:bg-amber-600 disabled:opacity-60"
+                >
+                  {overriding ? 'Đang lưu...' : 'Phê duyệt có lý do'}
+                </button>
+                {overrideError && <p className="text-[10px] text-red-600">{overrideError}</p>}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -159,6 +249,7 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment })
             dataUrl: reader.result,
             width: width || null,
             height: height || null,
+            intendedFormat: file.type.startsWith('video/') ? 'video' : 'banner',
           }
           onChange(prev => {
             const prevFiles = prev.files || []
@@ -179,11 +270,30 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment })
     return { ...prev, files: updated, uploaded: updated.length > 0 }
   })
 
+  const handleOverride = (id, verdict) => onChange(prev => ({
+    ...prev,
+    files: (prev.files || []).map(file => file.id === id ? {
+      ...file,
+      analysisStatus: verdict.effective_status,
+      override: verdict.override || {},
+      reviewReasons: verdict.review_reasons || file.reviewReasons || [],
+    } : file),
+  }))
+
+  const handleFormat = (id, intendedFormat) => onChange(prev => ({
+    ...prev,
+    files: (prev.files || []).map(file =>
+      file.id === id ? { ...file, intendedFormat } : file
+    ),
+  }))
+
   // Merge AI-generated images into the files pool, then flip to upload tab
   const handleAddAiImages = (aiImages) => {
     onChange(prev => {
       const existing = prev.files || []
-      const toAdd = aiImages.filter(img => !existing.some(f => f.id === img.id))
+      const toAdd = aiImages
+        .filter(img => !existing.some(f => f.id === img.id))
+        .map(img => ({ ...img, intendedFormat: inferIntendedFormat(img) }))
       return { ...prev, files: [...existing, ...toAdd], uploaded: true }
     })
     setTab('upload')
@@ -251,7 +361,7 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment })
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {files.map(file => (
-                  <FileCard key={file.id} file={file} onRemove={removeFile} onPreview={setLightboxFile} />
+                  <FileCard key={file.id} file={file} onRemove={removeFile} onPreview={setLightboxFile} onOverride={handleOverride} onFormat={handleFormat} />
                 ))}
               </div>
             </div>

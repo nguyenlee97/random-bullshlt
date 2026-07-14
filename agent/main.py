@@ -109,6 +109,9 @@ async def readiness():
             checks["rag_index"] = (await inspect_index())["ready"]
         except Exception:
             pass
+    if config.USE_VLM_CREATIVE:
+        from creative_intel.service import worker_running
+        checks["creative_worker"] = worker_running()
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             response = await client.get(f"{config.BACKEND_URL.rstrip('/')}/api/health")
@@ -132,6 +135,20 @@ async def version():
 # Import router after app is created to avoid circular imports
 from router import agent_router  # noqa: E402
 app.include_router(agent_router, prefix="/api/agent")
+
+
+@app.on_event("startup")
+async def _start_creative_worker():
+    if config.USE_VLM_CREATIVE:
+        from creative_intel.service import start_worker
+        await start_worker()
+
+
+@app.on_event("shutdown")
+async def _stop_creative_worker():
+    if config.USE_VLM_CREATIVE:
+        from creative_intel.service import stop_worker
+        await stop_worker()
 
 print(f"\n🚀 Camp Ads Agent v{BUILD_VERSION} starting on port {config.AGENT_PORT}")
 print(f"   GreenNode AgentBase: listening on 0.0.0.0:{config.AGENT_PORT}, health at /health")

@@ -283,12 +283,9 @@ async def _creative_match(setup: SetupData, session_id: str) -> AgentResponse:
     # Phase 3: measured creative facts beat filename heuristics when available
     from config import config as _cfg
     if _cfg.USE_VLM_CREATIVE:
-        try:
-            from creative_intel.service import get_intel
-            from tools.creative_match import enrich_files_with_intel
-            files = enrich_files_with_intel(files, await get_intel(session_id))
-        except Exception:
-            pass  # enrichment is advisory
+        from creative_intel.service import get_intel
+        from tools.creative_match import enrich_files_with_intel
+        files = enrich_files_with_intel(files, await get_intel(session_id))
 
     result = auto_assign(selected_zones, files)
 
@@ -333,6 +330,13 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
     assignments = setup.assignments or session["form_state"].get("assignments", {})
     files = creative.get("files", [])
 
+    from config import config as _cfg
+    if _cfg.USE_VLM_CREATIVE:
+        from creative_intel.service import get_intel
+        from tools.creative_match import enrich_files_with_intel
+
+        files = enrich_files_with_intel(files, await get_intel(session_id))
+
     if not zone_ids:
         return AgentResponse(
             text="⚠ Không có zone nào được chọn.",
@@ -347,25 +351,26 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
             file_to_zones.setdefault(int(file_idx), []).append(zone_id)
 
     # Any zones not in assignments → assign file 0 as fallback
-    assigned_zones = set(assignments.keys())
-    for zid in zone_ids:
-        if zid not in assigned_zones:
-            file_to_zones.setdefault(0, []).append(zid)
-
     creatives_payload = []
     for file_idx, z_ids in file_to_zones.items():
         f = files[file_idx] if file_idx < len(files) else {}
-        is_skin = "skin" in (f.get("name") or "").lower()
+        intel = f.get("intel") or {}
+        is_skin = intel.get("is_skin")
+        if is_skin is None:
+            is_skin = "skin" in (f.get("name") or "").lower()
+        measured_width = intel.get("width") or f.get("width", 0)
+        measured_height = intel.get("height") or f.get("height", 0)
         # Prefer URL uploaded by frontend (base64→VPS), fall back to session-stored url
         resolved_url = setup.fileUrls.get(str(file_idx)) or f.get("url", "")
         creatives_payload.append({
             "groupId": f"g_{file_idx}",
             "name": f.get("name", ""),
-            "size": "skin" if is_skin else f.get("size", f"{f.get('width',0)}x{f.get('height',0)}"),
+            "size": "skin" if is_skin else f"{measured_width}x{measured_height}",
             "format": "skin" if is_skin else "banner",
             "url": resolved_url,
             "zones": z_ids,
             "label": f.get("name", ""),
+            "analysisId": f.get("analysisId") or intel.get("analysis_id", ""),
         })
 
     # ── DMP: use _id values ───────────────────────────────────────────────────

@@ -16,6 +16,8 @@ _client = httpx.AsyncClient(timeout=20.0)
 # deterministic signal (VLM adds the semantic confirmation when enabled).
 SKIN_MIN_HEIGHT = 1000
 SKIN_MAX_RATIO = 0.95  # width/height — portrait-ish full-page background
+MIN_IMAGE_WIDTH = 300
+MIN_IMAGE_HEIGHT = 50  # standard leaderboard banners are commonly 90-250px tall
 
 
 async def analyze_bytes(data: bytes, name: str = "") -> dict:
@@ -37,7 +39,9 @@ async def analyze_bytes(data: bytes, name: str = "") -> dict:
             and out["aspect"] is not None
             and out["aspect"] <= SKIN_MAX_RATIO
         )
-        out["min_size_ok"] = img.width >= 300 and img.height >= 300
+        out["min_size_ok"] = (
+            img.width >= MIN_IMAGE_WIDTH and img.height >= MIN_IMAGE_HEIGHT
+        )
     except Exception as e:
         out["decode_error"] = f"{type(e).__name__}: {str(e)[:80]}"
         # video/unknown types can't be PIL-decoded — flag for review, never block

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from models import ChatRequest, AgentResponse
 from ratelimit import limiter, CHAT_LIMIT, RECOMMEND_LIMIT
@@ -149,7 +149,11 @@ async def creative_intel(session_id: str = "default"):
 
 
 class _AnalyzeFile(BaseModel):
+    id: str = ""
     name: str = ""
+    type: str = ""
+    formatId: str = ""
+    intendedFormat: str = ""
     url: str = ""
 
 
@@ -166,10 +170,31 @@ async def creative_analyze(req: _AnalyzeRequest):
     land in /creative-intel."""
     from config import config as _cfg
     if not _cfg.USE_VLM_CREATIVE:
-        return {"enqueued": 0, "note": "USE_VLM_CREATIVE=false"}
+        return {"jobs": [], "note": "USE_VLM_CREATIVE=false"}
     from creative_intel.service import enqueue_analysis
-    n = enqueue_analysis(req.session_id, [f.model_dump() for f in req.files])
-    return {"enqueued": n}
+    jobs = await enqueue_analysis(req.session_id, [f.model_dump() for f in req.files])
+    return {"jobs": jobs}
+
+
+class _OverrideRequest(BaseModel):
+    session_id: str = "default"
+    analysis_id: str
+    reason: str
+    actor: str = "campaign_operator"
+
+
+@agent_router.post("/creative-intel/override")
+async def creative_intel_override(req: _OverrideRequest):
+    """Record an explicit, reasoned human approval for a review verdict."""
+    from creative_intel.service import approve_override
+    try:
+        return await approve_override(
+            req.session_id, req.analysis_id, req.reason, req.actor
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @agent_router.get("/dmp-recommend")

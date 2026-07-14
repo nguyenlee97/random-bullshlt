@@ -711,6 +711,137 @@ export async function getSetupEntry() {
  * Upload a creative file (base64 dataUrl) to the AdsPilot VPS.
  * Returns the VPS URL string on success, empty string on failure.
  */
+/**
+ * Phase 3: fire-and-forget creative analysis (deterministic + VLM) once files
+ * have real URLs. Results surface via GET /api/agent/creative-intel.
+ * @param {Array<{name: string, url: string}>} files
+ */
+export async function analyzeCreatives(files) {
+  const withUrls = (files || []).filter(f => f.url)
+  if (!withUrls.length) return { jobs: [] }
+  const res = await agentFetch(`${AGENT_URL}/api/agent/creative-analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: SESSION_ID, files: withUrls }),
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!res.ok) throw new Error(`Không thể tạo tác vụ phân tích creative (HTTP ${res.status})`)
+  return await res.json()
+}
+
+export async function getCreativeIntel() {
+  const res = await agentFetch(
+    `${AGENT_URL}/api/agent/creative-intel?session_id=${encodeURIComponent(SESSION_ID)}`,
+    { signal: AbortSignal.timeout(10000) },
+  )
+  if (!res.ok) throw new Error(`Không thể đọc kết quả creative (HTTP ${res.status})`)
+  return (await res.json()).files || []
+}
+
+export async function overrideCreative(analysisId, reason) {
+  const res = await agentFetch(`${AGENT_URL}/api/agent/creative-intel/override`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      session_id: SESSION_ID,
+      analysis_id: analysisId,
+      reason,
+      actor: 'campaign_operator',
+    }),
+    signal: AbortSignal.timeout(10000),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.detail || 'Không thể ghi nhận phê duyệt thủ công')
+  return body
+}
+
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+const SKIN_FORMAT_IDS = new Set(['zuma-Left', 'zuma-Right', 'znews-Background'])
+const inferIntendedFormat = (file) => {
+  if (file.intendedFormat) return file.intendedFormat
+  if (SKIN_FORMAT_IDS.has(file.formatId)) return 'skin'
+  if (file.type?.startsWith('video/')) return 'video'
+  return 'banner'
+}
+
+function mergeCreativeIntel(files, docs) {
+  return files.map(file => {
+    const doc = docs.find(item =>
+      item.analysis_id === file.analysisId ||
+      item.url === file.url ||
+      (item.name && item.name === file.name)
+    )
+    if (!doc) return file
+    const deterministic = doc.deterministic || {}
+    return {
+      ...file,
+      analysisId: doc.analysis_id,
+      analysisStatus: doc.effective_status || doc.status,
+      reviewReasons: doc.review_reasons || [],
+      deterministic,
+      vlm: doc.vlm || {},
+      override: doc.override || {},
+      width: deterministic.width || file.width,
+      height: deterministic.height || file.height,
+    }
+  })
+}
+
+/** Upload, enqueue, and wait for terminal creative verdicts before Setup. */
+export async function prepareCreativeFiles(files, onProgress = () => {}) {
+  let prepared = []
+  for (let index = 0; index < (files || []).length; index += 1) {
+    const file = files[index]
+    let url = file.url || ''
+    if (!url && file.dataUrl) {
+      onProgress([
+        ...prepared,
+        { ...file, analysisStatus: 'uploading' },
+        ...(files || []).slice(index + 1),
+      ])
+      url = await uploadCreativeFile(file.dataUrl, file.name, file.type)
+    }
+    if (!url) throw new Error(`Upload creative thất bại: ${file.name}`)
+    prepared.push({
+      ...file,
+      url,
+      intendedFormat: inferIntendedFormat(file),
+      analysisStatus: file.analysisStatus || 'queued',
+    })
+    onProgress([...prepared, ...(files || []).slice(index + 1)])
+  }
+
+  const queued = await analyzeCreatives(prepared.map(file => ({
+    id: file.id,
+    name: file.name,
+    type: file.type,
+    formatId: file.formatId || '',
+    intendedFormat: inferIntendedFormat(file),
+    url: file.url,
+  })))
+  if (!(queued.jobs || []).length) {
+    throw new Error('Creative intelligence chưa được bật trên agent')
+  }
+  prepared = prepared.map(file => {
+    const job = queued.jobs.find(item => item.url === file.url || item.name === file.name)
+    return { ...file, analysisId: job?.analysis_id || file.analysisId, analysisStatus: job?.effective_status || job?.status || 'queued' }
+  })
+  onProgress(prepared)
+
+  const deadline = Date.now() + 45000
+  while (Date.now() < deadline) {
+    prepared = mergeCreativeIntel(prepared, await getCreativeIntel())
+    onProgress(prepared)
+    const complete = prepared.every(file =>
+      ['auto_approved', 'needs_review', 'approved_override'].includes(file.analysisStatus)
+    )
+    if (complete) return prepared
+    await wait(750)
+  }
+  throw new Error('Phân tích creative quá thời gian. Tác vụ vẫn được lưu; vui lòng thử xác nhận lại.')
+}
+
 export async function uploadCreativeFile(dataUrl, filename, mimeType) {
   if (!dataUrl || !dataUrl.startsWith('data:')) return ''
   try {
@@ -865,7 +996,8 @@ export const AgentAPI = {
       message: '',
       formData: { creative: creativeData },
     })
-    return real ?? AGENT_SCENARIOS.approveCreative(creativeData)
+    if (!real) throw new Error('Agent không lưu được creative đã phân tích')
+    return real
   },
 
   async approveAudience(segmentData) {
