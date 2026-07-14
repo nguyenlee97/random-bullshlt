@@ -38,7 +38,7 @@ async def intercepts_node(state: AgentState) -> dict:
     if any(kw in msg_lower for kw in _AUTOPICK_TRIGGERS):
         await alog(session_id, "info", {"intent": "autopick_targeting", "path": "graph"})
         resp = await handle_targeting_autopick(session_id)
-        return _from_agent_response(resp, used_tool="autopick_targeting")
+        return _from_agent_response(resp, used_tool="targeting_autopick")
 
     # 2. Next-step redirect (pure nav messages only, ≤80 chars — ported guard) --
     if len(msg_lower) <= 80 and any(kw in msg_lower for kw in _NEXT_STEP_TRIGGERS):

@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "instructions": "Set every status to approved or edited after human review. Never use model-only review as sign-off.",
+  "cases": [
+    {
+      "id": "brief_041",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_042",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_043",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_044",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_045",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_046",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_047",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_048",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_049",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_050",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_051",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_052",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_053",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_054",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_055",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_056",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_057",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_058",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_059",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_060",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_061",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_062",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_063",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_064",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_065",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_066",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_067",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_068",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_069",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_070",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_071",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_072",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_073",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_074",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_075",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_076",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_077",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_078",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_079",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    },
+    {
+      "id": "brief_080",
+      "status": "pending",
+      "reviewer": "",
+      "reviewed_at": "",
+      "comment": ""
+    }
+  ]
+}

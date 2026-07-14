@@ -10,8 +10,9 @@
 > retry idempotency, result/report generation, and cleanup. M2 audience RAG is
 > enabled and measured; M3 creative intelligence has passed its local safety,
 > video, browser override, restart, and HTTP queue-load gates. The remaining M1
-> conversation-restart/observability evidence and M2 human-label/soak work are
-> the next closure items. See `03-m3-creative-intelligence-evidence.md` and
+> conversation-restart/observability evidence and M2 human sign-off are the
+> next closure items. M2's local targeting, source-grounding, 100-request soak,
+> and Qdrant outage/recovery gates are green. See `03-m3-creative-intelligence-evidence.md` and
 > `eval/reports/full-campaign-smoke.json`.
 
 ## 1. Starting point

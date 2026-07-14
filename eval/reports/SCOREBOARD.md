@@ -26,21 +26,32 @@ Set: 80 briefs (`brief_001`–`brief_080`)
 | RAG, MiniMax selector, 15 candidates | 0.669 | 0.786 | 0 | 0 | 0 | 12.79 s | 18.55 s |
 | **RAG, GPT-5.4 mini selector, 25 candidates + guard** | **0.831** | **0.848** | **0** | **0** | **0** | **4.11 s** | **5.96 s** |
 
-The final RAG candidate improves recall by 4.0 percentage points and cuts p95 recommendation latency by 86.6% versus legacy. Stopping Qdrant produced one successful, explicitly counted legacy fallback; restarting Qdrant restored `rag_index: true` readiness.
+The final RAG candidate improves recall by 4.0 percentage points and cuts p95 recommendation latency by 86.6% versus legacy. The final 100-request soak produced 0 errors, 0 fallbacks, 0 exclusions, 0 unknown IDs, and 0 source-grounding violations, with p95 6.49 seconds. Stopping Qdrant changed readiness to 503 with `rag_index: false`, produced one successful and explicitly counted legacy fallback, and retained valid source citations. Restarting Qdrant restored `rag_index: true`; the next request used RAG with no fallback in 4.14 seconds.
+
+## Targeting evaluation
+
+Set: 12 v2 targeting-labeled briefs.
+
+| Pipeline | Expected-value recall | Exact dimensions | Forbidden values | Catalog violations | Contract failures | p95 |
+|---|---:|---:|---:|---:|---:|---:|
+| MiniMax free-form JSON | 87.5% | 74.2% | 0 | 0 | 0 | 39.67 s |
+| **GPT-5.4 mini structured + MiniMax fallback** | **95.8%** | 74.2% | **0** | **0** | **0** | **3.99 s** |
+
+The server now whitelists every selected dimension and value against the live targeting-options catalog before persistence. Structured generation removed the truncated-JSON empty result and reduced p95 by about 90%. Only explicitly labeled dimensions are graded; extra valid dimensions remain operator-editable rather than being treated as wrong.
 
 ## Verdict
 
 - Candidate strategy: raw brief plus coverage-preserving query rewrites, 25 candidates, strict structured GPT-5.4 mini selection, candidate whitelist, and deterministic taxonomy guard.
 - Qwen `qwen/qwen3-reranker-8b`: integrated but disabled. It causes a material ranking regression on this catalog.
 - Retrieval infrastructure: ready. The versioned index contains all 310 live segments and matches the catalog fingerprint and embedding runtime metadata.
-- Engineering gate: pass. The isolated local RAG candidate is staging-ready.
-- Normal production flag: remains off until briefs 041–080 receive human label review and a staging soak/rehearsal is signed off.
+- Engineering gate: pass. The local RAG, targeting, source-grounding, soak, and outage/recovery gates are green.
+- Normal external-release approval remains blocked until briefs 041–080 receive human sign-off.
 
 ## Release caveat
 
 Briefs 041–080 are machine-authored and have not received the same explicit human sign-off as the original 40. These results are valid engineering diagnostics, but they are not sufficient by themselves to approve a production release.
 
-Authoritative reports: `legacy-310.json`, `retrieval-raw-plus-rewrite-k25.json`, `rag-critic-k25-final.json`, and `rag-qdrant-fallback-smoke.json`.
+Authoritative reports: `legacy-310.json`, `retrieval-raw-plus-rewrite-k25.json`, `rag-critic-k25-final.json`, `targeting-v1.json`, `targeting-critic-v2.json`, `rag-soak-100-grounded.json`, `rag-qdrant-fallback-v2.json`, and `rag-qdrant-recovery-v2.json`.
 
 ## Creative intelligence candidate
 

@@ -1,5 +1,7 @@
 from rag.index import _catalog_fingerprint
 from rag.recommend import _guard_reason, _rank_merged, _raw_query
+from handlers.audience import _normalize_targeting
+from tools.audience_provenance import catalog_source
 
 
 def _segments():
@@ -55,6 +57,36 @@ def test_raw_query_preserves_user_audience_notes():
     assert "urban runners" in query
     assert "exclude children" in query
     assert "conversion" in query
+
+
+def test_targeting_normalization_rejects_invented_values_and_dimensions():
+    options = {
+        "geo": {"South": ["TP.HCM", "Đà Nẵng"]},
+        "gender": ["Male", "Female"],
+    }
+    result = _normalize_targeting({
+        "geo": ["TP.HCM", "Atlantis", "TP.HCM"],
+        "gender": "Female",
+        "secretDimension": ["anything"],
+    }, options)
+
+    assert result == {"geo": ["TP.HCM"], "gender": ["Female"]}
+
+
+def test_catalog_source_cites_stable_segment_and_index_version():
+    source = catalog_source(
+        {"_id": "mongo-a", "segmentId": "INT001"},
+        {"schema": 2, "catalog_fingerprint": "abc123"},
+    )
+
+    assert source == {
+        "type": "dmp_catalog",
+        "endpoint": "/api/dmp/attributes",
+        "segmentId": "INT001",
+        "recordId": "mongo-a",
+        "catalogFingerprint": "abc123",
+        "indexSchema": 2,
+    }
 
 
 def test_coverage_ranking_keeps_strong_single_aspect_match():

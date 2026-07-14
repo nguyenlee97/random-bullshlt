@@ -24,6 +24,7 @@ from metrics import (RAG_CANDIDATES, RAG_GUARD_REJECTED, RAG_HALLUCINATED, RAG_R
 from prompts.audience import DMP_RECOMMEND_SYSTEM, DMP_RECOMMEND_USER
 from rag.index import ensure_index, get_qdrant
 from rag.rerank import rerank as rerank_docs
+from tools.audience_provenance import catalog_source
 
 
 class RagUnavailable(Exception):
@@ -200,9 +201,11 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
                 RAG_GUARD_REJECTED.labels(reason=guard_reason).inc()
                 guard_rejected += 1
                 continue
+            index_metadata = seg.get("_rag_index") or {}
+            source = catalog_source(seg, index_metadata)
             internal = {"_rank", "_text", "_fusion_score", "_query_hits", "_rag_index"}
             seg = {k: v for k, v in seg.items() if k not in internal}
-            enriched.append({**seg, "reason": rec.get("reason", "")})
+            enriched.append({**seg, "reason": rec.get("reason", ""), "source": source})
         else:
             dropped += 1
     if dropped:

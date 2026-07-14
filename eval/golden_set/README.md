@@ -70,18 +70,15 @@ human-review flag if that ever regresses, rather than silently patching v1 label
 1. ✅ `validate.py` is schema-version aware, checks every `_id` against `catalog_full.json`
    (not the old 71-dump), checks every `targeting` value against `targeting_options.json`,
    prints the v2 quota table, and passes for all 80 briefs.
-2. ⛔ **Blocked in this environment**: `python eval/run_eval.py --no-judge --subset
-   tag=full_catalog_only` requires a running agent that itself calls the live backend
-   (`api.pawgrammers.io.vn`) and the LLM (`maas-llm-aiplatform-hcm.api.vngcloud.vn`). The
-   sandbox this batch was authored in has network egress restricted to an allowlist that does
-   not include those hosts (confirmed: direct `curl`/`httpx` to both return no route even
-   though credentials in `agent/.env` are present and valid). `run_eval.py`'s own
-   `fullLabel → _id` map was also still pointing at the old 71-item dump — fixed to read
-   `catalog_full.json` so the run will work correctly once someone runs it in an environment
-   with real network access. **Action needed from a human with agent access**: run the command
-   above (and ideally the full `--subset tag=targeting_labeled` and `tag=near_miss` cells too)
-   against a live agent before trusting these labels — a recall of 0.0 across the new briefs
-   would flag a label bug, not necessarily an agent bug.
-3. This README is updated; all v2 briefs are tagged for human review per the note above.
-4. ⛔ No labels in `brief_041.json`–`brief_080.json` have been marked reviewed by this pass —
-   that is explicitly the next human's job, not the authoring model's.
+2. ✅ The local agent evaluation is operational. The final 100-request grounded soak completed
+   without errors, fallback, exclusions, unknown IDs, or source-citation violations; see
+   `../reports/rag-soak-100-grounded.json`.
+3. ✅ The 12 targeting-labeled cases have a dedicated gate. The structured critic candidate
+   reached 95.8% expected-value recall with zero forbidden or out-of-catalog values and p95
+   3.99 seconds; see `../reports/targeting-critic-v2.json`.
+4. ✅ Run `python eval/golden_set/build_v2_review_packet.py` to refresh
+   `V2-HUMAN-REVIEW-PACKET.md`. It preserves an existing `v2_review_status.json` so reviewer
+   decisions are never overwritten.
+5. ⛔ No labels in `brief_041.json`–`brief_080.json` are human-approved yet. A reviewer must
+   fill `v2_review_status.json`; `python eval/golden_set/check_v2_review.py` intentionally
+   fails until all 40 cases have a reviewer, timestamp, and `approved` or `edited` status.

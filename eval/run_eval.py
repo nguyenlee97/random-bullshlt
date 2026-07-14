@@ -110,6 +110,16 @@ async def eval_one(client: httpx.AsyncClient, brief_file: Path, agent_url: str,
         (rank for rank, label in enumerate(ordered_got, start=1) if label in must), None)
     mrr = 1.0 / first_relevant_rank if first_relevant_rank else 0.0
     unknown = sorted(value for value in got if value not in segment_to_label)
+    source_violations = []
+    for rec in recs:
+        source = rec.get("source") or {}
+        if (
+            source.get("type") != "dmp_catalog"
+            or source.get("endpoint") != "/api/dmp/attributes"
+            or source.get("segmentId") != rec.get("segmentId")
+            or not source.get("recordId")
+        ):
+            source_violations.append(rec.get("segmentId") or rec.get("fullLabel") or "unknown")
     rag_meta = response_data.get("rag")
 
     out = {
@@ -118,6 +128,7 @@ async def eval_one(client: httpx.AsyncClient, brief_file: Path, agent_url: str,
         "mrr_at_k": round(mrr, 4),
         "exclusion_violations": violations,
         "unknown_recommendations": unknown,
+        "source_grounding_violations": source_violations,
         "latency_s": round(latency, 2),
         "rag": rag_meta,
         "rag_fallback": bool(expect_rag and not rag_meta),
@@ -216,6 +227,8 @@ async def main():
         "exclusion_violations_total": total_viol,   # ⛔ CI gate: must be 0
         "judge_score": round(statistics.mean(judge_means), 3) if judge_means else None,
         "unknown_recommendations_total": sum(len(r["unknown_recommendations"]) for r in ok),
+        "source_grounding_violations_total": sum(
+            len(r["source_grounding_violations"]) for r in ok),
         "rag_fallbacks": sum(1 for r in ok if r.get("rag_fallback")),
         "mean_recommendations": round(statistics.mean(r["n_recs"] for r in ok), 2) if ok else None,
         "p50_latency_s": percentile(latencies, 0.50),

@@ -3,7 +3,9 @@ Audience handler — Step 2.
 Phase 1: DMP segment validation + LLM reasoning + audience size calc.
 Phase 2: Targeting auto-pick (LLM suggests targeting fields).
 """
+import asyncio
 import json
+from pydantic import BaseModel, Field
 from models import AgentResponse, SegmentData, ResponseMeta
 from llm import simple_generate, parse_json_response
 from session import get_or_create_session, update_form_state, log_event
@@ -16,6 +18,18 @@ from prompts.audience import (
 )
 from tools.targeting_options import get_targeting_options
 from tools.audience_library import get_all_segments
+from tools.audience_provenance import catalog_source
+
+
+class _TargetingReason(BaseModel):
+    field: str
+    picks: list[str] = []
+    reason: str = ""
+
+
+class _TargetingSelection(BaseModel):
+    targeting: dict[str, list[str]]
+    reasoning: list[_TargetingReason] = Field(default_factory=list)
 
 
 
@@ -57,6 +71,38 @@ def _normalize_dmp_attr(seg: dict) -> dict:
         # Keep originals for compatibility
         "fullLabel": full_label,
     }
+
+
+def _normalize_targeting(targeting: dict, options: dict) -> dict[str, list[str]]:
+    """Keep only dimensions and exact values supplied by the backend catalog."""
+    normalized: dict[str, list[str]] = {}
+    if not isinstance(targeting, dict) or not isinstance(options, dict):
+        return normalized
+
+    for dimension, raw_values in targeting.items():
+        raw_options = options.get(dimension)
+        if raw_options is None:
+            continue
+        if isinstance(raw_options, dict):
+            allowed = {
+                value
+                for grouped_values in raw_options.values()
+                if isinstance(grouped_values, list)
+                for value in grouped_values
+            }
+        elif isinstance(raw_options, list):
+            allowed = set(raw_options)
+        else:
+            continue
+
+        values = raw_values if isinstance(raw_values, list) else [raw_values]
+        valid: list[str] = []
+        for value in values:
+            if isinstance(value, str) and value in allowed and value not in valid:
+                valid.append(value)
+        if valid:
+            normalized[dimension] = valid
+    return normalized
 
 
 async def handle_audience(segment: SegmentData, session_id: str) -> AgentResponse:
@@ -174,29 +220,57 @@ async def handle_targeting_autopick(session_id: str) -> AgentResponse:
         options_json=json.dumps(options, ensure_ascii=False),
     )
 
+    selected_model = "minimax"
     try:
-        raw = simple_generate(TARGETING_AUTOPICK_SYSTEM, prompt)
-        parsed = parse_json_response(raw)
-        targeting = parsed.get("targeting", {})
+        from config import config as _cfg
+        from graph.structured import structured
+
+        role = "critic" if (
+            _cfg.CRITIC_BASE_URL and _cfg.CRITIC_MODEL and _cfg.CRITIC_API_KEY
+        ) else "generator"
+        output, tokens = await asyncio.to_thread(
+            structured,
+            [
+                {"role": "system", "content": TARGETING_AUTOPICK_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            _TargetingSelection,
+            "targeting_selection",
+            role,
+            1400,
+        )
+        parsed = output.model_dump()
+        targeting = _normalize_targeting(parsed.get("targeting", {}), options)
         reasoning = parsed.get("reasoning", [])
-        await log_event(session_id, "llm_call", {"handler": "targeting_autopick", "response": raw[:500]})
+        selected_model = _cfg.CRITIC_MODEL if role == "critic" else _cfg.LLM_MODEL
+        await log_event(session_id, "llm_call", {
+            "handler": "targeting_autopick",
+            "model": selected_model,
+            "tokens": tokens,
+            "targeting": targeting,
+        })
     except Exception as e:
         await log_event(session_id, "error", {"handler": "targeting_autopick", "error": str(e)})
-        targeting = {
+        targeting = _normalize_targeting({
             "geo": ["Hà Nội", "TP.HCM", "Đà Nẵng"],
             "age": ["25-34", "35-44"],
             "gender": ["Male", "Female"],
             "deviceOS": [], "deviceBrand": [], "marital": [],
             "parental": [], "education": [], "income": [],
             "career": [], "interest": [], "weather": [],
-        }
+        }, options)
         reasoning = [{"field": "geo", "picks": ["Hà Nội", "TP.HCM", "Đà Nẵng"], "reason": "3 thị trường lớn nhất"}]
+        selected_model = "deterministic_fallback"
 
     await update_form_state(session_id, "targeting", targeting)
 
+    reason_by_field = {
+        r.get("field"): r.get("reason", "")
+        for r in reasoning if isinstance(r, dict) and r.get("field")
+    }
     reason_rows = [
-        [r["field"], ", ".join(r.get("picks", [])), r.get("reason", "")]
-        for r in reasoning if r.get("picks")
+        [field, ", ".join(picks), reason_by_field.get(field, "")]
+        for field, picks in targeting.items()
     ]
 
     blocks = [
@@ -215,7 +289,7 @@ async def handle_targeting_autopick(session_id: str) -> AgentResponse:
     return AgentResponse(
         text="✅ Em đã phân tích brief và chọn targeting phù hợp:",
         blocks=blocks,
-        meta=ResponseMeta(tool="targeting_autopick", model="minimax", step=2),
+        meta=ResponseMeta(tool="targeting_autopick", model=selected_model, step=2),
     )
 
 async def handle_dmp_recommend(session_id: str) -> dict:
@@ -279,7 +353,11 @@ async def handle_dmp_recommend(session_id: str) -> dict:
         label = rec.get("fullLabel", "")
         seg = label_map.get(label)
         if seg:
-            enriched.append({**seg, "reason": rec.get("reason", "")})
+            enriched.append({
+                **seg,
+                "reason": rec.get("reason", ""),
+                "source": catalog_source(seg),
+            })
 
     return {"recommendations": enriched, "total_segments": len(all_segs)}
 
@@ -573,5 +651,3 @@ async def handle_audience_entry(session_id: str, brief_hint: dict | None = None)
             {"label": "🔍 Tìm thêm segments",   "action": "prefill", "text": "Tìm thêm segments liên quan đến "},
         ],
     }
-
-
