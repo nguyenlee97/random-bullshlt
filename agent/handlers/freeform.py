@@ -8,6 +8,7 @@ Workspace Sync Protocol:
   - Workspace diff events from direct UI edits are injected as system message
   - update_workspace tool produces a proposal block (Option B: confirm before apply)
 """
+import asyncio
 import json
 import time
 from models import AgentResponse, ResponseMeta
@@ -20,6 +21,7 @@ from session import (
 from prompts.system import SYSTEM_PROMPT, STEP_NAMES
 from tools.zone_catalog import get_all_zones
 from agent_logger import alog
+from time_context import campaign_time_system_message
 
 from tools.registry import TOOL_DEFINITIONS, execute_tool
 from handlers.audience import handle_targeting_autopick
@@ -589,6 +591,7 @@ async def handle_freeform(
     # ── Build message array ───────────────────────────────────────────────────
     messages: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": campaign_time_system_message()},
         {"role": "system", "content": _build_workspace_snapshot(effective_workspace, confirmed_steps or [], current_step=step)},
     ]
 
@@ -610,7 +613,9 @@ async def handle_freeform(
 
     # ── Call LLM ─────────────────────────────────────────────────────────────
     try:
-        response = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
+        response = await asyncio.to_thread(
+            chat_completion, messages=messages, tools=TOOL_DEFINITIONS
+        )
         msg = response.choices[0].message
         raw_content = msg.content or ""
         tool_calls_names = [tc.function.name for tc in (msg.tool_calls or [])]
@@ -634,7 +639,9 @@ async def handle_freeform(
             })
             short_msgs = [messages[0]] + messages[-6:]  # system prompt + last 6 turns
             try:
-                retry_resp = force_text_completion(messages=short_msgs)
+                retry_resp = await asyncio.to_thread(
+                    force_text_completion, messages=short_msgs
+                )
                 retry_content = sanitize_response(retry_resp.choices[0].message.content or "")
                 raw_content = retry_content or (
                     "Xin lỗi anh/chị, em bị quá tải ngữ cảnh ở tin nhắn này. "
@@ -783,7 +790,9 @@ async def handle_freeform(
             # Attempt 1: normal second call (model summarises tool results)
             await alog(session_id, "llm_call_start", {"attempt": 1, "purpose": f"{used_tool}_summary"})
             t1 = time.time()
-            final = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
+            final = await asyncio.to_thread(
+                chat_completion, messages=messages, tools=TOOL_DEFINITIONS
+            )
             reply = sanitize_response(final.choices[0].message.content or "")
             await alog(session_id, "llm_call_done", {"attempt": 1, "duration_ms": int((time.time()-t1)*1000), "reply_len": len(reply), "empty": not reply})
 
@@ -793,7 +802,9 @@ async def handle_freeform(
                 FALLBACK_LEVEL.labels(level="2").inc()
                 await alog(session_id, "fallback", {"attempt": 2, "tool": used_tool, "reason": "attempt1_empty"})
                 t2 = time.time()
-                forced = force_text_completion(messages=messages)  # no tools!
+                forced = await asyncio.to_thread(
+                    force_text_completion, messages=messages
+                )  # no tools!
                 reply = sanitize_response(forced.choices[0].message.content or "")
                 await alog(session_id, "llm_call_done", {"attempt": 2, "duration_ms": int((time.time()-t2)*1000), "reply_len": len(reply), "empty": not reply})
 

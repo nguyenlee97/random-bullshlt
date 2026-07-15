@@ -9,6 +9,7 @@ Ports freeform.py's LLM pipeline 1:1:
 
 Reuses freeform.py helpers (snapshot/diff/summary builders) — parity by import.
 """
+import asyncio
 import json
 import time
 
@@ -29,6 +30,7 @@ from agent_logger import alog
 from workspace.service import create_proposal, get_workspace, legacy_view
 from workspace.intent import InvalidWorkspaceIntent, resolve_legacy_update
 from provider_resilience import PROVIDER_UNAVAILABLE_MESSAGE
+from time_context import campaign_time_system_message
 
 _TOOL_FALLBACKS = {
     "get_audience_list": "Đã tìm thấy các đối tượng phù hợp. Anh/Chị xem danh sách ở panel phải và chọn nhé!",
@@ -53,6 +55,7 @@ async def context_node(state: AgentState) -> dict:
             + ("Client snapshot is stale; canonical server artifacts are authoritative."
                if stale_client else "Client snapshot is current for this turn.")
         )},
+        {"role": "system", "content": campaign_time_system_message()},
         {"role": "system", "content": _build_workspace_snapshot(
             workspace, state.get("confirmed_steps") or [], current_step=state["step"])},
     ]
@@ -61,8 +64,16 @@ async def context_node(state: AgentState) -> dict:
         messages.append({"role": "system", "content": diff})
     messages.extend(await get_history(state["session_id"]))  # CONTEXT_WINDOW-trimmed
     messages.append({"role": "user", "content": state["user_message"]})
-    return {"messages": messages, "tool_rounds": 0, "fallback_level": 0,
-            "workspace": workspace, "workspace_revision": canonical_revision}
+    return {
+        "messages": messages,
+        "tool_rounds": 0,
+        "fallback_level": 0,
+        "workspace": workspace,
+        "workspace_revision": canonical_revision,
+        "canonical_brief_missing": not bool(
+            canonical.get("artifacts", {}).get("brief", {}).get("value")
+        ),
+    }
 
 
 async def agent_node(state: AgentState) -> dict:
@@ -78,7 +89,10 @@ async def agent_node(state: AgentState) -> dict:
 
     await alog(session_id, "llm_call_start", {"handler": "graph_agent", "messages_count": len(messages)})
     try:
-        response = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
+        started = time.perf_counter()
+        response = await asyncio.to_thread(
+            chat_completion, messages=messages, tools=TOOL_DEFINITIONS
+        )
     except Exception as error:
         from metrics import FALLBACK_LEVEL
         FALLBACK_LEVEL.labels(level="3").inc()
@@ -94,13 +108,20 @@ async def agent_node(state: AgentState) -> dict:
         }
     msg = response.choices[0].message
     tokens = (response.usage.total_tokens or 0) if getattr(response, "usage", None) else 0
+    await alog(session_id, "llm_call_end", {
+        "handler": "graph_agent",
+        "duration_ms": int((time.perf_counter() - started) * 1000),
+        "finish_reason": response.choices[0].finish_reason,
+        "tokens": tokens,
+        "tool_names": [call.function.name for call in (msg.tool_calls or [])],
+    })
 
     # length-exhaustion retry (ported)
     if response.choices[0].finish_reason == "length" and not msg.tool_calls:
         await alog(session_id, "warn", {"event": "llm_length_truncated", "path": "graph"})
         short = [messages[0]] + messages[-6:]
         try:
-            retry = force_text_completion(messages=short)
+            retry = await asyncio.to_thread(force_text_completion, messages=short)
             text = sanitize_response(retry.choices[0].message.content or "") or (
                 "Xin lỗi anh/chị, em bị quá tải ngữ cảnh ở tin nhắn này. "
                 "Anh/chị có thể hỏi ngắn hơn hoặc bắt đầu lại không ạ?")
@@ -232,7 +253,9 @@ async def fallback_node(state: AgentState) -> dict:
 
     await alog(session_id, "fallback", {"attempt": 2, "tool": used_tool, "path": "graph"})
     try:
-        forced = force_text_completion(messages=state["messages"])
+        forced = await asyncio.to_thread(
+            force_text_completion, messages=state["messages"]
+        )
         reply = sanitize_response(forced.choices[0].message.content or "")
     except Exception:
         reply = ""

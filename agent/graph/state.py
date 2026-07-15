@@ -28,6 +28,7 @@ class AgentState(TypedDict, total=False):
     confirmed_steps: list[int]
     pending_proposal: dict | None
     workspace_intent_checked: bool
+    canonical_brief_missing: bool
 
     # ── llm conversation (graph-managed) ────────────────────────────────────
     messages: list[dict]             # OpenAI-format dicts (system/user/assistant/tool)

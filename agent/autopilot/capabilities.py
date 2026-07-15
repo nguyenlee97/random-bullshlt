@@ -55,7 +55,9 @@ async def _normalize_brief(run: dict, workspace: dict) -> CapabilityResult:
     )
 
 
-def validate_brief_value(raw: Any) -> tuple[dict | None, list[str]]:
+def validate_brief_value(
+    raw: Any, *, today: date | None = None,
+) -> tuple[dict | None, list[str]]:
     """Normalize and validate the canonical brief used by Autopilot."""
     try:
         brief = BriefData.model_validate(raw or {}).model_dump()
@@ -73,7 +75,7 @@ def validate_brief_value(raw: Any) -> tuple[dict | None, list[str]]:
         end = date.fromisoformat(brief["endDate"][:10])
         if start > end:
             errors.append("Ngày bắt đầu phải trước ngày kết thúc")
-        if end < date.today():
+        if end < (today or date.today()):
             errors.append("Ngày kết thúc đã ở quá khứ")
     except (TypeError, ValueError):
         errors.append("Ngày chạy phải có định dạng YYYY-MM-DD")

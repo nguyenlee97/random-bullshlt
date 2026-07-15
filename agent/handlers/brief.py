@@ -2,6 +2,8 @@
 Brief handler — Step 0.
 LLM validates and summarizes the brief, extracts audience hints.
 """
+import asyncio
+
 from models import AgentResponse, BriefData, ResponseMeta
 from llm import simple_generate, parse_json_response
 from session import get_or_create_session, update_form_state, log_event
@@ -41,7 +43,7 @@ async def handle_brief(brief: BriefData, session_id: str) -> AgentResponse:
     )
 
     try:
-        raw = simple_generate(BRIEF_SYSTEM, prompt)
+        raw = await asyncio.to_thread(simple_generate, BRIEF_SYSTEM, prompt)
         data = parse_json_response(raw)
         await log_event(session_id, "llm_call", {"handler": "brief", "response": raw[:500]})
     except Exception as e:

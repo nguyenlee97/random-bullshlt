@@ -234,7 +234,7 @@ async def test_bare_confirmation_tool_call_creates_proposal_but_never_auto_appli
 
 
 @pytest.mark.asyncio
-async def test_bare_confirmation_without_pending_proposal_never_reaches_model():
+async def test_bare_brief_confirmation_without_pending_proposal_reaches_typed_recovery():
     from graph.nodes.intercepts import intercepts_node
     from workspace.service import get_workspace
 
@@ -243,8 +243,8 @@ async def test_bare_confirmation_without_pending_proposal_never_reaches_model():
         "session_id": sid, "step": 0,
         "user_message": "đồng ý", "workspace": {},
     })
-    assert result["used_tool"] == "workspace_clarification"
-    assert "không có đề xuất" in result["response_text"]
+    assert result["used_tool"] == ""
+    assert result["pending_proposal"] is None
     assert (await get_workspace(sid))["revision"] == 0
 
 

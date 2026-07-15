@@ -232,6 +232,14 @@ async def intercepts_node(state: AgentState) -> dict:
             }
 
     if is_confirm and not pending:
+        if step == 0:
+            from workspace.service import get_workspace
+            canonical = await get_workspace(session_id)
+            if not canonical.get("artifacts", {}).get("brief", {}).get("value"):
+                # Recovery path for old/model-only recommendations. Let the typed
+                # Brief collector reconstruct a safe proposal from history instead
+                # of claiming the conversation has been forgotten.
+                return {"pending_proposal": None, "used_tool": ""}
         text = (
             "Hiện không có đề xuất nào đang chờ duyệt. "
             "Anh/chị hãy yêu cầu thay đổi cụ thể trước nhé."

@@ -140,7 +140,7 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
     )
 
     try:
-        raw = simple_generate(AUDIENCE_SYSTEM, prompt)
+        raw = await asyncio.to_thread(simple_generate, AUDIENCE_SYSTEM, prompt)
         data = parse_json_response(raw)
         await log_event(session_id, "llm_call", {"handler": "audience", "response": raw[:500]})
     except Exception as e:
@@ -338,7 +338,7 @@ async def handle_dmp_recommend(session_id: str, brief_override: dict | None = No
     )
 
     try:
-        raw = simple_generate(DMP_RECOMMEND_SYSTEM, prompt)
+        raw = await asyncio.to_thread(simple_generate, DMP_RECOMMEND_SYSTEM, prompt)
         data = parse_json_response(raw)
         recs = data.get("recommendations", [])
         await log_event(session_id, "llm_call", {"handler": "dmp_recommend", "count": len(recs)})
@@ -432,7 +432,7 @@ async def handle_audience_entry(session_id: str, brief_hint: dict | None = None)
     )
 
     try:
-        raw = simple_generate(AUDIENCE_ENTRY_SYSTEM, prompt)
+        raw = await asyncio.to_thread(simple_generate, AUDIENCE_ENTRY_SYSTEM, prompt)
         data = parse_json_response(raw)
         await log_event(session_id, "llm_call", {"handler": "audience_entry", "response": raw[:500]})
     except Exception as e:
@@ -527,7 +527,9 @@ async def handle_audience_entry(session_id: str, brief_hint: dict | None = None)
                 notes=brief.get("notes", "(trống)"),
                 segments_json=json.dumps(seg_labels_simple[:150], ensure_ascii=False),
             )
-            raw_retry = simple_generate(AUDIENCE_ENTRY_RETRY_SYSTEM, retry_prompt)
+            raw_retry = await asyncio.to_thread(
+                simple_generate, AUDIENCE_ENTRY_RETRY_SYSTEM, retry_prompt
+            )
             retry_data = parse_json_response(raw_retry)
             retry_recs = retry_data.get("dmp_segments", [])
             await log_event(session_id, "warn", {
