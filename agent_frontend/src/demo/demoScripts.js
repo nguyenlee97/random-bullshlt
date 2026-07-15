@@ -291,8 +291,8 @@ export const STAGE1_STEPS = [
     type: 'TOOLTIP',
     target: '#new-chat-btn',
     position: 'bottom',
-    title: '🆕 New Chat',
-    text: '**New Chat** — tạo chiến dịch mới hoàn toàn. Xóa toàn bộ chat và workspace hiện tại.',
+    title: '🆕 Chiến dịch mới',
+    text: '**Chiến dịch mới** — tạo chiến dịch mới hoàn toàn. Xóa toàn bộ chat và workspace hiện tại.',
   },
   {
     type: 'TOOLTIP',

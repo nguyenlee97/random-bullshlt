@@ -5,10 +5,11 @@ import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
 import ExperienceSelector from '@/components/ExperienceSelector'
 import AutopilotPanel from '@/components/AutopilotPanel'
+import ModeSwitcher from '@/components/ModeSwitcher'
 import { AgentAPI, getSetupEntry } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
-import { MessageSquare, LayoutDashboard } from 'lucide-react'
+import { MessageSquare, LayoutDashboard, Sparkles } from 'lucide-react'
 import { DemoProvider } from '@/demo/DemoEngine'
 import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { canApproveWorkflowStep } from '@/lib/workflowValidation'
@@ -60,7 +61,10 @@ const STEP_NAMES_VI = ['Brief', 'Audience', 'Creative', 'Setup Camp', 'Kết qu�
 const AUTO_NAV_STEPS = new Set([2, 3, 5]) // Creative, Setup, Report
 
 // ─── Mobile Tab Bar ─────────────────────────────────────────────────────────
-function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew }) {
+function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew, experienceMode }) {
+  const canvasTab = experienceMode === 'autopilot' ? 'autopilot' : 'workspace'
+  const CanvasIcon = experienceMode === 'autopilot' ? Sparkles : LayoutDashboard
+  const canvasLabel = experienceMode === 'autopilot' ? 'Tiến độ' : 'Workspace'
   return (
     <div className="flex flex-shrink-0 border-b border-border bg-white/95 backdrop-blur-sm shadow-sm" role="tablist" aria-label="Chọn khu vực làm việc">
       <button
@@ -81,18 +85,18 @@ function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew }) {
         )}
       </button>
       <button
-        id="tab-workspace"
-        onClick={() => onTabChange('workspace')}
+        id={`tab-${canvasTab}`}
+        onClick={() => onTabChange(canvasTab)}
         role="tab"
-        aria-selected={activeTab === 'workspace'}
+        aria-selected={activeTab === canvasTab}
         className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-all relative ${
-          activeTab === 'workspace'
+          activeTab === canvasTab
             ? 'text-brand-600 border-b-2 border-brand-500 bg-brand-50/30'
             : 'text-muted-foreground hover:text-foreground'
         }`}
       >
-        <LayoutDashboard className="w-4 h-4" />
-        Workspace
+        <CanvasIcon className="w-4 h-4" />
+        {canvasLabel}
         {workspaceHasNew && (
           <span className="absolute top-2 right-[22%] w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
         )}
@@ -105,6 +109,7 @@ export default function App() {
   const [experienceMode, setExperienceMode] = useState(null)
   const [modeSelectionBusy, setModeSelectionBusy] = useState(false)
   const [modeSelectionError, setModeSelectionError] = useState('')
+  const [autopilotSummary, setAutopilotSummary] = useState(null)
   const [currentStep, setCurrentStep] = useState(0)
   const [stepStatuses, setStepStatuses] = useState(STEPS.map(() => 'pending'))
   const [formState, setFormState] = useState(initialState)
@@ -114,6 +119,7 @@ export default function App() {
   const [recomputePlan, setRecomputePlan] = useState(null)
   const workspaceRef = useRef(null)
   const mainRef = useRef(null)
+  const bootedRef = useRef(false)
 
   // ── Demo visibility: hide Demo button once user has interacted ──────────
   const [hasUserStarted, setHasUserStarted] = useState(false)
@@ -371,13 +377,13 @@ export default function App() {
     pushWorkspaceEvent(`Agent đã cập nhật "${field}" (đã xác nhận bởi anh/chị)`)
     // On mobile: always notify. For key steps, also auto-navigate to Workspace after 2.5s.
     // Suppressed while the guided demo runs — it drives the tabs itself.
-    if (window.innerWidth < 768 && !isDemoActiveRef.current) {
+    if (experienceMode === 'guided' && window.innerWidth < 768 && !isDemoActiveRef.current) {
       setWorkspaceHasNew(true)
       if (AUTO_NAV_STEPS.has(currentStepRef.current) && activeTabRef.current === 'chat') {
         setTimeout(() => setActiveTab('workspace'), 2500)
       }
     }
-  }, [pushWorkspaceEvent])
+  }, [experienceMode, pushWorkspaceEvent])
 
 
   // ── Auto-select audience from chat (targeting autopick) ───────────────────
@@ -471,6 +477,7 @@ export default function App() {
   }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectExperience = useCallback(async (mode) => {
+    if (mode === experienceMode) return true
     setModeSelectionBusy(true)
     setModeSelectionError('')
     try {
@@ -480,16 +487,22 @@ export default function App() {
       )
       if (!result?.ok) throw new Error(result?.detail || 'Không thể lưu chế độ làm việc.')
       setExperienceMode(mode)
+      setActiveTab(mode === 'autopilot' ? 'autopilot' : 'workspace')
       setHasUserStarted(true)
+      return true
     } catch (error) {
       setModeSelectionError(error.message)
+      return false
     } finally {
       setModeSelectionBusy(false)
     }
-  }, [])
+  }, [experienceMode])
 
   useEffect(() => {
-    if (experienceMode) boot()
+    if (experienceMode && !bootedRef.current) {
+      bootedRef.current = true
+      boot()
+    }
   }, [boot, experienceMode])
 
   // Audience-entry: when user reaches step 1 with brief done → proactive recommendation in chat
@@ -709,7 +722,9 @@ export default function App() {
     const deleted = await newChat()
     if (!deleted) return
     resetLocalCampaign()
+    bootedRef.current = false
     setExperienceMode(null)
+    setAutopilotSummary(null)
     setModeSelectionError('')
   }, [resetLocalCampaign, newChat])
 
@@ -976,6 +991,14 @@ export default function App() {
     }
   }, [recomputePlan, busy])
 
+  const openGuidedStep = useCallback(async (step) => {
+    const switched = await selectExperience('guided')
+    if (!switched) return
+    setCurrentStep(step)
+    setActiveTab('workspace')
+    requestAnimationFrame(() => workspaceRef.current?.flash?.())
+  }, [selectExperience])
+
   // ── isMobile helper (used for conditional inline styles) ──────────────────
   // Read at render-time. Tailwind md: breakpoints handle the class-based
   // layout switching automatically on resize.
@@ -1000,25 +1023,22 @@ export default function App() {
       activeTab={activeTab}
       onActiveChange={(active) => { isDemoActiveRef.current = active }}
     >
-    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 to-brand-50/30 overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-brand-50/30 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
       <TopBar
         onReset={handleReset}
         onNewChat={handleNewChat}
         showDemo={!hasUserStarted}
-        experienceMode={experienceMode}
       />
 
-      {experienceMode === 'autopilot' && (
-        <AutopilotPanel
-          brief={formState.brief}
-          onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
-          onOpenCreative={() => {
-            setCurrentStep(2)
-            setActiveTab('workspace')
-            workspaceRef.current?.flash?.()
-          }}
+      <div className="hidden flex-shrink-0 md:block">
+        <ModeSwitcher
+          value={experienceMode}
+          onChange={selectExperience}
+          busy={modeSelectionBusy}
+          error={modeSelectionError}
+          autopilotSummary={autopilotSummary}
         />
-      )}
+      </div>
 
       {workspaceConflict && (
         <div className="flex items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
@@ -1043,6 +1063,7 @@ export default function App() {
           onTabChange={setActiveTab}
           chatHasNew={chatHasNew}
           workspaceHasNew={workspaceHasNew}
+          experienceMode={experienceMode}
         />
       </div>
 
@@ -1056,10 +1077,11 @@ export default function App() {
         {/* ── Workspace Pane ──────────────────────────────────────────
             Mobile: shown when activeTab==='workspace', hidden otherwise
             Desktop: RIGHT side, flex-1 (always visible)             */}
-        <div data-demo="workspace-pane" className={`
+        <div id="guided-canvas" role="tabpanel" aria-label="Quy trình hướng dẫn" data-mode-canvas="guided" data-demo="workspace-pane" className={`
           md:order-2 flex flex-col min-w-0 overflow-hidden bg-white
           md:flex-1 md:h-full
-          ${activeTab === 'workspace' ? 'flex-1' : 'hidden md:flex'}
+          ${experienceMode === 'guided' && activeTab === 'workspace' ? 'flex-1' : 'hidden'}
+          ${experienceMode === 'guided' ? 'md:flex' : 'md:hidden'}
         `}>
           <WorkspacePane
             ref={workspaceRef}
@@ -1078,7 +1100,23 @@ export default function App() {
             recomputePlan={recomputePlan}
             workspaceRevision={canonicalWorkspace?.revision}
             onOpenRecompute={openFirstRecomputeStep}
-            autopilotMode={experienceMode === 'autopilot'}
+            autopilotMode={false}
+          />
+        </div>
+
+        {/* Autopilot is a sibling canvas, not a banner above the workspace.
+            It stays mounted while hidden so run state and the event stream survive mode switches. */}
+        <div id="autopilot-canvas" role="tabpanel" aria-label="Campaign Autopilot" data-mode-canvas="autopilot" className={`
+          md:order-2 min-w-0 overflow-hidden bg-slate-50 md:flex-1 md:h-full
+          ${experienceMode === 'autopilot' && activeTab === 'autopilot' ? 'flex flex-1' : 'hidden'}
+          ${experienceMode === 'autopilot' ? 'md:flex' : 'md:hidden'}
+        `}>
+          <AutopilotPanel
+            brief={formState.brief}
+            onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
+            onOpenBrief={() => openGuidedStep(0)}
+            onOpenCreative={() => openGuidedStep(2)}
+            onStatusChange={setAutopilotSummary}
           />
         </div>
 
@@ -1104,6 +1142,17 @@ export default function App() {
         </div>
 
       </main>
+
+      <div className="fixed inset-x-0 bottom-0 z-30 md:hidden">
+        <ModeSwitcher
+          value={experienceMode}
+          onChange={selectExperience}
+          busy={modeSelectionBusy}
+          error={modeSelectionError}
+          mobile
+          autopilotSummary={autopilotSummary}
+        />
+      </div>
     </div>
     </DemoProvider>
   )

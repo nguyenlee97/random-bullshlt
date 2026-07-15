@@ -85,7 +85,7 @@ export default function ExperienceSelector({ onSelect, busy, error }) {
         {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         <p className="mt-6 text-center text-xs text-slate-600">Khi bắt đầu campaign mới, bạn có thể chọn lại chế độ làm việc.</p>
         <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] leading-5 text-slate-500">
-          Nội dung chat, brief và creative được dịch vụ AI xử lý để xây dựng campaign. Không nhập dữ liệu cá nhân hoặc bí mật không cần thiết. Chọn New Chat để xóa dữ liệu phiên Agent.
+          Nội dung chat, brief và creative được dịch vụ AI xử lý để xây dựng campaign. Không nhập dữ liệu cá nhân hoặc bí mật không cần thiết. Chọn Chiến dịch mới để xóa dữ liệu phiên Agent.
         </p>
       </div>
     </main>

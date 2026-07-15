@@ -67,6 +67,7 @@ test('external platform links use product-neutral labels', async () => {
 test('core mode controls keep mobile layout and accessible names', async () => {
   const app = await source('agent_frontend/src/App.jsx')
   const selector = await source('agent_frontend/src/components/ExperienceSelector.jsx')
+  const modeSwitcher = await source('agent_frontend/src/components/ModeSwitcher.jsx')
   const topBar = await source('agent_frontend/src/components/TopBar.jsx')
   const composer = await source('agent_frontend/src/components/ChatPane/ChatComposer.jsx')
   const autopilot = await source('agent_frontend/src/components/AutopilotPanel.jsx')
@@ -77,6 +78,10 @@ test('core mode controls keep mobile layout and accessible names', async () => {
   assert.match(app, /flex-col md:flex-row/)
   assert.match(app, /role="tablist"/)
   assert.match(app, /aria-selected=/)
+  assert.match(modeSwitcher, /aria-label="Chọn chế độ làm việc"/)
+  assert.match(modeSwitcher, /role="tab"/)
+  assert.match(modeSwitcher, /aria-selected=\{selected\}/)
+  assert.match(modeSwitcher, /safe-area-inset-bottom/)
   assert.match(selector, /aria-label={`Chọn \${mode\.title}/)
   assert.match(topBar, /aria-label="Mở tài liệu kỹ thuật"/)
   assert.match(topBar, /aria-label="Bắt đầu campaign mới"/)
@@ -122,10 +127,25 @@ test('Autopilot presents artifacts without Guided workflow controls', async () =
   const app = await source('agent_frontend/src/App.jsx')
   const workspace = await source('agent_frontend/src/components/WorkspacePane/index.jsx')
   const topbar = await source('agent_frontend/src/components/TopBar.jsx')
-  assert.match(app, /autopilotMode=\{experienceMode === 'autopilot'\}/)
+  assert.match(app, /autopilotMode=\{false\}/)
   assert.match(workspace, /Điều hướng campaign artifacts/)
   assert.match(workspace, /!autopilotMode && <WorkFoot/)
   assert.doesNotMatch(topbar, /Minimax-M2\.5/)
+})
+
+test('workflow modes are sibling canvases and Autopilot survives tab switches', async () => {
+  const app = await source('agent_frontend/src/App.jsx')
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  const switcher = await source('agent_frontend/src/components/ModeSwitcher.jsx')
+
+  assert.match(app, /data-mode-canvas="guided"/)
+  assert.match(app, /data-mode-canvas="autopilot"/)
+  assert.match(app, /Autopilot is a sibling canvas, not a banner above the workspace/)
+  assert.match(app, /experienceMode === 'autopilot' \? 'md:flex' : 'md:hidden'/)
+  assert.match(app, /bootedRef\.current/)
+  assert.match(panel, /sticky top-0/)
+  assert.match(panel, /sticky bottom-2/)
+  assert.match(switcher, /Chuyển chế độ không làm mất chat, workspace hoặc tiến độ đang chạy/)
 })
 
 test('workspace proposals have one durable decision lifecycle', async () => {

@@ -30,6 +30,11 @@ const ARTIFACT_LABELS = {
   order_draft: 'order draft', order: 'order', report: 'báo cáo',
 }
 
+const RUN_LABELS = {
+  queued: 'Đang chờ', running: 'Đang chạy', waiting_review: 'Cần duyệt',
+  paused: 'Tạm dừng', completed: 'Hoàn tất', cancelled: 'Đã hủy', failed: 'Có lỗi',
+}
+
 const taskIcon = status => {
   if (status === 'succeeded') return <Check className="h-3 w-3" />
   if (status === 'running') return <Loader2 className="h-3 w-3 animate-spin" />
@@ -49,7 +54,7 @@ const evidenceText = evidence => {
   return evidence.type?.replaceAll('_', ' ') || 'evidence'
 }
 
-export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreative }) {
+export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenBrief, onOpenCreative, onStatusChange }) {
   const [policy, setPolicy] = useState('critical_only')
   const [run, setRun] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -162,47 +167,91 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
   ].filter(Boolean), [brief])
   const briefReady = missingBriefFields.length === 0
 
+  useEffect(() => {
+    onStatusChange?.(run ? {
+      status: run.status,
+      progress,
+      waitingReview: Boolean(waiting),
+    } : null)
+  }, [onStatusChange, progress, run?.status, waiting?.task_id])
+
   return (
-    <section className="border-b border-brand-100 bg-white px-4 py-3 shadow-sm">
+    <section className="h-full w-full overflow-y-auto bg-slate-50/70 p-3 sm:p-5" aria-label="Không gian Campaign Autopilot">
       {!run ? (
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-3 lg:min-w-[330px]">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">Campaign Autopilot</h2>
-              <p className="text-xs leading-5 text-slate-600">Điền brief ở workspace, chọn mức review rồi để Agent lập kế hoạch và thực hiện.</p>
+        <div className="mx-auto max-w-5xl space-y-4 pb-6">
+          <div className="overflow-hidden rounded-3xl border border-brand-100 bg-[radial-gradient(circle_at_top_right,_#dcebff_0,_#ffffff_48%)] p-5 shadow-sm sm:p-7">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-500 text-white shadow-[0_10px_24px_rgba(0,104,255,0.24)]">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <div className="max-w-2xl">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Agentic workspace</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-900 sm:text-2xl">Campaign Autopilot</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Trao brief cho Agent, chọn mức kiểm soát rồi theo dõi kế hoạch, bằng chứng và các điểm cần duyệt trong một không gian riêng.
+                </p>
+              </div>
             </div>
           </div>
-          <div className="flex flex-1 flex-wrap gap-2">
-            {POLICY_OPTIONS.map(item => (
-              <button key={item.value} type="button" onClick={() => setPolicy(item.value)}
-                className={`rounded-xl border px-3 py-2 text-left transition-colors ${policy === item.value ? 'border-brand-400 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200'}`}>
-                <span className="block text-xs font-semibold">{item.label}</span>
-                <span className="block text-[10px] opacity-70">{item.note}</span>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="mb-4">
+                <p className="text-sm font-black text-slate-900">Chọn cách Agent xin duyệt</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Có thể tạm dừng hoặc chuyển về quy trình hướng dẫn bất cứ lúc nào.</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {POLICY_OPTIONS.map(item => (
+                  <button key={item.value} type="button" onClick={() => setPolicy(item.value)}
+                    aria-pressed={policy === item.value}
+                    className={`min-h-24 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${policy === item.value ? 'border-brand-400 bg-brand-50 text-brand-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50/50'}`}>
+                    <span className="block text-xs font-bold leading-5">{item.label}</span>
+                    <span className="mt-1 block text-[10px] opacity-70">{item.note}</span>
+                    {policy === item.value && <span className="mt-3 inline-flex items-center gap-1 text-[10px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đang chọn</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <aside className={`rounded-2xl border p-4 shadow-sm ${briefReady ? 'border-green-200 bg-green-50/70' : 'border-amber-200 bg-amber-50/70'}`}>
+              <div className="flex items-center gap-2">
+                {briefReady ? <Check className="h-4 w-4 text-green-700" /> : <AlertTriangle className="h-4 w-4 text-amber-700" />}
+                <p className={`text-xs font-black uppercase tracking-wide ${briefReady ? 'text-green-800' : 'text-amber-900'}`}>
+                  {briefReady ? 'Brief sẵn sàng' : 'Brief chưa hoàn tất'}
+                </p>
+              </div>
+              <dl className="mt-3 space-y-2 text-xs">
+                <div><dt className="text-slate-500">Thương hiệu</dt><dd className="font-bold text-slate-800">{brief?.brand || 'Chưa có'}</dd></div>
+                <div><dt className="text-slate-500">Ngân sách</dt><dd className="font-bold text-slate-800">{Number(brief?.budget) > 0 ? `${brief.budget} triệu đồng` : 'Chưa có'}</dd></div>
+                <div><dt className="text-slate-500">Thời gian</dt><dd className="font-bold text-slate-800">{brief?.startDate && brief?.endDate ? `${brief.startDate} → ${brief.endDate}` : 'Chưa có'}</dd></div>
+              </dl>
+              {!briefReady && <p className="mt-3 text-[11px] leading-5 text-amber-800">Còn thiếu: {missingBriefFields.join(', ')}. Bạn có thể cung cấp brief qua chat hoặc mở form để chỉnh trực tiếp.</p>}
+              <button type="button" onClick={onOpenBrief} className="mt-4 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-brand-300 hover:text-brand-700">
+                {briefReady ? 'Xem hoặc chỉnh brief' : 'Mở form Brief'}
               </button>
-            ))}
+            </aside>
           </div>
-          <button type="button" disabled={!briefReady || loading} onClick={start}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 text-sm font-bold text-white shadow-sm hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
-            Bắt đầu Autopilot
-          </button>
-          {!briefReady && (
-            <p className="w-full text-right text-[11px] text-amber-700 lg:w-auto">
-              Còn thiếu: {missingBriefFields.join(', ')}
-            </p>
-          )}
+
+          <div className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-brand-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
+            <div>
+              <p className="text-sm font-bold text-slate-900">Sẵn sàng để Agent lập kế hoạch?</p>
+              <p className="mt-1 text-xs text-slate-500">Agent luôn dừng trước hành động tạo order để bạn xác nhận.</p>
+            </div>
+            <button type="button" disabled={!briefReady || loading} onClick={start}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-500 px-6 text-sm font-bold text-white shadow-sm hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
+              Bắt đầu Autopilot
+            </button>
+          </div>
         </div>
       ) : (
-        <div className="mx-auto max-w-7xl">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="mx-auto max-w-6xl space-y-4 pb-24">
+          <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur-md sm:p-4">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-brand-500" />
               <span className="text-sm font-bold text-slate-900">Campaign Autopilot</span>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Plan v{run.plan_revision || 1}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${run.status === 'waiting_review' ? 'bg-amber-100 text-amber-800' : run.status === 'failed' ? 'bg-red-100 text-red-700' : run.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-brand-50 text-brand-700'}`}>{run.status}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${run.status === 'waiting_review' ? 'bg-amber-100 text-amber-800' : run.status === 'failed' ? 'bg-red-100 text-red-700' : run.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-brand-50 text-brand-700'}`}>{RUN_LABELS[run.status] || run.status}</span>
             </div>
             <div className="h-1.5 min-w-[130px] flex-1 overflow-hidden rounded-full bg-slate-100">
               <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${progress}%` }} />
@@ -219,24 +268,27 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
             </div>
           </div>
 
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            {run.tasks.map(task => (
-              <div key={task.task_id} title={task.error || task.result?.message || TASK_LABELS[task.key]}
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium ${task.status === 'succeeded' ? 'border-green-200 bg-green-50 text-green-700' : task.status === 'running' ? 'border-brand-300 bg-brand-50 text-brand-700' : task.status === 'waiting_review' ? 'border-amber-300 bg-amber-50 text-amber-800' : task.status === 'failed' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
-                {taskIcon(task.status)} {TASK_LABELS[task.key] || task.key}
-              </div>
-            ))}
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+            <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">Tiến độ thực thi</p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {run.tasks.map(task => (
+                <div key={task.task_id} title={task.error || task.result?.message || TASK_LABELS[task.key]}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium ${task.status === 'succeeded' ? 'border-green-200 bg-green-50 text-green-700' : task.status === 'running' ? 'border-brand-300 bg-brand-50 text-brand-700' : task.status === 'waiting_review' ? 'border-amber-300 bg-amber-50 text-amber-800' : task.status === 'failed' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+                  {taskIcon(task.status)} {TASK_LABELS[task.key] || task.key}
+                </div>
+              ))}
+            </div>
           </div>
 
           {run.replan_blocked && (
-            <div className="mt-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+            <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
               <p className="font-bold">Run đã dừng an toàn sau khi order được tạo.</p>
-              <p className="mt-0.5">Workspace có thay đổi mới. Hãy chọn “Cuộc trò chuyện mới” để tạo một run khác; Advertising Agent sẽ không tự tạo lại order.</p>
+              <p className="mt-0.5">Workspace có thay đổi mới. Hãy chọn “Chiến dịch mới” để tạo một run khác; Advertising Agent sẽ không tự tạo lại order.</p>
             </div>
           )}
 
           {run.last_replan && !run.replan_blocked && (
-            <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
+            <div className="rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
               <span className="font-bold">Kế hoạch đã được tính lại.</span>{' '}
               Thay đổi ở {run.last_replan.changed_artifacts.map(item => ARTIFACT_LABELS[item] || item).join(', ')} ảnh hưởng {run.last_replan.affected_tasks.length} tác vụ; các kết quả không liên quan được giữ nguyên.
             </div>
@@ -249,7 +301,7 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
             onSelect={chooseStrategy}
           />
 
-          <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <details className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
             <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-bold text-slate-700">
               <Activity className="h-4 w-4 text-brand-500" /> Bằng chứng vận hành
               <span className="font-normal text-slate-500">trace · RAG/rerank · guard · idempotency</span>
@@ -265,7 +317,7 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
           </details>
 
           {waiting && (
-            <div className="mt-3 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 sm:flex-row sm:items-center">
+            <div className="sticky bottom-2 z-10 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50/95 p-3 shadow-[0_12px_36px_rgba(120,80,0,0.18)] backdrop-blur-md sm:flex-row sm:items-center">
               <ShieldCheck className="h-5 w-5 shrink-0 text-amber-700" />
               <div className="flex-1">
                 <p className="text-xs font-bold text-amber-900">Cần bạn review: {TASK_LABELS[waiting.key]}</p>
@@ -282,7 +334,7 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
           )}
         </div>
       )}
-      {error && <p className="mx-auto mt-2 max-w-7xl text-xs font-medium text-red-600">{error}</p>}
+      {error && <p className="mx-auto mt-3 max-w-6xl rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">{error}</p>}
     </section>
   )
 }

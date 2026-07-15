@@ -1,10 +1,8 @@
 import { Bot, RotateCcw, MessageSquarePlus, Play, FileText } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import { useDemo } from '@/demo/DemoEngine'
 
-export default function TopBar({ onReset, onNewChat, showDemo, experienceMode }) {
+export default function TopBar({ onReset, onNewChat, showDemo }) {
   const demo = useDemo()
 
   return (
@@ -19,13 +17,6 @@ export default function TopBar({ onReset, onNewChat, showDemo, experienceMode })
           <span className="font-black text-base text-brand-600 tracking-tight">Agent</span>
         </div>
       </div>
-
-      <Separator orientation="vertical" className="h-5 mx-1 hidden sm:block" />
-
-      <Badge variant="muted" className="gap-1.5 text-[11px] hidden sm:flex">
-        <div className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-        {experienceMode === 'autopilot' ? 'Campaign Autopilot' : 'Guided Workflow'}
-      </Badge>
 
       <div className="ml-auto flex items-center gap-2">
 
@@ -68,7 +59,7 @@ export default function TopBar({ onReset, onNewChat, showDemo, experienceMode })
           aria-label="Bắt đầu campaign mới"
         >
           <MessageSquarePlus className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">New Chat</span>
+          <span className="hidden sm:inline">Chiến dịch mới</span>
         </Button>
         {/* Đặt lại — workspace reset only */}
         <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5 text-xs h-8" data-demo="reset-btn" aria-label="Đặt lại workspace">
