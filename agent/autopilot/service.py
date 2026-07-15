@@ -13,7 +13,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from config import config
-from workspace.service import get_workspace, set_preferences
+from request_context import get_request_id
+from workspace.service import get_workspace, list_pending_proposals, set_preferences
 
 APPROVAL_POLICIES = {
     "review_every_stage", "critical_only", "auto_build_draft"
@@ -172,10 +173,6 @@ async def create_run(
 ) -> dict:
     if approval_policy not in APPROVAL_POLICIES:
         raise ValueError("unsupported approval_policy")
-    workspace = await get_workspace(session_id)
-    brief = workspace.get("artifacts", {}).get("brief", {})
-    if not brief.get("value"):
-        raise ValueError("brief is required before starting Campaign Autopilot")
     key = idempotency_key.strip() or f"autopilot:{session_id}:{uuid.uuid4().hex}"
     runs, tasks, _ = await _collections()
     if runs is not None:
@@ -186,6 +183,18 @@ async def create_run(
     if existing:
         return await get_run(existing["run_id"])
 
+    pending_proposals = await list_pending_proposals(session_id)
+    if pending_proposals:
+        fields = sorted({item.get("field", "workspace") for item in pending_proposals})
+        raise RunConflict(
+            "Hãy duyệt hoặc hủy các đề xuất workspace đang chờ trước khi bắt đầu "
+            f"Campaign Autopilot: {', '.join(fields)}"
+        )
+    workspace = await get_workspace(session_id)
+    brief = workspace.get("artifacts", {}).get("brief", {})
+    if not brief.get("value"):
+        raise ValueError("brief is required before starting Campaign Autopilot")
+
     pref = await set_preferences(
         session_id, experience_mode="autopilot", approval_policy=approval_policy,
         base_revision=workspace["revision"], actor=actor,
@@ -193,6 +202,8 @@ async def create_run(
     )
     workspace = await get_workspace(session_id)
     run_id = f"run_{uuid.uuid4().hex}"
+    request_id = get_request_id()
+    trace_id = request_id if request_id != "-" else f"trace_{uuid.uuid4().hex[:16]}"
     now = _now()
     run = {
         "_id": run_id, "run_id": run_id, "session_id": session_id,
@@ -204,6 +215,7 @@ async def create_run(
         "pause_requested": False, "current_task_id": None,
         "created_at": now, "updated_at": now,
         "preference_revision": pref["workspace_revision"],
+        "trace_id": trace_id,
     }
     task_docs = _new_tasks(run_id)
     if runs is not None:
@@ -234,7 +246,10 @@ async def get_run(run_id: str) -> dict:
         task_docs.sort(key=lambda item: item["created_at"])
     if not run:
         raise KeyError(f"run not found: {run_id}")
-    return {**_public(run), "tasks": [_public(task) for task in task_docs]}
+    public_run = _public(run)
+    # Runs created before trace IDs were persisted still get a stable fallback.
+    public_run.setdefault("trace_id", public_run["run_id"])
+    return {**public_run, "tasks": [_public(task) for task in task_docs]}
 
 
 async def list_events(run_id: str, after: datetime | None = None) -> list[dict]:
@@ -648,6 +663,22 @@ async def review_task(
     retry_after_review = bool(
         approved and (task.get("result") or {}).get("review_action") == "retry"
     )
+    if retry_after_review and task.get("key") == "validate_brief":
+        run = await get_run(run_id)
+        pending = await list_pending_proposals(run["session_id"])
+        if any(item.get("field") == "brief" for item in pending):
+            raise RunConflict(
+                "Brief đang chờ duyệt trong Chat; hãy duyệt hoặc hủy đề xuất trước khi kiểm tra lại"
+            )
+        workspace = await get_workspace(run["session_id"])
+        from autopilot.capabilities import validate_brief_value
+        _, validation_errors = validate_brief_value(
+            workspace.get("artifacts", {}).get("brief", {}).get("value")
+        )
+        if validation_errors:
+            raise RunConflict(
+                "Brief vẫn chưa hợp lệ: " + "; ".join(validation_errors)
+            )
     if not retry_after_review:
         reconciliation = await reconcile_workspace_changes(run_id)
         if reconciliation.get("reason") == "side_effect_boundary":

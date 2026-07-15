@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-15.3"
+BUILD_VERSION = "2026-07-15.4"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -87,6 +87,8 @@ BUILD_FEATURES = [
     "switchable-mode-canvases",          # Guided/Autopilot tabs with durable desktop/mobile state
     "campaign-strategy-simulator",      # three deterministic, auditable strategy scenarios
     "autopilot-live-evidence",          # trace, retrieval, rerank, guard and idempotency evidence
+    "autopilot-approved-brief-gate",    # never persist or run against an unapproved chat brief
+    "autopilot-stable-run-trace",       # stable run-level trace instead of polling request IDs
     "privacy-security-hardening",       # redaction, deletion, prompt guard and bounded requests
     "provider-circuit-breaker",         # timeout, bounded retry, fail-fast and policy-gated fallback
     "namespaced-demo-rehearsal",        # safe fallback + reset/prewarm/rehearsal tooling

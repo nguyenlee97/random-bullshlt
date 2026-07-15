@@ -55,8 +55,12 @@ async def _normalize_brief(run: dict, workspace: dict) -> CapabilityResult:
     )
 
 
-async def _validate_brief(run: dict, workspace: dict) -> CapabilityResult:
-    brief = BriefData.model_validate(_artifact(workspace, "brief", {})).model_dump()
+def validate_brief_value(raw: Any) -> tuple[dict | None, list[str]]:
+    """Normalize and validate the canonical brief used by Autopilot."""
+    try:
+        brief = BriefData.model_validate(raw or {}).model_dump()
+    except Exception:
+        return None, ["Brief không đúng cấu trúc hoặc còn thiếu trường bắt buộc"]
     errors = []
     if not brief["brand"].strip():
         errors.append("Thiếu tên thương hiệu")
@@ -73,6 +77,11 @@ async def _validate_brief(run: dict, workspace: dict) -> CapabilityResult:
             errors.append("Ngày kết thúc đã ở quá khứ")
     except (TypeError, ValueError):
         errors.append("Ngày chạy phải có định dạng YYYY-MM-DD")
+    return brief, errors
+
+
+async def _validate_brief(run: dict, workspace: dict) -> CapabilityResult:
+    brief, errors = validate_brief_value(_artifact(workspace, "brief", {}))
     if errors:
         return CapabilityResult(
             value={"valid": False, "errors": errors, "review_action": "retry"},

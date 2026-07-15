@@ -119,7 +119,8 @@ test('campaign strategy simulator is integrated into Autopilot', async () => {
   assert.match(api, /selectAutopilotStrategy/)
   assert.match(api, /\/strategy`/)
   assert.match(panel, /Bằng chứng vận hành/)
-  assert.match(panel, /Trace ID:/)
+  assert.match(panel, /Run trace:/)
+  assert.match(panel, /run\.trace_id \|\| run\.run_id/)
   assert.match(panel, /RAG\/rerank/)
 })
 
@@ -155,15 +156,27 @@ test('workspace proposals have one durable decision lifecycle', async () => {
   assert.match(blocks, /agent:workspace_proposal_result/)
   assert.match(blocks, /Đã áp dụng vào workspace/)
   assert.match(blocks, /Đã bỏ qua đề xuất/)
-  assert.match(app, /status: persisted\?\.ok \? 'approved' : 'failed'/)
+  assert.match(blocks, /Đề xuất đã lỗi thời vì workspace có thay đổi mới/)
+  assert.match(app, /persisted\?\.conflict \? 'superseded' : 'failed'/)
   assert.match(api, /block\.type === 'workspace_proposal'/)
 })
 
 test('Autopilot keeps one stable event stream across parent renders', async () => {
   const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
   assert.match(panel, /workspaceRefreshRef = useRef\(onWorkspaceRefresh\)/)
-  assert.match(panel, /await workspaceRefreshRef\.current\?\.\(\)/)
-  assert.match(panel, /\}, \[run\?\.run_id\]\)/)
+  assert.match(panel, /workspaceRefreshRef\.current\?\.\(\) \|\| AgentAPI\.getWorkspace\(\)/)
+  assert.match(panel, /\}, \[loadPrerequisites, run\?\.run_id\]\)/)
+})
+
+test('Autopilot never persists an unapproved chat brief or retries it unchanged', async () => {
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  const api = await source('agent_frontend/src/api/agentApi.js')
+  assert.doesNotMatch(panel, /commitWorkspace\('brief', brief\)/)
+  assert.match(panel, /getPendingWorkspaceProposals/)
+  assert.match(panel, /Brief đang chờ duyệt/)
+  assert.match(panel, /Mở Chat để duyệt/)
+  assert.match(panel, /disabled=\{loading \|\| \(retryAction && !retryReady\)\}/)
+  assert.match(api, /workspace\/proposals\?session_id=/)
 })
 
 test('Autopilot hides stale review actions after a terminal run', async () => {

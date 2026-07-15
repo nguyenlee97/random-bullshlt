@@ -7,7 +7,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
 import { fmt } from '@/lib/utils'
-import { Users, TrendingUp, TrendingDown, Minus, Mail, CheckCircle2, RefreshCw, Pencil, X } from 'lucide-react'
+import { Users, TrendingUp, TrendingDown, Minus, Mail, CheckCircle2, RefreshCw, Pencil, X, AlertTriangle } from 'lucide-react'
 
 const ChartBlock = lazy(() => import('./ChartBlock'))
 
@@ -352,6 +352,10 @@ function WorkspaceProposalBlock({ block }) {
       ) : decision === 'rejected' ? (
         <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
           <X className="h-4 w-4" /> Đã bỏ qua đề xuất
+        </div>
+      ) : decision === 'superseded' ? (
+        <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+          <AlertTriangle className="h-4 w-4" /> Đề xuất đã lỗi thời vì workspace có thay đổi mới. Hãy tạo lại đề xuất nếu vẫn cần.
         </div>
       ) : decision === 'processing' ? (
         <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700" role="status">

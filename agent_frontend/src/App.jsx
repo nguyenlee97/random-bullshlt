@@ -861,10 +861,10 @@ export default function App() {
         log.workspace(`persistWorkspace(${originalField}) →`, persisted?.ok ? 'ok' : 'failed')
         if (e.detail.patch.proposal_id) {
           window.dispatchEvent(new CustomEvent('agent:workspace_proposal_result', {
-            detail: {
-              proposal_id: e.detail.patch.proposal_id,
-              status: persisted?.ok ? 'approved' : 'failed',
-            },
+              detail: {
+                proposal_id: e.detail.patch.proposal_id,
+                status: persisted?.ok ? 'approved' : persisted?.conflict ? 'superseded' : 'failed',
+              },
           }))
         }
         if (!persisted?.ok || target.step == null) return
@@ -1113,7 +1113,9 @@ export default function App() {
         `}>
           <AutopilotPanel
             brief={formState.brief}
+            canonicalWorkspace={canonicalWorkspace}
             onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
+            onOpenChat={() => setActiveTab('chat')}
             onOpenBrief={() => openGuidedStep(0)}
             onOpenCreative={() => openGuidedStep(2)}
             onStatusChange={setAutopilotSummary}

@@ -9,7 +9,7 @@ from autopilot.capabilities import (
 )
 from autopilot import worker
 from workspace.service import (
-    apply_mutation, get_task_context, get_workspace, set_preferences,
+    apply_mutation, create_proposal, get_task_context, get_workspace, set_preferences,
 )
 
 
@@ -60,6 +60,53 @@ async def test_run_start_is_idempotent_and_has_fixed_plan():
     ]
     assert first["tasks"][0]["status"] == "queued"
     assert all(task["status"] == "pending" for task in first["tasks"][1:])
+    assert first["trace_id"] == second["trace_id"]
+
+
+@pytest.mark.asyncio
+async def test_run_cannot_start_while_workspace_proposal_is_pending():
+    session_id = "pending-start"
+    workspace = await get_workspace(session_id)
+    await create_proposal(
+        session_id,
+        "brief",
+        BRIEF,
+        base_revision=workspace["revision"],
+        actor="test",
+        reason="await explicit approval",
+    )
+
+    with pytest.raises(service.RunConflict, match="duyệt hoặc hủy"):
+        await service.create_run(session_id, idempotency_key="must-not-start")
+
+    unchanged = await get_workspace(session_id)
+    assert unchanged["revision"] == workspace["revision"]
+    assert unchanged["artifacts"]["brief"]["value"] is None
+
+
+@pytest.mark.asyncio
+async def test_validate_brief_retry_requires_an_actual_canonical_fix():
+    session_id = "invalid-retry"
+    workspace = await get_workspace(session_id)
+    invalid_brief = {**BRIEF, "endDate": "2025-08-15"}
+    await apply_mutation(
+        session_id, "brief", invalid_brief, base_revision=workspace["revision"],
+        actor="test", idempotency_key="invalid-retry:brief",
+    )
+    run = await service.create_run(session_id, idempotency_key="invalid-retry:run")
+    task_id = next(
+        task["task_id"] for task in run["tasks"] if task["key"] == "validate_brief"
+    )
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result={"valid": False, "errors": ["past"], "review_action": "retry"},
+    )
+
+    with pytest.raises(service.RunConflict, match="Brief vẫn chưa hợp lệ"):
+        await service.review_task(run["run_id"], task_id, approved=True)
+
+    unchanged = await service.get_run(run["run_id"])
+    assert next(task for task in unchanged["tasks"] if task["task_id"] == task_id)["status"] == "waiting_review"
 
 
 @pytest.mark.asyncio

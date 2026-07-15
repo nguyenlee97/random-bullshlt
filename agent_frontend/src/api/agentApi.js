@@ -1233,6 +1233,21 @@ export const AgentAPI = {
     }
   },
 
+  async getPendingWorkspaceProposals() {
+    try {
+      const res = await agentFetch(
+        `${AGENT_URL}/api/agent/workspace/proposals?session_id=${encodeURIComponent(SESSION_ID)}`,
+        { signal: AbortSignal.timeout(5000) },
+      )
+      if (!res.ok) return []
+      const data = await res.json()
+      return Array.isArray(data?.proposals) ? data.proposals : []
+    } catch (e) {
+      console.warn('[getPendingWorkspaceProposals] failed:', e.message)
+      return []
+    }
+  },
+
   async setWorkspacePreferences(experienceMode, approvalPolicy = null) {
     try {
       if (WORKSPACE_REVISION == null) await this.getWorkspace()

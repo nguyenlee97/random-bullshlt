@@ -446,6 +446,12 @@ async def workspace_create_proposal(request: _WorkspaceProposalRequest):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@agent_router.get("/workspace/proposals")
+async def workspace_list_pending_proposals(session_id: str = "default"):
+    from workspace.service import list_pending_proposals
+    return {"proposals": await list_pending_proposals(session_id)}
+
+
 @agent_router.post("/workspace/proposals/{proposal_id}/approve")
 async def workspace_approve_proposal(proposal_id: str, request: _ProposalDecisionRequest):
     from workspace.service import WorkspaceConflict, approve_proposal

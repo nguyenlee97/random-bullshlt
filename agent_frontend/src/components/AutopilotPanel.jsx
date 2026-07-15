@@ -54,25 +54,74 @@ const evidenceText = evidence => {
   return evidence.type?.replaceAll('_', ' ') || 'evidence'
 }
 
-export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenBrief, onOpenCreative, onStatusChange }) {
+const localToday = () => {
+  const now = new Date()
+  const offset = now.getTimezoneOffset() * 60_000
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10)
+}
+
+const validateBrief = brief => {
+  const errors = []
+  if (!String(brief?.brand || '').trim()) errors.push('thiếu thương hiệu')
+  if (!['awareness', 'consideration', 'conversion', 'retention'].includes(brief?.objective)) {
+    errors.push('mục tiêu chiến dịch không hợp lệ')
+  }
+  if (!(Number(brief?.budget) > 0)) errors.push('ngân sách phải lớn hơn 0')
+  if (!brief?.startDate) errors.push('thiếu ngày bắt đầu')
+  if (!brief?.endDate) errors.push('thiếu ngày kết thúc')
+  if (brief?.startDate && brief?.endDate && brief.startDate > brief.endDate) {
+    errors.push('ngày bắt đầu phải trước ngày kết thúc')
+  }
+  if (brief?.endDate && brief.endDate < localToday()) errors.push('ngày kết thúc đã ở quá khứ')
+  return errors
+}
+
+export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceRefresh, onOpenChat, onOpenBrief, onOpenCreative, onStatusChange }) {
   const [policy, setPolicy] = useState('critical_only')
   const [run, setRun] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [workspaceSnapshot, setWorkspaceSnapshot] = useState(canonicalWorkspace)
+  const [pendingProposals, setPendingProposals] = useState([])
+  const [prerequisitesLoading, setPrerequisitesLoading] = useState(true)
   const workspaceRefreshRef = useRef(onWorkspaceRefresh)
 
   useEffect(() => {
     workspaceRefreshRef.current = onWorkspaceRefresh
   }, [onWorkspaceRefresh])
 
+  useEffect(() => {
+    if (canonicalWorkspace) setWorkspaceSnapshot(canonicalWorkspace)
+  }, [canonicalWorkspace])
+
+  const loadPrerequisites = useCallback(async () => {
+    const [workspace, proposals] = await Promise.all([
+      workspaceRefreshRef.current?.() || AgentAPI.getWorkspace(),
+      AgentAPI.getPendingWorkspaceProposals(),
+    ])
+    if (workspace) setWorkspaceSnapshot(workspace)
+    setPendingProposals(proposals)
+    setPrerequisitesLoading(false)
+    return { workspace, proposals }
+  }, [])
+
+  useEffect(() => {
+    loadPrerequisites()
+    if (run?.run_id) return undefined
+    const timer = setInterval(loadPrerequisites, 3000)
+    return () => clearInterval(timer)
+  }, [loadPrerequisites, run?.run_id])
+
   const refresh = useCallback(async () => {
     if (!run?.run_id) return
-    const current = await AgentAPI.getAutopilotRun(run.run_id)
+    const [current] = await Promise.all([
+      AgentAPI.getAutopilotRun(run.run_id),
+      loadPrerequisites(),
+    ])
     if (current) {
       setRun(current)
-      await workspaceRefreshRef.current?.()
     }
-  }, [run?.run_id])
+  }, [loadPrerequisites, run?.run_id])
 
   useEffect(() => {
     if (!run?.run_id || ['completed', 'cancelled', 'failed'].includes(run.status)) return
@@ -85,8 +134,16 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenBrief,
     setLoading(true)
     setError('')
     try {
-      const committed = await AgentAPI.commitWorkspace('brief', brief)
-      if (!committed?.ok) throw new Error('Không thể lưu brief trước khi chạy Autopilot.')
+      const { workspace, proposals } = await loadPrerequisites()
+      if (proposals.length) {
+        const fields = [...new Set(proposals.map(item => item.field || 'workspace'))]
+        throw new Error(`Hãy duyệt hoặc hủy đề xuất đang chờ trong Chat trước: ${fields.join(', ')}.`)
+      }
+      const canonicalBrief = workspace?.artifacts?.brief?.value
+      const validationErrors = validateBrief(canonicalBrief)
+      if (!canonicalBrief || validationErrors.length) {
+        throw new Error(`Brief đã duyệt chưa hợp lệ: ${validationErrors.join(', ')}.`)
+      }
       const created = await AgentAPI.startAutopilot(policy)
       if (!created?.run_id) throw new Error(created?.detail || 'Không thể khởi động Campaign Autopilot.')
       setRun(created)
@@ -113,7 +170,6 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenBrief,
 
   const review = async (task, approved) => {
     if (!run?.run_id || ['completed', 'cancelled', 'failed'].includes(run.status)) return
-    if (task.result?.reason === 'missing_creative') onOpenCreative?.()
     setLoading(true)
     setError('')
     try {
@@ -159,13 +215,20 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenBrief,
       key: `${task.task_id}:${index}`, task: TASK_LABELS[task.key] || task.key,
       evidence,
     }))), [run])
-  const missingBriefFields = useMemo(() => [
-    !String(brief?.brand || '').trim() && 'thương hiệu',
-    !(Number(brief?.budget) > 0) && 'ngân sách',
-    !brief?.startDate && 'ngày bắt đầu',
-    !brief?.endDate && 'ngày kết thúc',
-  ].filter(Boolean), [brief])
-  const briefReady = missingBriefFields.length === 0
+  const canonicalBrief = workspaceSnapshot?.artifacts?.brief?.value || null
+  const pendingBrief = pendingProposals.some(item => item.artifact === 'brief' || item.field === 'brief')
+  const pendingFields = [...new Set(pendingProposals.map(item => item.field || 'workspace'))]
+  const displayBrief = canonicalBrief || brief || {}
+  const briefErrors = useMemo(() => validateBrief(canonicalBrief), [canonicalBrief])
+  const briefReady = Boolean(canonicalBrief) && briefErrors.length === 0 && !pendingProposals.length && !prerequisitesLoading
+  const retryAction = waiting?.result?.review_action === 'retry'
+  const briefRetry = retryAction && waiting?.key === 'validate_brief'
+  const retryReady = !briefRetry || (Boolean(canonicalBrief) && briefErrors.length === 0 && !pendingBrief)
+  const waitingMessage = waiting?.result?.message
+    || (waiting?.result?.errors || []).join(' · ')
+    || (waiting?.key === 'launch_approval'
+      ? 'Kiểm tra bản order cuối cùng trước khi tạo chiến dịch.'
+      : 'Kiểm tra bằng chứng và xác nhận để tiếp tục.')
 
   useEffect(() => {
     onStatusChange?.(run ? {
@@ -217,15 +280,16 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenBrief,
               <div className="flex items-center gap-2">
                 {briefReady ? <Check className="h-4 w-4 text-green-700" /> : <AlertTriangle className="h-4 w-4 text-amber-700" />}
                 <p className={`text-xs font-black uppercase tracking-wide ${briefReady ? 'text-green-800' : 'text-amber-900'}`}>
-                  {briefReady ? 'Brief sẵn sàng' : 'Brief chưa hoàn tất'}
+                  {pendingBrief ? 'Brief đang chờ duyệt' : briefReady ? 'Brief sẵn sàng' : 'Brief chưa hợp lệ'}
                 </p>
               </div>
               <dl className="mt-3 space-y-2 text-xs">
-                <div><dt className="text-slate-500">Thương hiệu</dt><dd className="font-bold text-slate-800">{brief?.brand || 'Chưa có'}</dd></div>
-                <div><dt className="text-slate-500">Ngân sách</dt><dd className="font-bold text-slate-800">{Number(brief?.budget) > 0 ? `${brief.budget} triệu đồng` : 'Chưa có'}</dd></div>
-                <div><dt className="text-slate-500">Thời gian</dt><dd className="font-bold text-slate-800">{brief?.startDate && brief?.endDate ? `${brief.startDate} → ${brief.endDate}` : 'Chưa có'}</dd></div>
+                <div><dt className="text-slate-500">Thương hiệu</dt><dd className="font-bold text-slate-800">{displayBrief?.brand || 'Chưa có'}</dd></div>
+                <div><dt className="text-slate-500">Ngân sách</dt><dd className="font-bold text-slate-800">{Number(displayBrief?.budget) > 0 ? `${displayBrief.budget} triệu đồng` : 'Chưa có'}</dd></div>
+                <div><dt className="text-slate-500">Thời gian</dt><dd className="font-bold text-slate-800">{displayBrief?.startDate && displayBrief?.endDate ? `${displayBrief.startDate} → ${displayBrief.endDate}` : 'Chưa có'}</dd></div>
               </dl>
-              {!briefReady && <p className="mt-3 text-[11px] leading-5 text-amber-800">Còn thiếu: {missingBriefFields.join(', ')}. Bạn có thể cung cấp brief qua chat hoặc mở form để chỉnh trực tiếp.</p>}
+              {pendingProposals.length > 0 && <p className="mt-3 text-[11px] leading-5 text-amber-800">Đang chờ duyệt hoặc hủy đề xuất: {pendingFields.join(', ')}. Autopilot sẽ không tự ghi các thay đổi này.</p>}
+              {!pendingProposals.length && !briefReady && <p className="mt-3 text-[11px] leading-5 text-amber-800">Cần xử lý: {briefErrors.join(', ')}.</p>}
               <button type="button" onClick={onOpenBrief} className="mt-4 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-brand-300 hover:text-brand-700">
                 {briefReady ? 'Xem hoặc chỉnh brief' : 'Mở form Brief'}
               </button>
@@ -237,7 +301,7 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenBrief,
               <p className="text-sm font-bold text-slate-900">Sẵn sàng để Agent lập kế hoạch?</p>
               <p className="mt-1 text-xs text-slate-500">Agent luôn dừng trước hành động tạo order để bạn xác nhận.</p>
             </div>
-            <button type="button" disabled={!briefReady || loading} onClick={start}
+            <button type="button" disabled={!briefReady || loading || prerequisitesLoading} onClick={start}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-500 px-6 text-sm font-bold text-white shadow-sm hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
               Bắt đầu Autopilot
@@ -307,7 +371,7 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenBrief,
               <span className="font-normal text-slate-500">trace · RAG/rerank · guard · idempotency</span>
             </summary>
             <div className="mt-2 space-y-1.5 text-[11px]">
-              <p className="rounded-lg bg-white px-2 py-1.5 text-slate-600"><span className="font-bold text-slate-800">Trace ID:</span> {run.request_id || 'sẽ xuất hiện sau lần đồng bộ kế tiếp'}</p>
+              <p className="rounded-lg bg-white px-2 py-1.5 text-slate-600"><span className="font-bold text-slate-800">Run trace:</span> {run.trace_id || run.run_id}</p>
               {evidenceRows.length ? evidenceRows.map(row => (
                 <p key={row.key} className="rounded-lg bg-white px-2 py-1.5 text-slate-600">
                   <span className="font-bold text-slate-800">{row.task}:</span> {evidenceText(row.evidence)}
@@ -321,13 +385,20 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenBrief,
               <ShieldCheck className="h-5 w-5 shrink-0 text-amber-700" />
               <div className="flex-1">
                 <p className="text-xs font-bold text-amber-900">Cần bạn review: {TASK_LABELS[waiting.key]}</p>
-                <p className="mt-0.5 text-xs text-amber-800">{waiting.result?.message || (waiting.key === 'launch_approval' ? 'Kiểm tra bản order cuối cùng trước khi tạo chiến dịch.' : 'Kiểm tra bằng chứng và xác nhận để tiếp tục.')}</p>
+                <p className="mt-0.5 text-xs text-amber-800">{waitingMessage}</p>
+                {briefRetry && !retryReady && (
+                  <p className="mt-1 text-[11px] font-semibold text-amber-900">
+                    {pendingBrief ? 'Duyệt hoặc hủy đề xuất Brief trong Chat trước.' : `Sửa Brief trước khi kiểm tra lại: ${briefErrors.join(', ')}.`}
+                  </p>
+                )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                {briefRetry && pendingBrief && <button onClick={onOpenChat} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Chat để duyệt</button>}
+                {briefRetry && !pendingBrief && !retryReady && <button onClick={onOpenBrief} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Sửa Brief</button>}
                 {waiting.result?.reason === 'missing_creative' && <button onClick={onOpenCreative} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Creative</button>}
                 <button onClick={() => review(waiting, false)} disabled={loading} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">Từ chối</button>
-                <button onClick={() => review(waiting, true)} disabled={loading} className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}>
-                  {waiting.result?.review_action === 'retry' ? 'Đã xử lý, thử lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}
+                <button onClick={() => review(waiting, true)} disabled={loading || (retryAction && !retryReady)} className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}>
+                  {retryAction ? 'Kiểm tra lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}
                 </button>
               </div>
             </div>
