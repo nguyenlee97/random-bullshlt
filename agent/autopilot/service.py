@@ -20,6 +20,25 @@ APPROVAL_POLICIES = {
 }
 RUN_TERMINAL = {"completed", "failed", "cancelled"}
 TASK_TERMINAL = {"succeeded", "failed", "cancelled", "skipped"}
+AUTOPILOT_WORKSPACE_ACTORS = {"autopilot_worker", "autopilot_review"}
+
+# Workspace artifacts do not map one-to-one to plan outputs. Brief and creative
+# are user-owned inputs, while an externally corrected order must be verified
+# rather than created again. These roots make replanning explicit and auditable.
+ARTIFACT_REPLAN_ROOT = {
+    "brief": "normalize_brief",
+    "strategy": "generate_strategy",
+    "audience": "retrieve_audience",
+    "targeting": "derive_targeting",
+    "creative": "analyze_creatives",
+    "creative_verdict": "analyze_creatives",
+    "placements": "rank_placements",
+    "assignments": "assign_creatives",
+    "forecast": "forecast",
+    "order_draft": "build_order_draft",
+    "order": "verify_order",
+    "report": "create_setup_report",
+}
 
 # A fixed capability graph is safer than allowing a model to invent tools.
 # The strategy planner may parameterize these tasks in a later slice.
@@ -256,6 +275,18 @@ async def resume_run(run_id: str, actor: str = "campaign_operator") -> dict:
     run = await get_run(run_id)
     if run["status"] != "paused":
         raise RunConflict("only a paused run can be resumed")
+    if run.get("replan_blocked"):
+        raise RunConflict(
+            "run crossed the order side-effect boundary; start a new run to apply edits"
+        )
+    reconciliation = await reconcile_workspace_changes(run_id)
+    if (
+        reconciliation.get("reason") == "side_effect_boundary"
+        or reconciliation["run"].get("replan_blocked")
+    ):
+        raise RunConflict(
+            "run crossed the order side-effect boundary; start a new run to apply edits"
+        )
     await _set_run(run_id, {"status": "queued", "pause_requested": False,
                             "resumed_by": actor})
     await _emit(run_id, "run_resumed", {"actor": actor})
@@ -323,6 +354,166 @@ async def _queue_ready_dependents(run_id: str) -> None:
             _mem_tasks[task_id].update(status="queued", updated_at=now)
 
 
+def _external_workspace_changes(workspace: dict, after_revision: int) -> list[str]:
+    changed: set[str] = set()
+    for event in workspace.get("events", []):
+        if int(event.get("revision", 0)) <= after_revision:
+            continue
+        artifact = event.get("artifact")
+        if artifact and event.get("actor") not in AUTOPILOT_WORKSPACE_ACTORS:
+            changed.add(artifact)
+    # The bounded event history is normally sufficient. Artifact metadata is a
+    # safe fallback if a long-running workspace has already truncated events.
+    for artifact, item in workspace.get("artifacts", {}).items():
+        if (
+            int((item or {}).get("revision", 0)) > after_revision
+            and (item or {}).get("updated_by") not in AUTOPILOT_WORKSPACE_ACTORS
+        ):
+            changed.add(artifact)
+    return [name for name in ARTIFACT_REPLAN_ROOT if name in changed]
+
+
+def _task_descendants(root_keys: set[str]) -> set[str]:
+    descendants = set(root_keys)
+    changed = True
+    while changed:
+        changed = False
+        for spec in STANDARD_PLAN:
+            if spec["key"] in descendants:
+                continue
+            if any(dependency in descendants for dependency in spec["deps"]):
+                descendants.add(spec["key"])
+                changed = True
+    return descendants
+
+
+async def reconcile_workspace_changes(run_id: str) -> dict:
+    """Replan an active run after external canonical-workspace edits.
+
+    Only affected tasks are reset. A task that is currently running is allowed
+    to reach its revision-checked commit boundary before reconciliation. Once
+    order creation succeeded, edits block this run instead of replaying the
+    external side effect.
+    """
+    run = await get_run(run_id)
+    if run["status"] in RUN_TERMINAL:
+        return {"changed": False, "reason": "terminal", "run": run}
+    workspace = await get_workspace(run["session_id"])
+    previous_revision = int(run.get("workspace_revision", 0))
+    if workspace["revision"] <= previous_revision:
+        return {"changed": False, "reason": "current", "run": run}
+    changed_artifacts = _external_workspace_changes(workspace, previous_revision)
+    if not changed_artifacts:
+        await _set_run(run_id, {"workspace_revision": workspace["revision"]})
+        return {"changed": False, "reason": "internal_only", "run": await get_run(run_id)}
+
+    root_keys = {
+        ARTIFACT_REPLAN_ROOT[artifact]
+        for artifact in changed_artifacts
+        if artifact in ARTIFACT_REPLAN_ROOT
+    }
+    affected_keys = _task_descendants(root_keys)
+    affected = [task for task in run["tasks"] if task["key"] in affected_keys]
+    running = [task["task_id"] for task in affected if task["status"] == "running"]
+    if running:
+        await _set_run(run_id, {"replan_pending": {
+            "workspace_revision": workspace["revision"],
+            "changed_artifacts": changed_artifacts,
+            "running_tasks": running,
+        }})
+        return {"changed": False, "reason": "running_task", "run": await get_run(run_id)}
+
+    created = next((task for task in run["tasks"] if task["key"] == "create_order"), None)
+    if created and created["status"] == "succeeded" and "create_order" in affected_keys:
+        blocked = {
+            "reason": "order_already_created",
+            "message": "Workspace changed after order creation; start a new run to apply edits.",
+            "workspace_revision": workspace["revision"],
+            "changed_artifacts": changed_artifacts,
+        }
+        await _set_run(run_id, {
+            "status": "paused", "pause_requested": True,
+            "replan_blocked": blocked, "workspace_revision": workspace["revision"],
+        })
+        await _emit(run_id, "run_replan_blocked", blocked)
+        return {"changed": False, "reason": "side_effect_boundary",
+                "run": await get_run(run_id)}
+
+    statuses = {task["task_id"]: task["status"] for task in run["tasks"]}
+    affected_ids = {task["task_id"] for task in affected}
+    now = _now()
+    reset_docs: list[tuple[str, dict]] = []
+    for task in affected:
+        external_dependencies_ready = all(
+            dependency not in affected_ids and statuses.get(dependency) == "succeeded"
+            for dependency in task["dependencies"]
+        )
+        status = "queued" if not task["dependencies"] or external_dependencies_ready else "pending"
+        reset_docs.append((task["task_id"], {
+            "status": status, "attempts": 0, "lease_owner": None,
+            "lease_expires_at": None, "result": None, "evidence": [], "error": None,
+            "pending_artifact": None, "review_decision": None,
+            "replanned_from_status": task["status"],
+            "replan_workspace_revision": workspace["revision"], "updated_at": now,
+        }))
+
+    _, tasks, _ = await _collections()
+    if tasks is not None:
+        for task_id, updates in reset_docs:
+            await tasks.update_one(
+                {"_id": task_id},
+                {"$set": updates, "$unset": {"completed_at": "", "started_at": ""}},
+            )
+    else:
+        for task_id, updates in reset_docs:
+            _mem_tasks[task_id].update(updates)
+            _mem_tasks[task_id].pop("completed_at", None)
+            _mem_tasks[task_id].pop("started_at", None)
+
+    plan_revision = int(run.get("plan_revision", 1)) + 1
+    unaffected_review = any(
+        task["status"] == "waiting_review" and task["task_id"] not in affected_ids
+        for task in run["tasks"]
+    )
+    next_status = (
+        "paused" if run["status"] == "paused"
+        else "waiting_review" if unaffected_review
+        else "queued"
+    )
+    await _set_run(run_id, {
+        "status": next_status, "current_task_id": None,
+        "workspace_revision": workspace["revision"], "plan_revision": plan_revision,
+        "replan_pending": None, "last_replan": {
+            "from_workspace_revision": previous_revision,
+            "to_workspace_revision": workspace["revision"],
+            "changed_artifacts": changed_artifacts,
+            "affected_tasks": [task["key"] for task in affected],
+            "created_at": now,
+        },
+    })
+    await _emit(run_id, "run_replanned", {
+        "plan_revision": plan_revision,
+        "from_workspace_revision": previous_revision,
+        "to_workspace_revision": workspace["revision"],
+        "changed_artifacts": changed_artifacts,
+        "affected_tasks": [task["key"] for task in affected],
+    })
+    return {"changed": True, "reason": "workspace_changed", "run": await get_run(run_id)}
+
+
+async def reconcile_active_runs() -> int:
+    runs, _, _ = await _collections()
+    if runs is not None:
+        docs = await runs.find({"status": {"$nin": list(RUN_TERMINAL)}}).to_list(None)
+    else:
+        docs = [run for run in _mem_runs.values() if run["status"] not in RUN_TERMINAL]
+    count = 0
+    for run in docs:
+        result = await reconcile_workspace_changes(run["run_id"])
+        count += int(bool(result.get("changed")))
+    return count
+
+
 async def claim_next_task(worker_id: str, lease_seconds: int | None = None) -> dict | None:
     """Claim one queued task. Expired leases are recovered before selection."""
     await recover_expired_leases()
@@ -338,6 +529,9 @@ async def claim_next_task(worker_id: str, lease_seconds: int | None = None) -> d
             key=lambda task: task["created_at"],
         )[:20]
     for candidate in candidates:
+        reconciliation = await reconcile_workspace_changes(candidate["run_id"])
+        if reconciliation.get("changed"):
+            continue
         run = await get_run(candidate["run_id"])
         if run["status"] in RUN_TERMINAL | {"paused", "waiting_review"}:
             continue
@@ -441,11 +635,27 @@ async def review_task(
     if not task or task.get("run_id") != run_id:
         raise KeyError(f"task not found: {task_id}")
     if task["status"] != "waiting_review":
+        if (
+            approved
+            and task["status"] in {"queued", "running"}
+            and task.get("replanned_from_status") == "waiting_review"
+        ):
+            return await get_run(run_id)
         raise RunConflict("task is not waiting for review")
     now = _now()
     retry_after_review = bool(
         approved and (task.get("result") or {}).get("review_action") == "retry"
     )
+    if not retry_after_review:
+        reconciliation = await reconcile_workspace_changes(run_id)
+        if reconciliation.get("reason") == "side_effect_boundary":
+            raise RunConflict(
+                "workspace changed; this review was superseded by a replanned task"
+            )
+        task = await tasks.find_one({"_id": task_id, "run_id": run_id}) if tasks is not None \
+            else _mem_tasks.get(task_id)
+        if not task or task["status"] != "waiting_review":
+            raise RunConflict("task is no longer waiting for review")
     if approved and task.get("pending_artifact") and not retry_after_review:
         from workspace.service import commit_artifact_result
         pending = task["pending_artifact"]
@@ -475,6 +685,8 @@ async def review_task(
     if approved and not retry_after_review:
         await _queue_ready_dependents(run_id)
     await _refresh_run_status(run_id)
+    if retry_after_review:
+        await reconcile_workspace_changes(run_id)
     return await get_run(run_id)
 
 

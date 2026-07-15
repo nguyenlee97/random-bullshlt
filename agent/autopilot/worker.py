@@ -13,6 +13,7 @@ from autopilot.service import (
     complete_task,
     fail_task,
     get_run,
+    reconcile_active_runs,
 )
 from config import config
 from workspace.service import commit_artifact_result, get_task_context
@@ -69,6 +70,12 @@ async def _process(task: dict) -> None:
 async def _loop() -> None:
     worker_id = f"apw_{os.getpid()}_{uuid.uuid4().hex[:8]}"
     while _stop_event and not _stop_event.is_set():
+        try:
+            await reconcile_active_runs()
+        except Exception as exc:
+            await alog("autopilot", "error", {
+                "handler": "autopilot_reconcile", "error": str(exc)[:500],
+            })
         task = await claim_next_task(worker_id)
         if task is None:
             try:

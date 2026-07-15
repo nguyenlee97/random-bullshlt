@@ -22,6 +22,13 @@ const TASK_LABELS = {
   create_setup_report: 'Tạo báo cáo setup',
 }
 
+const ARTIFACT_LABELS = {
+  brief: 'brief', strategy: 'chiến lược', audience: 'audience',
+  targeting: 'targeting', creative: 'creative', creative_verdict: 'creative verdict',
+  placements: 'placements', assignments: 'phân bổ creative', forecast: 'dự báo',
+  order_draft: 'order draft', order: 'order', report: 'báo cáo',
+}
+
 const taskIcon = status => {
   if (status === 'succeeded') return <Check className="h-3 w-3" />
   if (status === 'running') return <Loader2 className="h-3 w-3 animate-spin" />
@@ -151,6 +158,7 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-brand-500" />
               <span className="text-sm font-bold text-slate-900">Campaign Autopilot</span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Plan v{run.plan_revision || 1}</span>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${run.status === 'waiting_review' ? 'bg-amber-100 text-amber-800' : run.status === 'failed' ? 'bg-red-100 text-red-700' : run.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-brand-50 text-brand-700'}`}>{run.status}</span>
             </div>
             <div className="h-1.5 min-w-[130px] flex-1 overflow-hidden rounded-full bg-slate-100">
@@ -158,7 +166,7 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
             </div>
             <span className="text-xs font-semibold text-slate-500">{progress}%</span>
             <div className="flex gap-1.5">
-              {run.status === 'paused' ? (
+              {run.status === 'paused' && !run.replan_blocked ? (
                 <button onClick={() => act('resume')} disabled={loading} className="rounded-lg border border-brand-200 p-2 text-brand-600 hover:bg-brand-50" title="Tiếp tục"><Play className="h-3.5 w-3.5" /></button>
               ) : !['completed', 'cancelled', 'failed'].includes(run.status) && (
                 <button onClick={() => act('pause')} disabled={loading} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" title="Tạm dừng"><Pause className="h-3.5 w-3.5" /></button>
@@ -176,6 +184,20 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
               </div>
             ))}
           </div>
+
+          {run.replan_blocked && (
+            <div className="mt-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+              <p className="font-bold">Run đã dừng an toàn sau khi order được tạo.</p>
+              <p className="mt-0.5">Workspace có thay đổi mới. Hãy chọn “Cuộc trò chuyện mới” để tạo một run khác; Advertising Agent sẽ không tự tạo lại order.</p>
+            </div>
+          )}
+
+          {run.last_replan && !run.replan_blocked && (
+            <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
+              <span className="font-bold">Kế hoạch đã được tính lại.</span>{' '}
+              Thay đổi ở {run.last_replan.changed_artifacts.map(item => ARTIFACT_LABELS[item] || item).join(', ')} ảnh hưởng {run.last_replan.affected_tasks.length} tác vụ; các kết quả không liên quan được giữ nguyên.
+            </div>
+          )}
 
           {waiting && (
             <div className="mt-3 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 sm:flex-row sm:items-center">

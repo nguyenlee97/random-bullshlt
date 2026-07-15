@@ -352,10 +352,12 @@ async def _run_order_guard(run: dict, workspace: dict) -> CapabilityResult:
 
 
 async def _launch_approval(run: dict, workspace: dict) -> CapabilityResult:
-    draft = _artifact(workspace, "order_draft", {})
+    draft_item = workspace.get("artifacts", {}).get("order_draft", {})
+    draft = draft_item.get("value") or {}
     payload = draft.get("payload", {}) if isinstance(draft, dict) else {}
     return CapabilityResult(
         value={"ready": True, "requires_explicit_approval": True,
+               "order_draft_revision": int(draft_item.get("revision", 0)),
                "summary": {"brand": payload.get("brand"),
                            "budget": payload.get("budget"),
                            "placements": payload.get("placements", [])}},
@@ -367,7 +369,18 @@ async def _launch_approval(run: dict, workspace: dict) -> CapabilityResult:
 async def _create_order(run: dict, workspace: dict) -> CapabilityResult:
     from tools.order_api import create_order
     from validation.order_guard import guard_order
-    draft = _artifact(workspace, "order_draft", {})
+    draft_item = workspace.get("artifacts", {}).get("order_draft", {})
+    if draft_item.get("status") != "approved":
+        raise RuntimeError("order draft is stale or missing; replan before launch")
+    launch = next(
+        (task for task in run.get("tasks", []) if task.get("key") == "launch_approval"),
+        {},
+    )
+    approved_revision = int((launch.get("result") or {}).get("order_draft_revision", -1))
+    current_revision = int(draft_item.get("revision", 0))
+    if launch.get("status") != "succeeded" or approved_revision != current_revision:
+        raise RuntimeError("launch approval does not match the current order draft")
+    draft = draft_item.get("value") or {}
     payload = draft.get("payload", {}) if isinstance(draft, dict) else {}
     # Recheck live catalogs/conflicts immediately before the side effect.
     await guard_order(payload, await get_or_create_session(run["session_id"]))

@@ -3,7 +3,7 @@ from datetime import timedelta
 import pytest
 
 from autopilot import service
-from autopilot.capabilities import CapabilityResult
+from autopilot.capabilities import CapabilityResult, _create_order
 from autopilot import worker
 from workspace.service import apply_mutation, get_workspace, set_preferences
 
@@ -173,3 +173,178 @@ async def test_reviewed_artifact_is_not_committed_before_approval(monkeypatch):
     assert reviewed["status"] == "queued"
     assert after["artifacts"]["strategy"]["status"] == "approved"
     assert after["artifacts"]["strategy"]["value"] == {"selected": "quality_first"}
+
+
+def _mark_tasks(run_id: str, statuses: dict[str, str]) -> None:
+    for task in service._mem_tasks.values():
+        if task["run_id"] == run_id and task["key"] in statuses:
+            task.update(
+                status=statuses[task["key"]], result={"old": task["key"]},
+                evidence=[{"old": True}], attempts=1,
+            )
+
+
+@pytest.mark.asyncio
+async def test_brief_edit_replans_entire_active_run_from_validation_boundary():
+    await _seed("replan-brief")
+    run = await service.create_run(
+        "replan-brief", approval_policy="auto_build_draft", idempotency_key="replan"
+    )
+    _mark_tasks(run["run_id"], {
+        "normalize_brief": "succeeded", "validate_brief": "succeeded",
+        "generate_strategy": "succeeded", "retrieve_audience": "succeeded",
+        "derive_targeting": "queued",
+    })
+    workspace = await get_workspace("replan-brief")
+    changed = {**BRIEF, "budget": 55}
+    await apply_mutation(
+        "replan-brief", "brief", changed, base_revision=workspace["revision"],
+        actor="campaign_operator", idempotency_key="edit-budget",
+    )
+
+    result = await service.reconcile_workspace_changes(run["run_id"])
+    replanned = result["run"]
+    by_key = {task["key"]: task for task in replanned["tasks"]}
+    assert result["changed"] is True
+    assert replanned["plan_revision"] == 2
+    assert replanned["last_replan"]["changed_artifacts"] == ["brief"]
+    assert by_key["normalize_brief"]["status"] == "queued"
+    assert by_key["validate_brief"]["status"] == "pending"
+    assert by_key["generate_strategy"]["status"] == "pending"
+    assert by_key["retrieve_audience"]["result"] is None
+
+
+@pytest.mark.asyncio
+async def test_creative_edit_replans_only_creative_dependent_branch():
+    await _seed("replan-creative")
+    run = await service.create_run(
+        "replan-creative", approval_policy="auto_build_draft",
+        idempotency_key="replan-creative",
+    )
+    _mark_tasks(run["run_id"], {
+        "normalize_brief": "succeeded", "validate_brief": "succeeded",
+        "generate_strategy": "succeeded", "retrieve_audience": "succeeded",
+        "derive_targeting": "succeeded", "analyze_creatives": "succeeded",
+        "rank_placements": "succeeded", "assign_creatives": "succeeded",
+        "forecast": "queued",
+    })
+    workspace = await get_workspace("replan-creative")
+    await apply_mutation(
+        "replan-creative", "creative", {"files": [{"url": "https://x/new.png"}]},
+        base_revision=workspace["revision"], actor="campaign_operator",
+        idempotency_key="new-creative",
+    )
+
+    result = await service.reconcile_workspace_changes(run["run_id"])
+    by_key = {task["key"]: task for task in result["run"]["tasks"]}
+    assert result["changed"] is True
+    assert by_key["generate_strategy"]["status"] == "succeeded"
+    assert by_key["retrieve_audience"]["status"] == "succeeded"
+    assert by_key["derive_targeting"]["status"] == "succeeded"
+    assert by_key["rank_placements"]["status"] == "succeeded"
+    assert by_key["analyze_creatives"]["status"] == "queued"
+    assert by_key["assign_creatives"]["status"] == "pending"
+    assert by_key["forecast"]["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_workspace_edit_supersedes_stale_launch_review():
+    await _seed("replan-launch")
+    run = await service.create_run("replan-launch", idempotency_key="launch")
+    statuses = {spec["key"]: "succeeded" for spec in service.STANDARD_PLAN}
+    statuses.update({
+        "launch_approval": "waiting_review", "create_order": "pending",
+        "verify_order": "pending", "create_setup_report": "pending",
+    })
+    _mark_tasks(run["run_id"], statuses)
+    workspace = await get_workspace("replan-launch")
+    await apply_mutation(
+        "replan-launch", "brief", {**BRIEF, "budget": 60},
+        base_revision=workspace["revision"], actor="campaign_operator",
+        idempotency_key="launch-edit",
+    )
+
+    launch_id = f"{run['run_id']}:launch_approval"
+    with pytest.raises(service.RunConflict, match="no longer waiting"):
+        await service.review_task(run["run_id"], launch_id, approved=True)
+    latest = await service.get_run(run["run_id"])
+    by_key = {task["key"]: task for task in latest["tasks"]}
+    assert by_key["launch_approval"]["status"] == "pending"
+    assert by_key["create_order"]["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_edit_after_order_creation_blocks_replay_of_side_effect():
+    await _seed("replan-created")
+    run = await service.create_run("replan-created", idempotency_key="created")
+    statuses = {spec["key"]: "succeeded" for spec in service.STANDARD_PLAN}
+    statuses.update({"verify_order": "queued", "create_setup_report": "pending"})
+    _mark_tasks(run["run_id"], statuses)
+    workspace = await get_workspace("replan-created")
+    await apply_mutation(
+        "replan-created", "brief", {**BRIEF, "budget": 70},
+        base_revision=workspace["revision"], actor="campaign_operator",
+        idempotency_key="post-create-edit",
+    )
+
+    result = await service.reconcile_workspace_changes(run["run_id"])
+    assert result["reason"] == "side_effect_boundary"
+    assert result["run"]["status"] == "paused"
+    assert result["run"]["replan_blocked"]["reason"] == "order_already_created"
+    created = next(task for task in result["run"]["tasks"] if task["key"] == "create_order")
+    assert created["status"] == "succeeded"
+    with pytest.raises(service.RunConflict, match="side-effect boundary"):
+        await service.resume_run(run["run_id"])
+
+
+@pytest.mark.asyncio
+async def test_order_capability_rejects_stale_draft_before_external_call():
+    run = {
+        "tasks": [{
+            "key": "launch_approval", "status": "succeeded",
+            "result": {"order_draft_revision": 7},
+        }],
+    }
+    workspace = {
+        "artifacts": {
+            "order_draft": {
+                "status": "stale", "revision": 7,
+                "value": {"payload": {"idempotencyKey": "never-called"}},
+            },
+        },
+    }
+    with pytest.raises(RuntimeError, match="stale or missing"):
+        await _create_order(run, workspace)
+
+
+@pytest.mark.asyncio
+async def test_order_capability_rejects_approval_for_older_draft():
+    run = {
+        "tasks": [{
+            "key": "launch_approval", "status": "succeeded",
+            "result": {"order_draft_revision": 6},
+        }],
+    }
+    workspace = {
+        "artifacts": {
+            "order_draft": {
+                "status": "approved", "revision": 7,
+                "value": {"payload": {"idempotencyKey": "never-called"}},
+            },
+        },
+    }
+    with pytest.raises(RuntimeError, match="does not match"):
+        await _create_order(run, workspace)
+
+
+@pytest.mark.asyncio
+async def test_retry_review_is_idempotent_when_input_edit_already_replanned_task():
+    await _seed("replan-review-race")
+    run = await service.create_run("replan-review-race", idempotency_key="review-race")
+    task_id = f"{run['run_id']}:analyze_creatives"
+    service._mem_tasks[task_id].update(
+        status="queued", replanned_from_status="waiting_review",
+    )
+    current = await service.review_task(run["run_id"], task_id, approved=True)
+    task = next(item for item in current["tasks"] if item["task_id"] == task_id)
+    assert task["status"] == "queued"
