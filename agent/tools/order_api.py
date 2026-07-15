@@ -5,8 +5,14 @@ Real schema confirmed from live API data.
 import httpx
 from datetime import date
 from config import config
+from request_context import get_request_id
 
 _client = httpx.AsyncClient(base_url=config.BACKEND_URL, timeout=15.0)
+
+
+def _correlation_headers() -> dict[str, str]:
+    request_id = get_request_id()
+    return {"X-Request-Id": request_id} if request_id != "-" else {}
 
 
 async def create_order(payload: dict) -> dict:
@@ -21,7 +27,9 @@ async def create_order(payload: dict) -> dict:
     last_err: Exception | None = None
     for attempt in (1, 2):
         try:
-            resp = await _client.post("/api/orders", json=payload)
+            resp = await _client.post(
+                "/api/orders", json=payload, headers=_correlation_headers()
+            )
             if resp.status_code == 409:
                 return {"error": "conflict", "detail": resp.json()}
             resp.raise_for_status()
@@ -38,14 +46,16 @@ async def create_order(payload: dict) -> dict:
 
 async def fetch_order(order_id: str) -> dict:
     """GET /api/orders/:id"""
-    resp = await _client.get(f"/api/orders/{order_id}")
+    resp = await _client.get(
+        f"/api/orders/{order_id}", headers=_correlation_headers()
+    )
     resp.raise_for_status()
     return resp.json()
 
 
 async def fetch_all_orders() -> list[dict]:
     """GET /api/orders"""
-    resp = await _client.get("/api/orders")
+    resp = await _client.get("/api/orders", headers=_correlation_headers())
     resp.raise_for_status()
     return resp.json()
 

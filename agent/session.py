@@ -6,6 +6,7 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
 from config import config
+from security import redact_pii
 
 # ── State ─────────────────────────────────────────────────────────────────────
 _client: AsyncIOMotorClient | None = None
@@ -139,7 +140,12 @@ async def get_history(session_id: str) -> list:
 
 
 async def log_event(session_id: str, event_type: str, data: dict) -> None:
-    entry = {"session_id": session_id, "type": event_type, "data": data, "ts": _now()}
+    entry = {
+        "session_id": session_id,
+        "type": event_type,
+        "data": redact_pii(data),
+        "ts": _now(),
+    }
     if await _ensure_mongo():
         try:
             await _logs_col.insert_one(entry)
@@ -149,6 +155,97 @@ async def log_event(session_id: str, event_type: str, data: dict) -> None:
         _mem_logs.append(entry)
         if len(_mem_logs) > 500:
             _mem_logs.pop(0)
+
+
+async def delete_session_data(session_id: str) -> dict[str, int]:
+    """Delete conversational/agent artifacts for one session, but never orders.
+
+    Campaign orders are business records owned by the Node backend and are
+    intentionally outside this lifecycle operation.
+    """
+    deleted: dict[str, int] = {}
+    if await _ensure_mongo():
+        db = _client[config.MONGODB_DB]
+        runs = await db["agent_runs"].find(
+            {"session_id": session_id}, {"run_id": 1, "_id": 0}
+        ).to_list(None)
+        run_ids = [item.get("run_id") for item in runs if item.get("run_id")]
+        workspaces = await db["campaign_workspaces"].find(
+            {"session_id": session_id}, {"_id": 1}
+        ).to_list(None)
+        workspace_ids = [item.get("_id") for item in workspaces if item.get("_id")]
+        filters = {
+            "agent_sessions": {"_id": session_id},
+            "agent_logs": {"session_id": session_id},
+            "campaign_workspaces": {"session_id": session_id},
+            "workspace_proposals": {"session_id": session_id},
+            # New events carry session_id. The workspace_id branch also
+            # removes events written before that metadata was added.
+            "workspace_events": {"$or": [
+                {"session_id": session_id},
+                {"workspace_id": {"$in": workspace_ids}},
+            ]},
+            "creative_intel_jobs": {"session_id": session_id},
+            "agent_runs": {"session_id": session_id},
+            "agent_tasks": {"run_id": {"$in": run_ids}},
+            "agent_run_events": {"run_id": {"$in": run_ids}},
+            "graph_checkpoints": {"thread_id": {"$in": [session_id, f"{session_id}:auto"]}},
+            "checkpoint_writes": {"thread_id": {"$in": [session_id, f"{session_id}:auto"]}},
+        }
+        for collection, query in filters.items():
+            result = await db[collection].delete_many(query)
+            deleted[collection] = result.deleted_count
+        return deleted
+
+    _mem.pop(session_id, None)
+    before = len(_mem_logs)
+    _mem_logs[:] = [entry for entry in _mem_logs if entry.get("session_id") != session_id]
+    deleted["agent_sessions"] = 1
+    deleted["agent_logs"] = before - len(_mem_logs)
+
+    # Clean the domain-specific in-memory fallbacks used by tests/local outage mode.
+    from workspace import service as workspace_store
+    workspace_store._mem_workspaces.pop(session_id, None)
+    proposal_ids = [
+        key for key, value in workspace_store._mem_proposals.items()
+        if value.get("session_id") == session_id
+    ]
+    for key in proposal_ids:
+        workspace_store._mem_proposals.pop(key, None)
+    deleted["campaign_workspaces"] = 1
+    deleted["workspace_proposals"] = len(proposal_ids)
+
+    from creative_intel import service as creative_store
+    creative_ids = [
+        key for key, value in creative_store._mem.items()
+        if value.get("session_id") == session_id
+    ]
+    for key in creative_ids:
+        creative_store._mem.pop(key, None)
+    deleted["creative_intel_jobs"] = len(creative_ids)
+
+    from autopilot import service as autopilot_store
+    run_ids = [
+        key for key, value in autopilot_store._mem_runs.items()
+        if value.get("session_id") == session_id
+    ]
+    task_ids = [
+        key for key, value in autopilot_store._mem_tasks.items()
+        if value.get("run_id") in run_ids
+    ]
+    for key in run_ids:
+        autopilot_store._mem_runs.pop(key, None)
+    for key in task_ids:
+        autopilot_store._mem_tasks.pop(key, None)
+    before_events = len(autopilot_store._mem_events)
+    autopilot_store._mem_events[:] = [
+        event for event in autopilot_store._mem_events
+        if event.get("run_id") not in run_ids
+    ]
+    deleted["agent_runs"] = len(run_ids)
+    deleted["agent_tasks"] = len(task_ids)
+    deleted["agent_run_events"] = before_events - len(autopilot_store._mem_events)
+    return deleted
 
 
 # ── Pending proposal storage ──────────────────────────────────────────────────

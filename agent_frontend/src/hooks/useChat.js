@@ -96,6 +96,19 @@ export function useChat({
   // Without newSession(), the old session_id is reused and the backend
   // still has the old conversation history / workspace context.
   const newChat = useCallback(async () => {
+    setBusy(true)
+    const deleted = await AgentAPI.deleteCurrentSession()
+    if (!deleted) {
+      const response = {
+        id: generateId(), role: 'error', blocks: [],
+        content: '⚠️ Không thể xóa dữ liệu phiên trên server. Workspace hiện tại vẫn được giữ nguyên; hãy thử lại khi kết nối phục hồi.',
+        timestamp: new Date().toISOString(),
+        metadata: { tool: 'session_delete_failed', model: 'none' },
+      }
+      setMessages(prev => [...prev, response])
+      setBusy(false)
+      return false
+    }
     AgentAPI.newSession()   // ← fresh session ID; backend starts clean
     bootedRef.current = false
     setMessages([])
@@ -104,6 +117,7 @@ export function useChat({
     const response = await AgentAPI.boot()
     setMessages([response])
     setBusy(false)
+    return true
   }, [])
 
 
@@ -334,7 +348,7 @@ export function useChat({
             const compactFiles = prepared.map(({ dataUrl, ...file }) => file)
             response = await AgentAPI.approveCreative({ files: compactFiles })
             if (!response) throw new Error('Agent không lưu được creative đã phân tích')
-            shouldAdvance = response?.metadata?.tool !== 'creative_blocked'
+            shouldAdvance = responseAllowsAdvance(response)
           }
         } catch (error) {
           shouldAdvance = false
@@ -367,6 +381,7 @@ export function useChat({
       // Step 4 — Result
       case 4:
         response = await AgentAPI.getResult()
+        shouldAdvance = responseAllowsAdvance(response)
         break
 
       // Steps 5-6 — Report / Email
@@ -383,6 +398,7 @@ export function useChat({
             metadata: { tool: 'report_entry', model: 'none', step: 5 },
           }
         }
+        shouldAdvance = responseAllowsAdvance(response)
         break
       }
       case 6:

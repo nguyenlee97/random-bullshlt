@@ -54,4 +54,7 @@ def detect_safety_flags(lines: list[str] | str | None) -> set[str]:
 
 def contains_prompt_injection(lines: list[str] | str | None) -> bool:
     value = _text(lines)
-    return any(term in value for term in _INJECTION_TERMS)
+    if any(term in value for term in _INJECTION_TERMS):
+        return True
+    from prompt_guard import detect_prompt_injection
+    return detect_prompt_injection(value) is not None

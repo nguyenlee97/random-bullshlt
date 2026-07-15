@@ -21,7 +21,7 @@ from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from llm import _client as _generator_client
+from llm import _client as _generator_client, _create_completion
 from config import config
 
 T = TypeVar("T", bound=BaseModel)
@@ -37,7 +37,9 @@ def _get_client(role: str):
         if _critic_client is None:
             from openai import OpenAI
             _critic_client = OpenAI(base_url=config.CRITIC_BASE_URL,
-                                    api_key=config.CRITIC_API_KEY)
+                                    api_key=config.CRITIC_API_KEY,
+                                    timeout=config.LLM_TIMEOUT_SECONDS,
+                                    max_retries=config.LLM_MAX_RETRIES)
         return _critic_client, config.CRITIC_MODEL
     return _generator_client, config.LLM_MODEL
 
@@ -93,7 +95,10 @@ def structured(
         # up to 2 param adaptations for OpenAI GPT-5-family endpoints
         for _ in range(3):
             try:
-                resp = client.chat.completions.create(messages=msgs, **kwargs)
+                if role == "generator":
+                    resp, _, _, _ = _create_completion({"messages": msgs, **kwargs})
+                else:
+                    resp = client.chat.completions.create(messages=msgs, **kwargs)
                 break
             except Exception as e:
                 m = str(e)

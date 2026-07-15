@@ -4,10 +4,13 @@ import pytest
 
 from autopilot import service
 from autopilot.capabilities import (
-    CapabilityResult, _analyze_creatives, _create_order, _rank_placements,
+    CapabilityResult, _analyze_creatives, _create_order, _generate_strategy,
+    _rank_placements, _retrieve_audience,
 )
 from autopilot import worker
-from workspace.service import apply_mutation, get_workspace, set_preferences
+from workspace.service import (
+    apply_mutation, get_task_context, get_workspace, set_preferences,
+)
 
 
 BRIEF = {
@@ -103,6 +106,129 @@ async def test_review_policy_interrupts_and_resume_queues_dependency():
 async def test_auto_build_still_requires_launch_review():
     assert service._needs_review({"review": "launch"}, "auto_build_draft")
     assert not service._needs_review({"review": "stage"}, "auto_build_draft")
+
+
+@pytest.mark.asyncio
+async def test_strategy_simulator_returns_three_directional_scenarios():
+    workspace = {"artifacts": {"brief": {"revision": 3, "value": BRIEF}}}
+    result = await _generate_strategy({"session_id": "simulator"}, workspace)
+    value = result.value
+    assert value["kind"] == "campaign_strategy_simulation"
+    assert value["selected"] == "reach_first"
+    assert [option["id"] for option in value["options"]] == [
+        "balanced", "reach_first", "quality_first",
+    ]
+    reach = next(option for option in value["options"] if option["id"] == "reach_first")
+    quality = next(option for option in value["options"] if option["id"] == "quality_first")
+    assert reach["metrics"]["estimated_reach"] > quality["metrics"]["estimated_reach"]
+    assert reach["metrics"]["average_cpm"] < quality["metrics"]["average_cpm"]
+    assert all(option["metrics"]["is_estimate"] for option in value["options"])
+
+
+@pytest.mark.asyncio
+async def test_selected_strategy_is_grounded_into_audience_retrieval(monkeypatch):
+    import handlers.audience as audience_handler
+
+    captured = {}
+
+    async def fake_recommend(session_id, brief_override=None):
+        captured.update({"session_id": session_id, "brief": brief_override})
+        return {
+            "recommendations": [{"_id": "seg-1", "sizeMin": 100, "sizeMax": 300}],
+            "total_segments": 20,
+            "rag": {"candidates": 20, "rerank_enabled": True, "reranked": True},
+        }
+
+    monkeypatch.setattr(audience_handler, "handle_dmp_recommend", fake_recommend)
+    workspace = {"artifacts": {
+        "brief": {"value": {**BRIEF, "notes": "Người yêu công nghệ"}},
+        "strategy": {"value": {"selected": "quality_first"}},
+    }}
+    result = await _retrieve_audience({"session_id": "strategy-audience"}, workspace)
+    assert "inventory chất lượng" in captured["brief"]["notes"]
+    assert result.value["attrs"][0]["_id"] == "seg-1"
+    pipeline = next(item for item in result.evidence if item["type"] == "audience_pipeline")
+    assert pipeline["strategy_id"] == "quality_first"
+    assert pipeline["reranked"] is True
+
+
+@pytest.mark.asyncio
+async def test_operator_can_select_pending_strategy_before_review():
+    await _seed("strategy-review")
+    run = await service.create_run(
+        "strategy-review", approval_policy="review_every_stage",
+        idempotency_key="strategy-review",
+    )
+    workspace = await get_workspace("strategy-review")
+    simulated = await _generate_strategy(run, workspace)
+    context = await get_task_context("strategy-review", "strategy")
+    task_id = f"{run['run_id']}:generate_strategy"
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result=simulated.value,
+        evidence=simulated.evidence,
+        pending_artifact={
+            "session_id": "strategy-review", "artifact": "strategy",
+            "value": simulated.value,
+            "input_revisions": context["input_revisions"],
+            "base_artifact_revision": context["artifact_revision"],
+        },
+    )
+
+    selected = await service.select_strategy(
+        run["run_id"], "quality_first", reason="Ưu tiên inventory chất lượng"
+    )
+    selected_task = next(task for task in selected["tasks"] if task["key"] == "generate_strategy")
+    assert selected_task["result"]["selected"] == "quality_first"
+    assert selected_task["pending_artifact"]["value"]["selection"]["source"] == "operator"
+    assert (await get_workspace("strategy-review"))["artifacts"]["strategy"]["status"] == "missing"
+
+    await service.review_task(run["run_id"], task_id, approved=True, reason="selected")
+    committed = await get_workspace("strategy-review")
+    assert committed["artifacts"]["strategy"]["value"]["selected"] == "quality_first"
+
+
+@pytest.mark.asyncio
+async def test_changing_committed_strategy_replans_only_consumers():
+    await _seed("strategy-replan")
+    run = await service.create_run(
+        "strategy-replan", approval_policy="auto_build_draft",
+        idempotency_key="strategy-replan",
+    )
+    workspace = await get_workspace("strategy-replan")
+    simulated = await _generate_strategy(run, workspace)
+    await apply_mutation(
+        "strategy-replan", "strategy", simulated.value,
+        base_revision=workspace["revision"], actor="autopilot_worker",
+        idempotency_key="initial-strategy",
+    )
+    _mark_tasks(run["run_id"], {
+        "normalize_brief": "succeeded", "validate_brief": "succeeded",
+        "generate_strategy": "succeeded", "retrieve_audience": "succeeded",
+        "derive_targeting": "succeeded", "analyze_creatives": "succeeded",
+        "rank_placements": "succeeded", "assign_creatives": "succeeded",
+        "forecast": "queued",
+    })
+    service._mem_tasks[f"{run['run_id']}:generate_strategy"]["result"] = simulated.value
+
+    replanned = await service.select_strategy(run["run_id"], "quality_first")
+    by_key = {task["key"]: task for task in replanned["tasks"]}
+    assert by_key["generate_strategy"]["status"] == "succeeded"
+    assert by_key["generate_strategy"]["result"]["selected"] == "quality_first"
+    assert by_key["retrieve_audience"]["status"] == "queued"
+    assert by_key["analyze_creatives"]["status"] == "queued"
+    assert by_key["rank_placements"]["status"] == "queued"
+    assert by_key["derive_targeting"]["status"] == "pending"
+    assert replanned["last_replan"]["changed_artifacts"] == ["strategy"]
+
+
+@pytest.mark.asyncio
+async def test_strategy_change_is_blocked_after_order_creation():
+    await _seed("strategy-after-order")
+    run = await service.create_run("strategy-after-order", idempotency_key="after-order")
+    service._mem_tasks[f"{run['run_id']}:create_order"]["status"] = "succeeded"
+    with pytest.raises(service.RunConflict, match="after order creation"):
+        await service.select_strategy(run["run_id"], "balanced")
 
 
 @pytest.mark.asyncio

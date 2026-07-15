@@ -111,6 +111,39 @@ async def test_explicit_edit_creates_durable_proposal_without_mutating(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_structured_brief_proposal_preserves_omitted_audience_notes(monkeypatch):
+    message = (
+        "Thiết lập brief ZaloPay Summer, ngân sách 40 triệu. "
+        "Đối tượng 20-35 tại TP.HCM, quan tâm công nghệ và thanh toán số."
+    )
+
+    async def classified(_message, _workspace):
+        return _change(
+            command="set_brief_fields",
+            field="brief",
+            value={
+                "brand": "ZaloPay Summer",
+                "objective": "awareness",
+                "kpi": "Reach",
+                "budget": 40,
+                "startDate": "2026-08-01",
+                "endDate": "2026-08-31",
+            },
+        )
+
+    monkeypatch.setattr(intent_node, "classify_workspace_intent", classified)
+    result = await intent_node.workspace_intent_node({
+        "session_id": "intent-preserve-notes",
+        "step": 0,
+        "user_message": message,
+        "workspace": {},
+        "confirmed_steps": [],
+    })
+
+    assert result["response_blocks"][0]["changes"]["value"]["notes"] == message
+
+
+@pytest.mark.asyncio
 async def test_ambiguous_edit_asks_for_value_and_does_not_create_proposal(monkeypatch):
     async def classified(message, current_brief):
         return _change(
@@ -438,6 +471,51 @@ async def test_legacy_brief_payload_is_normalized_and_validated():
     assert result[0] == "brief"
     assert result[1]["budget"] == 250
     assert result[1]["brand"] == "Zalo Ads"
+
+
+@pytest.mark.asyncio
+async def test_legacy_brief_preserves_user_audience_context_when_model_omits_notes():
+    message = (
+        "Thiết lập brief ZaloPay Summer, ngân sách 40 triệu. "
+        "Đối tượng 20-35 tại TP.HCM, quan tâm công nghệ và thanh toán số."
+    )
+    result = await resolve_legacy_update(
+        "brief",
+        {
+            "brand": "ZaloPay Summer",
+            "objective": "awareness",
+            "kpi": "Reach",
+            "budget": 40,
+            "startDate": "2026-08-01",
+            "endDate": "2026-08-31",
+        },
+        _workspace(),
+        "User supplied a complete brief",
+        source_message=message,
+    )
+
+    assert result[0] == "brief"
+    assert result[1]["notes"] == message
+
+
+@pytest.mark.asyncio
+async def test_legacy_brief_keeps_model_notes_instead_of_raw_message():
+    result = await resolve_legacy_update(
+        "brief",
+        {
+            "brand": "ZaloPay Summer",
+            "objective": "awareness",
+            "kpi": "Reach",
+            "budget": 40,
+            "startDate": "2026-08-01",
+            "endDate": "2026-08-31",
+            "notes": "Audience: 20-35, fintech",
+        },
+        _workspace(),
+        source_message="Đối tượng người trẻ tại TP.HCM",
+    )
+
+    assert result[1]["notes"] == "Audience: 20-35, fintech"
 
 
 @pytest.mark.asyncio

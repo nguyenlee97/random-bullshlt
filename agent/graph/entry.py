@@ -19,6 +19,8 @@ from models import AgentResponse, ResponseMeta
 from config import config
 from graph.build import build_chat_graph, build_auto_graph
 from agent_logger import alog
+from request_context import get_request_id
+from provider_resilience import PROVIDER_UNAVAILABLE_MESSAGE
 
 _chat_graph = None
 _auto_graph = None
@@ -65,12 +67,13 @@ def _langfuse_config(session_id: str, request_id: str, mode: str) -> dict:
     import os
     if os.getenv("LANGFUSE_PUBLIC_KEY"):
         try:
-            from langfuse.callback import CallbackHandler
-            cfg["callbacks"] = [CallbackHandler(
-                session_id=session_id,
-                trace_name=f"graph_{mode}",
-                metadata={"request_id": request_id, "mode": mode},
-            )]
+            from langfuse.langchain import CallbackHandler
+            cfg["callbacks"] = [CallbackHandler()]
+            cfg["metadata"] = {
+                "langfuse_session_id": session_id,
+                "langfuse_tags": [f"mode:{mode}"],
+                "request_id": request_id,
+            }
         except ImportError:
             pass
     return cfg
@@ -90,7 +93,9 @@ async def handle_freeform_graph(
 
     state = {
         "session_id": session_id,
-        "request_id": uuid.uuid4().hex[:12],
+        "request_id": (
+            get_request_id() if get_request_id() != "-" else uuid.uuid4().hex[:12]
+        ),
         "step": step,
         "user_message": message,
         "workspace": workspace or {},
@@ -137,7 +142,7 @@ async def handle_freeform_graph(
         await alog(session_id, "error", {"handler": f"graph_{mode}", "error": str(e),
                                          "traceback": traceback.format_exc()[-600:]})
         return AgentResponse(
-            text=f"Em gặp lỗi khi xử lý: {str(e)[:100]}. Anh/Chị thử lại nhé!",
+            text=PROVIDER_UNAVAILABLE_MESSAGE,
             blocks=[], meta=ResponseMeta(tool="freeform_chat", model="none", step=step),
         )
 

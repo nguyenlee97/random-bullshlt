@@ -3,10 +3,30 @@ E4b Agent Backend — FastAPI app entry point.
 """
 import sys
 import uvicorn
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import config
+
+
+@asynccontextmanager
+async def _lifespan(_app):
+    if config.USE_VLM_CREATIVE:
+        from creative_intel.service import start_worker
+        await start_worker()
+    if config.USE_CAMPAIGN_AUTOPILOT:
+        from autopilot.worker import start_worker as start_autopilot_worker
+        await start_autopilot_worker()
+    try:
+        yield
+    finally:
+        if config.USE_CAMPAIGN_AUTOPILOT:
+            from autopilot.worker import stop_worker as stop_autopilot_worker
+            await stop_autopilot_worker()
+        if config.USE_VLM_CREATIVE:
+            from creative_intel.service import stop_worker
+            await stop_worker()
 
 
 def _configure_stdio() -> None:
@@ -31,6 +51,7 @@ app = FastAPI(
     title="Advertising Agent",
     version=BUILD_VERSION,
     description="AI Agent for autonomous ad campaign planning (E4b)",
+    lifespan=_lifespan,
 )
 
 # Phase 0: API-key auth (no-op until AGENT_API_KEY is set in .env).
@@ -38,6 +59,10 @@ app = FastAPI(
 # executes in reverse registration order) and 401s still carry CORS headers.
 from middleware.auth import ApiKeyMiddleware  # noqa: E402
 app.add_middleware(ApiKeyMiddleware)
+
+# Reject oversized bodies before Pydantic parsing or model/tool execution.
+from middleware.request_limits import RequestSizeLimitMiddleware  # noqa: E402
+app.add_middleware(RequestSizeLimitMiddleware)
 
 # Phase 0 A2: rate limiting (SlowAPI). Per-route limits are decorated in router.py.
 from slowapi.errors import RateLimitExceeded  # noqa: E402
@@ -64,11 +89,18 @@ app.add_middleware(
     allow_origins=config.CORS_ORIGINS,
     # Allow any Cloudflare Quick Tunnel or ngrok URL automatically —
     # removes the chicken-and-egg problem of needing the frontend URL before it exists.
-    allow_origin_regex=r"https://(.*\.trycloudflare\.com|.*\.ngrok(-free)?\.app|.*\.ngrok\.io)",
+    allow_origin_regex=(
+        r"https://(.*\.trycloudflare\.com|.*\.ngrok(-free)?\.app|.*\.ngrok\.io)"
+        if config.CORS_ALLOW_TUNNELS else None
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register last so correlation context wraps auth, limits, routing, and errors.
+from middleware.request_context import RequestContextMiddleware  # noqa: E402
+app.add_middleware(RequestContextMiddleware)
 
 
 @app.get("/api/health")
@@ -78,9 +110,6 @@ async def health():
         "version": BUILD_VERSION,
         "features": BUILD_FEATURES,
         "deployed_at": datetime.now(timezone.utc).isoformat(),
-        "model": config.LLM_MODEL,
-        "backend": config.BACKEND_URL,
-        "db": config.MONGODB_DB,
     }
 
 
@@ -139,25 +168,6 @@ async def version():
 from router import agent_router  # noqa: E402
 app.include_router(agent_router, prefix="/api/agent")
 
-
-@app.on_event("startup")
-async def _start_creative_worker():
-    if config.USE_VLM_CREATIVE:
-        from creative_intel.service import start_worker
-        await start_worker()
-    if config.USE_CAMPAIGN_AUTOPILOT:
-        from autopilot.worker import start_worker as start_autopilot_worker
-        await start_autopilot_worker()
-
-
-@app.on_event("shutdown")
-async def _stop_creative_worker():
-    if config.USE_CAMPAIGN_AUTOPILOT:
-        from autopilot.worker import stop_worker as stop_autopilot_worker
-        await stop_autopilot_worker()
-    if config.USE_VLM_CREATIVE:
-        from creative_intel.service import stop_worker
-        await stop_worker()
 
 print(f"\n🚀 Advertising Agent v{BUILD_VERSION} starting on port {config.AGENT_PORT}")
 print(f"   GreenNode AgentBase: listening on 0.0.0.0:{config.AGENT_PORT}, health at /health")

@@ -1,4 +1,4 @@
-# Camp Ads Agent — Autonomous Ad Campaign Manager
+# Advertising Agent — Autonomous Ad Campaign Manager
 
 > An AI agent that autonomously drives the full lifecycle of a display advertising campaign — from brief to live reporting — built on **GreenNode AgentBase** and **GreenNode MaaS**.
 
@@ -29,7 +29,7 @@ Each step is manual, siloed, and error-prone. Campaign managers spend 60-70% of 
 
 ## Solution
 
-**Camp Ads Agent** is a conversational AI agent that walks the user through all 6 steps in a single guided session — making decisions, populating the platform, generating insights, and delivering the final PDF report to stakeholders via email.
+**Advertising Agent** is a conversational AI agent that supports both a guided campaign workflow and a durable Campaign Autopilot — making grounded decisions, populating the workspace, requesting human review, generating insights, and delivering the final PDF report to stakeholders via email.
 
 ### How it works
 
@@ -71,7 +71,7 @@ User ─── Chat ──► Agent (FastAPI + GreenNode MaaS)
 └────────────────────┬────────────────────────────────────────────┘
                      │ REST
 ┌────────────────────▼────────────────────────────────────────────┐
-│  Camp Ads Agent  ◄── THIS REPO                                  │
+│  Advertising Agent  ◄── THIS REPO                               │
 │  FastAPI · Python 3.11 · Port 8080                              │
 │  agent-api.pawgrammers.io.vn                                    │
 │  ├─ router.py        (6-step state machine)                     │

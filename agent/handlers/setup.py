@@ -10,6 +10,7 @@ from tools.zone_ranker import rank_zones
 from tools.creative_match import auto_assign
 from tools.order_api import create_order
 from tools.zone_catalog import get_zone_map
+from config import config
 
 
 async def handle_setup(setup: SetupData, session_id: str) -> AgentResponse:
@@ -414,7 +415,8 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
         "freqCap": "3",
         # Phase 0 idempotency: frontend-provided key, or generated here as fallback
         # (fallback still protects against the create_order internal retry).
-        "idempotencyKey": setup.idempotencyKey or f"agent_{session_id}_{__import__('uuid').uuid4().hex[:12]}",
+        "demoNamespace": config.DEMO_NAMESPACE,
+        "idempotencyKey": setup.idempotencyKey or f"agent_{config.DEMO_NAMESPACE}_{session_id}_{__import__('uuid').uuid4().hex[:12]}",
     }
 
     # ── Phase 0 order guard ⛔ — deterministic server-side validation.

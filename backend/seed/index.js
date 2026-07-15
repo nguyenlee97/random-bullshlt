@@ -18,7 +18,7 @@
 require('dotenv').config();
 const path     = require('path');
 const mongoose = require('mongoose');
-const xlsx     = require('xlsx');
+const { readWorksheetRows } = require('./workbook-rows');
 
 const ZoneCatalog      = require('../models/Zone');
 const Campaign         = require('../models/Campaign');
@@ -31,9 +31,8 @@ const AudienceLibrary  = require('../models/AudienceLibrary');
 const ZONE_FILE     = path.join(__dirname, 'data', 'Ads Zone.xlsx');
 const AUDIENCE_FILE = path.join(__dirname, 'data', 'Audience Library.xlsx');
 
-function readZonesFromExcel() {
-  const wb   = xlsx.readFile(ZONE_FILE);
-  const rows = xlsx.utils.sheet_to_json(wb.Sheets['Ad Zones'], { defval: null });
+async function readZonesFromExcel() {
+  const rows = await readWorksheetRows(ZONE_FILE, 'Ad Zones');
   return rows.map((r) => ({
     mockId:  r['Zone ID'],
     channel: r['Channel'],
@@ -48,9 +47,8 @@ function readZonesFromExcel() {
   }));
 }
 
-function readAudienceFromExcel() {
-  const wb   = xlsx.readFile(AUDIENCE_FILE);
-  const rows = xlsx.utils.sheet_to_json(wb.Sheets['Sheet1'], { defval: null });
+async function readAudienceFromExcel() {
+  const rows = await readWorksheetRows(AUDIENCE_FILE, 'Sheet1');
   return rows.map((r) => ({
     segmentId:   r['ID'],
     type:        r['Type'],
@@ -295,8 +293,8 @@ async function runSeed(opts = {}) {
 
   // ── Read Excel files ───────────────────────────────────────────────────────
   console.log('  📂  Reading Excel files...');
-  const mockRows    = readZonesFromExcel();
-  const audRows     = readAudienceFromExcel();
+  const mockRows    = await readZonesFromExcel();
+  const audRows     = await readAudienceFromExcel();
   const zonesCatalog = buildZonesCatalog(mockRows);
   const { placements } = zonesCatalog;
   console.log(`       Mock zones read: ${mockRows.length}`);

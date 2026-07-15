@@ -703,7 +703,8 @@ async def handle_freeform(
                 canonical = await get_workspace(session_id)
                 try:
                     field, value, reason = await resolve_legacy_update(
-                        field, value, canonical, first_args.get("reason", "")
+                        field, value, canonical, first_args.get("reason", ""),
+                        source_message=message,
                     )
                 except InvalidWorkspaceIntent as exc:
                     reply = f"Em chưa thể tạo đề xuất an toàn: {exc}"
@@ -851,8 +852,9 @@ async def handle_freeform(
             "error": str(e),
             "traceback": tb[-600:],  # last 600 chars of traceback
         })
+        from provider_resilience import PROVIDER_UNAVAILABLE_MESSAGE
         return AgentResponse(
-            text=f"Em gặp lỗi khi xử lý: {str(e)[:100]}. Anh/Chị thử lại nhé!",
+            text=PROVIDER_UNAVAILABLE_MESSAGE,
             blocks=[],
             meta=ResponseMeta(tool="freeform_chat", model="none", step=step),
         )

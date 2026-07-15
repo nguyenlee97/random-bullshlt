@@ -1,3 +1,4 @@
+import { lazy, Suspense, useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -5,12 +6,10 @@ import log from '@/lib/logger'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
-import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer
-} from 'recharts'
 import { fmt } from '@/lib/utils'
 import { Users, TrendingUp, TrendingDown, Minus, Mail, CheckCircle2, RefreshCw, Pencil, X } from 'lucide-react'
+
+const ChartBlock = lazy(() => import('./ChartBlock'))
 
 // ─── Table Block ─────────────────────────────────────────────────────────────
 function TableBlock({ block }) {
@@ -47,49 +46,6 @@ function TableBlock({ block }) {
 }
 
 // ─── Chart Block ─────────────────────────────────────────────────────────────
-function ChartBlock({ block }) {
-  const chartData = block.data.labels.map((label, i) => {
-    const entry = { label }
-    block.data.series.forEach(s => { entry[s.name] = s.values[i] })
-    return entry
-  })
-
-  return (
-    <Card className="mt-2">
-      <CardHeader className="pb-2 pt-3">
-        <CardTitle className="text-xs text-muted-foreground">{block.title}</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 pb-3">
-        <ResponsiveContainer width="100%" height={180}>
-          {block.chartType === 'line' ? (
-            <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {block.data.series.map(s => (
-                <Line key={s.name} type="monotone" dataKey={s.name} stroke={s.color} strokeWidth={2} dot={{ r: 3 }} />
-              ))}
-            </LineChart>
-          ) : (
-            <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {block.data.series.map(s => (
-                <Bar key={s.name} dataKey={s.name} fill={s.color} radius={[3, 3, 0, 0]} />
-              ))}
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  )
-}
-
 // ─── Audience Size Block ──────────────────────────────────────────────────────
 function AudienceSizeBlock({ block }) {
   return (
@@ -302,8 +258,21 @@ function WorkspaceProposalBlock({ block }) {
 
   const isAudience = field === 'segment'
   const isSetup = field === 'setup'
+  const proposalId = changes.proposal_id
+  const [decision, setDecision] = useState(changes.status || 'pending')
+
+  useEffect(() => {
+    const listener = event => {
+      if (!proposalId || event.detail?.proposal_id !== proposalId) return
+      setDecision(event.detail.status || 'pending')
+    }
+    window.addEventListener('agent:workspace_proposal_result', listener)
+    return () => window.removeEventListener('agent:workspace_proposal_result', listener)
+  }, [proposalId])
 
   const handleConfirm = () => {
+    if (!['pending', 'failed'].includes(decision)) return
+    setDecision('processing')
     log.block('workspace_proposal CONFIRM', { field, value_type: typeof rawValue })
     if (isSetup) {
       // Setup is special: do NOT apply the stale proposal value (which has all recommended
@@ -312,6 +281,7 @@ function WorkspaceProposalBlock({ block }) {
       window.dispatchEvent(new CustomEvent('agent:setup_zones_confirmed', {
         detail: { proposal_id: changes.proposal_id }
       }))
+      setDecision('approved')
     } else {
       window.dispatchEvent(new CustomEvent('agent:workspace_confirm', {
         detail: { patch: changes }
@@ -320,6 +290,8 @@ function WorkspaceProposalBlock({ block }) {
   }
 
   const handleCancel = () => {
+    if (!['pending', 'failed'].includes(decision)) return
+    setDecision('rejected')
     log.block('workspace_proposal CANCEL', { field })
     window.dispatchEvent(new CustomEvent('agent:workspace_cancel', {
       detail: { field, proposal_id: changes.proposal_id }
@@ -372,8 +344,20 @@ function WorkspaceProposalBlock({ block }) {
         )}
       </div>
 
-      {/* Confirm / Cancel */}
-      <div className="flex gap-2 px-3 pb-3">
+      {/* Proposal lifecycle */}
+      {decision === 'approved' ? (
+        <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
+          <CheckCircle2 className="h-4 w-4" /> Đã áp dụng vào workspace
+        </div>
+      ) : decision === 'rejected' ? (
+        <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
+          <X className="h-4 w-4" /> Đã bỏ qua đề xuất
+        </div>
+      ) : decision === 'processing' ? (
+        <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700" role="status">
+          <RefreshCw className="h-4 w-4 animate-spin" /> Đang cập nhật workspace…
+        </div>
+      ) : <div className="flex gap-2 px-3 pb-3">
         <button
           onClick={handleConfirm}
           className="flex-1 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
@@ -386,7 +370,8 @@ function WorkspaceProposalBlock({ block }) {
         >
           <X className="w-3 h-3" /> {isAudience ? 'Tự chọn' : isSetup ? 'Chỉnh sửa' : 'Hủy'}
         </button>
-      </div>
+        {decision === 'failed' && <span className="self-center text-[10px] font-semibold text-red-600">Cập nhật thất bại · thử lại</span>}
+      </div>}
     </div>
   )
 }
@@ -507,7 +492,7 @@ function ReportAnalysisBlock({ block }) {
 export default function BlockRenderer({ block }) {
   switch (block.type) {
     case 'table':              return <TableBlock block={block} />
-    case 'chart':              return <ChartBlock block={block} />
+    case 'chart':              return <Suspense fallback={<div className="mt-2 h-44 rounded-xl bg-muted animate-pulse" role="status" aria-label="Đang tải biểu đồ" />}><ChartBlock block={block} /></Suspense>
     case 'audience_size':      return <AudienceSizeBlock block={block} />
     case 'campaign_list':      return <CampaignListBlock block={block} />
     case 'verdict':            return <VerdictBlock block={block} />

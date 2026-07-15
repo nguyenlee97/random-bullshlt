@@ -88,35 +88,92 @@ async def _validate_brief(run: dict, workspace: dict) -> CapabilityResult:
 async def _generate_strategy(run: dict, workspace: dict) -> CapabilityResult:
     brief = _artifact(workspace, "brief", {})
     objective = brief.get("objective", "awareness")
-    options = [
+    budget_vnd = max(float(brief.get("budget", 0)), 0) * 1_000_000
+    assumptions = [
         {
             "id": "balanced", "label": "Cân bằng",
             "budget_share": {"premium": 40, "reach": 40, "test": 20},
+            "average_cpm": 55_000, "frequency": 3.0,
+            "targeting_mode": "balanced", "placement_mode": "ranked",
             "rationale": "Cân bằng độ phủ, chất lượng hiển thị và khả năng thử nghiệm.",
+            "tradeoffs": ["Độ phủ và chất lượng ở mức cân bằng", "20% ngân sách dành cho thử nghiệm"],
         },
         {
             "id": "reach_first", "label": "Ưu tiên độ phủ",
             "budget_share": {"premium": 25, "reach": 60, "test": 15},
+            "average_cpm": 38_000, "frequency": 2.6,
+            "targeting_mode": "broad", "placement_mode": "lowest_cpm",
             "rationale": "Tối đa hóa lượng người tiếp cận trong ngân sách đã duyệt.",
+            "tradeoffs": ["Reach cao hơn với CPM mục tiêu thấp", "Chất lượng placement có thể phân tán hơn"],
         },
         {
             "id": "quality_first", "label": "Ưu tiên chất lượng",
             "budget_share": {"premium": 60, "reach": 25, "test": 15},
+            "average_cpm": 80_000, "frequency": 3.4,
+            "targeting_mode": "focused", "placement_mode": "quality",
             "rationale": "Ưu tiên vị trí có viewability và tương tác cao.",
+            "tradeoffs": ["Ưu tiên inventory chất lượng cao", "Reach dự kiến thấp hơn do CPM cao"],
         },
     ]
     selected = "reach_first" if objective == "awareness" else (
         "quality_first" if objective == "conversion" else "balanced"
     )
+    risk_by_objective = {
+        "awareness": {"reach_first": "low", "balanced": "low", "quality_first": "medium"},
+        "conversion": {"reach_first": "high", "balanced": "medium", "quality_first": "low"},
+        "consideration": {"reach_first": "medium", "balanced": "low", "quality_first": "medium"},
+        "retention": {"reach_first": "medium", "balanced": "low", "quality_first": "medium"},
+    }
+    options = []
+    for assumption in assumptions:
+        impressions = round(budget_vnd / assumption["average_cpm"] * 1000) \
+            if assumption["average_cpm"] and budget_vnd else 0
+        reach = round(impressions / assumption["frequency"]) if impressions else 0
+        option = dict(assumption)
+        option["metrics"] = {
+            "budget_vnd": round(budget_vnd),
+            "estimated_impressions": impressions,
+            "estimated_reach": reach,
+            "average_cpm": assumption["average_cpm"],
+            "frequency": assumption["frequency"],
+            "risk": risk_by_objective.get(objective, {}).get(assumption["id"], "medium"),
+            "is_estimate": True,
+        }
+        options.append(option)
+    selected_option = next(item for item in options if item["id"] == selected)
     return CapabilityResult(
-        value={"options": options, "selected": selected, "objective": objective},
-        evidence=[{"type": "brief_field", "field": "objective", "value": objective}],
+        value={
+            "kind": "campaign_strategy_simulation",
+            "options": options,
+            "selected": selected,
+            "objective": objective,
+            "selected_reason": selected_option["rationale"],
+            "selection": {"source": "deterministic_recommendation"},
+            "methodology": "Directional estimates from approved budget, CPM and frequency assumptions; final forecast uses selected catalog placements.",
+        },
+        evidence=[
+            {"type": "brief_field", "field": "objective", "value": objective},
+            {"type": "strategy_simulation", "budget_vnd": round(budget_vnd),
+             "option_ids": [item["id"] for item in options], "selected": selected,
+             "method": "deterministic_v1"},
+        ],
     )
 
 
 async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
     from handlers.audience import handle_dmp_recommend
-    recommendation = await handle_dmp_recommend(run["session_id"])
+    brief = dict(_artifact(workspace, "brief", {}))
+    strategy = _artifact(workspace, "strategy", {})
+    selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
+    strategy_signal = {
+        "reach_first": "Chiến lược: ưu tiên độ phủ rộng, CPM thấp và audience có quy mô lớn.",
+        "quality_first": "Chiến lược: ưu tiên audience có ý định/độ liên quan cao và inventory chất lượng.",
+        "balanced": "Chiến lược: cân bằng độ phủ, độ liên quan và khả năng thử nghiệm.",
+    }.get(selected, "")
+    brief["notes"] = " ".join(
+        item for item in (str(brief.get("notes") or "").strip(), strategy_signal) if item
+    )
+    recommendation = await handle_dmp_recommend(run["session_id"], brief_override=brief)
     attrs = recommendation.get("recommendations") or []
     if not attrs:
         raise RuntimeError("audience retrieval returned no catalog-backed segments")
@@ -125,12 +182,20 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
         int(((item.get("sizeMin") or 0) + (item.get("sizeMax") or 0)) / 2)
         for item in attrs
     )
+    diagnostics = recommendation.get("rag") or recommendation.get("retrieval") or {}
     return CapabilityResult(
-        value={"attrs": attrs, "size": size,
-               "retrieval": recommendation.get("retrieval", {})},
+        value={"attrs": attrs, "size": size, "retrieval": diagnostics},
         evidence=[{
             "type": "catalog_segments", "count": len(attrs),
             "ids": [item.get("_id") for item in attrs if item.get("_id")],
+        }, {
+            "type": "audience_pipeline",
+            "retrieval_candidates": diagnostics.get("candidates", recommendation.get("total_segments", 0)),
+            "rerank_enabled": bool(diagnostics.get("rerank_enabled")),
+            "reranked": bool(diagnostics.get("reranked")),
+            "selector": diagnostics.get("selector", "legacy"),
+            "strategy_id": selected,
+            "stage_ms": diagnostics.get("stage_ms", {}),
         }],
     )
 
@@ -141,14 +206,22 @@ async def _derive_targeting(run: dict, workspace: dict) -> CapabilityResult:
     options = await get_targeting_options()
     # Deterministic, catalog-validated fallback. The model-assisted targeting
     # selector can later enrich this without weakening the source boundary.
+    strategy = _artifact(workspace, "strategy", {})
+    selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
+    ages = {
+        "reach_first": ["18-24", "25-34", "35-44"],
+        "balanced": ["25-34", "35-44"],
+        "quality_first": ["25-34", "35-44"],
+    }.get(selected, ["25-34", "35-44"])
     targeting = _normalize_targeting({
         "geo": ["Hà Nội", "TP.HCM", "Đà Nẵng"],
-        "age": ["25-34", "35-44"],
+        "age": ages,
         "gender": ["Male", "Female"],
     }, options)
     return CapabilityResult(
         value=targeting,
-        evidence=[{"type": "targeting_catalog", "dimensions": list(targeting)}],
+        evidence=[{"type": "targeting_catalog", "dimensions": list(targeting),
+                   "strategy_id": selected}],
     )
 
 
@@ -244,7 +317,21 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
         zone for zone in ranked
         if not conflicts.get(zone["id"])
         and zone.get("match_mode") in compatible_modes
-    ][:6]
+    ]
+    strategy = _artifact(workspace, "strategy", {})
+    selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
+    if selected == "reach_first":
+        available.sort(key=lambda zone: (float(zone.get("cpm") or 10**12), -float(zone.get("score") or 0)))
+    elif selected == "quality_first":
+        available.sort(
+            key=lambda zone: (
+                float(zone.get("viewability") or 0),
+                float(zone.get("ctr") or 0),
+                float(zone.get("score") or 0),
+            ),
+            reverse=True,
+        )
+    available = available[:6]
     if not available:
         return CapabilityResult(
             value={
@@ -261,7 +348,8 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
     return CapabilityResult(
         value={"selectedZoneIds": [zone["id"] for zone in available],
                "zones": available, "phase": "zones"},
-        evidence=[{"type": "zone_catalog", "ids": [zone["id"] for zone in available]},
+        evidence=[{"type": "zone_catalog", "ids": [zone["id"] for zone in available],
+                   "strategy_id": selected},
                   {"type": "conflict_check", "excluded": len(ranked) - len(available)}],
     )
 
@@ -346,6 +434,7 @@ def _build_creatives(files: list[dict], assignments: dict, zone_ids: list[str]) 
 
 
 async def _build_order_draft(run: dict, workspace: dict) -> CapabilityResult:
+    from config import config
     from creative_intel.service import get_intel
     from tools.creative_match import enrich_files_with_intel
     brief = _artifact(workspace, "brief", {})
@@ -368,7 +457,8 @@ async def _build_order_draft(run: dict, workspace: dict) -> CapabilityResult:
         "placements": placements, "targeting": targeting,
         "dmp": {"include": [item.get("_id") for item in audience if item.get("_id")],
                 "exclude": []},
-        "freqCap": "3", "idempotencyKey": f"autopilot:{run['run_id']}:launch",
+        "freqCap": "3", "demoNamespace": config.DEMO_NAMESPACE,
+        "idempotencyKey": f"autopilot:{config.DEMO_NAMESPACE}:{run['run_id']}:launch",
     }
     payload["creatives"] = _build_creatives(files, assignments, placements)
     payload["creative"] = payload["creatives"][0] if payload["creatives"] else {}

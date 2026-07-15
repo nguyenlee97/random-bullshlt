@@ -3,6 +3,7 @@ const BLOCKING_RESPONSE_TOOLS = new Set([
   'audience_validate',
   'creative_blocked',
   'creative_analysis_error',
+  'agent_unavailable',
 ])
 
 export function isBriefReady(brief = {}) {

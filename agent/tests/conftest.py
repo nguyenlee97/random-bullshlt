@@ -18,6 +18,8 @@ import os
 os.environ["MONGODB_URI"] = "mongodb://127.0.0.1:1"   # unreachable → triggers in-memory fallback
 os.environ.pop("LANGFUSE_PUBLIC_KEY", None)            # no tracing in tests
 os.environ["RATE_LIMIT_ENABLED"] = "false"
+os.environ.setdefault("AI_PLATFORM_API_KEY", "test-not-a-real-key")
+os.environ["ALLOW_OFFSHORE_LLM_FALLBACK"] = "false"
 
 import pytest
 

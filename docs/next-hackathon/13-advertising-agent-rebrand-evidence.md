@@ -1,9 +1,8 @@
 # Advertising Agent Rebrand — Local Completion Evidence
 
 > Status: implementation and local verification complete on 2026-07-15.
-> Final hackathon screenshots and presentation assets remain part of M6 demo
-> hardening because they should be captured only after performance and release
-> work stops changing the interface.
+> Final local release-candidate screenshots were captured after the performance,
+> responsive and browser gates passed.
 
 ## Delivered scope
 
@@ -42,10 +41,10 @@ Frontend:
 
 ```text
 node --test tests
-10 passed, 0 failed
+18 passed, 0 failed
 
 vite build
-2750 modules transformed; build passed
+2569 modules transformed with Vite 6.4.3; build passed without an oversized-chunk warning
 ```
 
 The new branding regression suite checks:
@@ -60,7 +59,7 @@ Agent regression:
 
 ```text
 python -m pytest tests -q
-133 passed
+167 passed
 ```
 
 ## Local browser verification
@@ -83,10 +82,9 @@ The browser smoke also verified:
 - Autopilot remains disabled until required brief fields exist;
 - technical documentation uses the Advertising Agent title and blue tokens.
 
-## Remaining work outside this checkpoint
+## Final screenshot evidence
 
-- Split the current approximately 1.19 MB JavaScript bundle during performance
-  hardening.
-- Run final narrow-device screenshot capture and the complete five-screen visual
-  regression set after performance changes settle.
-- Produce final presentation/demo assets in M6.
+- Desktop opening selector: `screenshots/01-opening-selector.png`.
+- Autopilot Strategy Simulator: `screenshots/02-autopilot-strategy.png`.
+- Mobile selector after scrolling to Autopilot and privacy copy: `screenshots/03-mobile-mode-selector.png`.
+- At 390x844 the selector has a constrained 844-pixel scroll viewport, 1,307 pixels of reachable content and zero horizontal overflow.

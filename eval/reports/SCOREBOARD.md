@@ -151,8 +151,8 @@ Evaluation date: 2026-07-15
 
 | Gate | Result |
 |---|---:|
-| Frontend source tests | **10/10** |
-| Agent regression tests | **133/133** |
+| Frontend source tests | **18/18** |
+| Agent regression tests | **167/167** |
 | Opening selector contrast failures | **0/12** |
 | Guided Workflow contrast failures | **0/64** |
 | Campaign Autopilot contrast failures | **0/74** |
@@ -161,9 +161,11 @@ Evaluation date: 2026-07-15
 
 The local identity, blue visual system, mode selector, user-visible copy,
 email/PDF exports, technical docs, accessible control names, and responsive
-layout contracts pass. The approximately 1.19 MB JavaScript bundle remains a
-performance-hardening item. Final screenshots are intentionally deferred until
-that work no longer changes the interface.
+layout contracts pass. The application-owned initial bundle is now 294.58 KB;
+report, email, and chart code are lazily loaded without an oversized-chunk
+warning. Final release-candidate desktop and mobile screenshots, lossless
+freeform brief handling, stable Autopilot SSE and terminal-state controls are
+tracked in the M6 evidence.
 
 Authoritative evidence:
 `docs/next-hackathon/13-advertising-agent-rebrand-evidence.md`.

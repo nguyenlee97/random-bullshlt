@@ -705,9 +705,10 @@ export default function App() {
     AgentAPI.getWorkspace()
   }, [resetLocalCampaign])
 
-  const handleNewChat = useCallback(() => {
+  const handleNewChat = useCallback(async () => {
+    const deleted = await newChat()
+    if (!deleted) return
     resetLocalCampaign()
-    newChat()
     setExperienceMode(null)
     setModeSelectionError('')
   }, [resetLocalCampaign, newChat])
@@ -843,7 +844,33 @@ export default function App() {
           ? await AgentAPI.approveWorkspaceProposal(e.detail.patch.proposal_id)
           : await AgentAPI.commitWorkspace(originalField, e.detail.patch.value)
         log.workspace(`persistWorkspace(${originalField}) →`, persisted?.ok ? 'ok' : 'failed')
+        if (e.detail.patch.proposal_id) {
+          window.dispatchEvent(new CustomEvent('agent:workspace_proposal_result', {
+            detail: {
+              proposal_id: e.detail.patch.proposal_id,
+              status: persisted?.ok ? 'approved' : 'failed',
+            },
+          }))
+        }
         if (!persisted?.ok || target.step == null) return
+
+        // In Autopilot, chat is a control surface for the canonical workspace.
+        // Applying a proposal must not also launch the Guided step machine (and
+        // its proactive audience request) behind the operator's back. The run
+        // begins only from the explicit "Bắt đầu Autopilot" action above.
+        if (experienceMode === 'autopilot') {
+          window.dispatchEvent(new CustomEvent('agent:inject_message', {
+            detail: {
+              id: `autopilot_update_${Date.now()}`,
+              role: 'assistant',
+              content: '✅ Đã cập nhật workspace. Autopilot sẽ dùng thay đổi này khi bạn bấm **Bắt đầu Autopilot**.',
+              blocks: [],
+              timestamp: new Date().toISOString(),
+              metadata: { tool: 'workspace_confirmed', model: 'none', step: target.step },
+            }
+          }))
+          return
+        }
 
         const stepNum = target.step
         if (stepStatuses[stepNum] !== 'done' && stepStatuses[stepNum] !== 'stale') {
@@ -874,7 +901,7 @@ export default function App() {
     }
     window.addEventListener('agent:workspace_confirm', handler)
     return () => window.removeEventListener('agent:workspace_confirm', handler)
-  }, [handleWorkspaceUpdate, stepStatuses, markStepDone])
+  }, [handleWorkspaceUpdate, stepStatuses, markStepDone, experienceMode])
 
   // Listen for agent:setup_zones_confirmed — fired by WorkspaceProposalBlock when user
   // clicks "✅ Duyệt các zones này". This advances the setup sub-phase to 'assign' using
@@ -1051,6 +1078,7 @@ export default function App() {
             recomputePlan={recomputePlan}
             workspaceRevision={canonicalWorkspace?.revision}
             onOpenRecompute={openFirstRecomputeStep}
+            autopilotMode={experienceMode === 'autopilot'}
           />
         </div>
 

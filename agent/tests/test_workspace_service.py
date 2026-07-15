@@ -19,6 +19,18 @@ def test_dependency_closure_is_selective_and_deterministic():
     assert "creative" not in dependencies.downstream("audience")
 
 
+def test_append_only_event_envelopes_include_session_identity():
+    mutation = service._mutation_event(
+        "workspace-1", "session-1", 1, "brief", "brief", "user", "edit", "key", []
+    )
+    result = service._task_result_event(
+        "workspace-1", "session-1", 2, "strategy", "worker", "done",
+        "task-1", {"brief": 1}, 0, [],
+    )
+    assert mutation["session_id"] == "session-1"
+    assert result["session_id"] == "session-1"
+
+
 @pytest.mark.asyncio
 async def test_stale_revision_cannot_overwrite_newer_workspace():
     initial = await service.get_workspace("ws-conflict")

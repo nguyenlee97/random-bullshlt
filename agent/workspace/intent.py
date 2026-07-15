@@ -94,6 +94,12 @@ _DECLINE_PHRASES = (
     "khong thay doi", "tu choi de xuat", "huy de xuat",
 )
 
+_BRIEF_CONTEXT_TERMS = (
+    "audience", "doi tuong", "do tuoi", "tuoi", "nam", "nu", "gender",
+    "geo", "khu vuc", "tai", "interest", "so thich", "quan tam",
+    "behavior", "hanh vi",
+)
+
 
 def _plain(text: str) -> str:
     normalized = unicodedata.normalize(
@@ -120,6 +126,21 @@ def looks_like_brief_edit(message: str) -> bool:
 def is_explicit_decline(message: str) -> bool:
     text = _plain(message)
     return any(phrase in text for phrase in _DECLINE_PHRASES)
+
+
+def preserve_brief_context(field: str, value: Any, source_message: str) -> Any:
+    """Keep user-supplied audience context when a model omits brief.notes."""
+    if (
+        field == "brief"
+        and isinstance(value, dict)
+        and not str(value.get("notes") or "").strip()
+        and source_message.strip()
+        and any(term in _plain(source_message) for term in _BRIEF_CONTEXT_TERMS)
+    ):
+        enriched = dict(value)
+        enriched["notes"] = source_message.strip()[:4000]
+        return enriched
+    return value
 
 
 def _artifact_value(workspace: dict, artifact: str) -> Any:
@@ -650,6 +671,8 @@ async def resolve_legacy_update(
     value: Any,
     workspace: dict,
     reason: str = "",
+    *,
+    source_message: str = "",
 ) -> tuple[str, Any, str]:
     """Coerce an old ``update_workspace`` payload into a typed safe command.
 
@@ -670,6 +693,11 @@ async def resolve_legacy_update(
         command = "set_brief_fields"
         typed_field = field  # validated by resolve_workspace_intent
         operation = "set"
+        # Some tool-capable models occasionally omit ``notes`` even when the
+        # same user message contains audience, geo, interest, or behavior
+        # context. Preserve that authoritative user text losslessly instead of
+        # letting the downstream audience pipeline start from an empty brief.
+        typed_value = preserve_brief_context(field, typed_value, source_message)
     elif field == "segment":
         command = "select_audience_segments"
         typed_field = "segment"

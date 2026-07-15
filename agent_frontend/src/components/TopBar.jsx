@@ -1,4 +1,4 @@
-import { Bot, Zap, RotateCcw, MessageSquarePlus, Play, FileText } from 'lucide-react'
+import { Bot, RotateCcw, MessageSquarePlus, Play, FileText } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -25,11 +25,6 @@ export default function TopBar({ onReset, onNewChat, showDemo, experienceMode })
       <Badge variant="muted" className="gap-1.5 text-[11px] hidden sm:flex">
         <div className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
         {experienceMode === 'autopilot' ? 'Campaign Autopilot' : 'Guided Workflow'}
-      </Badge>
-
-      <Badge variant="model-qwen" className="text-[11px] hidden sm:flex">
-        <Zap className="w-3 h-3" />
-        Minimax-M2.5
       </Badge>
 
       <div className="ml-auto flex items-center gap-2">

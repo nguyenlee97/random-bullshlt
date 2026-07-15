@@ -72,6 +72,7 @@ test('core mode controls keep mobile layout and accessible names', async () => {
   const autopilot = await source('agent_frontend/src/components/AutopilotPanel.jsx')
 
   assert.match(selector, /grid gap-4 md:grid-cols-2/)
+  assert.match(selector, /h-\[100dvh\] overflow-y-auto/)
   assert.match(app, /md:hidden/)
   assert.match(app, /flex-col md:flex-row/)
   assert.match(app, /role="tablist"/)
@@ -83,4 +84,88 @@ test('core mode controls keep mobile layout and accessible names', async () => {
   assert.match(composer, /aria-label=\{busy \? 'Advertising Agent đang xử lý' : 'Gửi tin nhắn'\}/)
   assert.match(autopilot, /aria-label="Tạm dừng Autopilot"/)
   assert.match(autopilot, /aria-label="Hủy Autopilot run"/)
+})
+
+test('agent credential stays behind the frontend proxy', async () => {
+  const api = await source('agent_frontend/src/api/agentApi.js')
+  const dockerfile = await source('agent_frontend/Dockerfile')
+  const nginx = await source('agent_frontend/nginx.conf')
+  const compose = await source('docker-compose.yml')
+
+  assert.doesNotMatch(api, /VITE_AGENT_API_KEY|X-API-Key/)
+  assert.doesNotMatch(dockerfile, /VITE_AGENT_API_KEY/)
+  assert.match(nginx, /proxy_set_header X-API-Key "\$\{AGENT_API_KEY\}"/)
+  assert.match(compose, /VITE_AGENT_URL: \/agent/)
+  assert.match(compose, /127\.0\.0\.1:27017:27017/)
+})
+
+test('campaign strategy simulator is integrated into Autopilot', async () => {
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  const simulator = await source('agent_frontend/src/components/StrategySimulator.jsx')
+  const api = await source('agent_frontend/src/api/agentApi.js')
+
+  assert.match(panel, /<StrategySimulator/)
+  assert.match(simulator, /Mô phỏng chiến lược campaign/)
+  assert.match(simulator, /Độ phủ dự kiến/)
+  assert.match(simulator, /CPM giả định/)
+  assert.match(simulator, /Chọn phương án này/)
+  assert.match(simulator, /triệu \$\{unit\}/)
+  assert.match(simulator, /nghìn \$\{unit\}/)
+  assert.match(api, /selectAutopilotStrategy/)
+  assert.match(api, /\/strategy`/)
+  assert.match(panel, /Bằng chứng vận hành/)
+  assert.match(panel, /Trace ID:/)
+  assert.match(panel, /RAG\/rerank/)
+})
+
+test('Autopilot presents artifacts without Guided workflow controls', async () => {
+  const app = await source('agent_frontend/src/App.jsx')
+  const workspace = await source('agent_frontend/src/components/WorkspacePane/index.jsx')
+  const topbar = await source('agent_frontend/src/components/TopBar.jsx')
+  assert.match(app, /autopilotMode=\{experienceMode === 'autopilot'\}/)
+  assert.match(workspace, /Điều hướng campaign artifacts/)
+  assert.match(workspace, /!autopilotMode && <WorkFoot/)
+  assert.doesNotMatch(topbar, /Minimax-M2\.5/)
+})
+
+test('workspace proposals have one durable decision lifecycle', async () => {
+  const blocks = await source('agent_frontend/src/blocks/BlockRenderer.jsx')
+  const app = await source('agent_frontend/src/App.jsx')
+  const api = await source('agent_frontend/src/api/agentApi.js')
+  assert.match(blocks, /agent:workspace_proposal_result/)
+  assert.match(blocks, /Đã áp dụng vào workspace/)
+  assert.match(blocks, /Đã bỏ qua đề xuất/)
+  assert.match(app, /status: persisted\?\.ok \? 'approved' : 'failed'/)
+  assert.match(api, /block\.type === 'workspace_proposal'/)
+})
+
+test('Autopilot keeps one stable event stream across parent renders', async () => {
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  assert.match(panel, /workspaceRefreshRef = useRef\(onWorkspaceRefresh\)/)
+  assert.match(panel, /await workspaceRefreshRef\.current\?\.\(\)/)
+  assert.match(panel, /\}, \[run\?\.run_id\]\)/)
+})
+
+test('Autopilot hides stale review actions after a terminal run', async () => {
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  assert.match(panel, /const runTerminal = \['completed', 'cancelled', 'failed'\]\.includes\(run\?\.status\)/)
+  assert.match(panel, /const waiting = runTerminal \? null/)
+  assert.match(panel, /if \(!run\?\.run_id \|\| \['completed', 'cancelled', 'failed'\]\.includes\(run\.status\)\) return/)
+})
+
+test('demo fallback is labeled and cannot mutate workspace', async () => {
+  const api = await source('agent_frontend/src/api/agentApi.js')
+  const chat = await source('agent_frontend/src/hooks/useChat.js')
+  const app = await source('agent_frontend/src/App.jsx')
+  assert.match(api, /Chế độ demo dự phòng/)
+  assert.match(api, /workspace_update: null/)
+  assert.match(api, /fallback_mode: true/)
+  assert.match(api, /brief chưa được lưu/)
+  assert.match(api, /audience chưa được lưu/)
+  assert.match(api, /setup chưa được lưu/)
+  assert.match(api, /không thể xác minh kết quả campaign/)
+  assert.match(api, /báo cáo chưa được khởi tạo/)
+  assert.match(chat, /Không thể xóa dữ liệu phiên trên server/)
+  assert.match(chat, /if \(!deleted\)/)
+  assert.match(app, /if \(!deleted\) return/)
 })

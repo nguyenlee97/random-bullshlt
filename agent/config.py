@@ -18,6 +18,34 @@ class Config:
     LLM_MODEL: str = os.getenv("LLM_MODEL", "minimax/minimax-m2.5")
     LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.1"))
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "2000"))
+    # Provider resilience. The SDK performs at most one retry inside the
+    # request deadline; the circuit breaker prevents a failing provider from
+    # stalling every request during an outage.
+    LLM_TIMEOUT_SECONDS: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "45"))
+    LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "1"))
+    LLM_CIRCUIT_FAILURE_THRESHOLD: int = int(
+        os.getenv("LLM_CIRCUIT_FAILURE_THRESHOLD", "3")
+    )
+    LLM_CIRCUIT_COOLDOWN_SECONDS: float = float(
+        os.getenv("LLM_CIRCUIT_COOLDOWN_SECONDS", "30")
+    )
+    # Cross-provider fallback is opt-in because prompts can contain campaign
+    # and customer data. Both the switch and classification allow-list must
+    # permit it. Blank endpoint/model means no fallback client exists.
+    ALLOW_OFFSHORE_LLM_FALLBACK: bool = (
+        os.getenv("ALLOW_OFFSHORE_LLM_FALLBACK", "false").lower() == "true"
+    )
+    DATA_CLASSIFICATION: str = os.getenv("DATA_CLASSIFICATION", "confidential").lower()
+    LLM_FALLBACK_ALLOWED_CLASSIFICATIONS: tuple[str, ...] = tuple(
+        item.strip().lower()
+        for item in os.getenv(
+            "LLM_FALLBACK_ALLOWED_CLASSIFICATIONS", "public,internal"
+        ).split(",")
+        if item.strip()
+    )
+    LLM_FALLBACK_BASE_URL: str = os.getenv("LLM_FALLBACK_BASE_URL", "")
+    LLM_FALLBACK_API_KEY: str = os.getenv("LLM_FALLBACK_API_KEY", "")
+    LLM_FALLBACK_MODEL: str = os.getenv("LLM_FALLBACK_MODEL", "")
 
     # ── VPS Backend API ───────────────────────────────────────────────────────
     BACKEND_URL: str = os.getenv("BACKEND_URL", "https://api.pawgrammers.io.vn")
@@ -25,6 +53,8 @@ class Config:
     # ── MongoDB (VPS, Option A: port exposed) ─────────────────────────────────
     MONGODB_URI: str = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
     MONGODB_DB: str = os.getenv("MONGODB_DB", "camp_ads")
+    # Separates local/staging judge artifacts from any real campaign namespace.
+    DEMO_NAMESPACE: str = os.getenv("DEMO_NAMESPACE", "local-demo")
 
     # ── Session ───────────────────────────────────────────────────────────────
     # Matches n8n prototype contextWindowLength: 18
@@ -33,6 +63,10 @@ class Config:
     # ── Agent server ──────────────────────────────────────────────────────────
     AGENT_HOST: str = os.getenv("AGENT_HOST", "0.0.0.0")
     AGENT_PORT: int = int(os.getenv("AGENT_PORT", "8080"))
+    MAX_AGENT_REQUEST_BYTES: int = int(
+        os.getenv("MAX_AGENT_REQUEST_BYTES", str(2 * 1024 * 1024))
+    )
+    MAX_CHAT_MESSAGE_CHARS: int = int(os.getenv("MAX_CHAT_MESSAGE_CHARS", "12000"))
 
     # ── Security (Phase 0) ────────────────────────────────────────────────────
     # Empty AGENT_API_KEY = auth middleware disabled (no-op). Set in .env to enable.
@@ -119,6 +153,9 @@ class Config:
         "http://localhost:5176,http://localhost:5175,http://localhost:5174,http://localhost:5173,"
         "http://localhost:3000,http://127.0.0.1:5175,http://127.0.0.1:5173",
     ).split(",")
+    CORS_ALLOW_TUNNELS: bool = (
+        os.getenv("CORS_ALLOW_TUNNELS", "false").lower() == "true"
+    )
 
 
 config = Config()

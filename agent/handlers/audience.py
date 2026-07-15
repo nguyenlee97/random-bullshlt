@@ -292,14 +292,14 @@ async def handle_targeting_autopick(session_id: str) -> AgentResponse:
         meta=ResponseMeta(tool="targeting_autopick", model=selected_model, step=2),
     )
 
-async def handle_dmp_recommend(session_id: str) -> dict:
+async def handle_dmp_recommend(session_id: str, brief_override: dict | None = None) -> dict:
     """
     GET /api/agent/dmp-recommend?session_id=xxx
     Returns AI-picked top segments based on real DMP data + brief context.
     Response: { recommendations: [{fullLabel, reason}], segments: [{fullLabel, segmentId, ...}] }
     """
     session = await get_or_create_session(session_id)
-    brief = session.get("form_state", {}).get("brief", {})
+    brief = brief_override or session.get("form_state", {}).get("brief", {})
 
     # If brief not set yet, return empty gracefully
     if not brief.get("brand"):

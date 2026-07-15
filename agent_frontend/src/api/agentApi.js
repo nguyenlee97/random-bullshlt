@@ -2,21 +2,24 @@ import { fmt, generateId } from '@/lib/utils'
 import log from '@/lib/logger'
 
 // ─── Real Agent API client ────────────────────────────────────────────────────
-const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8000'
+const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8080'
 // AdsPilot backend (for /api/creative/upload)
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+const DEMO_NAMESPACE = String(import.meta.env.VITE_DEMO_NAMESPACE || '')
+  .toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32)
 
-// Phase 0 auth: X-API-Key sent on every agent call when VITE_AGENT_API_KEY is
-// set (must match AGENT_API_KEY in agent/.env — middleware no-ops when empty).
-const AGENT_API_KEY = import.meta.env.VITE_AGENT_API_KEY || ''
 const agentFetch = (url, opts = {}) =>
   fetch(url, {
     ...opts,
     headers: {
       ...(opts.headers || {}),
-      ...(AGENT_API_KEY ? { 'X-API-Key': AGENT_API_KEY } : {}),
     },
   })
+
+const withRequestId = (data, response) => ({
+  ...data,
+  request_id: response.headers.get('x-request-id') || data?.request_id || null,
+})
 
 let _agentReachable = null // null=unknown, true/false after first probe
 
@@ -39,7 +42,7 @@ async function probeVersion() {
     // Big, visible log so you can confirm the deployed backend version instantly
     console.log(
       `%c🚀 BACKEND v${data.version}%c  ${AGENT_URL}`,
-      'background:#16a34a;color:#fff;font-size:13px;font-weight:bold;padding:3px 10px;border-radius:4px',
+      'background:#0068ff;color:#fff;font-size:13px;font-weight:bold;padding:3px 10px;border-radius:4px',
       'color:#6b7280;font-size:11px',
     )
     log.api('VERSION CHECK', {
@@ -107,7 +110,11 @@ async function callAgent(payload) {
         step: data.meta?.step ?? null,
       },
       workspace_update: data.workspace_update || null,
-      suggestions: data.suggestions || [],
+      // Proposal cards own approve/reject actions. Repeating confirmation as
+      // quick-reply chips creates two competing control paths for one mutation.
+      suggestions: (data.blocks || []).some(block => block.type === 'workspace_proposal')
+        ? []
+        : (data.suggestions || []),
     }
   } catch (err) {
     log.error('callAgent failed', { error: err.message, duration_ms: Date.now() - t0 })
@@ -637,7 +644,8 @@ export function extractTargetingMap(blocks) {
  * Session ID — regenerated on newChat/reset so backend history is always clean.
  */
 function _genSessionId() {
-  return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const namespace = DEMO_NAMESPACE ? `${DEMO_NAMESPACE}_` : ''
+  return `sess_${namespace}${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
 let SESSION_ID = _genSessionId()
 let WORKSPACE_REVISION = null
@@ -928,7 +936,7 @@ export async function uploadCreativeFile(dataUrl, filename, mimeType) {
 let _orderIdempotencyKey = null
 
 export async function createCampaignOrder(selectedZoneIds, assignments, fileUrls = {}) {
-  if (!_orderIdempotencyKey) _orderIdempotencyKey = crypto.randomUUID()
+  if (!_orderIdempotencyKey) _orderIdempotencyKey = `${DEMO_NAMESPACE || 'app'}:${crypto.randomUUID()}`
   try {
     const res = await agentFetch(`${AGENT_URL}/api/agent/chat`, {
       method: 'POST',
@@ -962,12 +970,30 @@ export async function createCampaignOrder(selectedZoneIds, assignments, fileUrls
   }
 }
 
+function safeDemoFallback(response) {
+  return {
+    ...response,
+    content: `⚠️ **Chế độ demo dự phòng** — Agent service đang tạm thời không khả dụng. Nội dung dưới đây là hướng dẫn đã lưu sẵn và không thay đổi workspace.\n\n${response?.content || ''}`,
+    blocks: [],
+    workspace_update: null,
+    metadata: { ...(response?.metadata || {}), tool: 'demo_fallback', model: 'deterministic-cache', fallback_mode: true },
+  }
+}
+
+function serviceUnavailable(content, step) {
+  return {
+    id: generateId(), role: 'error', content, blocks: [],
+    timestamp: new Date().toISOString(), workspace_update: null,
+    metadata: { tool: 'agent_unavailable', model: 'none', step },
+  }
+}
+
 
 export const AgentAPI = {
 
   async boot() {
     const real = await callAgent({ session_id: SESSION_ID, step: -1, message: '' })
-    return real ?? AGENT_SCENARIOS.boot()
+    return real ?? safeDemoFallback(AGENT_SCENARIOS.boot())
   },
 
   async chat(text, currentStep, formState, stepStatuses, workspaceEvents) {
@@ -1013,7 +1039,7 @@ export const AgentAPI = {
     if (real?.workspace_update || real?.metadata?.tool === 'targeting_autopick') {
       await this.getWorkspace()
     }
-    return real ?? AGENT_SCENARIOS.chat(text, currentStep, formState)
+    return real ?? safeDemoFallback(AGENT_SCENARIOS.chat(text, currentStep, formState))
   },
 
   async approveBrief(briefData) {
@@ -1023,17 +1049,29 @@ export const AgentAPI = {
       message: '',
       formData: { brief: briefData },
     })
-    if (real) await this.getWorkspace()
-    return real ?? AGENT_SCENARIOS.approveBrief(briefData)
+    if (!real) return serviceUnavailable('⚠️ Agent service không khả dụng; brief chưa được lưu. Hãy thử lại khi kết nối phục hồi.', 0)
+    await this.getWorkspace()
+    return real
   },
 
   async approveCreative(creativeData) {
     // Creative is now step 2 (Brief=0, Audience=1, Creative=2)
+    const compactCreative = {
+      ...creativeData,
+      files: (creativeData?.files || []).map(file => ({
+        id: file.id, name: file.name, type: file.type, size: file.size,
+        width: file.width, height: file.height, url: file.url,
+        analysisId: file.analysisId, analysisStatus: file.analysisStatus,
+        reviewReasons: file.reviewReasons, deterministic: file.deterministic,
+        vlm: file.vlm, override: file.override, formatId: file.formatId,
+        intendedFormat: file.intendedFormat,
+      })),
+    }
     const real = await callAgent({
       session_id: SESSION_ID,
       step: 2,
       message: '',
-      formData: { creative: creativeData },
+      formData: { creative: compactCreative },
     })
     if (!real) throw new Error('Agent không lưu được creative đã phân tích')
     await this.getWorkspace()
@@ -1048,8 +1086,9 @@ export const AgentAPI = {
       message: '',
       formData: { segment: segmentData },
     })
-    if (real) await this.getWorkspace()
-    return real ?? AGENT_SCENARIOS.approveAudience(segmentData)
+    if (!real) return serviceUnavailable('⚠️ Agent service không khả dụng; audience chưa được lưu. Hãy thử lại khi kết nối phục hồi.', 1)
+    await this.getWorkspace()
+    return real
   },
 
   async approveSetup(setupData) {
@@ -1059,7 +1098,8 @@ export const AgentAPI = {
       message: '',
       formData: { setup: setupData },
     })
-    return real ?? AGENT_SCENARIOS.approveSetup(setupData)
+    if (!real) return serviceUnavailable('⚠️ Agent service không khả dụng; setup chưa được lưu. Hãy thử lại khi kết nối phục hồi.', 3)
+    return real
   },
 
   async getResult() {
@@ -1069,12 +1109,27 @@ export const AgentAPI = {
       message: '',
       formData: {},
     })
-    return real ?? AGENT_SCENARIOS.showResult()
+    if (!real) return serviceUnavailable('⚠️ Agent service không khả dụng; không thể xác minh kết quả campaign.', 4)
+    return real
   },
 
   /** Probe health — called on app mount to decide badge status */
   async isOnline() {
     return probeAgent()
+  },
+
+  /** Delete the current agent/session artifacts. Created campaign orders remain. */
+  async deleteCurrentSession() {
+    try {
+      const res = await agentFetch(
+        `${AGENT_URL}/api/agent/sessions/${encodeURIComponent(SESSION_ID)}`,
+        { method: 'DELETE', signal: AbortSignal.timeout(10000) },
+      )
+      return res.ok
+    } catch (e) {
+      console.warn('[deleteCurrentSession] failed:', e.message)
+      return false
+    }
   },
 
   /** Generate a fresh session ID — call before newChat() to get a clean backend context. */
@@ -1219,7 +1274,7 @@ export const AgentAPI = {
         signal: AbortSignal.timeout(10000),
       })
       const data = await res.json().catch(() => ({}))
-      return res.ok ? data : { ok: false, status: res.status, ...(data.detail || data) }
+      return res.ok ? withRequestId(data, res) : { ok: false, status: res.status, ...(data.detail || data) }
     } catch (e) {
       return { ok: false, detail: e.message }
     }
@@ -1230,7 +1285,7 @@ export const AgentAPI = {
       const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}`, {
         signal: AbortSignal.timeout(5000),
       })
-      return res.ok ? await res.json() : null
+      return res.ok ? withRequestId(await res.json(), res) : null
     } catch (e) {
       console.warn('[getAutopilotRun] failed:', e.message)
       return null
@@ -1245,7 +1300,7 @@ export const AgentAPI = {
         signal: AbortSignal.timeout(5000),
       })
       const data = await res.json().catch(() => ({}))
-      return res.ok ? data : { ok: false, status: res.status, ...(data.detail || data) }
+      return res.ok ? withRequestId(data, res) : { ok: false, status: res.status, ...(data.detail || data) }
     } catch (e) {
       return { ok: false, detail: e.message }
     }
@@ -1259,17 +1314,31 @@ export const AgentAPI = {
         signal: AbortSignal.timeout(10000),
       })
       const data = await res.json().catch(() => ({}))
-      return res.ok ? data : { ok: false, status: res.status, ...(data.detail || data) }
+      return res.ok ? withRequestId(data, res) : { ok: false, status: res.status, ...(data.detail || data) }
+    } catch (e) {
+      return { ok: false, detail: e.message }
+    }
+  },
+
+  async selectAutopilotStrategy(runId, optionId, reason = '') {
+    try {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/strategy`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ option_id: optionId, actor: 'campaign_operator', reason }),
+        signal: AbortSignal.timeout(10000),
+      })
+      const data = await res.json().catch(() => ({}))
+      return res.ok ? withRequestId(data, res) : { ok: false, status: res.status, ...(data.detail || data) }
     } catch (e) {
       return { ok: false, detail: e.message }
     }
   },
 
   subscribeAutopilot(runId, onEvent) {
-    if (typeof EventSource === 'undefined' || AGENT_API_KEY) return () => {}
+    if (typeof EventSource === 'undefined') return () => {}
     const source = new EventSource(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/events`)
     const handler = () => onEvent?.()
-    ;['run_created', 'task_started', 'task_completed', 'task_waiting_review', 'task_approved', 'task_rejected', 'task_retry_scheduled', 'task_failed', 'run_paused', 'run_resumed', 'run_cancelled'].forEach(type => source.addEventListener(type, handler))
+    ;['run_created', 'task_started', 'task_completed', 'task_waiting_review', 'task_approved', 'task_rejected', 'task_retry_scheduled', 'task_failed', 'strategy_selected', 'run_paused', 'run_resumed', 'run_cancelled'].forEach(type => source.addEventListener(type, handler))
     source.onerror = () => source.close()
     return () => source.close()
   },
@@ -1385,11 +1454,11 @@ export const AgentAPI = {
         `${AGENT_URL}/api/agent/report-entry?session_id=${SESSION_ID}`,
         { signal: AbortSignal.timeout(180000) }  // triggers background report gen
       )
-      if (!res.ok) return null
+      if (!res.ok) return serviceUnavailable('⚠️ Agent service không khả dụng; báo cáo chưa được khởi tạo.', 5)
       return await res.json()
     } catch (e) {
       console.warn('[reportEntry] failed:', e.message)
-      return null
+      return serviceUnavailable('⚠️ Agent service không khả dụng; báo cáo chưa được khởi tạo.', 5)
     }
   },
 

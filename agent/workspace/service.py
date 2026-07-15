@@ -209,6 +209,7 @@ async def set_preferences(
     event = {
         "event_id": f"wev_{uuid.uuid4().hex}",
         "workspace_id": workspace_id,
+        "session_id": session_id,
         "revision": expected + 1,
         "type": "workspace_preferences_changed",
         "actor": actor,
@@ -378,6 +379,7 @@ def _merged_artifact_value(doc: dict, artifact: str, field: str, value: Any) -> 
 
 def _mutation_event(
     workspace_id: str,
+    session_id: str,
     revision: int,
     field: str,
     artifact: str,
@@ -389,6 +391,7 @@ def _mutation_event(
     return {
         "event_id": f"wev_{uuid.uuid4().hex}",
         "workspace_id": workspace_id,
+        "session_id": session_id,
         "revision": revision,
         "type": "workspace_mutated",
         "field": field,
@@ -433,7 +436,7 @@ async def apply_mutation(
         affected = _impact(raw, artifact)
         committed_value = _merged_artifact_value(raw, artifact, field, value)
         event = _mutation_event(
-            workspace_id, new_revision, field, artifact, actor, reason, key, affected
+            workspace_id, session_id, new_revision, field, artifact, actor, reason, key, affected
         )
         result = {
             "ok": True,
@@ -508,7 +511,7 @@ async def apply_mutation(
             affected = _impact(raw, artifact)
             committed_value = _merged_artifact_value(raw, artifact, field, value)
             event = _mutation_event(
-                workspace_id, new_revision, field, artifact, actor, reason, key, affected
+                workspace_id, session_id, new_revision, field, artifact, actor, reason, key, affected
             )
             raw["revision"] = new_revision
             raw["updated_at"] = event["created_at"]
@@ -578,6 +581,7 @@ async def apply_mutation(
 
 def _task_result_event(
     workspace_id: str,
+    session_id: str,
     revision: int,
     artifact: str,
     actor: str,
@@ -590,6 +594,7 @@ def _task_result_event(
     return {
         "event_id": f"wev_{uuid.uuid4().hex}",
         "workspace_id": workspace_id,
+        "session_id": session_id,
         "revision": revision,
         "type": "artifact_result_committed",
         "artifact": artifact,
@@ -643,7 +648,7 @@ async def commit_artifact_result(
         new_revision = expected + 1
         affected = _impact(raw, artifact)
         event = _task_result_event(
-            workspace_id, new_revision, artifact, actor, reason, task_id,
+            workspace_id, session_id, new_revision, artifact, actor, reason, task_id,
             input_revisions, base_artifact_revision, affected,
         )
         result = {
@@ -721,7 +726,7 @@ async def commit_artifact_result(
             new_revision = raw["revision"] + 1
             affected = _impact(raw, artifact)
             event = _task_result_event(
-                workspace_id, new_revision, artifact, actor, reason, task_id,
+                workspace_id, session_id, new_revision, artifact, actor, reason, task_id,
                 input_revisions, base_artifact_revision, affected,
             )
             result = {

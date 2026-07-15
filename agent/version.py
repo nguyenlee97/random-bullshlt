@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-15.1"
+BUILD_VERSION = "2026-07-15.2"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -83,4 +83,10 @@ BUILD_FEATURES = [
     "transactional-campaign-workspace", # revisioned canonical artifacts + typed proposals
     "nonlinear-artifact-recompute",     # dependency-aware stale/reuse orchestration
     "durable-campaign-autopilot",       # persisted runs/tasks, leases, review, pause/resume/cancel
+    "advertising-agent-blue-ui",        # Zalo-inspired original blue identity + two-mode selector
+    "campaign-strategy-simulator",      # three deterministic, auditable strategy scenarios
+    "autopilot-live-evidence",          # trace, retrieval, rerank, guard and idempotency evidence
+    "privacy-security-hardening",       # redaction, deletion, prompt guard and bounded requests
+    "provider-circuit-breaker",         # timeout, bounded retry, fail-fast and policy-gated fallback
+    "namespaced-demo-rehearsal",        # safe fallback + reset/prewarm/rehearsal tooling
 ]

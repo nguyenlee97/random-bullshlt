@@ -1,14 +1,13 @@
 """
-API-key auth middleware (Phase 0). Upgraded to JWT in Phase 5.
+Internal API-key authentication for the agent service.
 
 Behavior:
-- If AGENT_API_KEY is unset/empty → middleware is a NO-OP (deploy-safe default:
+- If AGENT_API_KEY is unset/empty → middleware is a NO-OP (local development:
   turning this on is an explicit .env change, not a surprise lockout).
 - Health/version/metrics endpoints and CORS preflights are always exempt.
 
-Known limitation (accepted for Phase 0, see docs/production-plan/01 §A1):
-the key ships in the frontend bundle. Goal is stopping drive-by scripted abuse
-of an open LLM endpoint, not bulletproof auth.
+The browser never receives this key. Nginx injects it while proxying same-origin
+``/agent`` requests to the private agent container.
 """
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request

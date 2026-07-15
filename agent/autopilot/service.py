@@ -27,7 +27,9 @@ AUTOPILOT_WORKSPACE_ACTORS = {"autopilot_worker", "autopilot_review"}
 # rather than created again. These roots make replanning explicit and auditable.
 ARTIFACT_REPLAN_ROOT = {
     "brief": ("normalize_brief",),
-    "strategy": ("generate_strategy",),
+    # A strategy edit is the operator selecting one already-generated option.
+    # Keep the simulator result and recompute only consumers of that choice.
+    "strategy": ("retrieve_audience", "analyze_creatives", "rank_placements"),
     "audience": ("retrieve_audience",),
     "targeting": ("derive_targeting",),
     "creative": ("analyze_creatives", "rank_placements"),
@@ -688,6 +690,90 @@ async def review_task(
     if retry_after_review:
         await reconcile_workspace_changes(run_id)
     return await get_run(run_id)
+
+
+async def select_strategy(
+    run_id: str,
+    option_id: str,
+    *,
+    actor: str = "campaign_operator",
+    reason: str = "",
+) -> dict:
+    """Record a simulator choice and safely replan its downstream consumers."""
+    run = await get_run(run_id)
+    if run["status"] in RUN_TERMINAL:
+        raise RunConflict("strategy cannot change after the run is terminal")
+    if any(
+        task["key"] == "create_order" and task["status"] == "succeeded"
+        for task in run["tasks"]
+    ):
+        raise RunConflict("strategy cannot change after order creation")
+
+    task = next((item for item in run["tasks"] if item["key"] == "generate_strategy"), None)
+    if not task or task["status"] not in {"waiting_review", "succeeded"}:
+        raise RunConflict("strategy options are not ready")
+    value = deepcopy(task.get("result") or {})
+    options = value.get("options") if isinstance(value, dict) else None
+    selected_option = next(
+        (item for item in (options or []) if item.get("id") == option_id), None
+    )
+    if not selected_option:
+        raise ValueError("unknown strategy option")
+
+    selection_reason = reason.strip() or selected_option.get("rationale", "")
+    value.update({
+        "selected": option_id,
+        "selected_reason": selection_reason,
+        "selection": {
+            "source": "operator",
+            "actor": actor,
+            "reason": selection_reason,
+            "selected_at": _now(),
+        },
+    })
+    evidence = deepcopy(task.get("evidence") or [])
+    evidence.append({
+        "type": "strategy_selected", "option_id": option_id,
+        "actor": actor, "reason": selection_reason,
+    })
+
+    _, tasks, _ = await _collections()
+    updates = {"result": value, "evidence": evidence, "updated_at": _now()}
+    if task["status"] == "waiting_review":
+        pending = deepcopy(task.get("pending_artifact") or {})
+        if pending.get("artifact") != "strategy":
+            raise RunConflict("strategy review has no pending artifact")
+        pending["value"] = value
+        updates["pending_artifact"] = pending
+        if tasks is not None:
+            await tasks.update_one({"_id": task["task_id"]}, {"$set": updates})
+        else:
+            _mem_tasks[task["task_id"]].update(updates)
+        await _emit(run_id, "strategy_selected", {
+            "task_id": task["task_id"], "option_id": option_id, "actor": actor,
+        })
+        return await get_run(run_id)
+
+    from workspace.service import apply_mutation
+    workspace = await get_workspace(run["session_id"])
+    current = workspace.get("artifacts", {}).get("strategy", {}).get("value") or {}
+    if current.get("selected") == option_id:
+        return run
+    await apply_mutation(
+        run["session_id"], "strategy", value,
+        base_revision=workspace["revision"], actor=actor,
+        reason=f"Campaign Strategy Simulator: {selection_reason}",
+        idempotency_key=f"{run_id}:strategy:{option_id}:{workspace['revision']}",
+    )
+    if tasks is not None:
+        await tasks.update_one({"_id": task["task_id"]}, {"$set": updates})
+    else:
+        _mem_tasks[task["task_id"]].update(updates)
+    await _emit(run_id, "strategy_selected", {
+        "task_id": task["task_id"], "option_id": option_id, "actor": actor,
+    })
+    reconciled = await reconcile_workspace_changes(run_id)
+    return reconciled["run"]
 
 
 async def recover_expired_leases() -> int:

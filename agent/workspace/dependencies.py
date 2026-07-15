@@ -19,6 +19,7 @@ ARTIFACTS = (
 
 FIELD_TO_ARTIFACT = {
     "brief": "brief",
+    "strategy": "strategy",
     "segment": "audience",
     "targeting": "targeting",
     "creative": "creative",

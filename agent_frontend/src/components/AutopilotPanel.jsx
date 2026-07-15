@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, Check, Circle, Loader2, Pause, Play, RotateCw,
+  Activity, AlertTriangle, Check, Circle, Loader2, Pause, Play, RotateCw,
   ShieldCheck, Sparkles, Square, X,
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
+import StrategySimulator from '@/components/StrategySimulator'
 
 const POLICY_OPTIONS = [
   { value: 'critical_only', label: 'Duyệt các bước quan trọng', note: 'Khuyến nghị' },
@@ -37,20 +38,36 @@ const taskIcon = status => {
   return <Circle className="h-2.5 w-2.5" />
 }
 
+const evidenceText = evidence => {
+  if (evidence.type === 'audience_pipeline') return `RAG ${evidence.retrieval_candidates || 0} candidates → rerank ${evidence.reranked ? 'đã áp dụng' : evidence.rerank_enabled ? 'không khả dụng' : 'tắt'} → ${evidence.selector || 'selector'}`
+  if (evidence.type === 'catalog_segments') return `${evidence.count || 0} segment catalog: ${(evidence.ids || []).slice(0, 6).join(', ')}${(evidence.ids || []).length > 6 ? '…' : ''}`
+  if (evidence.type === 'order_guard') return `Order guard: ${evidence.passed ? 'PASS' : 'BLOCKED'}`
+  if (evidence.type === 'order_draft') return `Order draft: ${evidence.placements || 0} placements · idempotency ${evidence.idempotency_key || '—'}`
+  if (evidence.type === 'order_create') return `Order create: ${evidence.order_id || 'đã ghi nhận'} · idempotency ${evidence.idempotency_key || '—'}`
+  if (evidence.type === 'strategy_simulation') return `Simulator ${evidence.option_ids?.length || 0} phương án · đề xuất ${evidence.selected}`
+  if (evidence.type === 'creative_verdicts') return `${evidence.count || 0} creative verdict · ${evidence.revalidated ? 'đã revalidate' : 'hiện hành'}`
+  return evidence.type?.replaceAll('_', ' ') || 'evidence'
+}
+
 export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreative }) {
   const [policy, setPolicy] = useState('critical_only')
   const [run, setRun] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const workspaceRefreshRef = useRef(onWorkspaceRefresh)
+
+  useEffect(() => {
+    workspaceRefreshRef.current = onWorkspaceRefresh
+  }, [onWorkspaceRefresh])
 
   const refresh = useCallback(async () => {
     if (!run?.run_id) return
     const current = await AgentAPI.getAutopilotRun(run.run_id)
     if (current) {
       setRun(current)
-      await onWorkspaceRefresh?.()
+      await workspaceRefreshRef.current?.()
     }
-  }, [run?.run_id, onWorkspaceRefresh])
+  }, [run?.run_id])
 
   useEffect(() => {
     if (!run?.run_id || ['completed', 'cancelled', 'failed'].includes(run.status)) return
@@ -90,6 +107,7 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
   }
 
   const review = async (task, approved) => {
+    if (!run?.run_id || ['completed', 'cancelled', 'failed'].includes(run.status)) return
     if (task.result?.reason === 'missing_creative') onOpenCreative?.()
     setLoading(true)
     setError('')
@@ -104,13 +122,38 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
     }
   }
 
+  const chooseStrategy = async optionId => {
+    if (!run?.run_id || ['completed', 'cancelled', 'failed'].includes(run.status)) return
+    setLoading(true)
+    setError('')
+    try {
+      const next = await AgentAPI.selectAutopilotStrategy(run.run_id, optionId)
+      if (!next?.run_id) throw new Error(next?.detail || 'Không thể cập nhật chiến lược.')
+      setRun(next)
+      await onWorkspaceRefresh?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const progress = useMemo(() => {
     if (!run?.tasks?.length) return 0
     const done = run.tasks.filter(task => ['succeeded', 'skipped'].includes(task.status)).length
     return Math.round(done / run.tasks.length * 100)
   }, [run])
 
-  const waiting = run?.tasks?.find(task => task.status === 'waiting_review')
+  const runTerminal = ['completed', 'cancelled', 'failed'].includes(run?.status)
+  const waiting = runTerminal ? null : run?.tasks?.find(task => task.status === 'waiting_review')
+  const strategyTask = run?.tasks?.find(task => task.key === 'generate_strategy')
+  const orderCreated = run?.tasks?.some(task => task.key === 'create_order' && task.status === 'succeeded')
+  const strategyCanChange = Boolean(strategyTask && ['waiting_review', 'succeeded'].includes(strategyTask.status) && !orderCreated && !runTerminal)
+  const evidenceRows = useMemo(() => (run?.tasks || []).flatMap(task =>
+    (task.evidence || []).map((evidence, index) => ({
+      key: `${task.task_id}:${index}`, task: TASK_LABELS[task.key] || task.key,
+      evidence,
+    }))), [run])
   const missingBriefFields = useMemo(() => [
     !String(brief?.brand || '').trim() && 'thương hiệu',
     !(Number(brief?.budget) > 0) && 'ngân sách',
@@ -198,6 +241,28 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
               Thay đổi ở {run.last_replan.changed_artifacts.map(item => ARTIFACT_LABELS[item] || item).join(', ')} ảnh hưởng {run.last_replan.affected_tasks.length} tác vụ; các kết quả không liên quan được giữ nguyên.
             </div>
           )}
+
+          <StrategySimulator
+            value={strategyTask?.result}
+            busy={loading}
+            canSelect={strategyCanChange}
+            onSelect={chooseStrategy}
+          />
+
+          <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-bold text-slate-700">
+              <Activity className="h-4 w-4 text-brand-500" /> Bằng chứng vận hành
+              <span className="font-normal text-slate-500">trace · RAG/rerank · guard · idempotency</span>
+            </summary>
+            <div className="mt-2 space-y-1.5 text-[11px]">
+              <p className="rounded-lg bg-white px-2 py-1.5 text-slate-600"><span className="font-bold text-slate-800">Trace ID:</span> {run.request_id || 'sẽ xuất hiện sau lần đồng bộ kế tiếp'}</p>
+              {evidenceRows.length ? evidenceRows.map(row => (
+                <p key={row.key} className="rounded-lg bg-white px-2 py-1.5 text-slate-600">
+                  <span className="font-bold text-slate-800">{row.task}:</span> {evidenceText(row.evidence)}
+                </p>
+              )) : <p className="px-2 py-1 text-slate-500">Bằng chứng sẽ xuất hiện khi các tác vụ hoàn tất.</p>}
+            </div>
+          </details>
 
           {waiting && (
             <div className="mt-3 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 sm:flex-row sm:items-center">

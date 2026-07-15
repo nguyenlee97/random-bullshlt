@@ -21,7 +21,7 @@ const modes = [
 
 export default function ExperienceSelector({ onSelect, busy, error }) {
   return (
-    <main className="min-h-screen overflow-auto bg-[radial-gradient(circle_at_top_left,_#dcebff_0,_#f4f7fb_38%,_#eef4fb_100%)] px-5 py-8 sm:px-8 sm:py-12">
+    <main className="h-screen h-[100dvh] overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top_left,_#dcebff_0,_#f4f7fb_38%,_#eef4fb_100%)] px-5 py-8 sm:px-8 sm:py-12">
       <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-5xl flex-col justify-center">
         <div className="mb-8 flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-500 shadow-[0_12px_30px_rgba(0,104,255,0.28)]">
@@ -84,6 +84,9 @@ export default function ExperienceSelector({ onSelect, busy, error }) {
 
         {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         <p className="mt-6 text-center text-xs text-slate-600">Khi bắt đầu campaign mới, bạn có thể chọn lại chế độ làm việc.</p>
+        <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] leading-5 text-slate-500">
+          Nội dung chat, brief và creative được dịch vụ AI xử lý để xây dựng campaign. Không nhập dữ liệu cá nhân hoặc bí mật không cần thiết. Chọn New Chat để xóa dữ liệu phiên Agent.
+        </p>
       </div>
     </main>
   )

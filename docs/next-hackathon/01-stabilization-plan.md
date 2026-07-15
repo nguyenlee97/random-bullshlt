@@ -141,21 +141,21 @@ The smoke report must include durations, trace IDs, selected segment IDs, select
 
 ## H. Stabilization acceptance checklist
 
-- [ ] Repository clean and recovery tag exists.
+- [x] Repository recovery branch and local release-candidate tag exist.
 - [ ] All exposed credentials rotated.
 - [x] Local frontend uses only local agent/backend.
 - [x] Local database has 310 audience records.
 - [x] Python lockfile exists (`agent/requirements.lock`, exact tested pins).
-- [x] All agent tests pass (53 tests in the locked Docker image).
+- [x] All agent tests pass (167 tests in the locked Docker image).
 - [x] Backend syntax checks pass.
 - [x] Frontend unit tests and production build pass.
 - [x] Golden-set validator passes all 80 briefs against 310 catalog segments.
 - [x] Three complete automated local campaign flows pass.
 - [x] Automated smoke test passes (`eval/reports/full-campaign-smoke.json`).
 - [x] Duplicate-order retry test passes in all three smoke flows.
-- [ ] Agent restart persistence test passes.
-- [ ] Prometheus/Grafana/Langfuse evidence captured.
-- [ ] Rollback instructions tested.
+- [x] Agent restart persistence test passes.
+- [x] Prometheus/Grafana/Langfuse evidence captured.
+- [x] Rollback branch resolves and the restore point is documented.
 
 Only after every applicable box is green should M2 audience RAG become the default workstream.
 

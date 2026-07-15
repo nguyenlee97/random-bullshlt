@@ -12,6 +12,12 @@ try:
         "agent_llm_calls_total", "LLM calls", ["model", "handler", "outcome"])
     LLM_TOKENS = Counter(
         "agent_llm_tokens_total", "LLM tokens", ["model", "direction"])
+    LLM_PROVIDER_EVENTS = Counter(
+        "agent_llm_provider_events_total", "Model provider routing events",
+        ["provider", "outcome"])
+    INJECTION_FLAGGED = Counter(
+        "agent_prompt_injection_flagged_total", "Prompt injection detections",
+        ["surface", "rule"])
     TOOL_CALLS = Counter(
         "agent_tool_calls_total", "Tool executions", ["tool", "outcome"])
     FALLBACK_LEVEL = Counter(
@@ -49,7 +55,7 @@ except ImportError:  # prometheus_client not installed — everything no-ops
         def labels(self, *a, **k): return self
         def inc(self, *a, **k): pass
         def observe(self, *a, **k): pass
-    LLM_CALLS = LLM_TOKENS = TOOL_CALLS = FALLBACK_LEVEL = _Noop()
+    LLM_CALLS = LLM_TOKENS = LLM_PROVIDER_EVENTS = INJECTION_FLAGGED = TOOL_CALLS = FALLBACK_LEVEL = _Noop()
     ORDERS_CREATED = ORDERS_REJECTED = SESSION_COST = _Noop()
     RAG_REQUESTS = RAG_HALLUCINATED = RAG_GUARD_REJECTED = RAG_RERANK = _Noop()
     RAG_STAGE_SECONDS = RAG_CANDIDATES = _Noop()

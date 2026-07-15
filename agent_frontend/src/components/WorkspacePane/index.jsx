@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useRef, useCallback } from 'react'
+import { forwardRef, lazy, Suspense, useImperativeHandle, useRef, useCallback } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -9,9 +9,18 @@ import CreativeStep from '@/steps/CreativeStep'
 import AudienceStep from '@/steps/AudienceStep'
 import SetupStep from '@/steps/SetupStep'
 import SuccessStep from '@/steps/SuccessStep'
-import ReportStep from '@/steps/ReportStep'
-import EmailStep from '@/steps/EmailStep'
 import { AlertTriangle, LayoutDashboard } from 'lucide-react'
+
+const ReportStep = lazy(() => import('@/steps/ReportStep'))
+const EmailStep = lazy(() => import('@/steps/EmailStep'))
+
+function StepLoading() {
+  return (
+    <div className="min-h-40 grid place-items-center text-sm text-muted-foreground" role="status">
+      Đang tải công cụ bước này…
+    </div>
+  )
+}
 
 const STEP_DESCS = [
   'Điền brief khách hàng — agent chuẩn hóa về JSON schema và đề xuất KPI.',
@@ -24,7 +33,7 @@ const STEP_DESCS = [
 ]
 
 const WorkspacePane = forwardRef(function WorkspacePane(
-  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, onOpenRecompute },
+  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, onOpenRecompute, autopilotMode = false },
   ref
 ) {
   const bodyRef = useRef(null)
@@ -90,18 +99,24 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           }}
         />
       )
-      case 5: return <ReportStep data={formState.report} onChange={v => updateFormSlice('report', v)} isDone={isDone} formState={formState} onSendChat={onSendChat} />
+      case 5: return (
+        <Suspense fallback={<StepLoading />}>
+          <ReportStep data={formState.report} onChange={v => updateFormSlice('report', v)} isDone={isDone} formState={formState} onSendChat={onSendChat} />
+        </Suspense>
+      )
       case 6: return (
-        <EmailStep
-          brief={formState.brief}
-          zones={formState.setup?.recoZones || []}
-          selectedZoneIds={formState.setup?.selectedZoneIds || []}
-          audiences={formState.segment}
-          data={formState.email || {}}
-          onChange={v => updateFormSlice('email', v)}
-          isDone={isDone}
-          formState={formState}
-        />
+        <Suspense fallback={<StepLoading />}>
+          <EmailStep
+            brief={formState.brief}
+            zones={formState.setup?.recoZones || []}
+            selectedZoneIds={formState.setup?.selectedZoneIds || []}
+            audiences={formState.segment}
+            data={formState.email || {}}
+            onChange={v => updateFormSlice('email', v)}
+            isDone={isDone}
+            formState={formState}
+          />
+        </Suspense>
       )
       default: return null
     }
@@ -112,20 +127,38 @@ const WorkspacePane = forwardRef(function WorkspacePane(
       {/* Pane header */}
       <div className="flex items-center gap-2 px-3 sm:px-5 py-3 border-b border-border bg-white/80 flex-shrink-0">
         <LayoutDashboard className="w-4 h-4 text-violet-500" />
-        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Workspace</span>
-        <span className="ml-1 text-xs text-muted-foreground">· Form & kết quả · bước hiện tại</span>
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{autopilotMode ? 'Campaign artifacts' : 'Workspace'}</span>
+        <span className="ml-1 text-xs text-muted-foreground">{autopilotMode ? '· Dữ liệu để Agent thực thi' : '· Form & kết quả · bước hiện tại'}</span>
         {workspaceRevision != null && (
           <span className="ml-auto text-[10px] font-mono text-muted-foreground">rev {workspaceRevision}</span>
         )}
       </div>
 
       {/* Stepper */}
-      <Stepper
-        steps={steps}
-        currentStep={currentStep}
-        stepStatuses={stepStatuses}
-        onStepJump={onStepJump}
-      />
+      {autopilotMode ? (
+        <nav aria-label="Điều hướng campaign artifacts" className="flex gap-2 overflow-x-auto border-b border-border bg-slate-50/80 px-3 py-2 sm:px-5">
+          {steps.slice(0, 4).map((item, index) => {
+            const status = stepStatuses[index]
+            const active = index === currentStep
+            return (
+              <button key={item.id || item.title} type="button" disabled={busy} onClick={() => onStepJump(index)}
+                className={cn('inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
+                  active ? 'border-brand-300 bg-brand-50 text-brand-700' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200',
+                  busy && 'cursor-wait opacity-60')}>
+                <span className={cn('h-2 w-2 rounded-full', status === 'done' ? 'bg-green-500' : status === 'stale' ? 'bg-amber-500' : 'bg-slate-300')} />
+                {item.title}
+              </button>
+            )
+          })}
+        </nav>
+      ) : (
+        <Stepper
+          steps={steps}
+          currentStep={currentStep}
+          stepStatuses={stepStatuses}
+          onStepJump={onStepJump}
+        />
+      )}
 
       {recomputePlan?.has_changes && (
         <div className="mx-3 sm:mx-5 mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 flex items-start gap-2.5">
@@ -153,12 +186,12 @@ const WorkspacePane = forwardRef(function WorkspacePane(
         <div data-demo="step-body" className="p-3 sm:p-5">
           {/* Step heading */}
           <div className={cn('flex items-center gap-3 mb-1', isDone && 'opacity-90')}>
-            <div className={cn(
+            {!autopilotMode && <div className={cn(
               'w-8 h-8 rounded-full flex items-center justify-center text-sm font-black border-2 flex-shrink-0',
               isDone ? 'bg-brand-500 border-brand-500 text-white' : 'bg-brand-50 border-brand-300 text-brand-700'
             )}>
               {isDone ? '✓' : currentStep + 1}
-            </div>
+            </div>}
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-black text-foreground tracking-tight">{step.title}</h2>
               {step.heroLabel && (
@@ -196,7 +229,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
       </ScrollArea>
 
       {/* Footer */}
-      <WorkFoot
+      {!autopilotMode && <WorkFoot
         step={step}
         stepIndex={currentStep}
         stepStatus={stepStatuses[currentStep]}
@@ -206,7 +239,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
         onApprove={onApprove}
         onBack={() => onStepJump(currentStep - 1)}
         onNext={() => onStepJump(currentStep + 1)}
-      />
+      />}
     </div>
   )
 })

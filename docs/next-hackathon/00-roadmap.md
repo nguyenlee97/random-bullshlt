@@ -1,6 +1,6 @@
 # Next-Hackathon Recovery and Upgrade Roadmap
 
-> Status: proposed roadmap, created 2026-07-14 after a repository and live-system audit.
+> Status: local release candidate complete on 2026-07-15; deployment intentionally excluded.
 >
 > Purpose: turn the current split state—working older deployment plus unfinished local production upgrade—into one dependable, measurable product that can be adapted for the next hackathon.
 
@@ -10,10 +10,17 @@
 > an exactly-once creative-to-order run are proven. The 20-brief Autopilot
 > orchestration gate passed 20/20 with 5/5 failure drills and zero unauthorized
 > launches. The full local Advertising Agent rebrand and accessibility/contrast
-> audit are also complete. Remaining work is M4.5 observability/UI evidence,
-> M4.6 security and release automation, performance hardening, final screenshot
-> capture, and demo rehearsal. External release approval still requires
-> human sign-off for golden briefs 041-080.
+> audit are also complete. M4.5 observability and M4.6 security/release
+> automation are locally complete, including request correlation, redaction, prompt-injection gating,
+> provider circuit breaking, CI definitions, dependency remediation, and the
+> 3× load gate. M5 is now implemented as the Campaign Strategy Simulator with
+> deterministic scenario estimates, auditable operator selection and selective
+> downstream replanning. M6 namespace, safe fallback, prewarm/reset/rehearsal
+> tooling and live evidence UI are implemented. The one-hour soak, rebuilt-stack
+> browser evidence, responsive screenshots, and five-run local rehearsal all
+> passed. External release approval still requires human sign-off for golden
+> briefs 041-080 and rotation of the credentials explicitly deferred for this
+> local-only cycle.
 
 ## 1. Starting point
 

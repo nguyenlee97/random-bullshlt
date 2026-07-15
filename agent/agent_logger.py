@@ -12,6 +12,8 @@ Usage:
 import time
 from datetime import datetime, timezone
 from session import log_event
+from security import redact_pii
+from request_context import get_request_id
 
 # ANSI colours for pm2 / terminal readability
 _C = {
@@ -50,9 +52,9 @@ def _fmt(event_type: str, data: dict, session_id: str) -> str:
 
     # Build compact one-line summary
     parts = [f"{color}{bold}[{event_type.upper()}]{reset}",
-             f"{_C['gray']}[{sid}] {ts}{reset}"]
+             f"{_C['gray']}[{sid}] [{get_request_id()}] {ts}{reset}"]
 
-    for k, v in data.items():
+    for k, v in redact_pii(data).items():
         if isinstance(v, str) and len(v) > 120:
             v = v[:120] + "…"
         elif isinstance(v, list) and len(v) > 5:
@@ -64,5 +66,6 @@ def _fmt(event_type: str, data: dict, session_id: str) -> str:
 
 async def alog(session_id: str, event_type: str, data: dict) -> None:
     """Log to stdout AND MongoDB."""
-    print(_fmt(event_type, data, session_id), flush=True)
-    await log_event(session_id, event_type, data)
+    safe_data = redact_pii({"request_id": get_request_id(), **data})
+    print(_fmt(event_type, safe_data, session_id), flush=True)
+    await log_event(session_id, event_type, safe_data)

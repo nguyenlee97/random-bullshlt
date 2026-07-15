@@ -42,6 +42,37 @@
         { "expr": "increase(agent_orders_created_total[24h])", "legendFormat": "created" },
         { "expr": "sum(increase(agent_orders_rejected_total[24h]))", "legendFormat": "rejected" }
       ]
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Audience RAG stage latency",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le, stage) (rate(agent_rag_stage_seconds_bucket[5m])))", "legendFormat": "{{stage}} p95" }]
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "RAG and reranker outcomes",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (outcome) (increase(agent_rag_requests_total[1h]))", "legendFormat": "rag {{outcome}}" },
+        { "expr": "sum by (outcome) (increase(agent_rag_rerank_total[1h]))", "legendFormat": "rerank {{outcome}}" }
+      ]
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Creative VLM latency and outcomes",
+      "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le, model) (rate(agent_vlm_call_seconds_bucket[5m])))", "legendFormat": "{{model}} p95" },
+        { "expr": "sum by (outcome) (increase(agent_vlm_calls_total[1h]))", "legendFormat": "{{outcome}}" }
+      ]
+    },
+    {
+      "id": 11, "type": "timeseries", "title": "Model provider routing",
+      "gridPos": { "x": 12, "y": 32, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum by (provider, outcome) (increase(agent_llm_provider_events_total[1h]))", "legendFormat": "{{provider}} {{outcome}}" }]
+    },
+    {
+      "id": 12, "type": "stat", "title": "HTTP 5xx ratio (15m) — SLO < 0.5%",
+      "gridPos": { "x": 0, "y": 40, "w": 24, "h": 6 },
+      "targets": [{ "expr": "sum(rate(http_requests_total{status=~\"5..\"}[15m])) / clamp_min(sum(rate(http_requests_total[15m])), 0.001)" }]
     }
   ]
 }

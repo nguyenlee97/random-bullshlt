@@ -1,0 +1,94 @@
+name: Advertising Agent CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, "revamp/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: agent/requirements.lock
+      - run: python -m pip install --requirement requirements.lock
+      - run: python -m pytest tests -q
+      - name: Compile operational and evaluation scripts
+        working-directory: .
+        run: python -m compileall -q scripts ops eval
+      - name: Validate audience and targeting golden set
+        working-directory: .
+        run: python eval/golden_set/validate.py
+      - name: Run offline prompt-injection gate
+        working-directory: .
+        run: python eval/run_redteam_eval.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent_frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: agent_frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: Parse every tracked backend JavaScript file
+        run: git ls-files '*.js' | xargs -n1 node --check
+      - run: npm audit --omit=dev --audit-level=high
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python scripts/security/scan_tracked_secrets.py
+      - name: Build immutable local-release candidates
+        run: |
+          docker build --tag advertising-agent:${GITHUB_SHA} agent
+          docker build --tag advertising-agent-ui:${GITHUB_SHA} agent_frontend
+          docker build --tag advertising-agent-backend:${GITHUB_SHA} backend
+      - name: Record image identities
+        run: |
+          docker image inspect advertising-agent:${GITHUB_SHA} --format 'agent={{.Id}}'
+          docker image inspect advertising-agent-ui:${GITHUB_SHA} --format 'frontend={{.Id}}'
+          docker image inspect advertising-agent-backend:${GITHUB_SHA} --format 'backend={{.Id}}'

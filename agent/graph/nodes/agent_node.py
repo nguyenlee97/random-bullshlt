@@ -28,6 +28,7 @@ from tools.registry import TOOL_DEFINITIONS, execute_tool
 from agent_logger import alog
 from workspace.service import create_proposal, get_workspace, legacy_view
 from workspace.intent import InvalidWorkspaceIntent, resolve_legacy_update
+from provider_resilience import PROVIDER_UNAVAILABLE_MESSAGE
 
 _TOOL_FALLBACKS = {
     "get_audience_list": "Đã tìm thấy các đối tượng phù hợp. Anh/Chị xem danh sách ở panel phải và chọn nhé!",
@@ -76,7 +77,21 @@ async def agent_node(state: AgentState) -> dict:
             "used_tool": "budget_exceeded"}
 
     await alog(session_id, "llm_call_start", {"handler": "graph_agent", "messages_count": len(messages)})
-    response = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
+    try:
+        response = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
+    except Exception as error:
+        from metrics import FALLBACK_LEVEL
+        FALLBACK_LEVEL.labels(level="3").inc()
+        await alog(session_id, "fallback", {
+            "attempt": 3,
+            "reason": "provider_unavailable",
+            "error_type": type(error).__name__,
+        })
+        return {
+            "response_text": PROVIDER_UNAVAILABLE_MESSAGE,
+            "used_tool": "provider_unavailable",
+            "fallback_level": 3,
+        }
     msg = response.choices[0].message
     tokens = (response.usage.total_tokens or 0) if getattr(response, "usage", None) else 0
 
@@ -135,7 +150,8 @@ async def tools_node(state: AgentState) -> dict:
         canonical = await get_workspace(session_id)
         try:
             field, value, reason = await resolve_legacy_update(
-                field, value, canonical, first_args.get("reason", "")
+                field, value, canonical, first_args.get("reason", ""),
+                source_message=state["user_message"],
             )
         except InvalidWorkspaceIntent as exc:
             reply = f"Em chưa thể tạo đề xuất an toàn: {exc}"

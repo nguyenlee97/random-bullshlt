@@ -14,6 +14,7 @@ from workspace.intent import (
     InvalidWorkspaceIntent,
     classify_workspace_intent,
     is_explicit_decline,
+    preserve_brief_context,
     resolve_workspace_intent,
 )
 from workspace.service import WorkspaceConflict, create_proposal, get_workspace
@@ -53,6 +54,10 @@ async def workspace_intent_node(state: AgentState) -> dict:
             "response_blocks": [{"type": "info", "text": text}],
             "used_tool": "workspace_clarification",
         }
+
+    intent.value = preserve_brief_context(
+        intent.field, intent.value, state["user_message"]
+    )
 
     try:
         command = await resolve_workspace_intent(intent, canonical)

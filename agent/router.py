@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from models import ChatRequest, AgentResponse
+from models import ChatRequest, AgentResponse, ResponseMeta
 from ratelimit import limiter, CHAT_LIMIT, RECOMMEND_LIMIT
 from handlers.boot import handle_boot
 from handlers.brief import handle_brief
@@ -69,10 +69,48 @@ async def get_logs(session_id: str, limit: int = 200):
     }
 
 
+@agent_router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """Delete one user's agent/session artifacts; business orders are retained."""
+    from session import delete_session_data
+    if not session_id or len(session_id) > 128:
+        raise HTTPException(status_code=422, detail="invalid session id")
+    deleted = await delete_session_data(session_id)
+    return {"ok": True, "session_id": session_id, "deleted": deleted}
+
+
 @agent_router.post("/chat", response_model=AgentResponse)
 @limiter.limit(CHAT_LIMIT)
 async def chat(request: Request, req: ChatRequest) -> AgentResponse:
     sid = req.session_id or "default"
+
+    # Treat every browser-provided string as data, never as control text. A
+    # flagged request cannot reach a model or mutation handler.
+    from prompt_guard import scan_untrusted_payload
+    untrusted = {
+        "message": req.message,
+        "formData": req.formData.model_dump() if req.formData else None,
+        "workspace_events": req.workspace_events,
+    }
+    injection = scan_untrusted_payload(untrusted, "chat")
+    if injection:
+        from metrics import INJECTION_FLAGGED
+        from session import log_event
+        surface, finding = injection
+        INJECTION_FLAGGED.labels(surface=surface, rule=finding.rule).inc()
+        await log_event(sid, "prompt_injection_blocked", {
+            "surface": surface,
+            "rule": finding.rule,
+        })
+        return AgentResponse(
+            text=(
+                "Em đã chặn nội dung có dấu hiệu cố thay đổi quy tắc hoặc ép hệ thống "
+                "thực thi công cụ. Anh/chị hãy gửi lại yêu cầu campaign thuần túy; "
+                "workspace chưa bị thay đổi."
+            ),
+            blocks=[],
+            meta=ResponseMeta(tool="prompt_guard", model="none", step=req.step),
+        )
 
     # ── Boot ──────────────────────────────────────────────────────────────────
     if req.step == -1 or (req.step == 0 and not req.formData and not req.message):
@@ -555,6 +593,10 @@ class _AutopilotReviewRequest(_AutopilotActionRequest):
     approved: bool
 
 
+class _AutopilotStrategyRequest(_AutopilotActionRequest):
+    option_id: str
+
+
 def _autopilot_error(exc: Exception) -> HTTPException:
     from autopilot.service import RunConflict
     if isinstance(exc, KeyError):
@@ -623,6 +665,19 @@ async def autopilot_review(
         return await review_task(
             run_id, task_id, approved=request.approved,
             actor=request.actor, reason=request.reason,
+        )
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.post("/autopilot/runs/{run_id}/strategy")
+async def autopilot_select_strategy(
+    run_id: str, request: _AutopilotStrategyRequest
+):
+    from autopilot.service import RunConflict, select_strategy
+    try:
+        return await select_strategy(
+            run_id, request.option_id, actor=request.actor, reason=request.reason,
         )
     except (KeyError, ValueError, RunConflict) as exc:
         raise _autopilot_error(exc) from exc
