@@ -197,31 +197,67 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
             force_review=True,
         )
     current = await get_workspace(run["session_id"])
-    current_verdict = _artifact(current, "creative_verdict")
+    verdict_item = current.get("artifacts", {}).get("creative_verdict", {})
+    current_verdict = verdict_item.get("value")
+    verdict_is_current = (
+        verdict_item.get("status") == "approved" and bool(current_verdict)
+    )
+    refreshed_verdict = {
+        "batch_id": (current_verdict or {}).get("batch_id"),
+        "files": docs,
+    }
     return CapabilityResult(
-        value=current_verdict or {"files": docs},
+        value=current_verdict if verdict_is_current else refreshed_verdict,
         evidence=[{"type": "creative_verdicts", "count": len(docs),
-                   "analysis_ids": [doc.get("analysis_id") for doc in docs]}],
-        externally_committed=bool(current_verdict),
+                   "analysis_ids": [doc.get("analysis_id") for doc in docs],
+                   "revalidated": not verdict_is_current}],
+        # A stale canonical verdict must be recommitted by the Autopilot worker
+        # against the current strategy/brief/creative input revisions. The VLM
+        # result is reused; the stale-result guard is not bypassed.
+        externally_committed=verdict_is_current,
     )
 
 
 async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
+    from creative_intel.service import get_intel
+    from tools.creative_match import enrich_files_with_intel
     from tools.order_api import fetch_zone_conflicts
     from tools.zone_ranker import rank_zones
     brief = _artifact(workspace, "brief", {})
     creative = _artifact(workspace, "creative", {})
+    files = enrich_files_with_intel(
+        (creative or {}).get("files", []), await get_intel(run["session_id"])
+    )
     ranked = await rank_zones(
         objective=brief.get("objective", "awareness"),
         budget=brief.get("budget", 0), kpi=brief.get("kpi", ""),
-        creative_files=(creative or {}).get("files", []), limit=12,
+        creative_files=files, limit=12,
     )
     conflicts = await fetch_zone_conflicts(
         brief.get("startDate", ""), brief.get("endDate", "")
     )
-    available = [zone for zone in ranked if not conflicts.get(zone["id"])][:6]
+    # The current backend does not resize creatives; same-ratio assets still
+    # produce booking warnings. Automatic launch therefore requires exact
+    # pixels (or an explicitly approved skin format).
+    compatible_modes = {"exact_size", "skin_match"}
+    available = [
+        zone for zone in ranked
+        if not conflicts.get(zone["id"])
+        and zone.get("match_mode") in compatible_modes
+    ][:6]
     if not available:
-        raise RuntimeError("no available placement remains after conflict check")
+        return CapabilityResult(
+            value={
+                "selectedZoneIds": [], "zones": [], "phase": "zones",
+                "reason": "no_compatible_placements", "review_action": "retry",
+                "message": "Chưa có placement trống tương thích với kích thước/định dạng creative.",
+            },
+            evidence=[{
+                "type": "creative_placement_compatibility", "passed": False,
+                "ranked": len(ranked), "conflicts": len(conflicts),
+            }],
+            force_review=True,
+        )
     return CapabilityResult(
         value={"selectedZoneIds": [zone["id"] for zone in available],
                "zones": available, "phase": "zones"},
@@ -248,6 +284,19 @@ async def _assign_creatives(run: dict, workspace: dict) -> CapabilityResult:
                    "message": "Chưa có creative đã duyệt cho mọi placement."},
             evidence=[{"type": "assignment_gap", "assigned": len(result["assignments"]),
                        "placements": len(zones)}],
+            force_review=True,
+        )
+    weak = [
+        zone_id for zone_id, file_index in result["assignments"].items()
+        if float(result.get("scores", {}).get(zone_id, {}).get(str(file_index), -999)) < 1
+    ]
+    if weak:
+        return CapabilityResult(
+            value={**result, "review_action": "retry",
+                   "message": "Creative không đủ tương thích cho: " + ", ".join(weak),
+                   "incompatible_placements": weak},
+            evidence=[{"type": "assignment_compatibility", "passed": False,
+                       "placements": weak}],
             force_review=True,
         )
     return CapabilityResult(

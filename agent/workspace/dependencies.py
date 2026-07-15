@@ -34,7 +34,9 @@ DEPENDENTS = {
     "strategy": {"audience", "targeting", "creative_verdict", "placements"},
     "audience": {"targeting", "forecast"},
     "targeting": {"forecast"},
-    "creative": {"creative_verdict"},
+    # Placement ranking uses measured creative dimensions/intended format, so
+    # replacing creative assets must recompute both semantic verdict and zones.
+    "creative": {"creative_verdict", "placements"},
     "creative_verdict": {"assignments"},
     "placements": {"assignments", "forecast"},
     "assignments": {"forecast"},

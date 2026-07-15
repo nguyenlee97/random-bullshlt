@@ -144,7 +144,9 @@ def auto_assign(zones: list[dict], files: list[dict]) -> dict:
 
         for idx, f in eligible:
             s, w = score_file_for_zone(f, zone)
-            scores.setdefault(zid, {})[idx] = s
+            # MongoDB/BSON document keys must be strings. JSON clients already
+            # observe object keys as strings, so normalize at the source.
+            scores.setdefault(zid, {})[str(idx)] = s
             if s > best_score:
                 best_score, best_idx, zone_warnings = s, idx, w
 

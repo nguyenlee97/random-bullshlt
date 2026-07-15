@@ -81,7 +81,12 @@ def _size_compat(zone: dict, files: list[dict]) -> tuple[float, str]:
     # Skin zones: match by creative name containing "skin"
     if zone.get("size") == "skin" or zone.get("format") == "skin":
         for f in files:
-            if "skin" in (f.get("name") or "").lower():
+            intel = f.get("intel") or {}
+            if (
+                intel.get("is_skin") is True
+                or f.get("intendedFormat") == "skin"
+                or "skin" in (f.get("name") or "").lower()
+            ):
                 return 0.20, "skin_match"
         return 0.0, "no_skin_creative"
 
@@ -93,7 +98,9 @@ def _size_compat(zone: dict, files: list[dict]) -> tuple[float, str]:
 
     best_bonus, best_mode = -1.0, "no_match"
     for f in files:
-        fw, fh = f.get("width", 0), f.get("height", 0)
+        intel = f.get("intel") or {}
+        fw = intel.get("width") or f.get("width", 0)
+        fh = intel.get("height") or f.get("height", 0)
         if fw <= 0 or fh <= 0:
             continue
         if fw == zw and fh == zh:

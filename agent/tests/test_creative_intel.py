@@ -208,7 +208,8 @@ def test_auto_assignment_excludes_unreviewed_creative():
 
     result = auto_assign([zone], files)
     assert result["assignments"]["ZN-1"] == 1
-    assert 0 not in result["scores"]["ZN-1"]
+    assert "0" not in result["scores"]["ZN-1"]
+    assert all(isinstance(key, str) for key in result["scores"]["ZN-1"])
 
 
 def test_explicit_intended_format_beats_uncertain_vlm_layout():

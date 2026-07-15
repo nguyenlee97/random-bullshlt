@@ -3,7 +3,9 @@ from datetime import timedelta
 import pytest
 
 from autopilot import service
-from autopilot.capabilities import CapabilityResult, _create_order
+from autopilot.capabilities import (
+    CapabilityResult, _analyze_creatives, _create_order, _rank_placements,
+)
 from autopilot import worker
 from workspace.service import apply_mutation, get_workspace, set_preferences
 
@@ -241,7 +243,7 @@ async def test_creative_edit_replans_only_creative_dependent_branch():
     assert by_key["generate_strategy"]["status"] == "succeeded"
     assert by_key["retrieve_audience"]["status"] == "succeeded"
     assert by_key["derive_targeting"]["status"] == "succeeded"
-    assert by_key["rank_placements"]["status"] == "succeeded"
+    assert by_key["rank_placements"]["status"] == "queued"
     assert by_key["analyze_creatives"]["status"] == "queued"
     assert by_key["assign_creatives"]["status"] == "pending"
     assert by_key["forecast"]["status"] == "pending"
@@ -348,3 +350,96 @@ async def test_retry_review_is_idempotent_when_input_edit_already_replanned_task
     current = await service.review_task(run["run_id"], task_id, approved=True)
     task = next(item for item in current["tasks"] if item["task_id"] == task_id)
     assert task["status"] == "queued"
+
+
+@pytest.mark.asyncio
+async def test_stale_creative_verdict_is_recommitted_against_current_strategy(monkeypatch):
+    import autopilot.capabilities as capabilities
+    import creative_intel.service as creative_service
+
+    docs = [{
+        "analysis_id": "ci-1", "url": "http://localhost:3000/uploads/a.png",
+        "effective_status": "auto_approved", "status": "auto_approved",
+    }]
+    workspace = {
+        "artifacts": {
+            "creative": {"value": {"files": [{"url": docs[0]["url"]}]}},
+            "creative_verdict": {
+                "status": "stale", "revision": 3,
+                "value": {"batch_id": "batch-1", "files": [{"old": True}]},
+            },
+        },
+    }
+
+    async def fake_intel(_session_id):
+        return docs
+
+    async def fake_workspace(_session_id):
+        return workspace
+
+    monkeypatch.setattr(creative_service, "get_intel", fake_intel)
+    monkeypatch.setattr(capabilities, "get_workspace", fake_workspace)
+    result = await _analyze_creatives({"session_id": "stale-verdict"}, workspace)
+    assert result.externally_committed is False
+    assert result.value == {"batch_id": "batch-1", "files": docs}
+    assert result.evidence[0]["revalidated"] is True
+
+
+@pytest.mark.asyncio
+async def test_placement_ranking_keeps_only_creative_compatible_zones(monkeypatch):
+    import creative_intel.service as creative_service
+    import tools.order_api as order_api
+    import tools.zone_ranker as zone_ranker
+
+    ranked = [
+        {"id": "GOOD", "match_mode": "exact_size"},
+        {"id": "BAD", "match_mode": "nearest_ratio"},
+    ]
+
+    async def fake_intel(_session_id):
+        return []
+
+    async def fake_rank(**_kwargs):
+        return ranked
+
+    async def no_conflicts(_start, _end):
+        return {}
+
+    monkeypatch.setattr(creative_service, "get_intel", fake_intel)
+    monkeypatch.setattr(zone_ranker, "rank_zones", fake_rank)
+    monkeypatch.setattr(order_api, "fetch_zone_conflicts", no_conflicts)
+    workspace = {"artifacts": {
+        "brief": {"value": BRIEF},
+        "creative": {"value": {"files": [{"name": "good.png"}]}},
+    }}
+    result = await _rank_placements({"session_id": "compatible"}, workspace)
+    assert result.force_review is False
+    assert result.value["selectedZoneIds"] == ["GOOD"]
+
+
+@pytest.mark.asyncio
+async def test_no_compatible_placement_requests_new_creative(monkeypatch):
+    import creative_intel.service as creative_service
+    import tools.order_api as order_api
+    import tools.zone_ranker as zone_ranker
+
+    async def fake_intel(_session_id):
+        return []
+
+    async def fake_rank(**_kwargs):
+        return [{"id": "BAD", "match_mode": "same_ratio"}]
+
+    async def no_conflicts(_start, _end):
+        return {}
+
+    monkeypatch.setattr(creative_service, "get_intel", fake_intel)
+    monkeypatch.setattr(zone_ranker, "rank_zones", fake_rank)
+    monkeypatch.setattr(order_api, "fetch_zone_conflicts", no_conflicts)
+    workspace = {"artifacts": {
+        "brief": {"value": BRIEF},
+        "creative": {"value": {"files": [{"name": "bad.png"}]}},
+    }}
+    result = await _rank_placements({"session_id": "incompatible"}, workspace)
+    assert result.force_review is True
+    assert result.value["reason"] == "no_compatible_placements"
+    assert result.value["review_action"] == "retry"

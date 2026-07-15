@@ -26,18 +26,18 @@ AUTOPILOT_WORKSPACE_ACTORS = {"autopilot_worker", "autopilot_review"}
 # are user-owned inputs, while an externally corrected order must be verified
 # rather than created again. These roots make replanning explicit and auditable.
 ARTIFACT_REPLAN_ROOT = {
-    "brief": "normalize_brief",
-    "strategy": "generate_strategy",
-    "audience": "retrieve_audience",
-    "targeting": "derive_targeting",
-    "creative": "analyze_creatives",
-    "creative_verdict": "analyze_creatives",
-    "placements": "rank_placements",
-    "assignments": "assign_creatives",
-    "forecast": "forecast",
-    "order_draft": "build_order_draft",
-    "order": "verify_order",
-    "report": "create_setup_report",
+    "brief": ("normalize_brief",),
+    "strategy": ("generate_strategy",),
+    "audience": ("retrieve_audience",),
+    "targeting": ("derive_targeting",),
+    "creative": ("analyze_creatives", "rank_placements"),
+    "creative_verdict": ("analyze_creatives",),
+    "placements": ("rank_placements",),
+    "assignments": ("assign_creatives",),
+    "forecast": ("forecast",),
+    "order_draft": ("build_order_draft",),
+    "order": ("verify_order",),
+    "report": ("create_setup_report",),
 }
 
 # A fixed capability graph is safer than allowing a model to invent tools.
@@ -408,9 +408,9 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
         return {"changed": False, "reason": "internal_only", "run": await get_run(run_id)}
 
     root_keys = {
-        ARTIFACT_REPLAN_ROOT[artifact]
+        root
         for artifact in changed_artifacts
-        if artifact in ARTIFACT_REPLAN_ROOT
+        for root in ARTIFACT_REPLAN_ROOT.get(artifact, ())
     }
     affected_keys = _task_descendants(root_keys)
     affected = [task for task in run["tasks"] if task["key"] in affected_keys]
