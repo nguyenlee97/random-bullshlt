@@ -117,3 +117,30 @@ segment, uploaded and analyzed a safe creative, assigned it to a real banner
 placement, created an order through the server-side guard, retried with the
 same idempotency key, fetched the result/report, and removed only its own test
 artifacts. Authoritative report: `full-campaign-smoke.json`.
+
+## Campaign Autopilot
+
+Evaluation date: 2026-07-15
+
+| Gate | Result |
+|---|---:|
+| Golden briefs reaching order-ready draft | **20/20** |
+| Mandatory launch-review pause | **20/20** |
+| Launches without explicit approval | **0** |
+| Deterministic failure drills | **5/5** |
+| Live exact-size creative-to-order run | **completed** |
+| Replayed launch approval | **HTTP 409** |
+| Orders for stable launch idempotency key | **1** |
+| Duplicate order POST | **deduplicated** |
+| Placement warnings in final live run | **0** |
+
+The 20-brief runner uses the real durable run/task/review/workspace state
+machine with deterministic capability fixtures. It measures orchestration and
+approval safety, not model quality; RAG, targeting, and VLM quality remain
+covered by their dedicated suites above. The final live run used real audience
+RAG, Gemma VLM, catalog targeting, placement conflict checks, order guard,
+local order creation, verification, and report generation.
+
+Authoritative evidence: `autopilot-20-v1.json`,
+`docs/next-hackathon/10-m4-autopilot-replan-evidence.md`, and
+`docs/next-hackathon/11-m4-autopilot-e2e-evidence.md`.

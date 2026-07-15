@@ -4,16 +4,15 @@
 >
 > Purpose: turn the current split state—working older deployment plus unfinished local production upgrade—into one dependable, measurable product that can be adapted for the next hackathon.
 
-> Progress update (2026-07-15): M0 and the reproducible-stack portion of M1 are
-> locally stable. Three fresh automated campaign flows passed, including real
-> audience retrieval, creative analysis, guarded order creation, duplicate
-> retry idempotency, result/report generation, and cleanup. M2 audience RAG is
-> enabled and measured; M3 creative intelligence has passed its local safety,
-> video, browser override, restart, and HTTP queue-load gates. The remaining M1
-> conversation-restart/observability evidence and M2 human sign-off are the
-> next closure items. M2's local targeting, source-grounding, 100-request soak,
-> and Qdrant outage/recovery gates are green. See `03-m3-creative-intelligence-evidence.md` and
-> `eval/reports/full-campaign-smoke.json`.
+> Progress update (2026-07-15): M0-M3 are locally stable. M4.1-M4.4 are also
+> complete: transactional Copilot, non-linear artifact recovery, durable
+> Campaign Autopilot, the two-mode opening experience, mid-run replanning, and
+> an exactly-once creative-to-order run are proven. The 20-brief Autopilot
+> orchestration gate passed 20/20 with 5/5 failure drills and zero unauthorized
+> launches. Remaining work is M4.5 observability/UI evidence, M4.6 security and
+> release automation, the full Advertising Agent visual audit, performance
+> hardening, and final demo rehearsal. External release approval still requires
+> human sign-off for golden briefs 041-080.
 
 ## 1. Starting point
 
