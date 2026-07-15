@@ -357,7 +357,7 @@ export function useChat({
         response = {
           id: generateId(),
           role: 'assistant',
-          content: '✅ Chiến dịch đã được tạo thành công trên AdsPilot! Anh/Chị xem tổng kết ở bước Kết quả bên phải.',
+          content: '✅ Chiến dịch đã được tạo thành công trên nền tảng quảng cáo! Anh/Chị xem tổng kết ở bước Kết quả bên phải.',
           blocks: [{ type: 'info', text: '🎉 Order đã được khởi tạo. Chuyển sang bước Kết quả...' }],
           timestamp: new Date().toISOString(),
           metadata: { tool: 'order_create', model: 'minimax', step: 3 },

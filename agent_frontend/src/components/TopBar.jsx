@@ -41,6 +41,7 @@ export default function TopBar({ onReset, onNewChat, showDemo, experienceMode })
           onClick={() => { window.location.href = '/tech-docs.html' }}
           className="gap-1.5 text-xs h-8"
           title="Tài liệu kỹ thuật"
+          aria-label="Mở tài liệu kỹ thuật"
           id="tech-docs-btn"
         >
           <FileText className="w-3.5 h-3.5" />
@@ -55,6 +56,7 @@ export default function TopBar({ onReset, onNewChat, showDemo, experienceMode })
             onClick={demo.startDemo}
             className="flex gap-1.5 text-xs h-8 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 animate-pulse hover:animate-none"
             id="demo-btn"
+            aria-label="Bắt đầu demo hướng dẫn"
           >
             <Play className="w-3.5 h-3.5" />
             Demo
@@ -68,12 +70,13 @@ export default function TopBar({ onReset, onNewChat, showDemo, experienceMode })
           onClick={onNewChat}
           className="gap-1.5 text-xs h-8 bg-brand-500 hover:bg-brand-600"
           id="new-chat-btn"
+          aria-label="Bắt đầu campaign mới"
         >
           <MessageSquarePlus className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">New Chat</span>
         </Button>
         {/* Đặt lại — workspace reset only */}
-        <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5 text-xs h-8" data-demo="reset-btn">
+        <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5 text-xs h-8" data-demo="reset-btn" aria-label="Đặt lại workspace">
           <RotateCcw className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Đặt lại</span>
         </Button>

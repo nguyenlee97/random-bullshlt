@@ -62,10 +62,12 @@ const AUTO_NAV_STEPS = new Set([2, 3, 5]) // Creative, Setup, Report
 // ─── Mobile Tab Bar ─────────────────────────────────────────────────────────
 function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew }) {
   return (
-    <div className="flex flex-shrink-0 border-b border-border bg-white/95 backdrop-blur-sm shadow-sm">
+    <div className="flex flex-shrink-0 border-b border-border bg-white/95 backdrop-blur-sm shadow-sm" role="tablist" aria-label="Chọn khu vực làm việc">
       <button
         id="tab-chat"
         onClick={() => onTabChange('chat')}
+        role="tab"
+        aria-selected={activeTab === 'chat'}
         className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-all relative ${
           activeTab === 'chat'
             ? 'text-brand-600 border-b-2 border-brand-500 bg-brand-50/30'
@@ -81,16 +83,18 @@ function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew }) {
       <button
         id="tab-workspace"
         onClick={() => onTabChange('workspace')}
+        role="tab"
+        aria-selected={activeTab === 'workspace'}
         className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-all relative ${
           activeTab === 'workspace'
-            ? 'text-violet-600 border-b-2 border-violet-500 bg-violet-50/30'
+            ? 'text-brand-600 border-b-2 border-brand-500 bg-brand-50/30'
             : 'text-muted-foreground hover:text-foreground'
         }`}
       >
         <LayoutDashboard className="w-4 h-4" />
         Workspace
         {workspaceHasNew && (
-          <span className="absolute top-2 right-[22%] w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
+          <span className="absolute top-2 right-[22%] w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
         )}
       </button>
     </div>

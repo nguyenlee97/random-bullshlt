@@ -124,7 +124,7 @@ function exportChatLog(messages) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `camp-ads-log-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
+  a.download = `advertising-agent-log-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

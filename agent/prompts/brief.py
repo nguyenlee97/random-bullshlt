@@ -1,6 +1,6 @@
 """Brief handler prompts."""
 
-BRIEF_SYSTEM = """Bạn là Camp Ads Agent. Nhiệm vụ: Phân tích brief chiến dịch quảng cáo.
+BRIEF_SYSTEM = """Bạn là Advertising Agent. Nhiệm vụ: Phân tích brief chiến dịch quảng cáo.
 Trả về JSON theo đúng schema. Không thêm text ngoài JSON."""
 
 BRIEF_USER = """Brief chiến dịch:

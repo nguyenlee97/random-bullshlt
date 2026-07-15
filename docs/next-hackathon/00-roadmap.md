@@ -9,9 +9,10 @@
 > Campaign Autopilot, the two-mode opening experience, mid-run replanning, and
 > an exactly-once creative-to-order run are proven. The 20-brief Autopilot
 > orchestration gate passed 20/20 with 5/5 failure drills and zero unauthorized
-> launches. Remaining work is M4.5 observability/UI evidence, M4.6 security and
-> release automation, the full Advertising Agent visual audit, performance
-> hardening, and final demo rehearsal. External release approval still requires
+> launches. The full local Advertising Agent rebrand and accessibility/contrast
+> audit are also complete. Remaining work is M4.5 observability/UI evidence,
+> M4.6 security and release automation, performance hardening, final screenshot
+> capture, and demo rehearsal. External release approval still requires
 > human sign-off for golden briefs 041-080.
 
 ## 1. Starting point

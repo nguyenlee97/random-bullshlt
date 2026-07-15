@@ -8,7 +8,7 @@ const STEP_CHIPS = {
   1: ['Hãy tự động chọn targeting phù hợp nhất cho chiến dịch này', 'DMP segment nào phù hợp với brief?', 'Audience size bao nhiêu là đủ?'],
   2: ['Creative size nào phù hợp cho Banner?', 'Skin zone cần creative như thế nào?', 'Format nào được hỗ trợ?'],
   3: ['Zone nào tốt nhất cho objective của tôi?', 'VI% và CTR có nghĩa là gì?', 'CPM bao nhiêu là hợp lý?'],
-  4: ['Tổng kết chiến dịch', 'Xem link AdsPilot', 'Tạo chiến dịch mới'],
+  4: ['Tổng kết chiến dịch', 'Mở trình quản lý quảng cáo', 'Tạo chiến dịch mới'],
   5: ['Campaign nào hiệu quả nhất?', 'Đề xuất tối ưu tiếp theo'],
   6: ['Thêm người nhận', 'Chỉnh sửa nội dung email'],
 }
@@ -100,6 +100,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder="Trao đổi với agent về bước hiện tại... (Shift+Enter xuống dòng)"
+          aria-label="Tin nhắn gửi Advertising Agent"
           disabled={busy}
           rows={1}
           className={[
@@ -119,6 +120,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
           size="icon"
           className="h-10 w-10 flex-shrink-0 self-end"
           id="chat-send-btn"
+          aria-label={busy ? 'Advertising Agent đang xử lý' : 'Gửi tin nhắn'}
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </Button>

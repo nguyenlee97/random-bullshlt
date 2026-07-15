@@ -53,10 +53,10 @@ function buildHtmlBody({ brand, objective, campaignId, totals, overallText }) {
 <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
 
   <!-- HEADER -->
-  <tr><td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:36px 40px;">
+  <tr><td style="background:linear-gradient(135deg,#0068ff,#0057d9);padding:36px 40px;">
     <table width="100%"><tr>
       <td>
-        <p style="margin:0;color:rgba(255,255,255,.7);font-size:11px;text-transform:uppercase;letter-spacing:2px;">Camp Ads Agent</p>
+        <p style="margin:0;color:rgba(255,255,255,.76);font-size:11px;text-transform:uppercase;letter-spacing:2px;">Advertising Agent</p>
         <h1 style="margin:8px 0 0;color:#fff;font-size:26px;font-weight:800;">Báo cáo chiến dịch</h1>
         <p style="margin:6px 0 0;color:rgba(255,255,255,.9);font-size:16px;font-weight:600;">${brand}</p>
       </td>
@@ -70,9 +70,9 @@ function buildHtmlBody({ brand, objective, campaignId, totals, overallText }) {
   </td></tr>
 
   <!-- CAMPAIGN ID -->
-  <tr><td style="background:#f0f0fe;padding:10px 40px;border-bottom:1px solid #e5e7eb;">
+  <tr><td style="background:#eaf3ff;padding:10px 40px;border-bottom:1px solid #d8e9ff;">
     <p style="margin:0;font-size:11px;color:#6b7280;">
-      Campaign ID: <strong style="color:#4f46e5;">${campaignId}</strong>
+      Campaign ID: <strong style="color:#0068ff;">${campaignId}</strong>
       &nbsp;·&nbsp; Tạo lúc: <strong>${date}</strong>
     </p>
   </td></tr>
@@ -89,8 +89,8 @@ function buildHtmlBody({ brand, objective, campaignId, totals, overallText }) {
   <!-- AI SUMMARY -->
   ${overallText ? `
   <tr><td style="padding:4px 40px 24px;">
-    <div style="background:#fafafa;border-left:4px solid #4f46e5;border-radius:0 10px 10px 0;padding:16px 20px;">
-      <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#4f46e5;text-transform:uppercase;">🤖 AI Executive Summary</p>
+    <div style="background:#f7faff;border-left:4px solid #0068ff;border-radius:0 10px 10px 0;padding:16px 20px;">
+      <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#0068ff;text-transform:uppercase;">🤖 AI Executive Summary</p>
       <p style="margin:0;font-size:13px;color:#374151;line-height:1.7;">${overallText}</p>
     </div>
   </td></tr>` : ''}
@@ -107,7 +107,7 @@ function buildHtmlBody({ brand, objective, campaignId, totals, overallText }) {
 
   <!-- FOOTER -->
   <tr><td style="background:#f9fafb;border-top:1px solid #f3f4f6;padding:20px 40px;text-align:center;">
-    <p style="margin:0;font-size:11px;color:#9ca3af;">Được tạo bởi <strong>Camp Ads Agent</strong> · Claw-a-thon 2026</p>
+    <p style="margin:0;font-size:11px;color:#9ca3af;">Được tạo bởi <strong>Advertising Agent</strong></p>
     <p style="margin:4px 0 0;font-size:11px;color:#d1d5db;">Email này được gửi tự động. Vui lòng không reply.</p>
   </td></tr>
 
@@ -154,7 +154,7 @@ async function sendCampaignReport(opts) {
     pdfBuffer, attachCsv = false, attachJson = false, records = [],
   } = opts;
 
-  const subject = `[Camp Ads Agent] Báo cáo chiến dịch ${brand} — ${new Date().toLocaleDateString('vi-VN')}`;
+  const subject = `[Advertising Agent] Báo cáo chiến dịch ${brand} — ${new Date().toLocaleDateString('vi-VN')}`;
   const html = buildHtmlBody({ brand, objective, campaignId, totals, overallText });
 
   const attachments = [];

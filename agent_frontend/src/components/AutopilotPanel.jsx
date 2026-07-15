@@ -129,7 +129,7 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900">Campaign Autopilot</h2>
-              <p className="text-xs leading-5 text-slate-500">Điền brief ở workspace, chọn mức review rồi để Agent lập kế hoạch và thực hiện.</p>
+              <p className="text-xs leading-5 text-slate-600">Điền brief ở workspace, chọn mức review rồi để Agent lập kế hoạch và thực hiện.</p>
             </div>
           </div>
           <div className="flex flex-1 flex-wrap gap-2">
@@ -164,22 +164,22 @@ export default function AutopilotPanel({ brief, onWorkspaceRefresh, onOpenCreati
             <div className="h-1.5 min-w-[130px] flex-1 overflow-hidden rounded-full bg-slate-100">
               <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${progress}%` }} />
             </div>
-            <span className="text-xs font-semibold text-slate-500">{progress}%</span>
+            <span className="text-xs font-semibold text-slate-600">{progress}%</span>
             <div className="flex gap-1.5">
               {run.status === 'paused' && !run.replan_blocked ? (
-                <button onClick={() => act('resume')} disabled={loading} className="rounded-lg border border-brand-200 p-2 text-brand-600 hover:bg-brand-50" title="Tiếp tục"><Play className="h-3.5 w-3.5" /></button>
+                <button onClick={() => act('resume')} disabled={loading} className="rounded-lg border border-brand-200 p-2 text-brand-600 hover:bg-brand-50" title="Tiếp tục" aria-label="Tiếp tục Autopilot"><Play className="h-3.5 w-3.5" /></button>
               ) : !['completed', 'cancelled', 'failed'].includes(run.status) && (
-                <button onClick={() => act('pause')} disabled={loading} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" title="Tạm dừng"><Pause className="h-3.5 w-3.5" /></button>
+                <button onClick={() => act('pause')} disabled={loading} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" title="Tạm dừng" aria-label="Tạm dừng Autopilot"><Pause className="h-3.5 w-3.5" /></button>
               )}
-              {!['completed', 'cancelled'].includes(run.status) && <button onClick={() => act('cancel')} disabled={loading} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600" title="Hủy run"><Square className="h-3.5 w-3.5" /></button>}
-              <button onClick={refresh} disabled={loading} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" title="Làm mới"><RotateCw className="h-3.5 w-3.5" /></button>
+              {!['completed', 'cancelled'].includes(run.status) && <button onClick={() => act('cancel')} disabled={loading} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600" title="Hủy run" aria-label="Hủy Autopilot run"><Square className="h-3.5 w-3.5" /></button>}
+              <button onClick={refresh} disabled={loading} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" title="Làm mới" aria-label="Làm mới trạng thái Autopilot"><RotateCw className="h-3.5 w-3.5" /></button>
             </div>
           </div>
 
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
             {run.tasks.map(task => (
               <div key={task.task_id} title={task.error || task.result?.message || TASK_LABELS[task.key]}
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium ${task.status === 'succeeded' ? 'border-green-200 bg-green-50 text-green-700' : task.status === 'running' ? 'border-brand-300 bg-brand-50 text-brand-700' : task.status === 'waiting_review' ? 'border-amber-300 bg-amber-50 text-amber-800' : task.status === 'failed' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium ${task.status === 'succeeded' ? 'border-green-200 bg-green-50 text-green-700' : task.status === 'running' ? 'border-brand-300 bg-brand-50 text-brand-700' : task.status === 'waiting_review' ? 'border-amber-300 bg-amber-50 text-amber-800' : task.status === 'failed' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
                 {taskIcon(task.status)} {TASK_LABELS[task.key] || task.key}
               </div>
             ))}

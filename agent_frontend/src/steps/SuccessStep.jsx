@@ -371,7 +371,7 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
               <LayoutGrid className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-brand-700">Xem trong AdsPilot</p>
+              <p className="text-xs font-bold text-brand-700">Mở trình quản lý quảng cáo</p>
               <p className="text-[10px] text-brand-500 truncate">{ADSPILOT_ORDERS}</p>
             </div>
             <ExternalLink className="w-3.5 h-3.5 text-brand-400 group-hover:text-brand-600 flex-shrink-0" />
@@ -491,7 +491,7 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
                   {zone.adspilotUrl && (
                     <a href={zone.adspilotUrl} target="_blank" rel="noreferrer"
                       className="flex items-center gap-1 text-[10px] text-brand-600 hover:underline font-medium">
-                      <ExternalLink className="w-2.5 h-2.5" /> AdsPilot
+                      <ExternalLink className="w-2.5 h-2.5" /> Trình quản lý
                     </a>
                   )}
                   {zone.siteUrl && (

@@ -1,5 +1,10 @@
 # Advertising Agent — Product Identity Revamp
 
+> Implementation status (2026-07-15): the local rebrand, exported artifacts,
+> accessibility labels, branding regression tests, and browser contrast smoke
+> are complete. See `13-advertising-agent-rebrand-evidence.md`. Final screenshots
+> remain intentionally scheduled for M6 after performance hardening.
+
 ## 1. Product decision
 
 Rename the user-facing product to **Advertising Agent** and replace the current green visual theme with a blue, friendly, conversational design inspired by the familiarity of Zalo.

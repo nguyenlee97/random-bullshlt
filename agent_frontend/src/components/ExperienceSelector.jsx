@@ -29,7 +29,7 @@ export default function ExperienceSelector({ onSelect, busy, error }) {
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600">Advertising Agent</p>
-            <p className="text-sm text-slate-500">Campaign workspace thông minh</p>
+            <p className="text-sm text-slate-600">Campaign workspace thông minh</p>
           </div>
         </div>
 
@@ -55,6 +55,7 @@ export default function ExperienceSelector({ onSelect, busy, error }) {
                 type="button"
                 disabled={busy}
                 onClick={() => onSelect(mode.id)}
+                aria-label={`Chọn ${mode.title}: ${mode.description}`}
                 className="group flex min-h-[300px] flex-col rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-[0_12px_40px_rgba(28,62,104,0.08)] transition-all hover:-translate-y-1 hover:border-brand-300 hover:shadow-[0_20px_50px_rgba(0,104,255,0.16)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200 disabled:cursor-wait disabled:opacity-70"
               >
                 <div className="flex items-start justify-between gap-4">
@@ -82,7 +83,7 @@ export default function ExperienceSelector({ onSelect, busy, error }) {
         </div>
 
         {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-        <p className="mt-6 text-center text-xs text-slate-500">Khi bắt đầu campaign mới, bạn có thể chọn lại chế độ làm việc.</p>
+        <p className="mt-6 text-center text-xs text-slate-600">Khi bắt đầu campaign mới, bạn có thể chọn lại chế độ làm việc.</p>
       </div>
     </main>
   )

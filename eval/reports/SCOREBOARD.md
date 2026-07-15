@@ -144,3 +144,26 @@ local order creation, verification, and report generation.
 Authoritative evidence: `autopilot-20-v1.json`,
 `docs/next-hackathon/10-m4-autopilot-replan-evidence.md`, and
 `docs/next-hackathon/11-m4-autopilot-e2e-evidence.md`.
+
+## Advertising Agent rebrand
+
+Evaluation date: 2026-07-15
+
+| Gate | Result |
+|---|---:|
+| Frontend source tests | **10/10** |
+| Agent regression tests | **133/133** |
+| Opening selector contrast failures | **0/12** |
+| Guided Workflow contrast failures | **0/64** |
+| Campaign Autopilot contrast failures | **0/74** |
+| Browser horizontal-overflow findings | **0** |
+| Old product name in guarded user-facing sources | **0** |
+
+The local identity, blue visual system, mode selector, user-visible copy,
+email/PDF exports, technical docs, accessible control names, and responsive
+layout contracts pass. The approximately 1.19 MB JavaScript bundle remains a
+performance-hardening item. Final screenshots are intentionally deferred until
+that work no longer changes the interface.
+
+Authoritative evidence:
+`docs/next-hackathon/13-advertising-agent-rebrand-evidence.md`.

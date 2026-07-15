@@ -57,7 +57,7 @@ async def handle_result(session_id: str) -> AgentResponse:
         {
             "type": "info",
             "text": (
-                "🔗 Xem chi tiết: [AdsPilot](https://adspilot.pawgrammers.io.vn)\n\n"
+                "🔗 Xem chi tiết: [Trình quản lý quảng cáo](https://adspilot.pawgrammers.io.vn)\n\n"
                 "📊 Theo dõi hiệu quả: [Analytics](https://analytics.pawgrammers.io.vn)"
             ),
         },

@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Camp Ads Agent — Báo cáo Kiến trúc Kỹ thuật</title>
+<title>Advertising Agent — Báo cáo Kiến trúc Kỹ thuật</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
   :root{
     --bg:#0d1117; --panel:#141b24; --panel2:#1b2430; --ink:#e6edf3; --muted:#9aa7b4;
-    --line:#25303c; --accent:#4dd4ac; --accent2:#5aa9ff; --accent3:#ffb454; --danger:#ff6b6b;
+    --line:#25303c; --accent:#38a3ff; --accent2:#0068ff; --accent3:#ffb454; --danger:#ff6b6b;
     --code-bg:#0a0f16; --chip:#1f2a36;
     --maxw:1080px;
   }
@@ -23,7 +23,7 @@
   header.hero{
     background:
       radial-gradient(1200px 400px at 20% -10%, rgba(90,169,255,.18), transparent),
-      radial-gradient(900px 400px at 90% 0%, rgba(77,212,172,.16), transparent),
+      radial-gradient(900px 400px at 90% 0%, rgba(0,104,255,.18), transparent),
       linear-gradient(180deg,#0f1720,#0d1117);
     border-bottom:1px solid var(--line);
     padding:72px 24px 56px;
@@ -35,8 +35,8 @@
   .badges{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:26px}
   .badge{background:var(--chip); border:1px solid var(--line); color:var(--ink);
     padding:6px 12px; border-radius:999px; font-size:12.5px; font-weight:600}
-  .badge.g{color:var(--accent); border-color:rgba(77,212,172,.4)}
-  .badge.b{color:var(--accent2); border-color:rgba(90,169,255,.4)}
+  .badge.g{color:var(--accent); border-color:rgba(56,163,255,.4)}
+  .badge.b{color:var(--accent2); border-color:rgba(0,104,255,.4)}
   .meta{margin-top:22px; color:var(--muted); font-size:13px}
 
   h2{font-size:27px; margin:64px 0 6px; letter-spacing:-.01em; scroll-margin-top:20px}
@@ -78,7 +78,7 @@
   tr:nth-child(even) td{background:rgba(255,255,255,.015)}
 
   .callout{border-radius:12px; padding:14px 18px; margin:20px 0; font-size:14.5px}
-  .callout.tip{background:rgba(77,212,172,.08); border:1px solid rgba(77,212,172,.35)}
+  .callout.tip{background:rgba(0,104,255,.08); border:1px solid rgba(0,104,255,.35)}
   .callout.warn{background:rgba(255,180,84,.08); border:1px solid rgba(255,180,84,.35)}
   .callout b{color:#fff}
   .pill{display:inline-block; background:var(--chip); border:1px solid var(--line);
@@ -149,14 +149,14 @@
 </head>
 <body>
 
-<a href="/" class="back-agent" title="Quay lại Camp Ads Agent">
+<a href="/" class="back-agent" title="Quay lại Advertising Agent">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
   <span class="label">Về Agent</span>
 </a>
 
 <header class="hero">
   <div class="kicker">Báo cáo Kiến trúc Kỹ thuật</div>
-  <h1>Camp Ads Agent</h1>
+  <h1>Advertising Agent</h1>
   <p class="sub">Một "harness" agentic bao bọc công cụ thiết lập chiến dịch quảng cáo truyền thống bằng một lớp AI hội thoại — biến biểu mẫu 5 bước tĩnh thành một workspace được orchestrate, có tool-calling và ràng buộc trạng thái hai chiều.</p>
   <div class="badges">
     <span class="badge g">Agentic Orchestration</span>
@@ -190,7 +190,7 @@
 
 <!-- ===================== 1 ===================== -->
 <h2 id="s1"><span class="num">01</span>Tóm tắt — Luận điểm "Harness"</h2>
-<p class="lead">Camp Ads Agent lấy một quy trình quảng cáo truyền thống — brief, audience, creative, đặt ad-zone, launch — và hiện đại hóa nó không phải bằng cách thay thế công cụ của người vận hành, mà bằng cách <b>"harness" (bao bọc &amp; điều phối)</b> công cụ đó. Hệ thống có thể được hiểu như một <b>agentic harness</b>: một lớp orchestration mỏng, ràng buộc mô hình ngôn ngữ lớn (LLM) với (a) một workspace thiết lập chiến dịch trực tiếp và (b) một tập hợp năng lực backend có thể gọi được, để con người và agent tự động cùng điều khiển một trạng thái chiến dịch một cách cộng tác.</p>
+<p class="lead">Advertising Agent lấy một quy trình quảng cáo truyền thống — brief, audience, creative, đặt ad-zone, launch — và hiện đại hóa nó không phải bằng cách thay thế công cụ của người vận hành, mà bằng cách <b>"harness" (bao bọc &amp; điều phối)</b> công cụ đó. Hệ thống có thể được hiểu như một <b>agentic harness</b>: một lớp orchestration mỏng, ràng buộc mô hình ngôn ngữ lớn (LLM) với (a) một workspace thiết lập chiến dịch trực tiếp và (b) một tập hợp năng lực backend có thể gọi được, để con người và agent tự động cùng điều khiển một trạng thái chiến dịch một cách cộng tác.</p>
 
 <div class="grid2">
   <div class="card accent">
@@ -347,7 +347,7 @@ flowchart TD
     D -->|4| RE["handle_result"]
     C -->|không — có message| FF["handle_freeform<br/>LLM + tool calling"]
 
-    style FF fill:#1b2f2a,stroke:#4dd4ac,color:#e6edf3
+    style FF fill:#102a46,stroke:#38a3ff,color:#e6edf3
     style D fill:#1b263a,stroke:#5aa9ff,color:#e6edf3
 </div>
 <figcaption>Hình 3 — Điều phối của router. Bấm "Đồng ý &amp; Tiếp tục" là xác định và rẻ; gõ chat thì đi vào engine suy luận.</figcaption>
@@ -405,7 +405,7 @@ flowchart TD
     Q2 -->|có| A3["Lần 3<br/>tin nhắn fallback cứng theo từng tool"]
     A3 --> DONE
 
-    style DONE fill:#1b2f2a,stroke:#4dd4ac,color:#e6edf3
+    style DONE fill:#102a46,stroke:#38a3ff,color:#e6edf3
     style A3 fill:#3a2f1b,stroke:#ffb454,color:#e6edf3
 </div>
 <figcaption>Hình 4 — Thang giảm cấp tool-calling: hai lần thử mô hình, rồi một lưới an toàn xác định.</figcaption>
@@ -426,8 +426,8 @@ flowchart LR
     style B fill:#1b263a,stroke:#5aa9ff,color:#fff
     style A fill:#1b263a,stroke:#5aa9ff,color:#fff
     style C fill:#1b263a,stroke:#5aa9ff,color:#fff
-    style S fill:#1b2f2a,stroke:#4dd4ac,color:#fff
-    style R fill:#1b2f2a,stroke:#4dd4ac,color:#fff
+    style S fill:#102a46,stroke:#38a3ff,color:#fff
+    style R fill:#102a46,stroke:#38a3ff,color:#fff
 </div>
 <figcaption>Hình 5 — Máy trạng thái chiến dịch năm bước.</figcaption>
 
@@ -462,7 +462,7 @@ flowchart LR
 <p>Khi xác nhận, frontend post payload setup; backend lắp ráp body <code>POST /api/orders</code> (budget quy đổi triệu → VND, gom creative theo zone, DMP include dưới dạng ObjectId) và áp dụng logic auto-status: <code>active</code> nếu <code>startDate ≤ hôm nay</code>, ngược lại là <code>pending</code>.</p>
 
 <div class="step-h"><div class="dot">5</div><h3>Result — tóm tắt launch</h3></div>
-<p><code>handle_result</code> render order đã tạo: order ID (vd. <code>ORD-2026-005</code>), badge trạng thái, deep link tới trang chiến dịch AdsPilot, các link preview trực tiếp tới site quảng cáo mô phỏng, và tóm tắt budget. Điều này khép vòng — công việc của agent trở thành một chiến dịch thực, có thể kiểm tra được.</p>
+<p><code>handle_result</code> render order đã tạo: order ID (vd. <code>ORD-2026-005</code>), badge trạng thái, deep link tới trình quản lý quảng cáo, các link preview trực tiếp tới site quảng cáo mô phỏng, và tóm tắt budget. Điều này khép vòng — công việc của agent trở thành một chiến dịch thực, có thể kiểm tra được.</p>
 
 <!-- ===================== 8 — SUB-AGENTS ===================== -->
 <h2 id="s8"><span class="num">08</span>Điều phối đa tác tử — Sub-Agent chuyên biệt</h2>
@@ -482,7 +482,7 @@ flowchart TB
     STAT --> INS["Tổng hợp insight + biểu đồ<br/>+ email tường thuật"]
     INS -->|"báo cáo về"| ORCH
 
-    style ORCH fill:#1b2f2a,stroke:#4dd4ac,color:#fff
+    style ORCH fill:#102a46,stroke:#38a3ff,color:#fff
     style CAP fill:#1b263a,stroke:#5aa9ff,color:#fff
     style ANA fill:#3a2f1b,stroke:#ffb454,color:#fff
 </div>
@@ -539,15 +539,15 @@ flowchart TB
     PB --> DB
     PA -->|"HTTPS"| MAAS["GreenNode MaaS"]
 
-    style PA fill:#1b2f2a,stroke:#4dd4ac,color:#fff
+    style PA fill:#102a46,stroke:#38a3ff,color:#fff
     style PB fill:#1b263a,stroke:#5aa9ff,color:#fff
 </div>
 <figcaption>Hình 7 — Topology triển khai một-VPS dưới Nginx + PM2.</figcaption>
 
-<div class="callout tip"><b>Tóm trong một câu.</b> Camp Ads Agent là một orchestration harness gọn nhẹ, audit được hoàn toàn, ràng buộc một LLM với một công cụ thiết lập chiến dịch thực thông qua tool calling kiểu MCP và một workspace ràng buộc hai chiều — biến một biểu mẫu nhiều bước thủ công thành một quy trình cộng tác do agent điều khiển, mà không đánh mất quyền kiểm soát của con người lẫn tính minh bạch vận hành.</div>
+<div class="callout tip"><b>Tóm trong một câu.</b> Advertising Agent là một orchestration harness gọn nhẹ, audit được hoàn toàn, ràng buộc một LLM với một công cụ thiết lập chiến dịch thực thông qua tool calling kiểu MCP và một workspace ràng buộc hai chiều — biến một biểu mẫu nhiều bước thủ công thành một quy trình cộng tác do agent điều khiển, mà không đánh mất quyền kiểm soát của con người lẫn tính minh bạch vận hành.</div>
 
 <footer>
-  Camp Ads Agent — Báo cáo Kiến trúc Kỹ thuật · Build 2026-06-16.7 · Claw-a-thon 2026<br/>
+  Advertising Agent — Báo cáo Kiến trúc Kỹ thuật · Tài liệu phục vụ review kỹ thuật<br/>
   Nguồn: knowledge base của dự án (<code>docs/knowledge base/</code>) và mã nguồn agent/frontend/backend.
 </footer>
 
@@ -561,7 +561,7 @@ flowchart TB
       background: '#1b2430',
       primaryColor: '#1b2430',
       primaryTextColor: '#e6edf3',
-      primaryBorderColor: '#4dd4ac',
+      primaryBorderColor: '#38a3ff',
       lineColor: '#5aa9ff',
       fontSize: '14px',
       fontFamily: 'ui-sans-serif, system-ui, sans-serif'

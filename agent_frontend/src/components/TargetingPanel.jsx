@@ -42,7 +42,7 @@ function SectionHeader({ icon: Icon, label, color = 'slate' }) {
   return (
     <div className={`flex items-center gap-1.5 mb-2 mt-3 first:mt-0`}>
       <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${colors[color] || 'text-slate-500'}`} />
-      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
+      <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">{label}</span>
     </div>
   )
 }
@@ -114,7 +114,7 @@ function LocationPicker({ geoOptions, selected = [], onChange }) {
       </div>
       {/* Right: selected locations */}
       <div className="w-36 border border-slate-200 rounded-lg flex flex-col">
-        <div className="px-2 py-1 border-b border-slate-100 text-[10px] font-semibold text-slate-500">Đã chọn</div>
+        <div className="px-2 py-1 border-b border-slate-100 text-[10px] font-semibold text-slate-600">Đã chọn</div>
         <div className="overflow-y-auto flex-1 p-1">
           {selected.length === 0 ? (
             <p className="text-[10px] text-slate-400 text-center mt-3">Chưa chọn</p>
