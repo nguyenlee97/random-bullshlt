@@ -300,8 +300,19 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    mode = "partial" if args.allow_partial else "complete"
-    print(f"VALID: {args.report} ({mode} coverage)")
+    report = json.loads(args.report.read_text(encoding="utf-8"))
+    counts = Counter(item.get("status") for item in report.get("results", []))
+    inventory = "partial inventory" if args.allow_partial else "complete manifest inventory"
+    print(
+        f"VALID STRUCTURE: {args.report} ({inventory}; "
+        f"pass={counts['pass']} fail={counts['fail']} "
+        f"blocked={counts['blocked']} not_run={counts['not_run']})"
+    )
+    if counts["not_run"]:
+        print(
+            "WARNING: execution coverage is incomplete; validator success does not "
+            "mean not_run scenarios were tested."
+        )
     return 0
 
 

@@ -13,7 +13,7 @@ COPY . .
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s \
   CMD python -c "import httpx; httpx.get('http://localhost:8080/ready').raise_for_status()"
 
 # GreenNode AgentBase Runtime Contract: must listen on 0.0.0.0:8080

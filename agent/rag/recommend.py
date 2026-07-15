@@ -102,20 +102,29 @@ async def _hybrid_search(queries: list[str], limit: int) -> list[dict]:
         asyncio.to_thread(embed_sparse, queries),
     )
     client = get_qdrant()
-    merged: dict[str, dict] = {}
-    for i in range(len(queries)):
-        res = client.query_points(
+
+    def query_one(index: int):
+        return client.query_points(
             config.RAG_COLLECTION,
             prefetch=[
-                qm.Prefetch(query=dense[i], using="dense", limit=limit),
+                qm.Prefetch(query=dense[index], using="dense", limit=limit),
                 qm.Prefetch(query=qm.SparseVector(
-                    indices=sparse[i].indices.tolist(),
-                    values=sparse[i].values.tolist()), using="sparse", limit=limit),
+                    indices=sparse[index].indices.tolist(),
+                    values=sparse[index].values.tolist()), using="sparse", limit=limit),
             ],
             query=qm.FusionQuery(fusion=qm.Fusion.RRF),
             limit=limit,
             with_payload=True,
         )
+
+    # Rewritten queries are independent reads. Qdrant's synchronous client is
+    # thread-safe, so issue them concurrently without blocking the API event
+    # loop; merge below remains in original query order for deterministic ties.
+    responses = await asyncio.gather(*(
+        asyncio.to_thread(query_one, index) for index in range(len(queries))
+    ))
+    merged: dict[str, dict] = {}
+    for res in responses:
         for rank, p in enumerate(res.points):
             key = p.payload.get("_id") or p.payload.get("fullLabel")
             if key not in merged:

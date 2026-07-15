@@ -1,5 +1,10 @@
+from types import SimpleNamespace
+import threading
+
+import pytest
+
 from rag.index import _catalog_fingerprint
-from rag.recommend import _guard_reason, _rank_merged, _raw_query
+from rag.recommend import _guard_reason, _hybrid_search, _rank_merged, _raw_query
 from handlers.audience import _normalize_targeting
 from tools.audience_provenance import catalog_source
 
@@ -121,3 +126,31 @@ def test_b2b_leisure_guard_uses_catalog_taxonomy():
 
     assert _guard_reason(brief, consumer) == "b2b_consumer_leisure"
     assert _guard_reason(brief, industry) is None
+
+
+@pytest.mark.asyncio
+async def test_rewritten_qdrant_queries_execute_concurrently(monkeypatch):
+    import rag.embeddings as embeddings
+    import rag.recommend as recommend
+
+    class Values(list):
+        def tolist(self):
+            return list(self)
+
+    barrier = threading.Barrier(3, timeout=1)
+
+    class Client:
+        def query_points(self, *_args, **_kwargs):
+            barrier.wait()
+            return SimpleNamespace(points=[])
+
+    monkeypatch.setattr(embeddings, "embed_dense", lambda queries: [[0.1] for _ in queries])
+    monkeypatch.setattr(
+        embeddings,
+        "embed_sparse",
+        lambda queries: [SimpleNamespace(indices=Values([1]), values=Values([1.0]))
+                         for _ in queries],
+    )
+    monkeypatch.setattr(recommend, "get_qdrant", lambda: Client())
+
+    assert await _hybrid_search(["raw", "rewrite one", "rewrite two"], 5) == []

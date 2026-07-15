@@ -46,6 +46,7 @@ services:
       - DEMO_NAMESPACE=${DEMO_NAMESPACE:-local-demo}
     volumes:
       - hf_cache:/root/.cache/huggingface          # embedding models survive rebuilds
+      - fastembed_cache:/tmp/fastembed_cache       # actual FastEmbed model cache path
     depends_on:
       mongo:
         condition: service_healthy
@@ -141,6 +142,7 @@ services:
 
 volumes:
   hf_cache:
+  fastembed_cache:
   mongo_data:
   qdrant_data:
   prom_data:

@@ -54,7 +54,7 @@ Required endpoints:
 |---|---|---|
 | Frontend | `http://localhost:5175/` | HTTP 200, title `Advertising Agent` |
 | Agent | `http://localhost:8080/ready` | HTTP 200, dependencies ready |
-| Backend | `http://localhost:3000/health` | HTTP 200 |
+| Backend | `http://localhost:3000/api/health` | HTTP 200 |
 | Qdrant | `http://localhost:6333/readyz` | HTTP 200 |
 | Prometheus | `http://localhost:9090/-/ready` | HTTP 200 |
 | Grafana | `http://localhost:3002/` | HTTP 200 |
@@ -114,6 +114,11 @@ agent\venv\Scripts\python.exe eval\run_creative_safety_eval.py --help
 agent\venv\Scripts\python.exe eval\run_nonlinear_eval.py --help
 agent\venv\Scripts\python.exe eval\run_copilot_eval.py --help
 ```
+
+For release scenario `RAG-001`, use the runner with only `--label`; its no-flag
+pipeline mirrors the deployed rewrite/rerank/top-K configuration. Flags such as
+`--rerank`, `--no-rewrite`, or explicit K values are experiment-only and must be
+reported as A/B evidence, not as the production release result.
 
 Use each script’s committed/default release configuration unless the scenario explicitly names another configuration. Record the exact command and generated report path.
 

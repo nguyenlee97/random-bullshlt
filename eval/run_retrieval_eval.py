@@ -65,7 +65,7 @@ async def evaluate_case(path, golden_to_segment, segment_to_label, args):
     case = json.loads(path.read_text(encoding="utf-8"))
     audience = case["labels"]["audience"]
     t0 = time.perf_counter()
-    if args.no_rewrite:
+    if not args.rewrite:
         queries = _raw_query(case["brief"], args.raw_query_mode)
     else:
         queries = await rewrite(case["brief"])
@@ -81,7 +81,7 @@ async def evaluate_case(path, golden_to_segment, segment_to_label, args):
 
     order = None
     rerank_s = 0.0
-    if not args.no_rerank:
+    if args.rerank:
         stage = time.perf_counter()
         brief_text = " | ".join(str(case["brief"].get(key) or "")
                                 for key in ("brand", "objective", "kpi", "notes"))
@@ -150,19 +150,50 @@ async def main():
     parser.add_argument("--subset", default="", help="tag=<value>")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--concurrency", type=int, default=2)
-    parser.add_argument("--retrieve-k", type=int, default=50)
-    parser.add_argument("--final-k", type=int, default=15)
-    parser.add_argument("--no-rewrite", action="store_true")
-    parser.add_argument("--no-rerank", action="store_true")
-    parser.add_argument("--include-raw-with-rewrite", action="store_true")
+    parser.add_argument("--retrieve-k", type=int, default=None)
+    parser.add_argument("--final-k", type=int, default=None)
+    rewrite_group = parser.add_mutually_exclusive_group()
+    rewrite_group.add_argument("--rewrite", dest="rewrite", action="store_true")
+    rewrite_group.add_argument("--no-rewrite", dest="rewrite", action="store_false")
+    rerank_group = parser.add_mutually_exclusive_group()
+    rerank_group.add_argument("--rerank", dest="rerank", action="store_true")
+    rerank_group.add_argument("--no-rerank", dest="rerank", action="store_false")
+    raw_group = parser.add_mutually_exclusive_group()
+    raw_group.add_argument(
+        "--include-raw-with-rewrite", dest="include_raw_with_rewrite", action="store_true")
+    raw_group.add_argument(
+        "--exclude-raw-with-rewrite", dest="include_raw_with_rewrite", action="store_false")
+    parser.set_defaults(rewrite=None, rerank=None, include_raw_with_rewrite=None)
     parser.add_argument(
         "--raw-query-mode", choices=("all", "notes", "objective-notes"), default="all",
         help="Fields used by --no-rewrite experiments.")
     args = parser.parse_args()
 
+    # No-flag runs must evaluate the deployed candidate, not an accidental
+    # experimental pipeline. Every stage remains explicitly overrideable for
+    # A/B reports.
+    args.rewrite = config.RAG_QUERY_REWRITE if args.rewrite is None else args.rewrite
+    args.rerank = config.RAG_USE_RERANK if args.rerank is None else args.rerank
+    args.include_raw_with_rewrite = (
+        args.rewrite
+        if args.include_raw_with_rewrite is None
+        else args.include_raw_with_rewrite
+    )
+    args.retrieve_k = args.retrieve_k or config.RAG_TOP_RETRIEVE
+    args.final_k = args.final_k or config.RAG_TOP_FINAL
+
     index = await inspect_index()
     if not index.get("ready"):
         raise SystemExit(f"RAG index is not ready: {index}")
+
+    # Initialize FastEmbed once before concurrent cases. Without this, the
+    # first two workers can race while constructing duplicate ONNX sessions;
+    # that measures evaluator startup rather than retrieval quality/latency.
+    from rag.embeddings import embed_dense, embed_sparse
+    await asyncio.gather(
+        asyncio.to_thread(embed_dense, ["evaluation warmup"]),
+        asyncio.to_thread(embed_sparse, ["evaluation warmup"]),
+    )
 
     paths = sorted(GOLDEN.glob("brief_*.json"))
     if args.subset.startswith("tag="):
@@ -214,12 +245,19 @@ async def main():
         "config": {
             "dense_model": config.RAG_DENSE_MODEL,
             "sparse_model": config.RAG_SPARSE_MODEL,
-            "rerank_model": None if args.no_rerank else config.RERANK_MODEL,
-            "rewrite": not args.no_rewrite,
+            "rerank_model": config.RERANK_MODEL if args.rerank else None,
+            "rewrite": args.rewrite,
+            "rerank": args.rerank,
             "include_raw_with_rewrite": args.include_raw_with_rewrite,
-            "raw_query_mode": args.raw_query_mode if args.no_rewrite else None,
+            "raw_query_mode": args.raw_query_mode if not args.rewrite else None,
             "retrieve_k": args.retrieve_k,
             "final_k": args.final_k,
+            "mirrors_production_defaults": {
+                "rewrite": args.rewrite == config.RAG_QUERY_REWRITE,
+                "rerank": args.rerank == config.RAG_USE_RERANK,
+                "retrieve_k": args.retrieve_k == config.RAG_TOP_RETRIEVE,
+                "final_k": args.final_k == config.RAG_TOP_FINAL,
+            },
             "index": index,
         },
         "summary": summary,

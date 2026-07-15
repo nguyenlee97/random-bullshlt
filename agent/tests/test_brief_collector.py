@@ -67,6 +67,23 @@ def test_minimax_nested_json_string_is_coerced_then_strictly_validated():
     assert turn.brief.objective == "conversion"
 
 
+@pytest.mark.parametrize(
+    ("provider_value", "workspace_millions"),
+    [(2, 2), (2_000_000, 2), (2_000_000_000, 2000)],
+)
+def test_budget_is_normalized_from_raw_vnd(provider_value, workspace_millions):
+    raw = MIXIFOOD_DRAFT.model_dump()
+    raw["budget"] = provider_value
+    assert BriefDraft.model_validate(raw).budget == workspace_millions
+
+
+def test_ambiguous_over_limit_budget_is_not_silently_rescaled():
+    raw = MIXIFOOD_DRAFT.model_dump()
+    raw["budget"] = 6000
+    with pytest.raises(ValueError):
+        BriefDraft.model_validate(raw)
+
+
 def test_explicit_past_year_is_never_silently_rewritten():
     messages = [{"role": "user", "content": "chạy từ 15/7/2025 đến 17/7/2025"}]
     unchanged = normalize_inferred_dates(

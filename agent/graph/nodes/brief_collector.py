@@ -29,12 +29,35 @@ class BriefDraft(BaseModel):
     brand: str = Field(min_length=1, max_length=200)
     objective: Literal["awareness", "consideration", "conversion", "retention"]
     kpi: str = Field(min_length=1, max_length=500)
-    budget: float = Field(gt=0, le=5000)
+    budget: float = Field(
+        gt=0,
+        le=5000,
+        description="Campaign budget in millions of VND; 2 means 2,000,000 VND",
+    )
     startDate: str = Field(min_length=10, max_length=10)
     endDate: str = Field(min_length=10, max_length=10)
     notes: str = Field(default="", max_length=12000)
 
     model_config = {"extra": "forbid"}
+
+    @field_validator("budget", mode="before")
+    @classmethod
+    def normalize_budget_to_millions(cls, value):
+        """Accept a provider returning raw VND although the workspace uses millions.
+
+        MiniMax can correctly understand ``2 triệu`` but still serialize it as
+        ``2000000``. Values just above the workspace ceiling remain invalid;
+        only amounts large enough to be unambiguously raw VND are converted.
+        """
+        if isinstance(value, bool):
+            raise ValueError("budget must be a number")
+        try:
+            amount = float(value)
+        except (TypeError, ValueError):
+            return value
+        if amount >= 100_000:
+            amount /= 1_000_000
+        return amount
 
 
 class BriefTurn(BaseModel):
@@ -81,6 +104,8 @@ def _brief_messages(state: AgentState) -> list[dict]:
         "Nếu ngày không có năm, dùng lần xuất hiện gần nhất không sớm hơn ngày hiện tại. "
         "Số ngày chạy tính bao gồm ngày bắt đầu. Ví dụ chạy 3 ngày từ 2026-07-15 thì "
         "endDate=2026-07-17. Audience, geo, sở thích và sản phẩm phải lưu trong notes. "
+        "budget BẮT BUỘC dùng đơn vị TRIỆU VND: 2 triệu ghi budget=2, 2 tỷ ghi budget=2000; "
+        "không ghi budget=2000000 cho 2 triệu. "
         "propose_brief chỉ tạo bản nháp chờ người dùng duyệt, không có nghĩa đã áp dụng. "
         "message phải ngắn, bằng tiếng Việt và không được nói rằng Brief đã được lưu."
     )

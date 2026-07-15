@@ -6,6 +6,21 @@ Catalog: 310 segments
 
 Set: 80 briefs (`brief_001`–`brief_080`)
 
+## 2026-07-15 external-QA remediation rerun
+
+The no-flag retrieval runner now mirrors the deployed candidate: raw brief plus
+coverage-preserving rewrites, Qwen reranker disabled, retrieve 50 and final
+candidate pool 25. Qdrant reads for rewritten queries run concurrently.
+
+| Cases | Errors | Recall@50 | Must recall@25 | MRR@25 | nDCG@25 | Candidate exclusions | Unknown IDs | p50 | p95 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 80 | 0 | 0.876 | 0.871 | 0.670 | 0.579 | 20 | 0 | 3.534 s | 4.463 s |
+
+Candidate exclusions describe the model's review pool, not the six final
+recommendations; final-output safety remains enforced and graded separately.
+The paired nonlinear dependency rerun passed 30/30 cases. Reports:
+`post-qa-rag-production-v2.json` and `nonlinear-post-qa-fix-final.json`.
+
 | Candidate pipeline | Recall@50 | Must recall@K | MRR@K | nDCG@K | Exclusions | p50 |
 |---|---:|---:|---:|---:|---:|---:|
 | Raw hybrid | 0.785 | 0.713 | 0.563 | 0.464 | 12 | 0.036 s |

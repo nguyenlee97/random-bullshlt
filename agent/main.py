@@ -12,6 +12,9 @@ from config import config
 
 @asynccontextmanager
 async def _lifespan(_app):
+    if config.USE_RAG_AUDIENCE:
+        from rag.runtime import start_prewarm
+        await start_prewarm()
     if config.USE_VLM_CREATIVE:
         from creative_intel.service import start_worker
         await start_worker()
@@ -21,6 +24,9 @@ async def _lifespan(_app):
     try:
         yield
     finally:
+        if config.USE_RAG_AUDIENCE:
+            from rag.runtime import stop_prewarm
+            await stop_prewarm()
         if config.USE_CAMPAIGN_AUTOPILOT:
             from autopilot.worker import stop_worker as stop_autopilot_worker
             await stop_autopilot_worker()
@@ -133,9 +139,15 @@ async def readiness():
 
     if config.USE_RAG_AUDIENCE:
         checks["rag_index"] = False
+        checks["rag_runtime"] = False
         try:
             from rag.index import inspect_index
             checks["rag_index"] = (await inspect_index())["ready"]
+        except Exception:
+            pass
+        try:
+            from rag.runtime import runtime_status
+            checks["rag_runtime"] = runtime_status()["ready"]
         except Exception:
             pass
     if config.USE_VLM_CREATIVE:

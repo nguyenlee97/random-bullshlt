@@ -77,7 +77,7 @@ Each case must be recorded once in `report.json`. `P0` is release blocking, `P1`
 
 | ID | Pri | Input/action | Expected output/state | Forbidden outcome |
 |---|---|---|---|---|
-| RAG-001 | P0 | Run committed 80-brief retrieval evaluation. | Report contains catalog fingerprint, recall/nDCG/MRR/exclusions and no unknown IDs. | Missing source identity or silent catalog fallback. |
+| RAG-001 | P0 | Run `python eval/run_retrieval_eval.py --label <run_id>-retrieval` with no pipeline override flags. | All 80 briefs complete; report says every `mirrors_production_defaults` value is true and contains catalog fingerprint, recall/nDCG/MRR/exclusions and no unknown IDs. | Experimental Qwen reranker silently enabled, missing source identity, unknown IDs, or silent catalog fallback. |
 | RAG-002 | P0 | Mixifood Brief notes from BR-011; request recommendations. | Relevant food/snack/online-shopping candidates with authoritative IDs and reasons. | Generic fabricated segments. |
 | RAG-003 | P1 | Ambiguous Vietnamese slang/typos for gamers, students and online shoppers. | Query rewriting preserves raw intent; grounded candidates returned. | Rewrite drops a major concept. |
 | RAG-004 | P1 | English Brief against Vietnamese catalog. | Relevant catalog-backed results and Vietnamese explanation. | Empty result solely due language. |

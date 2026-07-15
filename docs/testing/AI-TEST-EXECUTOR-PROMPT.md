@@ -41,6 +41,7 @@ Never include API keys, database credentials, authorization headers, full system
 2. Capture `/health`, `/ready`, `/api/version`, container status, feature flags with secret values redacted, configured model names, catalog fingerprints and browser versions.
 3. Run deterministic unit/integration/frontend checks from the plan. Preserve complete outputs as evidence.
 4. Execute every manifest scenario exactly once, P0 first, then P1, then P2. Run the four journey scenarios uninterrupted after their isolated components.
+   A failure or blocker in one flow does not authorize stopping unrelated scenarios. Continue every independent case; only dependent cases may be marked blocked. Do not convert the run into a bounded/time-boxed sample unless the user explicitly supplied a time limit.
 5. Use a fresh session and uniquely prefixed test data unless a scenario explicitly depends on earlier state.
 6. Capture canonical state from server APIs before and after every mutation scenario. Browser-local state is not canonical evidence.
 7. For UI scenarios, capture the declared viewport, screenshot, browser console errors and failed network requests.
@@ -78,6 +79,6 @@ Return only:
 3. Release-gate result.
 4. Blocker and major defect IDs/titles.
 5. Paths to `report.json` and `summary.md`.
-6. The exact validator command and whether it exited 0.
+6. The exact validator command and whether it exited 0. State separately whether execution coverage is complete; validator success proves report structure and manifest inventory, not that `not_run` scenarios were executed.
 
 Do not replace `report.json` with prose. If execution must stop early, still emit a valid report containing every manifest ID, marking unexecuted cases `not_run` with the stop reason.
