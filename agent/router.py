@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -25,9 +25,117 @@ from handlers.screenshot import handle_screenshot, ALLOWED_DOMAINS
 agent_router = APIRouter()
 
 
+def _anonymous_token(request: Request) -> str | None:
+    return (
+        request.cookies.get("aa_anonymous")
+        or request.headers.get("x-anonymous-token")  # one-time legacy/API migration
+    )
+
+
+async def _request_identity(request: Request) -> dict:
+    from identity import require_identity
+    try:
+        return await require_identity(_anonymous_token(request))
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+async def _assert_session_access(request: Request, session_id: str) -> None:
+    from identity import require_session_access
+    try:
+        await require_session_access(_anonymous_token(request), session_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+async def _assert_run_access(request: Request, run_id: str) -> dict:
+    from autopilot.service import get_run
+    try:
+        run = await get_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await _assert_session_access(request, run["session_id"])
+    return run
+
+
+async def _assert_proposal_access(request: Request, proposal_id: str) -> dict:
+    from workspace.service import _get_proposal
+    proposal = await _get_proposal(proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    await _assert_session_access(request, proposal["session_id"])
+    return proposal
+
+
+class _ConversationCreateRequest(BaseModel):
+    title: str = ""
+    experience_mode: str | None = None
+
+
+@agent_router.post("/auth/anonymous")
+async def anonymous_bootstrap(request: Request, response: Response):
+    from identity import bootstrap_anonymous
+    supplied_token = _anonymous_token(request)
+    result = await bootstrap_anonymous(supplied_token)
+    token = result.pop("token", None) or supplied_token
+    if token:
+        response.set_cookie(
+            "aa_anonymous", token,
+            max_age=_cfg.ANONYMOUS_COOKIE_MAX_AGE_DAYS * 24 * 60 * 60,
+            httponly=True,
+            secure=_cfg.ANONYMOUS_COOKIE_SECURE,
+            samesite="lax",
+            path="/",
+        )
+    return result
+
+
+@agent_router.get("/conversations")
+async def conversations_list(request: Request, include_archived: bool = False):
+    from identity import list_conversations
+    identity = await _request_identity(request)
+    return {
+        "conversations": await list_conversations(
+            identity["identity_id"], include_archived=include_archived
+        )
+    }
+
+
+@agent_router.post("/conversations", status_code=201)
+async def conversations_create(request: Request, body: _ConversationCreateRequest):
+    from identity import create_conversation
+    identity = await _request_identity(request)
+    return await create_conversation(
+        identity["identity_id"], title=body.title,
+        experience_mode=body.experience_mode,
+    )
+
+
+@agent_router.get("/conversations/{conversation_id}")
+async def conversations_get(conversation_id: str, request: Request):
+    from identity import get_conversation
+    identity = await _request_identity(request)
+    try:
+        return await get_conversation(identity["identity_id"], conversation_id)
+    except KeyError as exc:
+        # Do not reveal whether another identity owns this ID.
+        raise HTTPException(status_code=404, detail="conversation not found") from exc
+
+
+@agent_router.post("/conversations/{conversation_id}/archive")
+async def conversations_archive(conversation_id: str, request: Request):
+    from identity import archive_conversation
+    identity = await _request_identity(request)
+    try:
+        return await archive_conversation(identity["identity_id"], conversation_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="conversation not found") from exc
+
+
 @agent_router.get("/logs/{session_id}")
-async def get_logs(session_id: str, limit: int = 200):
+async def get_logs(session_id: str, request: Request, limit: int = 200):
     """Return session logs for debugging. Used by the frontend Export feature."""
+    await _assert_session_access(request, session_id)
     from session import _ensure_mongo, _logs_col, _mem_logs
     use_mongo = await _ensure_mongo()
     if use_mongo:
@@ -70,11 +178,12 @@ async def get_logs(session_id: str, limit: int = 200):
 
 
 @agent_router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str):
+async def delete_session(session_id: str, request: Request):
     """Delete one user's agent/session artifacts; business orders are retained."""
     from session import delete_session_data
     if not session_id or len(session_id) > 128:
         raise HTTPException(status_code=422, detail="invalid session id")
+    await _assert_session_access(request, session_id)
     deleted = await delete_session_data(session_id)
     return {"ok": True, "session_id": session_id, "deleted": deleted}
 
@@ -83,6 +192,7 @@ async def delete_session(session_id: str):
 @limiter.limit(CHAT_LIMIT)
 async def chat(request: Request, req: ChatRequest) -> AgentResponse:
     sid = req.session_id or "default"
+    await _assert_session_access(request, sid)
 
     # Treat every browser-provided string as data, never as control text. A
     # flagged request cannot reach a model or mutation handler.
@@ -182,9 +292,10 @@ async def chat(request: Request, req: ChatRequest) -> AgentResponse:
 
 
 @agent_router.get("/creative-intel")
-async def creative_intel(session_id: str = "default"):
+async def creative_intel(request: Request, session_id: str = "default"):
     """Phase 3: analysis verdicts per uploaded creative (status: analyzing /
     auto_approved / needs_review + deterministic facts + optional VLM result)."""
+    await _assert_session_access(request, session_id)
     from creative_intel.service import get_intel
     return {"files": await get_intel(session_id)}
 
@@ -204,11 +315,12 @@ class _AnalyzeRequest(BaseModel):
 
 
 @agent_router.post("/creative-analyze")
-async def creative_analyze(req: _AnalyzeRequest):
+async def creative_analyze(request: Request, req: _AnalyzeRequest):
     """Phase 3 trigger. Called by ConfirmPhase right after files get real URLs
     (the Creative step is frontend-local and never reaches the agent — the KB's
     'upload at step 2' description is outdated). Analysis runs async; results
     land in /creative-intel."""
+    await _assert_session_access(request, req.session_id)
     from config import config as _cfg
     if not _cfg.USE_VLM_CREATIVE:
         return {"jobs": [], "note": "USE_VLM_CREATIVE=false"}
@@ -225,8 +337,9 @@ class _OverrideRequest(BaseModel):
 
 
 @agent_router.post("/creative-intel/override")
-async def creative_intel_override(req: _OverrideRequest):
+async def creative_intel_override(request: Request, req: _OverrideRequest):
     """Record an explicit, reasoned human approval for a review verdict."""
+    await _assert_session_access(request, req.session_id)
     from creative_intel.service import approve_override
     try:
         return await approve_override(
@@ -242,6 +355,7 @@ async def creative_intel_override(req: _OverrideRequest):
 @limiter.limit(RECOMMEND_LIMIT)
 async def dmp_recommend(request: Request, session_id: str = "default"):
     """AI picks top DMP segments based on brief + real segment data."""
+    await _assert_session_access(request, session_id)
     return await handle_dmp_recommend(session_id)
 
 
@@ -249,17 +363,19 @@ async def dmp_recommend(request: Request, session_id: str = "default"):
 @limiter.limit(RECOMMEND_LIMIT)
 async def zones_recommend(request: Request, session_id: str = "default"):
     """AI ranks real zones based on brief objective/budget/KPI + creative files."""
+    await _assert_session_access(request, session_id)
     return await handle_zone_recommend_api(session_id)
 
 
 @agent_router.get("/audience-entry")
-async def audience_entry(session_id: str = "default", brief_hint: str = ""):
+async def audience_entry(request: Request, session_id: str = "default", brief_hint: str = ""):
     """
     Proactive audience recommendation when user enters step 1.
     Returns Targeting Parameters + DMP Segments (+ optional Advanced Targeting) as chat blocks.
     Returns {skip: true} if brief not set or audience already selected.
     brief_hint: optional JSON-encoded brief from frontend (used when pending_proposal hasn't been committed yet).
     """
+    await _assert_session_access(request, session_id)
     import json as _j
     hint = None
     if brief_hint:
@@ -271,30 +387,33 @@ async def audience_entry(session_id: str = "default", brief_hint: str = ""):
 
 
 @agent_router.get("/setup-entry")
-async def setup_entry_endpoint(session_id: str = "default"):
+async def setup_entry_endpoint(request: Request, session_id: str = "default"):
     """
     Proactive zone recommendation when user enters Step 3 (Setup).
     Like audience-entry: ranks zones, annotates conflicts, returns workspace_proposal + chat explanation.
     Returns {skip: true} if zones already selected or brief not set.
     """
+    await _assert_session_access(request, session_id)
     return await handle_setup_entry(session_id)
 
 
 @agent_router.get("/report-entry")
-async def report_entry_endpoint(session_id: str = "default"):
+async def report_entry_endpoint(request: Request, session_id: str = "default"):
     """
     Called when user enters Report step (step 5).
     Triggers background report generation and returns intro message.
     """
+    await _assert_session_access(request, session_id)
     return await handle_report_entry(session_id)
 
 
 @agent_router.get("/email-entry")
-async def email_entry_endpoint(session_id: str = "default"):
+async def email_entry_endpoint(request: Request, session_id: str = "default"):
     """
     Called when user enters Email step (step 6).
     Returns intro message with pre-filled email suggestion.
     """
+    await _assert_session_access(request, session_id)
     return await handle_email_entry(session_id)
 
 class _WorkspaceMutationRequest(BaseModel):
@@ -338,13 +457,15 @@ class _WorkspacePreferencesRequest(BaseModel):
 
 
 @agent_router.get("/workspace")
-async def workspace_get(session_id: str = "default"):
+async def workspace_get(request: Request, session_id: str = "default"):
+    await _assert_session_access(request, session_id)
     from workspace.service import get_workspace
     return await get_workspace(session_id)
 
 
 @agent_router.post("/workspace/preferences")
-async def workspace_preferences(request: _WorkspacePreferencesRequest):
+async def workspace_preferences(raw_request: Request, request: _WorkspacePreferencesRequest):
+    await _assert_session_access(raw_request, request.session_id)
     from workspace.service import WorkspaceConflict, set_preferences
     try:
         return await set_preferences(
@@ -368,7 +489,8 @@ async def workspace_preferences(request: _WorkspacePreferencesRequest):
 
 
 @agent_router.get("/workspace/recompute-plan")
-async def workspace_recompute_plan(session_id: str = "default"):
+async def workspace_recompute_plan(request: Request, session_id: str = "default"):
+    await _assert_session_access(request, session_id)
     from workspace.service import get_recompute_plan
     try:
         return await get_recompute_plan(session_id)
@@ -377,7 +499,8 @@ async def workspace_recompute_plan(session_id: str = "default"):
 
 
 @agent_router.get("/workspace/task-context/{artifact}")
-async def workspace_task_context(artifact: str, session_id: str = "default"):
+async def workspace_task_context(artifact: str, request: Request, session_id: str = "default"):
+    await _assert_session_access(request, session_id)
     from workspace.service import get_task_context
     try:
         return await get_task_context(session_id, artifact)
@@ -386,7 +509,8 @@ async def workspace_task_context(artifact: str, session_id: str = "default"):
 
 
 @agent_router.post("/workspace/artifact-results")
-async def workspace_artifact_result(request: _ArtifactResultRequest):
+async def workspace_artifact_result(raw_request: Request, request: _ArtifactResultRequest):
+    await _assert_session_access(raw_request, request.session_id)
     from workspace.service import (
         StaleTaskResult,
         WorkspaceConflict,
@@ -421,7 +545,8 @@ async def workspace_artifact_result(request: _ArtifactResultRequest):
 
 
 @agent_router.post("/workspace/proposals")
-async def workspace_create_proposal(request: _WorkspaceProposalRequest):
+async def workspace_create_proposal(raw_request: Request, request: _WorkspaceProposalRequest):
+    await _assert_session_access(raw_request, request.session_id)
     from workspace.intent import resolve_legacy_update
     from workspace.service import WorkspaceConflict, create_proposal, get_workspace
     try:
@@ -449,13 +574,17 @@ async def workspace_create_proposal(request: _WorkspaceProposalRequest):
 
 
 @agent_router.get("/workspace/proposals")
-async def workspace_list_pending_proposals(session_id: str = "default"):
+async def workspace_list_pending_proposals(request: Request, session_id: str = "default"):
+    await _assert_session_access(request, session_id)
     from workspace.service import list_pending_proposals
     return {"proposals": await list_pending_proposals(session_id)}
 
 
 @agent_router.post("/workspace/proposals/{proposal_id}/approve")
-async def workspace_approve_proposal(proposal_id: str, request: _ProposalDecisionRequest):
+async def workspace_approve_proposal(
+    proposal_id: str, raw_request: Request, request: _ProposalDecisionRequest
+):
+    await _assert_proposal_access(raw_request, proposal_id)
     from workspace.service import WorkspaceConflict, approve_proposal
     try:
         result = await approve_proposal(proposal_id, actor=request.actor)
@@ -487,7 +616,10 @@ async def workspace_approve_proposal(proposal_id: str, request: _ProposalDecisio
 
 
 @agent_router.post("/workspace/proposals/{proposal_id}/reject")
-async def workspace_reject_proposal(proposal_id: str, request: _ProposalDecisionRequest):
+async def workspace_reject_proposal(
+    proposal_id: str, raw_request: Request, request: _ProposalDecisionRequest
+):
+    await _assert_proposal_access(raw_request, proposal_id)
     from workspace.service import reject_proposal
     try:
         result = await reject_proposal(
@@ -515,7 +647,7 @@ async def workspace_reject_proposal(proposal_id: str, request: _ProposalDecision
 
 
 @agent_router.post("/commit-workspace")
-async def commit_workspace(request: _WorkspaceMutationRequest):
+async def commit_workspace(raw_request: Request, request: _WorkspaceMutationRequest):
     """
     Commit a workspace field through the canonical revisioned workspace, then
     mirror it to legacy session form_state during migration.
@@ -527,6 +659,7 @@ async def commit_workspace(request: _WorkspaceMutationRequest):
     from session import get_pending_proposal, clear_pending_proposal, log_event
     from workspace.service import WorkspaceConflict, apply_mutation
     sid = request.session_id
+    await _assert_session_access(raw_request, sid)
     field = request.field
     value = request.value
 
@@ -616,8 +749,9 @@ def _autopilot_error(exc: Exception) -> HTTPException:
 
 
 @agent_router.post("/autopilot/runs", status_code=201)
-async def autopilot_start(request: _AutopilotStartRequest):
+async def autopilot_start(raw_request: Request, request: _AutopilotStartRequest):
     from autopilot.service import RunConflict, create_run
+    await _assert_session_access(raw_request, request.session_id)
     try:
         return await create_run(
             request.session_id,
@@ -631,36 +765,45 @@ async def autopilot_start(request: _AutopilotStartRequest):
 
 
 @agent_router.get("/autopilot/runs/{run_id}")
-async def autopilot_get(run_id: str):
+async def autopilot_get(run_id: str, request: Request):
     from autopilot.service import RunConflict, get_run
     try:
-        return await get_run(run_id)
+        return await _assert_run_access(request, run_id)
     except (KeyError, ValueError, RunConflict) as exc:
         raise _autopilot_error(exc) from exc
 
 
 @agent_router.post("/autopilot/runs/{run_id}/pause")
-async def autopilot_pause(run_id: str, request: _AutopilotActionRequest):
+async def autopilot_pause(
+    run_id: str, raw_request: Request, request: _AutopilotActionRequest
+):
     from autopilot.service import RunConflict, pause_run
     try:
+        await _assert_run_access(raw_request, run_id)
         return await pause_run(run_id, actor=request.actor)
     except (KeyError, ValueError, RunConflict) as exc:
         raise _autopilot_error(exc) from exc
 
 
 @agent_router.post("/autopilot/runs/{run_id}/resume")
-async def autopilot_resume(run_id: str, request: _AutopilotActionRequest):
+async def autopilot_resume(
+    run_id: str, raw_request: Request, request: _AutopilotActionRequest
+):
     from autopilot.service import RunConflict, resume_run
     try:
+        await _assert_run_access(raw_request, run_id)
         return await resume_run(run_id, actor=request.actor)
     except (KeyError, ValueError, RunConflict) as exc:
         raise _autopilot_error(exc) from exc
 
 
 @agent_router.post("/autopilot/runs/{run_id}/cancel")
-async def autopilot_cancel(run_id: str, request: _AutopilotActionRequest):
+async def autopilot_cancel(
+    run_id: str, raw_request: Request, request: _AutopilotActionRequest
+):
     from autopilot.service import RunConflict, cancel_run
     try:
+        await _assert_run_access(raw_request, run_id)
         return await cancel_run(run_id, actor=request.actor)
     except (KeyError, ValueError, RunConflict) as exc:
         raise _autopilot_error(exc) from exc
@@ -668,10 +811,12 @@ async def autopilot_cancel(run_id: str, request: _AutopilotActionRequest):
 
 @agent_router.post("/autopilot/runs/{run_id}/tasks/{task_id}/review")
 async def autopilot_review(
-    run_id: str, task_id: str, request: _AutopilotReviewRequest
+    run_id: str, task_id: str, raw_request: Request,
+    request: _AutopilotReviewRequest,
 ):
     from autopilot.service import RunConflict, review_task
     try:
+        await _assert_run_access(raw_request, run_id)
         return await review_task(
             run_id, task_id, approved=request.approved,
             actor=request.actor, reason=request.reason,
@@ -682,10 +827,11 @@ async def autopilot_review(
 
 @agent_router.post("/autopilot/runs/{run_id}/strategy")
 async def autopilot_select_strategy(
-    run_id: str, request: _AutopilotStrategyRequest
+    run_id: str, raw_request: Request, request: _AutopilotStrategyRequest
 ):
     from autopilot.service import RunConflict, select_strategy
     try:
+        await _assert_run_access(raw_request, run_id)
         return await select_strategy(
             run_id, request.option_id, actor=request.actor, reason=request.reason,
         )
@@ -698,9 +844,9 @@ async def autopilot_events(run_id: str, request: Request, follow: bool = True):
     """Stream durable run events. ``follow=false`` returns the current backlog."""
     import asyncio
     import json
-    from autopilot.service import get_run, list_events
+    from autopilot.service import list_events
     try:
-        await get_run(run_id)
+        await _assert_run_access(request, run_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -731,8 +877,9 @@ class GenerateImageRequest(BaseModel):
 
 
 @agent_router.post("/generate-image")
-async def generate_image_route(req: GenerateImageRequest):
+async def generate_image_route(request: Request, req: GenerateImageRequest):
     """Generate an ad creative image via gpt-image-1."""
+    await _assert_session_access(request, req.session_id)
     return await handle_generate_image(
         session_id=req.session_id,
         brief=req.brief,
@@ -742,8 +889,9 @@ async def generate_image_route(req: GenerateImageRequest):
 
 
 @agent_router.get("/image-gen-status")
-async def image_gen_status_route(session_id: str):
+async def image_gen_status_route(request: Request, session_id: str):
     """Return remaining image generation quota for this session."""
+    await _assert_session_access(request, session_id)
     remaining = get_remaining(session_id)
     return {"remaining": remaining, "max": 10}
 
@@ -761,6 +909,7 @@ async def image_gen_formats_route():
 
 @agent_router.get("/screenshot")
 async def screenshot_route(
+    request: Request,
     url: str = "",
     session_id: str = "default",
     zone_ids: str = "",   # comma-separated DOM element IDs, e.g. "ZingNews_Masthead,ZingNews_Halfpage"
@@ -779,5 +928,6 @@ async def screenshot_route(
         { ok, full_b64, zones, zone_count, width, height, captured_at, url }  on success
         { ok: false, error }                                                   on failure
     """
+    await _assert_session_access(request, session_id)
     parsed_zone_ids = [z.strip() for z in zone_ids.split(",") if z.strip()] if zone_ids else None
     return await handle_screenshot(url=url, session_id=session_id, zone_ids=parsed_zone_ids)

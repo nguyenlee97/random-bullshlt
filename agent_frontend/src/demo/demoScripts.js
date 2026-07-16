@@ -292,7 +292,7 @@ export const STAGE1_STEPS = [
     target: '#new-chat-btn',
     position: 'bottom',
     title: '🆕 Chiến dịch mới',
-    text: '**Chiến dịch mới** — tạo chiến dịch mới hoàn toàn. Xóa toàn bộ chat và workspace hiện tại.',
+    text: '**Chiến dịch mới** — mở workspace mới và giữ campaign hiện tại trong Lịch sử để có thể tiếp tục sau.',
   },
   {
     type: 'TOOLTIP',

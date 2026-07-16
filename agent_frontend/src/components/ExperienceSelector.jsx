@@ -1,4 +1,4 @@
-import { Bot, Route, Sparkles, ShieldCheck, ArrowRight, Check } from 'lucide-react'
+import { Bot, Route, Sparkles, ShieldCheck, ArrowRight, Check, History } from 'lucide-react'
 
 const modes = [
   {
@@ -19,7 +19,7 @@ const modes = [
   },
 ]
 
-export default function ExperienceSelector({ onSelect, busy, error }) {
+export default function ExperienceSelector({ onSelect, onOpenHistory, busy, error }) {
   return (
     <main className="h-screen h-[100dvh] overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top_left,_#dcebff_0,_#f4f7fb_38%,_#eef4fb_100%)] px-5 py-8 sm:px-8 sm:py-12">
       <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-5xl flex-col justify-center">
@@ -31,6 +31,10 @@ export default function ExperienceSelector({ onSelect, busy, error }) {
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600">Advertising Agent</p>
             <p className="text-sm text-slate-600">Campaign workspace thông minh</p>
           </div>
+          <button type="button" onClick={onOpenHistory} className="ml-auto flex items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-brand-300 hover:text-brand-600">
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">Lịch sử chiến dịch</span>
+          </button>
         </div>
 
         <div className="max-w-3xl">
@@ -85,7 +89,7 @@ export default function ExperienceSelector({ onSelect, busy, error }) {
         {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         <p className="mt-6 text-center text-xs text-slate-600">Khi bắt đầu campaign mới, bạn có thể chọn lại chế độ làm việc.</p>
         <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] leading-5 text-slate-500">
-          Nội dung chat, brief và creative được dịch vụ AI xử lý để xây dựng campaign. Không nhập dữ liệu cá nhân hoặc bí mật không cần thiết. Chọn Chiến dịch mới để xóa dữ liệu phiên Agent.
+          Nội dung chat, brief và creative được dịch vụ AI xử lý để xây dựng campaign. Không nhập dữ liệu cá nhân hoặc bí mật không cần thiết. Chiến dịch cũ được lưu trên thiết bị để bạn có thể tiếp tục sau.
         </p>
       </div>
     </main>

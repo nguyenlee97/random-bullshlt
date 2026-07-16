@@ -75,6 +75,12 @@ class Config:
     MAX_ORDER_BUDGET_VND: int = int(os.getenv("MAX_ORDER_BUDGET_VND", "5000000000"))
     # Session TTL in days (Mongo TTL index on agent_sessions.last_active).
     SESSION_TTL_DAYS: int = int(os.getenv("SESSION_TTL_DAYS", "30"))
+    ANONYMOUS_COOKIE_SECURE: bool = (
+        os.getenv("ANONYMOUS_COOKIE_SECURE", "false").lower() == "true"
+    )
+    ANONYMOUS_COOKIE_MAX_AGE_DAYS: int = int(
+        os.getenv("ANONYMOUS_COOKIE_MAX_AGE_DAYS", "90")
+    )
 
     # ── Phase 1: LangGraph (production-plan/02) ───────────────────────────────
     # Strangler flag: false = original freeform.py path (default, safe);

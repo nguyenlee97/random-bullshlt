@@ -127,10 +127,10 @@ const validateBrief = brief => {
   return errors
 }
 
-export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceRefresh, onOpenChat, onOpenBrief, onOpenCreative, onStatusChange }) {
+export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun = null, onWorkspaceRefresh, onOpenChat, onOpenBrief, onOpenCreative, onStatusChange }) {
   const [policy, setPolicy] = useState('critical_only')
   const [creativeSource, setCreativeSource] = useState(null)
-  const [run, setRun] = useState(null)
+  const [run, setRun] = useState(initialRun)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [workspaceSnapshot, setWorkspaceSnapshot] = useState(canonicalWorkspace)
@@ -141,6 +141,10 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
   useEffect(() => {
     workspaceRefreshRef.current = onWorkspaceRefresh
   }, [onWorkspaceRefresh])
+
+  useEffect(() => {
+    setRun(initialRun || null)
+  }, [initialRun?.run_id])
 
   useEffect(() => {
     if (canonicalWorkspace) {

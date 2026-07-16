@@ -66,4 +66,11 @@ def reset_session_col(monkeypatch):
                             raising=False)
     except ImportError:
         pass
+    try:
+        import identity
+        monkeypatch.setattr(identity, "_mem_identities", {}, raising=False)
+        monkeypatch.setattr(identity, "_mem_identity_by_hash", {}, raising=False)
+        monkeypatch.setattr(identity, "_mem_conversations", {}, raising=False)
+    except ImportError:
+        pass
     yield

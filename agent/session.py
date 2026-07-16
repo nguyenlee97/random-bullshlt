@@ -27,6 +27,9 @@ def _default_session(sid: str) -> dict:
     return {
         "_id": sid,
         "history": [],
+        # Full text transcript for UI resume. ``history`` remains a short LLM
+        # context window and may be trimmed independently.
+        "display_history": [],
         "form_state": {},
         "current_step": -1,
         "created_order_ids": [],
@@ -114,7 +117,13 @@ async def add_message(session_id: str, role: str, content: str) -> None:
     if await _ensure_mongo():
         await _sessions_col.update_one(
             {"_id": session_id},
-            {"$push": {"history": msg}, "$set": {"updated_at": _now()}},
+            {
+                "$push": {
+                    "history": msg,
+                    "display_history": {"$each": [msg], "$slice": -500},
+                },
+                "$set": {"updated_at": _now()},
+            },
             upsert=True,
         )
         doc = await _sessions_col.find_one({"_id": session_id}, {"history": 1})
@@ -124,8 +133,18 @@ async def add_message(session_id: str, role: str, content: str) -> None:
     else:
         s = _mem.setdefault(session_id, _default_session(session_id))
         s["history"].append(msg)
+        s.setdefault("display_history", []).append(msg)
+        s["display_history"] = s["display_history"][-500:]
         if len(s["history"]) > config.CONTEXT_WINDOW:
             s["history"] = s["history"][-config.CONTEXT_WINDOW:]
+    # Conversation history is a read model; failure must never fail the chat.
+    try:
+        from identity import touch_conversation_for_session
+        await touch_conversation_for_session(
+            session_id, role=role, content=content,
+        )
+    except Exception:
+        pass
 
 
 async def get_history(session_id: str) -> list:
@@ -137,6 +156,29 @@ async def get_history(session_id: str) -> list:
     else:
         s = _mem.get(session_id, _default_session(session_id))
         return [{"role": m["role"], "content": m["content"]} for m in s.get("history", [])]
+
+
+async def get_display_history(session_id: str) -> list:
+    """Return the durable UI transcript without exposing model-only metadata."""
+    if await _ensure_mongo():
+        doc = await _sessions_col.find_one(
+            {"_id": session_id}, {"display_history": 1, "history": 1}
+        )
+    else:
+        doc = _mem.get(session_id)
+    if not doc:
+        return []
+    # Migration-safe fallback for sessions created before display_history.
+    messages = doc.get("display_history") or doc.get("history") or []
+    return [
+        {
+            "role": item.get("role", "assistant"),
+            "content": item.get("content", ""),
+            "timestamp": item.get("ts"),
+        }
+        for item in messages
+        if item.get("content")
+    ]
 
 
 async def log_event(session_id: str, event_type: str, data: dict) -> None:

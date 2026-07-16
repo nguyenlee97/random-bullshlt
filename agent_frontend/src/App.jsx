@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useChat } from '@/hooks/useChat'
 import TopBar from '@/components/TopBar'
+import ConversationHistory from '@/components/ConversationHistory'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
 import ExperienceSelector from '@/components/ExperienceSelector'
@@ -110,6 +111,14 @@ export default function App() {
   const [modeSelectionBusy, setModeSelectionBusy] = useState(false)
   const [modeSelectionError, setModeSelectionError] = useState('')
   const [autopilotSummary, setAutopilotSummary] = useState(null)
+  const [identityReady, setIdentityReady] = useState(false)
+  const [identityError, setIdentityError] = useState('')
+  const [currentConversationId, setCurrentConversationId] = useState('')
+  const [restoredAutopilotRun, setRestoredAutopilotRun] = useState(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [conversationHistory, setConversationHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
   const [currentStep, setCurrentStep] = useState(0)
   const [stepStatuses, setStepStatuses] = useState(STEPS.map(() => 'pending'))
   const [formState, setFormState] = useState(initialState)
@@ -120,6 +129,7 @@ export default function App() {
   const workspaceRef = useRef(null)
   const mainRef = useRef(null)
   const bootedRef = useRef(false)
+  const identityInitRef = useRef(false)
 
   // ── Demo visibility: hide Demo button once user has interacted ──────────
   const [hasUserStarted, setHasUserStarted] = useState(false)
@@ -228,7 +238,6 @@ export default function App() {
   useEffect(() => {
     const handler = event => hydrateCanonicalWorkspace(event.detail)
     window.addEventListener('agent:canonical_workspace', handler)
-    AgentAPI.getWorkspace().then(hydrateCanonicalWorkspace)
     return () => window.removeEventListener('agent:canonical_workspace', handler)
   }, [hydrateCanonicalWorkspace])
 
@@ -423,7 +432,7 @@ export default function App() {
     }))
   }, [])
 
-  const { messages, busy, boot, newChat, sendMessage, approveStep, retryLastMessage, canRetry } = useChat({
+  const { messages, busy, boot, hydrateMessages, newChat, sendMessage, approveStep, retryLastMessage, canRetry } = useChat({
     currentStep,
     formState,
     stepStatuses,
@@ -462,6 +471,34 @@ export default function App() {
     }, [formState.creative.files]),
   })
 
+  // Device identity and campaign context must resolve before booting chat or
+  // reading workspace state. This prevents refresh from creating a stray
+  // session before the owned conversation has been restored.
+  useEffect(() => {
+    if (identityInitRef.current) return
+    identityInitRef.current = true
+    ;(async () => {
+      try {
+        const context = await AgentAPI.initializeIdentity()
+        setCurrentConversationId(context.conversation_id)
+        hydrateMessages(context.ui_messages || [])
+        hydrateCanonicalWorkspace(context.workspace)
+        setRestoredAutopilotRun(context.latest_run || null)
+        const restoredMode = context.workspace?.experience_mode || context.experience_mode || null
+        setExperienceMode(restoredMode)
+        if (restoredMode) {
+          setActiveTab(restoredMode === 'autopilot' ? 'autopilot' : 'workspace')
+          setHasUserStarted(true)
+        }
+        bootedRef.current = (context.ui_messages || []).length > 0
+      } catch (error) {
+        setIdentityError(error.message || 'Không thể khôi phục chiến dịch trên thiết bị này.')
+      } finally {
+        setIdentityReady(true)
+      }
+    })()
+  }, [hydrateCanonicalWorkspace, hydrateMessages])
+
   // Watch for new assistant messages while chat is compact (workspace expanded on mobile).
   // Uses ID comparison instead of messages.length — stopThinking() REPLACES the thinking
   // bubble (array length unchanged) so length-based tracking misses chip responses.
@@ -499,11 +536,11 @@ export default function App() {
   }, [experienceMode])
 
   useEffect(() => {
-    if (experienceMode && !bootedRef.current) {
+    if (identityReady && experienceMode && !bootedRef.current) {
       bootedRef.current = true
       boot()
     }
-  }, [boot, experienceMode])
+  }, [boot, experienceMode, identityReady])
 
   // Audience-entry: when user reaches step 1 with brief done → proactive recommendation in chat
   const audienceEntryFiredRef = useRef(false)
@@ -712,21 +749,89 @@ export default function App() {
     setCurrentStep(0)
   }, [])
 
-  const handleReset = useCallback(() => {
+  const applyConversationContext = useCallback((context) => {
+    if (!context) return
     resetLocalCampaign()
-    AgentAPI.newSession()
-    AgentAPI.getWorkspace()
-  }, [resetLocalCampaign])
+    setCurrentConversationId(context.conversation_id)
+    hydrateMessages(context.ui_messages || [])
+    hydrateCanonicalWorkspace(context.workspace)
+    setRestoredAutopilotRun(context.latest_run || null)
+    setAutopilotSummary(null)
+    const mode = context.workspace?.experience_mode || context.experience_mode || null
+    setExperienceMode(mode)
+    setActiveTab(mode === 'autopilot' ? 'autopilot' : mode === 'guided' ? 'workspace' : 'chat')
+    setHasUserStarted(Boolean(mode))
+    bootedRef.current = (context.ui_messages || []).length > 0
+  }, [hydrateCanonicalWorkspace, hydrateMessages, resetLocalCampaign])
+
+  const handleReset = useCallback(async () => {
+    const context = await newChat({ experienceMode })
+    if (!context) return
+    applyConversationContext({ ...context, ui_messages: [] })
+    if (experienceMode) {
+      await AgentAPI.setWorkspacePreferences(
+        experienceMode,
+        experienceMode === 'autopilot' ? 'critical_only' : 'review_every_stage',
+      )
+      const workspace = await AgentAPI.getWorkspace()
+      hydrateCanonicalWorkspace(workspace)
+      setExperienceMode(experienceMode)
+      setActiveTab(experienceMode === 'autopilot' ? 'autopilot' : 'workspace')
+      bootedRef.current = false
+    }
+  }, [applyConversationContext, experienceMode, hydrateCanonicalWorkspace, newChat])
 
   const handleNewChat = useCallback(async () => {
-    const deleted = await newChat()
-    if (!deleted) return
-    resetLocalCampaign()
-    bootedRef.current = false
+    const context = await newChat()
+    if (!context) return
+    applyConversationContext({ ...context, ui_messages: [] })
     setExperienceMode(null)
-    setAutopilotSummary(null)
+    setActiveTab('chat')
+    setHasUserStarted(false)
+    bootedRef.current = false
     setModeSelectionError('')
-  }, [resetLocalCampaign, newChat])
+    setHistoryOpen(false)
+  }, [applyConversationContext, newChat])
+
+  const openConversationHistory = useCallback(async () => {
+    setHistoryOpen(true)
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      setConversationHistory(await AgentAPI.listConversations())
+    } catch (error) {
+      setHistoryError(error.message)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
+  const resumeConversation = useCallback(async (conversationId) => {
+    if (conversationId === currentConversationId) {
+      setHistoryOpen(false)
+      return
+    }
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      const context = await AgentAPI.resumeConversation(conversationId)
+      applyConversationContext(context)
+      setHistoryOpen(false)
+    } catch (error) {
+      setHistoryError(error.message)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [applyConversationContext, currentConversationId])
+
+  const archiveConversation = useCallback(async (conversationId) => {
+    const ok = await AgentAPI.archiveConversation(conversationId)
+    if (!ok) {
+      setHistoryError('Không thể lưu trữ chiến dịch này.')
+      return
+    }
+    setConversationHistory(prev => prev.filter(item => item.conversation_id !== conversationId))
+  }, [])
 
   // Listen for agent:reset event from BlockRenderer ActionResetBlock
   useEffect(() => {
@@ -1003,13 +1108,47 @@ export default function App() {
   // Read at render-time. Tailwind md: breakpoints handle the class-based
   // layout switching automatically on resize.
 
+  if (!identityReady) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">
+        Đang khôi phục chiến dịch trên thiết bị này…
+      </div>
+    )
+  }
+
+  if (identityError) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50 p-6">
+        <div className="max-w-md rounded-2xl border border-red-200 bg-white p-6 text-center shadow-sm">
+          <h1 className="font-bold text-slate-900">Không thể khôi phục dữ liệu</h1>
+          <p className="mt-2 text-sm text-red-700">{identityError}</p>
+          <button onClick={() => window.location.reload()} className="mt-4 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white">Thử lại</button>
+        </div>
+      </div>
+    )
+  }
+
   if (!experienceMode) {
     return (
-      <ExperienceSelector
-        onSelect={selectExperience}
-        busy={modeSelectionBusy}
-        error={modeSelectionError}
-      />
+      <>
+        <ExperienceSelector
+          onSelect={selectExperience}
+          onOpenHistory={openConversationHistory}
+          busy={modeSelectionBusy}
+          error={modeSelectionError}
+        />
+        <ConversationHistory
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          conversations={conversationHistory}
+          currentId={currentConversationId}
+          loading={historyLoading}
+          error={historyError}
+          onResume={resumeConversation}
+          onNew={handleNewChat}
+          onArchive={archiveConversation}
+        />
+      </>
     )
   }
 
@@ -1027,7 +1166,20 @@ export default function App() {
       <TopBar
         onReset={handleReset}
         onNewChat={handleNewChat}
+        onOpenHistory={openConversationHistory}
         showDemo={!hasUserStarted}
+      />
+
+      <ConversationHistory
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        conversations={conversationHistory}
+        currentId={currentConversationId}
+        loading={historyLoading}
+        error={historyError}
+        onResume={resumeConversation}
+        onNew={handleNewChat}
+        onArchive={archiveConversation}
       />
 
       <div className="hidden flex-shrink-0 md:block">
@@ -1112,8 +1264,10 @@ export default function App() {
           ${experienceMode === 'autopilot' ? 'md:flex' : 'md:hidden'}
         `}>
           <AutopilotPanel
+            key={currentConversationId || 'autopilot'}
             brief={formState.brief}
             canonicalWorkspace={canonicalWorkspace}
+            initialRun={restoredAutopilotRun}
             onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
             onOpenChat={() => setActiveTab('chat')}
             onOpenBrief={() => openGuidedStep(0)}

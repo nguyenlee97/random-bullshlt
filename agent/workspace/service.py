@@ -211,6 +211,9 @@ async def set_preferences(
         }.items() if value is not None and current.get(name) != value
     }
     if not changed:
+        if experience_mode:
+            from identity import set_conversation_mode_for_session
+            await set_conversation_mode_for_session(session_id, experience_mode)
         return {
             "ok": True, "workspace_id": workspace_id,
             "workspace_revision": current["revision"], "changed": {},
@@ -286,6 +289,9 @@ async def set_preferences(
             raw["applied_mutations"] = (
                 raw["applied_mutations"] + [{"key": key, "result": result}]
             )[-200:]
+    if experience_mode:
+        from identity import set_conversation_mode_for_session
+        await set_conversation_mode_for_session(session_id, experience_mode)
     return result
 
 
@@ -586,6 +592,11 @@ async def apply_mutation(
 
     # Compatibility mirror. Canonical state has already committed atomically.
     await update_form_state(session_id, root, committed_value, sync_workspace=False)
+    if artifact == "brief" and isinstance(committed_value, dict):
+        from identity import set_conversation_title_for_session
+        await set_conversation_title_for_session(
+            session_id, str(committed_value.get("brand") or "")
+        )
     return result
 
 

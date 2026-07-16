@@ -80,6 +80,14 @@ export function useChat({
     setBusy(false)
   }, [])
 
+  const hydrateMessages = useCallback((storedMessages = []) => {
+    const restored = Array.isArray(storedMessages) ? storedMessages : []
+    bootedRef.current = restored.length > 0
+    thinkingIdRef.current = null
+    lastSentRef.current = null
+    setMessages(restored)
+  }, [])
+
   // Listen for externally-injected assistant messages (e.g. audience-entry recommendation from App.jsx)
   useEffect(() => {
     const handler = (e) => {
@@ -92,32 +100,31 @@ export function useChat({
     return () => window.removeEventListener('agent:inject_message', handler)
   }, [])
 
-  // Full reset: generate NEW session ID then re-run boot greeting
-  // Without newSession(), the old session_id is reused and the backend
-  // still has the old conversation history / workspace context.
-  const newChat = useCallback(async () => {
+  // Start a new owned conversation. The previous campaign remains available
+  // in History instead of being deleted from MongoDB.
+  const newChat = useCallback(async (options = {}) => {
     setBusy(true)
-    const deleted = await AgentAPI.deleteCurrentSession()
-    if (!deleted) {
+    try {
+      const context = await AgentAPI.createConversation(options)
+      bootedRef.current = false
+      setMessages([])
+      lastSentRef.current = null
+      log.chat('newChat → persistent conversation created', {
+        conversation_id: context?.conversation_id,
+      })
+      setBusy(false)
+      return context
+    } catch (error) {
       const response = {
         id: generateId(), role: 'error', blocks: [],
-        content: '⚠️ Không thể xóa dữ liệu phiên trên server. Workspace hiện tại vẫn được giữ nguyên; hãy thử lại khi kết nối phục hồi.',
+        content: '⚠️ Không thể tạo chiến dịch mới. Workspace hiện tại vẫn được giữ nguyên; hãy thử lại khi kết nối phục hồi.',
         timestamp: new Date().toISOString(),
-        metadata: { tool: 'session_delete_failed', model: 'none' },
+        metadata: { tool: 'conversation_create_failed', model: 'none' },
       }
       setMessages(prev => [...prev, response])
       setBusy(false)
-      return false
+      return null
     }
-    AgentAPI.newSession()   // ← fresh session ID; backend starts clean
-    bootedRef.current = false
-    setMessages([])
-    setBusy(true)
-    log.chat('newChat → new session + re-boot')
-    const response = await AgentAPI.boot()
-    setMessages([response])
-    setBusy(false)
-    return true
   }, [])
 
 
@@ -426,5 +433,8 @@ export function useChat({
     if (shouldAdvance && onStepApproved) onStepApproved(stepIndex)
   }, [busy, startThinking, stopThinking, onStepApproved, onCreativePrepared])
 
-  return { messages, busy, boot, newChat, sendMessage, approveStep, retryLastMessage, canRetry: !!lastSentRef.current }
+  return {
+    messages, busy, boot, hydrateMessages, newChat, sendMessage, approveStep,
+    retryLastMessage, canRetry: !!lastSentRef.current,
+  }
 }

@@ -1,8 +1,8 @@
-import { Bot, RotateCcw, MessageSquarePlus, Play, FileText } from 'lucide-react'
+import { Bot, RotateCcw, MessageSquarePlus, Play, FileText, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDemo } from '@/demo/DemoEngine'
 
-export default function TopBar({ onReset, onNewChat, showDemo }) {
+export default function TopBar({ onReset, onNewChat, onOpenHistory, showDemo }) {
   const demo = useDemo()
 
   return (
@@ -19,6 +19,19 @@ export default function TopBar({ onReset, onNewChat, showDemo }) {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onOpenHistory}
+          className="gap-1.5 text-xs h-8"
+          title="Lịch sử chiến dịch"
+          aria-label="Mở lịch sử chiến dịch"
+          id="conversation-history-btn"
+        >
+          <History className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Lịch sử</span>
+        </Button>
 
         {/* Technical docs — opens standalone report page */}
         <Button

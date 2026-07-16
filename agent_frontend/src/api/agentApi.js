@@ -8,10 +8,29 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
 const DEMO_NAMESPACE = String(import.meta.env.VITE_DEMO_NAMESPACE || '')
   .toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32)
 
+const STORAGE_PREFIX = `advertising-agent${DEMO_NAMESPACE ? `:${DEMO_NAMESPACE}` : ''}`
+const storageGet = key => {
+  try { return window.localStorage.getItem(`${STORAGE_PREFIX}:${key}`) || '' } catch { return '' }
+}
+const storageSet = (key, value) => {
+  try {
+    if (value) window.localStorage.setItem(`${STORAGE_PREFIX}:${key}`, value)
+    else window.localStorage.removeItem(`${STORAGE_PREFIX}:${key}`)
+  } catch {}
+}
+
+// Migration-only: builds before FE-2 briefly stored this token in localStorage.
+// New identities are issued only as an HttpOnly cookie by the server.
+let LEGACY_ANONYMOUS_TOKEN = typeof window !== 'undefined' ? storageGet('anonymous-token') : ''
+let CURRENT_CONVERSATION_ID = typeof window !== 'undefined' ? storageGet('conversation-id') : ''
+const STORED_SESSION_ID = typeof window !== 'undefined' ? storageGet('session-id') : ''
+
 const agentFetch = (url, opts = {}) =>
   fetch(url, {
     ...opts,
+    credentials: 'include',
     headers: {
+      ...(LEGACY_ANONYMOUS_TOKEN ? { 'X-Anonymous-Token': LEGACY_ANONYMOUS_TOKEN } : {}),
       ...(opts.headers || {}),
     },
   })
@@ -647,7 +666,7 @@ function _genSessionId() {
   const namespace = DEMO_NAMESPACE ? `${DEMO_NAMESPACE}_` : ''
   return `sess_${namespace}${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
-let SESSION_ID = _genSessionId()
+let SESSION_ID = STORED_SESSION_ID || _genSessionId()
 let WORKSPACE_REVISION = null
 const _workspaceMutationKeys = new Map()
 
@@ -667,6 +686,88 @@ function _mutationKey(field, value) {
 
 // Expose to window so ChatPane export can reference it
 if (typeof window !== 'undefined') window.__AGENT_SESSION_ID__ = SESSION_ID
+
+function applyConversationContext(context) {
+  if (!context?.session_id || !context?.conversation_id) return context
+  SESSION_ID = context.session_id
+  CURRENT_CONVERSATION_ID = context.conversation_id
+  WORKSPACE_REVISION = context.workspace?.revision ?? null
+  _workspaceMutationKeys.clear()
+  storageSet('session-id', SESSION_ID)
+  storageSet('conversation-id', CURRENT_CONVERSATION_ID)
+  if (typeof window !== 'undefined') {
+    window.__AGENT_SESSION_ID__ = SESSION_ID
+    window.__AGENT_CONVERSATION_ID__ = CURRENT_CONVERSATION_ID
+  }
+  return context
+}
+
+function conversationMessages(context) {
+  const messages = (context?.messages || []).map(item => ({
+    id: generateId(),
+    role: item.role === 'user' ? 'user' : 'assistant',
+    content: item.content || '',
+    blocks: [],
+    timestamp: item.timestamp || new Date().toISOString(),
+    metadata: { tool: 'conversation_history', model: 'stored' },
+  }))
+  for (const proposal of context?.pending_proposals || []) {
+    messages.push({
+      id: generateId(),
+      role: 'assistant',
+      content: `Đề xuất cập nhật ${proposal.field || 'workspace'} này vẫn đang chờ Anh/Chị duyệt.`,
+      blocks: [{
+        type: 'workspace_proposal',
+        changes: {
+          proposal_id: proposal.proposal_id,
+          field: proposal.field,
+          value: proposal.value,
+          reason: proposal.reason,
+          status: proposal.status || 'pending',
+        },
+      }],
+      timestamp: proposal.created_at || new Date().toISOString(),
+      metadata: { tool: 'workspace_proposal_resume', model: 'stored' },
+    })
+  }
+  return messages
+}
+
+async function bootstrapIdentity() {
+  const response = await agentFetch(`${AGENT_URL}/api/agent/auth/anonymous`, {
+    method: 'POST',
+    signal: AbortSignal.timeout(5000),
+  })
+  if (!response.ok) throw new Error('Không thể khởi tạo danh tính ẩn danh.')
+  const identity = await response.json()
+  // The response has now installed an HttpOnly cookie. Remove any credential
+  // left by the short-lived pre-cookie development build.
+  LEGACY_ANONYMOUS_TOKEN = ''
+  storageSet('anonymous-token', '')
+  return identity
+}
+
+async function fetchConversation(conversationId) {
+  const response = await agentFetch(
+    `${AGENT_URL}/api/agent/conversations/${encodeURIComponent(conversationId)}`,
+    { signal: AbortSignal.timeout(10000) },
+  )
+  if (!response.ok) return null
+  const context = applyConversationContext(await response.json())
+  return { ...context, ui_messages: conversationMessages(context) }
+}
+
+async function createOwnedConversation({ title = '', experienceMode = null } = {}) {
+  const response = await agentFetch(`${AGENT_URL}/api/agent/conversations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, experience_mode: experienceMode }),
+    signal: AbortSignal.timeout(5000),
+  })
+  if (!response.ok) throw new Error('Không thể tạo chiến dịch mới.')
+  const created = await response.json()
+  return fetchConversation(created.conversation_id)
+}
 
 
 /**
@@ -991,6 +1092,55 @@ function serviceUnavailable(content, step) {
 
 export const AgentAPI = {
 
+  /** Restore this device's last campaign, or create its first owned campaign. */
+  async initializeIdentity() {
+    await bootstrapIdentity()
+    let context = CURRENT_CONVERSATION_ID
+      ? await fetchConversation(CURRENT_CONVERSATION_ID)
+      : null
+    if (!context) context = await createOwnedConversation()
+    return context
+  },
+
+  async listConversations(includeArchived = false) {
+    try {
+      await bootstrapIdentity()
+      const response = await agentFetch(
+        `${AGENT_URL}/api/agent/conversations?include_archived=${includeArchived ? 'true' : 'false'}`,
+        { signal: AbortSignal.timeout(5000) },
+      )
+      if (!response.ok) return []
+      const data = await response.json()
+      return Array.isArray(data.conversations) ? data.conversations : []
+    } catch (error) {
+      console.warn('[listConversations] failed:', error.message)
+      return []
+    }
+  },
+
+  async resumeConversation(conversationId) {
+    const context = await fetchConversation(conversationId)
+    if (!context) throw new Error('Không tìm thấy chiến dịch hoặc thiết bị này không có quyền truy cập.')
+    return context
+  },
+
+  async createConversation(options = {}) {
+    await bootstrapIdentity()
+    return createOwnedConversation(options)
+  },
+
+  async archiveConversation(conversationId) {
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/conversations/${encodeURIComponent(conversationId)}/archive`,
+      { method: 'POST', signal: AbortSignal.timeout(5000) },
+    )
+    return response.ok
+  },
+
+  currentConversationId() {
+    return CURRENT_CONVERSATION_ID
+  },
+
   async boot() {
     const real = await callAgent({ session_id: SESSION_ID, step: -1, message: '' })
     return real ?? safeDemoFallback(AGENT_SCENARIOS.boot())
@@ -1132,11 +1282,17 @@ export const AgentAPI = {
     }
   },
 
-  /** Generate a fresh session ID — call before newChat() to get a clean backend context. */
+  /**
+   * Legacy non-persistent reset used only by old demos/tests. New product flows
+   * should call createConversation() so the previous campaign remains resumable.
+   */
   newSession() {
     SESSION_ID = _genSessionId()
+    CURRENT_CONVERSATION_ID = ''
     WORKSPACE_REVISION = null
     _workspaceMutationKeys.clear()
+    storageSet('session-id', '')
+    storageSet('conversation-id', '')
     if (typeof window !== 'undefined') window.__AGENT_SESSION_ID__ = SESSION_ID
     _agentReachable = null   // re-probe health on next call
     return SESSION_ID

@@ -1,0 +1,29 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+
+const api = readFileSync(new URL('../src/api/agentApi.js', import.meta.url), 'utf8')
+const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+const history = readFileSync(new URL('../src/components/ConversationHistory.jsx', import.meta.url), 'utf8')
+
+test('anonymous device credential uses an HttpOnly cookie with legacy migration only', () => {
+  assert.match(api, /anonymous-token/)
+  assert.match(api, /X-Anonymous-Token/)
+  assert.match(api, /credentials: 'include'/)
+  assert.match(api, /storageSet\('anonymous-token', ''\)/)
+  assert.match(api, /initializeIdentity/)
+})
+
+test('campaign resume hydrates transcript, workspace, pending proposals and autopilot run', () => {
+  assert.match(api, /pending_proposals/)
+  assert.match(app, /hydrateMessages\(context\.ui_messages/)
+  assert.match(app, /hydrateCanonicalWorkspace\(context\.workspace\)/)
+  assert.match(app, /initialRun=\{restoredAutopilotRun\}/)
+})
+
+test('history UI exposes resume, archive and new campaign actions', () => {
+  assert.match(history, /Lịch sử chiến dịch/)
+  assert.match(history, /onResume/)
+  assert.match(history, /onArchive/)
+  assert.match(history, /onNew/)
+})

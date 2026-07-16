@@ -281,6 +281,20 @@ async def get_run(run_id: str) -> dict:
     return {**public_run, "tasks": [_public(task) for task in task_docs]}
 
 
+async def get_latest_run(session_id: str) -> dict | None:
+    """Return the newest durable run for refresh/resume, if one exists."""
+    runs, _, _ = await _collections()
+    if runs is not None:
+        doc = await runs.find_one({"session_id": session_id}, sort=[("created_at", -1)])
+    else:
+        candidates = [
+            item for item in _mem_runs.values() if item.get("session_id") == session_id
+        ]
+        candidates.sort(key=lambda item: item.get("created_at") or _now(), reverse=True)
+        doc = candidates[0] if candidates else None
+    return await get_run(doc["run_id"]) if doc else None
+
+
 async def list_events(run_id: str, after: datetime | None = None) -> list[dict]:
     _, _, events = await _collections()
     query: dict[str, Any] = {"run_id": run_id}

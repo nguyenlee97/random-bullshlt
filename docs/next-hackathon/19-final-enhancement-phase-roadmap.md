@@ -208,6 +208,12 @@ The shared adapter converts Autopilot's numeric creative indices into stable cre
 
 ## 7. FE-2 — Accounts, anonymous use and conversation history
 
+Implementation status (2026-07-17): the anonymous foundation is code-complete and locally verified. The agent now issues a hashed, server-owned anonymous identity through an HttpOnly SameSite cookie; creates opaque owned conversation/session IDs; lists, archives and resumes campaigns; restores the canonical workspace, full display transcript, pending proposal cards and latest Autopilot run; and keeps the short LLM context window separate from the longer UI transcript. "Chiến dịch mới" preserves the previous campaign in History, while refresh resumes the current campaign. Existing pre-FE-2 evaluator sessions remain migration-compatible, but every session attached to a conversation now requires the owning identity for chat, workspace, proposal, creative and Autopilot APIs.
+
+Local verification: 209 backend tests, 30 frontend tests, production frontend build, browser create/list/resume/refresh journey, and a cookie-backed API journey that restored workspace revision 1 while the same workspace request without the owner cookie returned HTTP 401.
+
+Remaining FE-2 work is deliberately split into later slices: local account registration/login and anonymous claim, Google OIDC, Zalo Login, account session management/CSRF, and cross-device ownership tests. Anonymous identity plus same-device history/resume is complete; FE-2 as a whole is not.
+
 ### 7.1 Experience rules
 
 - A visitor may start immediately as an anonymous user.
@@ -255,6 +261,11 @@ Recommended delivery order:
 Use secure, HTTP-only, SameSite cookies for web sessions. Do not put long-lived access tokens in local storage. Add CSRF protection for cookie-authenticated mutations, session revocation, login rate limits and an audit record for account/channel linking.
 
 ### 7.4 APIs
+
+The anonymous foundation is currently mounted behind the existing Agent BFF as
+`/api/agent/auth/anonymous` and `/api/agent/conversations...`. The account
+endpoints below remain the target public contract for the login slices; route
+normalization can happen when the account session layer is introduced.
 
 ```text
 POST /api/auth/anonymous
