@@ -15,11 +15,11 @@
     "audience": {
       "must_include": [
         "6a2df27adda0ba67f14c7088",
-        "6a2df27adda0ba67f14c708b"
+        "6a48cc2381574c48dbd22bbd"
       ],
       "acceptable": [
-        "6a48cc2381574c48dbd22bb2",
-        "6a48cc2381574c48dbd22bbd"
+        "6a48cc2381574c48dbd22bbe",
+        "6a2df27adda0ba67f14c708b"
       ],
       "must_exclude": [
         "6a48cc2381574c48dbd22bbc"
@@ -30,7 +30,7 @@
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Near-miss trap: 'Investment banking' keyword-matches on 'invest' but targets institutional bankers, the opposite tier of user from a mass-market personal budgeting app — notes explicitly rule this out ('not institutional investors')."
+    "labeler_note": "Near-miss trap: 'Investment banking' keyword-matches on 'invest' but targets institutional bankers, the opposite tier of user from a mass-market personal budgeting app — notes explicitly rule this out ('not institutional investors').\n\nHuman review 2026-07-16: accepted and applied the independent audit. Personal finance is central. Investment is only adjacent, Business is over-broad, and Online banking better fits a digital budgeting tool. Investment banking remains a valid explicit institutional near miss."
   },
   "tags": [
     "consideration",

@@ -19,19 +19,17 @@
         "6a48cc2381574c48dbd22c7c"
       ],
       "acceptable": [
-        "6a48cc2381574c48dbd22c78",
-        "6a48cc2381574c48dbd22c7b"
+        "6a2df27adda0ba67f14c716a",
+        "6a48cc2381574c48dbd22be1"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22c7a"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Expats (Behavior) and American/College football only exist in the full 310-catalog — a nice cross-type (Behavior+Interest) full_catalog_only combination. must_exclude=Baseball: not part of this bar's programming, would misdirect budget."
+    "labeler_note": "Expats (Behavior) and American/College football only exist in the full 310-catalog — a nice cross-type (Behavior+Interest) full_catalog_only combination. must_exclude=Baseball: not part of this bar's programming, would misdirect budget.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Expats and American/college football fit. Soccer, basketball and the baseball exclusion are not stated; generic sports-bar occasion labels are safer."
   },
   "tags": [
     "retention",

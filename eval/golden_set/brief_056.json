@@ -21,16 +21,14 @@
         "6a48cc2381574c48dbd22c60",
         "6a2df27adda0ba67f14c714e"
       ],
-      "must_exclude": [
-        "6a2df27adda0ba67f14c7152"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Notes explicitly restrict geo to 2 cities and gender to female only — narrower than a typical nationwide/both-gender default, a genuine conflict case.",
+    "labeler_note": "Notes explicitly restrict geo to 2 cities and gender to female only — narrower than a typical nationwide/both-gender default, a genuine conflict case.\n\nHuman review 2026-07-16: accepted and applied the independent audit. The positive skincare labels and targeting block fit. Men's clothing is not a male-demographic segment and must not proxy gender; the targeting gender exclusion already encodes the requirement.",
     "targeting": {
       "expected": {
         "geo": [

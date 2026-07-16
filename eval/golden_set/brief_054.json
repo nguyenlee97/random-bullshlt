@@ -22,16 +22,14 @@
         "6a48cc2381574c48dbd22c3e",
         "6a2df27adda0ba67f14c711d"
       ],
-      "must_exclude": [
-        "6a2df27adda0ba67f14c7071"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Home improvement / DIY / Gardening are full-catalog-only Home and garden children. must_exclude=Real estate: shares the 'home' theme but the intent is house-hunting/buying, a mismatch against people already renovating a home they own."
+    "labeler_note": "Home improvement / DIY / Gardening are full-catalog-only Home and garden children. must_exclude=Real estate: shares the 'home' theme but the intent is house-hunting/buying, a mismatch against people already renovating a home they own.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Renovation positives fit. Real-estate interest can include existing property owners and is not explicitly excluded, so it is unsafe as must_exclude."
   },
   "tags": [
     "conversion",

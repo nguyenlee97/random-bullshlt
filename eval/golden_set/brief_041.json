@@ -20,11 +20,10 @@
       ],
       "acceptable": [
         "6a2df27adda0ba67f14c7088",
-        "6a2df27adda0ba67f14c708b",
         "6a2df27adda0ba67f14c715f"
       ],
       "must_exclude": [
-        "6a2df27adda0ba67f14c7171"
+        "6a48cc2381574c48dbd22bbc"
       ]
     },
     "zones": {
@@ -32,7 +31,7 @@
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "must_include are all Business and industry/Banking segments that only exist in the full 310 catalog, not the 71-dump — this is the point of the deep-catalog cell. must_exclude=Golf kept as a demographic-mismatch signal (affluent/45+ niche vs. a mass-market urban digital-card product), the same reasoning already established in brief_002/brief_003."
+    "labeler_note": "must_include are all Business and industry/Banking segments that only exist in the full 310 catalog, not the 71-dump — this is the point of the deep-catalog cell. must_exclude=Golf kept as a demographic-mismatch signal (affluent/45+ niche vs. a mass-market urban digital-card product), the same reasoning already established in brief_002/brief_003.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Core banking labels fit. Investment is unsupported, and Golf is an unsafe demographic proxy rather than an actively wrong audience."
   },
   "tags": [
     "conversion",

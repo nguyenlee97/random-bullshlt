@@ -18,23 +18,22 @@
         "6a48cc2381574c48dbd22c0c"
       ],
       "acceptable": [
-        "6a2df27adda0ba67f14c70e1",
+        "6a48cc2381574c48dbd22c0d",
         "6a2df27adda0ba67f14c70de"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22c80"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Notes explicitly rank two audiences: serious lifters (primary, must_include) vs. casual weight-loss beginners (secondary, acceptable only) — tests that ranking is respected rather than treating both as equal must_includes."
+    "labeler_note": "Notes explicitly rank two audiences: serious lifters (primary, must_include) vs. casual weight-loss beginners (secondary, acceptable only) — tests that ranking is respected rather than treating both as equal must_includes.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Serious-lifting must_includes fit. Physical fitness fits the secondary group; Physical exercise is more defensible than Yoga. Swimming is merely unrelated."
   },
   "tags": [
     "consideration",
     "vi",
-    "primary_secondary"
+    "primary_secondary",
+    "full_catalog_only"
   ]
 }

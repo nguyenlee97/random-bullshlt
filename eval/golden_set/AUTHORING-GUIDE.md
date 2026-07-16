@@ -87,8 +87,13 @@ Keep the global stratification balance of 07 §1 (objectives ≥8/8/8/4 per 40, 
 2. Search `catalog_full.json` for candidates: match on `name`, `context`, `category`,
    Vietnamese keyword variants. List every plausible segment.
 3. Sort into: `must_include` (2–4; removing one would clearly hurt the campaign),
-   `acceptable` (2–6), `must_exclude` (1–3; would be a visible mistake — brand-safety,
-   demographic mismatch, or near-miss trap).
+   `acceptable` (0–6 after human review), `must_exclude` (0–3 after human review;
+   would be a visible mistake — brand-safety, demographic mismatch, or near-miss
+   trap). A machine author may propose a negative for review, but the final bucket
+   must be empty when the catalog contains no defensible actively-wrong segment.
+   The same rule applies to acceptable alternatives: never add an unrelated label
+   merely to fill the bucket. Never invent a demographic proxy or unrelated
+   negative merely to satisfy a quota.
 4. Targeting (if labeling): open `targeting_options.json`, pick exact option values implied
    by the notes. Copy strings verbatim.
 5. Self-check: read the notes as if you were the advertiser — would you accept these labels?

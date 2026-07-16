@@ -15,10 +15,11 @@
     "audience": {
       "must_include": [
         "6a48cc2381574c48dbd22bd0",
-        "6a48cc2381574c48dbd22bdd"
+        "6a48cc2381574c48dbd22bdd",
+        "6a2df27adda0ba67f14c708f"
       ],
       "acceptable": [
-        "6a48cc2381574c48dbd22bd8",
+        "6a2df27adda0ba67f14c7109",
         "6a48cc2381574c48dbd22bde"
       ],
       "must_exclude": [
@@ -30,11 +31,11 @@
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Card games / Strategy games are Entertainment (leisure) segments only present in the full 310-catalog (the plain 'Entertainment' category, incl. 'Board games', was already in the 71-dump). must_exclude=Casino games: gambling association is a brand-safety mismatch for a family cafe."
+    "labeler_note": "Card games / Strategy games are Entertainment (leisure) segments only present in the full 310-catalog (the plain 'Entertainment' category, incl. 'Board games', was already in the 71-dump). must_exclude=Casino games: gambling association is a brand-safety mismatch for a family cafe.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Board games is the exact central label but was omitted from must_include, apparently to preserve full_catalog_only. Digital puzzle games are not a good substitute; Coffeehouses is directly relevant."
   },
   "tags": [
     "retention",
     "vi",
-    "full_catalog_only"
+    "near_miss"
   ]
 }

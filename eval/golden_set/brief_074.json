@@ -14,12 +14,13 @@
   "labels": {
     "audience": {
       "must_include": [
-        "6a48cc2381574c48dbd22c12",
-        "6a2df27adda0ba67f14c70df"
+        "6a2df27adda0ba67f14c70df",
+        "6a48cc2381574c48dbd22c11"
       ],
       "acceptable": [
         "6a2df27adda0ba67f14c70de",
-        "6a2df27adda0ba67f14c716a"
+        "6a2df27adda0ba67f14c716a",
+        "6a48cc2381574c48dbd22c12"
       ],
       "must_exclude": [
         "6a2df27adda0ba67f14c70e7"
@@ -30,11 +31,12 @@
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Near-miss trap: Coffee shares a surface 'stay energized' association with an electrolyte sports drink but serves a completely different occasion and buyer (desk-bound caffeine ritual vs. athletic hydration) — the notes explicitly rule this reading out."
+    "labeler_note": "Near-miss trap: Coffee shares a surface 'stay energized' association with an electrolyte sports drink but serves a completely different occasion and buyer (desk-bound caffeine ritual vs. athletic hydration) — the notes explicitly rule this reading out.\n\nHuman review 2026-07-16: accepted and applied the independent audit. There is no electrolyte/sports-drink segment. Energy drinks commonly means caffeinated stimulants and should not be required; Beverages is safer. Running/fitness/sports fit and Coffee is explicitly rejected. Remaining catalog gap is intentional; no substitute label was invented."
   },
   "tags": [
     "conversion",
     "vi",
-    "near_miss"
+    "near_miss",
+    "catalog_gap"
   ]
 }
