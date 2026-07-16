@@ -23,10 +23,10 @@ export default function StrategySimulator({ value, busy, canSelect = true, selec
     <section className="mt-3 rounded-2xl border border-brand-200 bg-gradient-to-br from-white to-brand-50/60 p-3 sm:p-4" aria-labelledby="strategy-simulator-title">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Tính năng nổi bật</p>
-          <h3 id="strategy-simulator-title" className="mt-1 text-sm font-extrabold text-slate-900">Mô phỏng chiến lược campaign</h3>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">So sánh phương án</p>
+          <h3 id="strategy-simulator-title" className="mt-1 text-sm font-extrabold text-slate-900">Kịch bản phân bổ theo brief</h3>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-600">
-            So sánh 3 cách phân bổ ngân sách trước khi Agent chọn audience và placement. Số liệu là dự báo định hướng; forecast cuối dùng inventory thật.
+            Ngân sách, objective và số ngày chạy điều chỉnh CPM/tần suất của từng kịch bản. Đây là ước tính định hướng; forecast cuối dùng placement catalog đã chọn.
           </p>
         </div>
         <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 shadow-sm">
@@ -82,6 +82,18 @@ export default function StrategySimulator({ value, busy, canSelect = true, selec
           {selectionHint && <p className="mt-1 font-medium text-brand-700">{selectionHint}</p>}
         </div>
       </div>
+
+      {value.calculation?.inputs && (
+        <details className="mt-3 rounded-xl border border-brand-100 bg-white/80 px-3 py-2 text-xs text-slate-600">
+          <summary className="cursor-pointer font-bold text-slate-800">Số liệu này được tính như thế nào?</summary>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <p><span className="font-semibold text-slate-800">Đầu vào:</span> {money(value.calculation.inputs.budget_vnd)} · {value.calculation.inputs.duration_days} ngày · {value.calculation.inputs.objective}</p>
+            <p><span className="font-semibold text-slate-800">Impression:</span> ngân sách ÷ CPM × 1.000</p>
+            <p><span className="font-semibold text-slate-800">Reach:</span> impression ÷ tần suất giả định</p>
+          </div>
+          <p className="mt-2 text-[10px] leading-4 text-slate-500">{value.methodology}</p>
+        </details>
+      )}
     </section>
   )
 }

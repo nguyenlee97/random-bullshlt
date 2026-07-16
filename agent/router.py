@@ -264,6 +264,14 @@ async def chat(request: Request, req: ChatRequest) -> AgentResponse:
 
     # ── Free-form text → LLM + tools ─────────────────────────────────────────
     if req.message:
+        # Autopilot owns mutations during a run. Its chat surface is therefore
+        # locked while executing, decision-only at review gates, and read-only
+        # after the run has ended.
+        from autopilot.chat import route_autopilot_chat
+        autopilot_response = await route_autopilot_chat(req.message, sid, req.step)
+        if autopilot_response is not None:
+            return autopilot_response
+
         # Step 5 (Report): route to report chat handler with context isolation
         if req.step == 5:
             active_tab = (req.formData or {}).get("activeReportTab", "daily_ops") if req.formData else "daily_ops"

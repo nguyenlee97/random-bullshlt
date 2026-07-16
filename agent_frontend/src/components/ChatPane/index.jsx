@@ -132,7 +132,7 @@ function exportChatLog(messages) {
 }
 
 // ─── ChatPane ───────────────────────────────────────────────────────────────────────────────
-export default function ChatPane({ messages, busy, currentStep, onSend, onBack, onRetry, canRetry }) {
+export default function ChatPane({ messages, busy, currentStep, onSend, onBack, onRetry, canRetry, policy = { mode: 'normal' } }) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Pane header */}
@@ -168,7 +168,7 @@ export default function ChatPane({ messages, busy, currentStep, onSend, onBack, 
       </div>
 
       {/* Composer — always visible */}
-      <ChatComposer busy={busy} currentStep={currentStep} onSend={onSend} onBack={onBack} />
+      <ChatComposer busy={busy} currentStep={currentStep} onSend={onSend} onBack={onBack} policy={policy} />
     </div>
   )
 }

@@ -6,11 +6,10 @@ import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
 import ExperienceSelector from '@/components/ExperienceSelector'
 import AutopilotPanel from '@/components/AutopilotPanel'
-import ModeSwitcher from '@/components/ModeSwitcher'
 import { AgentAPI, getSetupEntry } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
-import { MessageSquare, LayoutDashboard, Sparkles } from 'lucide-react'
+import { ArrowLeft, MessageSquare, LayoutDashboard, Sparkles } from 'lucide-react'
 import { DemoProvider } from '@/demo/DemoEngine'
 import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { canApproveWorkflowStep } from '@/lib/workflowValidation'
@@ -63,9 +62,10 @@ const AUTO_NAV_STEPS = new Set([2, 3, 5]) // Creative, Setup, Report
 
 // ─── Mobile Tab Bar ─────────────────────────────────────────────────────────
 function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew, experienceMode }) {
-  const canvasTab = experienceMode === 'autopilot' ? 'autopilot' : 'workspace'
+  const autopilotEditor = experienceMode === 'autopilot' && activeTab === 'workspace'
+  const canvasTab = experienceMode === 'autopilot' && !autopilotEditor ? 'autopilot' : 'workspace'
   const CanvasIcon = experienceMode === 'autopilot' ? Sparkles : LayoutDashboard
-  const canvasLabel = experienceMode === 'autopilot' ? 'Tiến độ' : 'Workspace'
+  const canvasLabel = autopilotEditor ? 'Chỉnh dữ liệu' : experienceMode === 'autopilot' ? 'Tiến độ' : 'Workspace'
   return (
     <div className="flex flex-shrink-0 border-b border-border bg-white/95 backdrop-blur-sm shadow-sm" role="tablist" aria-label="Chọn khu vực làm việc">
       <button
@@ -471,33 +471,25 @@ export default function App() {
     }, [formState.creative.files]),
   })
 
-  // Device identity and campaign context must resolve before booting chat or
-  // reading workspace state. This prevents refresh from creating a stray
-  // session before the owned conversation has been restored.
+  // Resolve only the anonymous identity on page load. A refresh intentionally
+  // returns to the homepage; campaign context is restored only after the user
+  // explicitly selects an item from History.
   useEffect(() => {
     if (identityInitRef.current) return
     identityInitRef.current = true
     ;(async () => {
       try {
-        const context = await AgentAPI.initializeIdentity()
-        setCurrentConversationId(context.conversation_id)
-        hydrateMessages(context.ui_messages || [])
-        hydrateCanonicalWorkspace(context.workspace)
-        setRestoredAutopilotRun(context.latest_run || null)
-        const restoredMode = context.workspace?.experience_mode || context.experience_mode || null
-        setExperienceMode(restoredMode)
-        if (restoredMode) {
-          setActiveTab(restoredMode === 'autopilot' ? 'autopilot' : 'workspace')
-          setHasUserStarted(true)
-        }
-        bootedRef.current = (context.ui_messages || []).length > 0
+        await AgentAPI.initializeIdentity({ restoreCurrent: false })
+        setHistoryLoading(true)
+        setConversationHistory(await AgentAPI.listConversations())
       } catch (error) {
-        setIdentityError(error.message || 'Không thể khôi phục chiến dịch trên thiết bị này.')
+        setIdentityError(error.message || 'Không thể khởi tạo Advertising Agent trên thiết bị này.')
       } finally {
+        setHistoryLoading(false)
         setIdentityReady(true)
       }
     })()
-  }, [hydrateCanonicalWorkspace, hydrateMessages])
+  }, [])
 
   // Watch for new assistant messages while chat is compact (workspace expanded on mobile).
   // Uses ID comparison instead of messages.length — stopThinking() REPLACES the thinking
@@ -513,34 +505,35 @@ export default function App() {
     }
   }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectExperience = useCallback(async (mode) => {
-    if (mode === experienceMode) return true
-    setModeSelectionBusy(true)
-    setModeSelectionError('')
-    try {
-      const result = await AgentAPI.setWorkspacePreferences(
-        mode,
-        mode === 'autopilot' ? 'critical_only' : 'review_every_stage',
-      )
-      if (!result?.ok) throw new Error(result?.detail || 'Không thể lưu chế độ làm việc.')
-      setExperienceMode(mode)
-      setActiveTab(mode === 'autopilot' ? 'autopilot' : 'workspace')
-      setHasUserStarted(true)
-      return true
-    } catch (error) {
-      setModeSelectionError(error.message)
-      return false
-    } finally {
-      setModeSelectionBusy(false)
-    }
-  }, [experienceMode])
-
   useEffect(() => {
     if (identityReady && experienceMode && !bootedRef.current) {
       bootedRef.current = true
       boot()
     }
   }, [boot, experienceMode, identityReady])
+
+  const autopilotChatPolicy = (() => {
+    if (experienceMode !== 'autopilot' || !autopilotSummary?.status) return { mode: 'normal' }
+    if (['queued', 'running', 'paused'].includes(autopilotSummary.status)) {
+      return {
+        mode: 'locked',
+        message: 'Autopilot đang thực thi và sở hữu workspace. Chat sẽ mở lại khi Agent cần xác nhận hoặc run kết thúc.',
+      }
+    }
+    if (autopilotSummary.status === 'waiting_review') {
+      return {
+        mode: 'review',
+        message: autopilotSummary.waitingMessage || 'Agent đang chờ quyết định. Chỉ xác nhận hoặc từ chối; nếu muốn sửa, hãy từ chối rồi chỉnh dữ liệu.',
+      }
+    }
+    if (['completed', 'failed', 'cancelled'].includes(autopilotSummary.status)) {
+      return {
+        mode: 'readonly',
+        message: 'Bạn có thể hỏi về kết quả campaign. Chat ở giai đoạn này chỉ đọc artifact và không tự sửa workspace.',
+      }
+    }
+    return { mode: 'normal' }
+  })()
 
   // Audience-entry: when user reaches step 1 with brief done → proactive recommendation in chat
   const audienceEntryFiredRef = useRef(false)
@@ -757,7 +750,10 @@ export default function App() {
     hydrateCanonicalWorkspace(context.workspace)
     setRestoredAutopilotRun(context.latest_run || null)
     setAutopilotSummary(null)
-    const mode = context.workspace?.experience_mode || context.experience_mode || null
+    // The owned conversation records the immutable homepage choice. A newly
+    // created workspace still carries the legacy `guided` default until its
+    // first preference write, so it must not override the conversation here.
+    const mode = context.experience_mode || context.workspace?.experience_mode || null
     setExperienceMode(mode)
     setActiveTab(mode === 'autopilot' ? 'autopilot' : mode === 'guided' ? 'workspace' : 'chat')
     setHasUserStarted(Boolean(mode))
@@ -781,17 +777,50 @@ export default function App() {
     }
   }, [applyConversationContext, experienceMode, hydrateCanonicalWorkspace, newChat])
 
-  const handleNewChat = useCallback(async () => {
-    const context = await newChat()
-    if (!context) return
-    applyConversationContext({ ...context, ui_messages: [] })
+  const handleNewChat = useCallback(() => {
+    resetLocalCampaign()
+    hydrateMessages([])
+    setCurrentConversationId('')
+    setRestoredAutopilotRun(null)
+    setAutopilotSummary(null)
     setExperienceMode(null)
     setActiveTab('chat')
     setHasUserStarted(false)
     bootedRef.current = false
     setModeSelectionError('')
     setHistoryOpen(false)
-  }, [applyConversationContext, newChat])
+    setConversationHistory(prev => [...prev].sort((a, b) => (
+      new Date(b.last_message_at || b.updated_at || 0) - new Date(a.last_message_at || a.updated_at || 0)
+    )))
+  }, [hydrateMessages, resetLocalCampaign])
+
+  const startCampaign = useCallback(async (mode) => {
+    setModeSelectionBusy(true)
+    setModeSelectionError('')
+    try {
+      const context = await newChat({ experienceMode: mode })
+      if (!context) throw new Error('Không thể tạo campaign mới.')
+      applyConversationContext({ ...context, ui_messages: [] })
+      const result = await AgentAPI.setWorkspacePreferences(
+        mode,
+        mode === 'autopilot' ? 'critical_only' : 'review_every_stage',
+      )
+      if (!result?.ok) throw new Error(result?.detail || 'Không thể lưu cách làm việc cho campaign.')
+      const workspace = await AgentAPI.getWorkspace()
+      hydrateCanonicalWorkspace(workspace)
+      setExperienceMode(mode)
+      setActiveTab(mode === 'autopilot' ? 'autopilot' : 'workspace')
+      setHasUserStarted(true)
+      setConversationHistory(await AgentAPI.listConversations())
+      bootedRef.current = false
+      return true
+    } catch (error) {
+      setModeSelectionError(error.message)
+      return false
+    } finally {
+      setModeSelectionBusy(false)
+    }
+  }, [applyConversationContext, hydrateCanonicalWorkspace, newChat])
 
   const openConversationHistory = useCallback(async () => {
     setHistoryOpen(true)
@@ -807,7 +836,7 @@ export default function App() {
   }, [])
 
   const resumeConversation = useCallback(async (conversationId) => {
-    if (conversationId === currentConversationId) {
+    if (experienceMode && conversationId === currentConversationId) {
       setHistoryOpen(false)
       return
     }
@@ -822,7 +851,7 @@ export default function App() {
     } finally {
       setHistoryLoading(false)
     }
-  }, [applyConversationContext, currentConversationId])
+  }, [applyConversationContext, currentConversationId, experienceMode])
 
   const archiveConversation = useCallback(async (conversationId) => {
     const ok = await AgentAPI.archiveConversation(conversationId)
@@ -1096,13 +1125,11 @@ export default function App() {
     }
   }, [recomputePlan, busy])
 
-  const openGuidedStep = useCallback(async (step) => {
-    const switched = await selectExperience('guided')
-    if (!switched) return
+  const openAutopilotEditor = useCallback((step) => {
     setCurrentStep(step)
     setActiveTab('workspace')
     requestAnimationFrame(() => workspaceRef.current?.flash?.())
-  }, [selectExperience])
+  }, [])
 
   // ── isMobile helper (used for conditional inline styles) ──────────────────
   // Read at render-time. Tailwind md: breakpoints handle the class-based
@@ -1130,25 +1157,16 @@ export default function App() {
 
   if (!experienceMode) {
     return (
-      <>
-        <ExperienceSelector
-          onSelect={selectExperience}
-          onOpenHistory={openConversationHistory}
-          busy={modeSelectionBusy}
-          error={modeSelectionError}
-        />
-        <ConversationHistory
-          open={historyOpen}
-          onClose={() => setHistoryOpen(false)}
-          conversations={conversationHistory}
-          currentId={currentConversationId}
-          loading={historyLoading}
-          error={historyError}
-          onResume={resumeConversation}
-          onNew={handleNewChat}
-          onArchive={archiveConversation}
-        />
-      </>
+      <ExperienceSelector
+        onSelect={startCampaign}
+        busy={modeSelectionBusy}
+        error={modeSelectionError}
+        conversations={conversationHistory}
+        historyLoading={historyLoading}
+        historyError={historyError}
+        onResume={resumeConversation}
+        onArchive={archiveConversation}
+      />
     )
   }
 
@@ -1162,7 +1180,7 @@ export default function App() {
       activeTab={activeTab}
       onActiveChange={(active) => { isDemoActiveRef.current = active }}
     >
-    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-brand-50/30 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-brand-50/30 pb-[env(safe-area-inset-bottom)] md:pb-0">
       <TopBar
         onReset={handleReset}
         onNewChat={handleNewChat}
@@ -1181,16 +1199,6 @@ export default function App() {
         onNew={handleNewChat}
         onArchive={archiveConversation}
       />
-
-      <div className="hidden flex-shrink-0 md:block">
-        <ModeSwitcher
-          value={experienceMode}
-          onChange={selectExperience}
-          busy={modeSelectionBusy}
-          error={modeSelectionError}
-          autopilotSummary={autopilotSummary}
-        />
-      </div>
 
       {workspaceConflict && (
         <div className="flex items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
@@ -1229,12 +1237,20 @@ export default function App() {
         {/* ── Workspace Pane ──────────────────────────────────────────
             Mobile: shown when activeTab==='workspace', hidden otherwise
             Desktop: RIGHT side, flex-1 (always visible)             */}
-        <div id="guided-canvas" role="tabpanel" aria-label="Quy trình hướng dẫn" data-mode-canvas="guided" data-demo="workspace-pane" className={`
+        <div id="guided-canvas" role="tabpanel" aria-label={experienceMode === 'autopilot' ? 'Chỉnh dữ liệu Campaign Autopilot' : 'Campaign Copilot'} data-mode-canvas="guided" data-demo="workspace-pane" className={`
           md:order-2 flex flex-col min-w-0 overflow-hidden bg-white
           md:flex-1 md:h-full
-          ${experienceMode === 'guided' && activeTab === 'workspace' ? 'flex-1' : 'hidden'}
-          ${experienceMode === 'guided' ? 'md:flex' : 'md:hidden'}
+          ${activeTab === 'workspace' ? 'flex-1' : 'hidden'}
+          ${experienceMode === 'guided' || activeTab === 'workspace' ? 'md:flex' : 'md:hidden'}
         `}>
+          {experienceMode === 'autopilot' && (
+            <div className="flex items-center gap-3 border-b border-brand-100 bg-brand-50 px-4 py-2 text-xs text-brand-800">
+              <button type="button" onClick={() => setActiveTab('autopilot')} className="inline-flex items-center gap-1 rounded-lg border border-brand-200 bg-white px-2.5 py-1.5 font-bold hover:bg-brand-100">
+                <ArrowLeft className="h-3.5 w-3.5" /> Quay lại Autopilot
+              </button>
+              <span>Đây là form chỉnh dữ liệu của campaign; chế độ vẫn là Campaign Autopilot.</span>
+            </div>
+          )}
           <WorkspacePane
             ref={workspaceRef}
             steps={STEPS}
@@ -1261,7 +1277,7 @@ export default function App() {
         <div id="autopilot-canvas" role="tabpanel" aria-label="Campaign Autopilot" data-mode-canvas="autopilot" className={`
           md:order-2 min-w-0 overflow-hidden bg-slate-50 md:flex-1 md:h-full
           ${experienceMode === 'autopilot' && activeTab === 'autopilot' ? 'flex flex-1' : 'hidden'}
-          ${experienceMode === 'autopilot' ? 'md:flex' : 'md:hidden'}
+          ${experienceMode === 'autopilot' && activeTab !== 'workspace' ? 'md:flex' : 'md:hidden'}
         `}>
           <AutopilotPanel
             key={currentConversationId || 'autopilot'}
@@ -1270,8 +1286,8 @@ export default function App() {
             initialRun={restoredAutopilotRun}
             onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
             onOpenChat={() => setActiveTab('chat')}
-            onOpenBrief={() => openGuidedStep(0)}
-            onOpenCreative={() => openGuidedStep(2)}
+            onOpenBrief={() => openAutopilotEditor(0)}
+            onOpenCreative={() => openAutopilotEditor(2)}
             onStatusChange={setAutopilotSummary}
           />
         </div>
@@ -1294,21 +1310,12 @@ export default function App() {
             onBack={() => !busy && currentStep > 0 && setCurrentStep(prev => prev - 1)}
             onRetry={retryLastMessage}
             canRetry={canRetry && !busy}
+            policy={autopilotChatPolicy}
           />
         </div>
 
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 md:hidden">
-        <ModeSwitcher
-          value={experienceMode}
-          onChange={selectExperience}
-          busy={modeSelectionBusy}
-          error={modeSelectionError}
-          mobile
-          autopilotSummary={autopilotSummary}
-        />
-      </div>
     </div>
     </DemoProvider>
   )

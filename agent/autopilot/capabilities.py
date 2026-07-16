@@ -101,11 +101,29 @@ async def _generate_strategy(run: dict, workspace: dict) -> CapabilityResult:
     brief = _artifact(workspace, "brief", {})
     objective = brief.get("objective", "awareness")
     budget_vnd = max(float(brief.get("budget", 0)), 0) * 1_000_000
+    try:
+        start = date.fromisoformat(str(brief.get("startDate", ""))[:10])
+        end = date.fromisoformat(str(brief.get("endDate", ""))[:10])
+        duration_days = max((end - start).days + 1, 1)
+    except ValueError:
+        duration_days = 7
+
+    # These factors make the directional scenarios respond to the approved
+    # brief. They are declared in the artifact so the UI can explain every
+    # estimate instead of presenting model-looking numbers without provenance.
+    objective_factor = {
+        "awareness": 0.92, "consideration": 1.0,
+        "conversion": 1.18, "retention": 1.08,
+    }.get(objective, 1.0)
+    pacing_factor = 1.12 if duration_days <= 3 else 1.05 if duration_days <= 7 else 0.97 if duration_days > 21 else 1.0
+    volume_factor = 1.08 if budget_vnd < 10_000_000 else 0.96 if budget_vnd >= 50_000_000 else 1.0
+    frequency_adjustment = (-0.15 if duration_days <= 3 else 0.2 if duration_days > 14 else 0) \
+        + (0.15 if objective in {"conversion", "retention"} else 0)
     assumptions = [
         {
             "id": "balanced", "label": "Cân bằng",
             "budget_share": {"premium": 40, "reach": 40, "test": 20},
-            "average_cpm": 55_000, "frequency": 3.0,
+            "base_cpm": 55_000, "base_frequency": 3.0,
             "targeting_mode": "balanced", "placement_mode": "ranked",
             "rationale": "Cân bằng độ phủ, chất lượng hiển thị và khả năng thử nghiệm.",
             "tradeoffs": ["Độ phủ và chất lượng ở mức cân bằng", "20% ngân sách dành cho thử nghiệm"],
@@ -113,7 +131,7 @@ async def _generate_strategy(run: dict, workspace: dict) -> CapabilityResult:
         {
             "id": "reach_first", "label": "Ưu tiên độ phủ",
             "budget_share": {"premium": 25, "reach": 60, "test": 15},
-            "average_cpm": 38_000, "frequency": 2.6,
+            "base_cpm": 38_000, "base_frequency": 2.6,
             "targeting_mode": "broad", "placement_mode": "lowest_cpm",
             "rationale": "Tối đa hóa lượng người tiếp cận trong ngân sách đã duyệt.",
             "tradeoffs": ["Reach cao hơn với CPM mục tiêu thấp", "Chất lượng placement có thể phân tán hơn"],
@@ -121,7 +139,7 @@ async def _generate_strategy(run: dict, workspace: dict) -> CapabilityResult:
         {
             "id": "quality_first", "label": "Ưu tiên chất lượng",
             "budget_share": {"premium": 60, "reach": 25, "test": 15},
-            "average_cpm": 80_000, "frequency": 3.4,
+            "base_cpm": 80_000, "base_frequency": 3.4,
             "targeting_mode": "focused", "placement_mode": "quality",
             "rationale": "Ưu tiên vị trí có viewability và tương tác cao.",
             "tradeoffs": ["Ưu tiên inventory chất lượng cao", "Reach dự kiến thấp hơn do CPM cao"],
@@ -138,16 +156,22 @@ async def _generate_strategy(run: dict, workspace: dict) -> CapabilityResult:
     }
     options = []
     for assumption in assumptions:
-        impressions = round(budget_vnd / assumption["average_cpm"] * 1000) \
-            if assumption["average_cpm"] and budget_vnd else 0
-        reach = round(impressions / assumption["frequency"]) if impressions else 0
+        average_cpm = round(
+            assumption["base_cpm"] * objective_factor * pacing_factor * volume_factor / 1000
+        ) * 1000
+        frequency = round(max(1.5, assumption["base_frequency"] + frequency_adjustment), 2)
+        impressions = round(budget_vnd / average_cpm * 1000) \
+            if average_cpm and budget_vnd else 0
+        reach = round(impressions / frequency) if impressions else 0
         option = dict(assumption)
+        option["average_cpm"] = average_cpm
+        option["frequency"] = frequency
         option["metrics"] = {
             "budget_vnd": round(budget_vnd),
             "estimated_impressions": impressions,
             "estimated_reach": reach,
-            "average_cpm": assumption["average_cpm"],
-            "frequency": assumption["frequency"],
+            "average_cpm": average_cpm,
+            "frequency": frequency,
             "risk": risk_by_objective.get(objective, {}).get(assumption["id"], "medium"),
             "is_estimate": True,
         }
@@ -161,13 +185,31 @@ async def _generate_strategy(run: dict, workspace: dict) -> CapabilityResult:
             "objective": objective,
             "selected_reason": selected_option["rationale"],
             "selection": {"source": "deterministic_recommendation"},
-            "methodology": "Directional estimates from approved budget, CPM and frequency assumptions; final forecast uses selected catalog placements.",
+            "methodology": "Ước tính định hướng từ brief đã duyệt. CPM nền được điều chỉnh theo objective, thời lượng và quy mô ngân sách; forecast cuối dùng CPM/reach của placement catalog đã chọn.",
+            "calculation": {
+                "version": "brief_scenario_v2",
+                "inputs": {
+                    "budget_vnd": round(budget_vnd),
+                    "objective": objective,
+                    "duration_days": duration_days,
+                    "objective_factor": objective_factor,
+                    "pacing_factor": pacing_factor,
+                    "volume_factor": volume_factor,
+                },
+                "formulas": {
+                    "average_cpm": "base_cpm × objective_factor × pacing_factor × volume_factor",
+                    "estimated_impressions": "budget_vnd ÷ average_cpm × 1,000",
+                    "estimated_reach": "estimated_impressions ÷ frequency",
+                },
+            },
         },
         evidence=[
             {"type": "brief_field", "field": "objective", "value": objective},
             {"type": "strategy_simulation", "budget_vnd": round(budget_vnd),
              "option_ids": [item["id"] for item in options], "selected": selected,
-             "method": "deterministic_v1"},
+             "duration_days": duration_days, "objective_factor": objective_factor,
+             "pacing_factor": pacing_factor, "volume_factor": volume_factor,
+             "method": "brief_scenario_v2"},
         ],
     )
 
@@ -639,17 +681,53 @@ async def _forecast(run: dict, workspace: dict) -> CapabilityResult:
     placements = _artifact(workspace, "placements", {})
     zones = placements.get("zones", []) if isinstance(placements, dict) else []
     budget_vnd = float(brief.get("budget", 0)) * 1_000_000
-    avg_cpm = sum(float(zone.get("cpm", 0)) for zone in zones) / max(len(zones), 1)
+    valid_zones = [zone for zone in zones if float(zone.get("cpm", 0) or 0) > 0]
+    weighted_reach = sum(max(float(zone.get("reach", 0) or 0), 1) for zone in valid_zones)
+    avg_cpm = (
+        sum(
+            float(zone.get("cpm", 0)) * max(float(zone.get("reach", 0) or 0), 1)
+            for zone in valid_zones
+        ) / weighted_reach
+        if valid_zones and weighted_reach > 0 else 0
+    )
     impressions = round(budget_vnd / avg_cpm * 1000) if avg_cpm > 0 else 0
     reach_cap = sum(int(zone.get("reach", 0)) for zone in zones)
-    reach = min(reach_cap, round(impressions / 3))
+    strategy = _artifact(workspace, "strategy", {})
+    selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
+    selected_option = next(
+        (item for item in strategy.get("options", []) if item.get("id") == selected), {}
+    ) if isinstance(strategy, dict) else {}
+    frequency = float((selected_option.get("metrics") or {}).get("frequency") or 3)
+    reach = min(reach_cap, round(impressions / frequency)) if reach_cap > 0 else 0
     risk = "medium" if not zones or impressions <= 0 else "low"
     return CapabilityResult(
         value={"budget_vnd": budget_vnd, "estimated_impressions": impressions,
                "estimated_reach": reach, "average_cpm": round(avg_cpm),
-               "risk": risk, "is_estimate": True},
+               "frequency": frequency, "inventory_reach_cap": reach_cap,
+               "risk": risk, "is_estimate": True,
+               "calculation": {
+                   "version": "catalog_forecast_v2",
+                   "source": "selected placement catalog",
+                   "inputs": {
+                       "budget_vnd": budget_vnd,
+                       "strategy_id": selected,
+                       "frequency": frequency,
+                       "inventory_reach_cap": reach_cap,
+                       "zones": [{
+                           "id": zone.get("id"), "name": zone.get("name"),
+                           "cpm": zone.get("cpm", 0), "reach": zone.get("reach", 0),
+                       } for zone in valid_zones],
+                   },
+                   "formulas": {
+                       "average_cpm": "reach-weighted average CPM of selected catalog placements",
+                       "estimated_impressions": "budget_vnd ÷ average_cpm × 1,000",
+                       "estimated_reach": "min(inventory_reach_cap, estimated_impressions ÷ frequency)",
+                   },
+               }},
         evidence=[{"type": "forecast_inputs", "zone_count": len(zones),
-                   "budget_vnd": budget_vnd}],
+                   "budget_vnd": budget_vnd, "average_cpm": round(avg_cpm),
+                   "frequency": frequency, "inventory_reach_cap": reach_cap,
+                   "method": "catalog_forecast_v2"}],
         force_review=risk != "low",
     )
 
@@ -698,7 +776,10 @@ async def _build_order_draft(run: dict, workspace: dict) -> CapabilityResult:
         "brand": brief.get("brand", ""),
         "advertiser": brief.get("advertiser") or brief.get("brand", ""),
         "objective": brief.get("objective", "awareness"),
-        "status": "pending", "budget": brief.get("budget", 0) * 1_000_000,
+        # The explicit launch review is the activation boundary. Once approved,
+        # Autopilot creates a live campaign in the same side effect instead of
+        # leaving an unexpected manual activation step in AdsPilot.
+        "status": "active", "budget": brief.get("budget", 0) * 1_000_000,
         "daily": 0, "rate": 0, "rateType": "CPM",
         "startDate": brief.get("startDate", ""), "endDate": brief.get("endDate", ""),
         "placements": placements, "targeting": targeting,
@@ -798,10 +879,16 @@ async def _verify_order(run: dict, workspace: dict) -> CapabilityResult:
 async def _create_setup_report(run: dict, workspace: dict) -> CapabilityResult:
     order = _artifact(workspace, "order", {})
     forecast = _artifact(workspace, "forecast", {})
+    order_value = order.get("order", order) if isinstance(order, dict) else {}
+    active = order_value.get("status") == "active"
     return CapabilityResult(
         value={"kind": "setup_report", "order": order, "forecast": forecast,
-               "performance_data_available": False,
-               "note": "Báo cáo hiệu suất sẽ chỉ được tạo khi có dữ liệu thực."},
+               "performance_data_available": active,
+               "performance_data_mode": "synthetic_showcase" if active else "unavailable",
+               "note": (
+                   "Dữ liệu hiệu suất mô phỏng được suy ra từ forecast, ngân sách, thời gian và placement để minh họa cách báo cáo hoạt động. Khi có delivery thật, số liệu thực sẽ thay thế phần mô phỏng."
+                   if active else "Báo cáo mô phỏng mở khi campaign ở trạng thái active."
+               )},
         evidence=[{"type": "workspace_artifacts", "artifacts": ["order", "forecast"]}],
     )
 

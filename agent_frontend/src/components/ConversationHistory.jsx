@@ -1,7 +1,7 @@
 import { Archive, Clock3, History, Loader2, MessageSquarePlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-const modeLabel = mode => mode === 'autopilot' ? 'Autopilot' : mode === 'guided' ? 'Hướng dẫn' : 'Chưa chọn chế độ'
+const modeLabel = mode => mode === 'autopilot' ? 'Campaign Autopilot' : mode === 'guided' ? 'Campaign Copilot' : 'Chưa chọn cách làm việc'
 
 const formatTime = value => {
   if (!value) return 'Chưa có tin nhắn'

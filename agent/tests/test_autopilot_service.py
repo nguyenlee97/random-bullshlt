@@ -4,7 +4,8 @@ import pytest
 
 from autopilot import service
 from autopilot.capabilities import (
-    CapabilityResult, _analyze_creatives, _build_creatives, _create_order, _generate_strategy,
+    CapabilityResult, _analyze_creatives, _build_creatives, _build_order_draft,
+    _create_order, _create_setup_report, _forecast, _generate_strategy,
     _prepare_creatives, _rank_placements, _retrieve_audience,
 )
 from autopilot import worker
@@ -31,7 +32,7 @@ async def _seed(session_id: str = "auto-test"):
 
 
 @pytest.mark.asyncio
-async def test_preferences_are_revisioned_without_invalidating_artifacts():
+async def test_preferences_are_revisioned_without_invalidating_artifacts(monkeypatch):
     await _seed("prefs")
     before = await get_workspace("prefs")
     result = await set_preferences(
@@ -45,6 +46,14 @@ async def test_preferences_are_revisioned_without_invalidating_artifacts():
     assert after["approval_policy"] == "critical_only"
     assert after["creative_source"] == "ai_generate"
     assert after["artifacts"]["brief"]["status"] == "approved"
+    async def homepage_mode(_session_id):
+        return "autopilot"
+
+    monkeypatch.setattr(
+        "identity.get_conversation_mode_for_session", homepage_mode
+    )
+    with pytest.raises(ValueError, match="fixed for this campaign"):
+        await set_preferences("prefs", experience_mode="guided")
 
 
 @pytest.mark.asyncio
@@ -243,6 +252,54 @@ async def test_strategy_simulator_returns_three_directional_scenarios():
     assert reach["metrics"]["estimated_reach"] > quality["metrics"]["estimated_reach"]
     assert reach["metrics"]["average_cpm"] < quality["metrics"]["average_cpm"]
     assert all(option["metrics"]["is_estimate"] for option in value["options"])
+    assert value["calculation"]["version"] == "brief_scenario_v2"
+    assert value["calculation"]["inputs"]["duration_days"] > 0
+
+
+@pytest.mark.asyncio
+async def test_strategy_and_forecast_expose_campaign_specific_provenance():
+    workspace = {"artifacts": {
+        "brief": {"value": {**BRIEF, "budget": 9}},
+        "placements": {"value": {"zones": [
+            {"id": "z1", "name": "Premium", "cpm": 80_000, "reach": 200_000},
+            {"id": "z2", "name": "Reach", "cpm": 40_000, "reach": 800_000},
+        ]}},
+    }}
+    strategy = await _generate_strategy({"session_id": "provenance"}, workspace)
+    workspace["artifacts"]["strategy"] = {"value": strategy.value}
+    forecast = await _forecast({"session_id": "provenance"}, workspace)
+
+    assert forecast.value["calculation"]["version"] == "catalog_forecast_v2"
+    assert forecast.value["average_cpm"] == 48_000
+    assert forecast.value["inventory_reach_cap"] == 1_000_000
+    assert forecast.value["estimated_reach"] > 0
+
+
+@pytest.mark.asyncio
+async def test_autopilot_launch_is_active_and_enables_synthetic_showcase(monkeypatch):
+    import creative_intel.service as intel_service
+
+    async def no_intel(session_id):
+        return []
+
+    monkeypatch.setattr(intel_service, "get_intel", no_intel)
+    workspace = {"artifacts": {
+        "brief": {"value": BRIEF},
+        "audience": {"value": {"attrs": []}},
+        "targeting": {"value": {}},
+        "creative": {"value": {"files": []}},
+        "placements": {"value": {"selectedZoneIds": ["z1"]}},
+        "assignments": {"value": {"assignments": {}}},
+    }}
+    draft = await _build_order_draft({"session_id": "active-order", "run_id": "run-active"}, workspace)
+    assert draft.value["payload"]["status"] == "active"
+
+    report = await _create_setup_report({}, {"artifacts": {
+        "order": {"value": {"order": {"id": "ORD-1", "status": "active"}}},
+        "forecast": {"value": {"estimated_reach": 1000}},
+    }})
+    assert report.value["performance_data_available"] is True
+    assert report.value["performance_data_mode"] == "synthetic_showcase"
 
 
 @pytest.mark.asyncio

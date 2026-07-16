@@ -16,33 +16,33 @@
 <header class="hero">
   <div class="kicker">Current system walkthrough</div>
   <h1>Advertising Agent</h1>
-  <p>Trợ lý xây dựng chiến dịch quảng cáo với hai cách làm việc: quy trình hướng dẫn có Copilot và Campaign Autopilot chạy kế hoạch bền vững, có bằng chứng và cổng duyệt.</p>
+  <p>Trợ lý xây dựng chiến dịch quảng cáo với hai trải nghiệm được chọn cố định từ trang chủ: Campaign Copilot để cùng AI làm từng bước và Campaign Autopilot để giao một brief rồi giám sát kế hoạch tự động.</p>
   <div class="badges"><span class="badge">React · FastAPI · Node</span><span class="badge">MongoDB canonical workspace</span><span class="badge">LangGraph freeform</span><span class="badge">Hybrid RAG · Qdrant</span><span class="badge">VLM creative review</span><span class="badge">Prometheus · Langfuse</span></div>
-  <div class="meta">Cập nhật 2026-07-16 · Mô tả build hiện tại, giới hạn hiện tại và cách kiểm thử</div>
+  <div class="meta">Cập nhật 2026-07-17 · Mô tả build hiện tại, giới hạn hiện tại và cách kiểm thử</div>
 </header>
 <main class="wrap">
   <nav class="toc"><b>Nội dung</b><ol><li><a href="#state">Trạng thái hiện tại</a></li><li><a href="#modes">Hai chế độ làm việc</a></li><li><a href="#architecture">Kiến trúc</a></li><li><a href="#workspace">Workspace &amp; non-linear flow</a></li><li><a href="#rag">Audience RAG không reranker</a></li><li><a href="#creative">Creative upload / AI tự tạo</a></li><li><a href="#safety">An toàn &amp; độ bền</a></li><li><a href="#test">Walkthrough kiểm thử</a></li><li><a href="#roadmap">Việc còn lại</a></li></ol></nav>
 
   <h2 id="state"><span class="n">01</span>Trạng thái hiện tại</h2>
-  <p class="lead">Ứng dụng đã vượt qua mức hackathon prototype ở nền tảng kiến trúc, nhưng chưa phải release production hoàn chỉnh. Luồng Guided, workspace phiên bản hóa, RAG audience, creative intelligence và Autopilot foundation đều chạy được; các tích hợp provider dài, browser E2E và chất lượng golden set vẫn cần tiếp tục gia cố.</p>
+  <p class="lead">Ứng dụng đã vượt qua mức hackathon prototype ở nền tảng kiến trúc, nhưng chưa phải release production hoàn chỉnh. Campaign Copilot, workspace phiên bản hóa, RAG audience, creative intelligence và Autopilot foundation đều chạy được; các tích hợp provider dài, browser E2E và chất lượng golden set vẫn cần tiếp tục gia cố.</p>
   <div class="grid">
     <div class="card"><h3><span class="status done">ĐÃ CÓ</span> Nền tảng</h3><p>Docker Compose, health/readiness, API key proxy, rate limit, structured logs, metrics, Langfuse, canonical workspace và optimistic revision.</p></div>
-    <div class="card"><h3><span class="status done">ĐÃ CÓ</span> Agent</h3><p>Guided workflow, LangGraph freeform, proposal/approval, dependency invalidation, durable Autopilot tasks, pause/resume/retry/replan và final launch gate.</p></div>
+    <div class="card"><h3><span class="status done">ĐÃ CÓ</span> Agent</h3><p>Campaign Copilot, LangGraph freeform, proposal/approval, dependency invalidation, durable Autopilot tasks, pause/resume/retry/replan và final launch gate.</p></div>
     <div class="card"><h3><span class="status done">ĐÃ CÓ</span> Intelligence</h3><p>Hybrid audience RAG, query rewrite, critic selector, deterministic exclusion guard, VLM creative analysis, zone ranking và order guard.</p></div>
     <div class="card"><h3><span class="status partial">ĐANG GIA CỐ</span> Release</h3><p>Golden-label human review, real upload/provider journeys, browser E2E và full performance-report loop. Multi-format AI generation đã code-complete, đang chờ sign-off journey thật.</p></div>
   </div>
 
   <h2 id="modes"><span class="n">02</span>Hai chế độ làm việc</h2>
   <div class="grid">
-    <div class="card"><h3>Quy trình hướng dẫn</h3><p>Người dùng điều khiển Brief → Audience → Creative → Setup → Result. Chat là Copilot: giải thích hoặc tạo proposal; thay đổi chỉ vào canonical workspace sau khi được duyệt.</p></div>
+    <div class="card"><h3>Campaign Copilot</h3><p>Người dùng cùng AI điều khiển Brief → Audience → Creative → Setup → Result. Chat giải thích hoặc tạo proposal; thay đổi chỉ vào canonical workspace sau khi được duyệt.</p></div>
     <div class="card"><h3>Campaign Autopilot</h3><p>Người dùng đưa brief, chọn nguồn creative và chính sách duyệt. Worker chạy capability graph, ghi artifact có revision/evidence và dừng tại review hoặc launch gate.</p></div>
   </div>
-  <div class="callout"><b>Ranh giới quan trọng:</b> “tự động” chỉ áp dụng cho công việc có thể đảo ngược. Tạo order luôn yêu cầu launch approval; VLM cảnh báo hoặc độ tin cậy thấp luôn chuyển sang người dùng.</div>
+  <div class="callout"><b>Ranh giới quan trọng:</b> Mode được chọn một lần trên trang chủ và cố định cho campaign. Trong Autopilot, chat bị khóa khi worker đang chạy, chỉ nhận quyết định duyệt/từ chối tại review gate, rồi chuyển thành hỏi đáp chỉ đọc sau khi run kết thúc. Tạo order luôn yêu cầu launch approval; VLM cảnh báo hoặc độ tin cậy thấp luôn chuyển sang người dùng.</div>
 
   <h2 id="architecture"><span class="n">03</span>Kiến trúc đang chạy</h2>
   <div class="mermaid">
 flowchart LR
-  UI["React UI :5175<br/>Guided + Autopilot"] -->|"/agent/*"| AG["FastAPI Agent :8080<br/>LangGraph + durable worker"]
+  UI["React UI :5175<br/>Homepage + Copilot + Autopilot"] -->|"/agent/*"| AG["FastAPI Agent :8080<br/>LangGraph + durable worker"]
   UI -->|"/api/*"| BE["Node Backend :3000<br/>catalog · order · creative storage"]
   AG --> WS[("MongoDB<br/>workspace · run · task · logs")]
   AG --> QD[("Qdrant<br/>dense + sparse vectors")]
@@ -118,18 +118,18 @@ http://localhost:5175
 # agent health / metrics
 http://localhost:8080/health
 http://localhost:8080/metrics</code></pre>
-  <h3>Test Guided nhanh</h3>
-  <ol><li>Chọn <b>Quy trình hướng dẫn</b>.</li><li>Nhập brief tiếng Việt, yêu cầu chat sửa budget và kiểm tra proposal chưa tự ghi.</li><li>Duyệt proposal; mở Audience và kiểm tra segment có ID/catalog source.</li><li>Sửa lại brief sau khi đã có audience; kiểm tra banner stale/recompute thay vì reset mọi thứ.</li></ol>
+  <h3>Test Campaign Copilot nhanh</h3>
+  <ol><li>Tải mới trang và xác nhận luôn thấy trang chủ, hai mode và lịch sử campaign.</li><li>Chọn <b>Campaign Copilot</b>, nhập brief tiếng Việt, yêu cầu chat sửa budget và kiểm tra proposal chưa tự ghi.</li><li>Duyệt proposal; mở Audience và kiểm tra segment có ID/catalog source.</li><li>Sửa lại brief sau khi đã có audience; kiểm tra banner stale/recompute thay vì reset mọi thứ.</li><li>Về trang chủ, mở lại campaign trong lịch sử và xác nhận mode cùng workspace được khôi phục đúng.</li></ol>
   <h3>Test Autopilot upload</h3>
-  <ol><li>Chọn Autopilot, tạo và duyệt brief.</li><li>Chọn “Tôi sẽ tải creative lên”, chọn policy, bắt đầu.</li><li>Xác nhận run dừng ở “Chuẩn bị creative” nếu chưa có file.</li><li>Upload file, bấm retry; xác nhận VLM result hoặc manual-review card.</li></ol>
+  <ol><li>Chọn Autopilot trên trang chủ, tạo và duyệt brief.</li><li>Chọn “Tôi sẽ tải creative lên”, chọn policy, bắt đầu.</li><li>Xác nhận chat bị khóa khi run đang chạy và chỉ nhận duyệt/từ chối khi có review gate.</li><li>Xác nhận run dừng ở “Chuẩn bị creative” nếu chưa có file.</li><li>Upload file, bấm retry; xác nhận VLM result hoặc manual-review card.</li></ol>
   <h3>Test Autopilot AI generate</h3>
-  <ol><li>Chọn “Để AI tự tạo creative”, sau đó bắt đầu.</li><li>Theo dõi task “Chuẩn bị creative”: file phải xuất hiện trong canonical workspace với <code>source=ai_generated</code> và generation provenance.</li><li>Nếu VLM an toàn, run đi tiếp; nếu timeout/rủi ro, run phải dừng review.</li><li>Dù policy là auto-build, run vẫn phải dừng ở launch approval trước create order.</li></ol>
+  <ol><li>Chọn “Để AI tự tạo creative”, sau đó bắt đầu.</li><li>Theo dõi task “Chuẩn bị creative”: file phải xuất hiện trong canonical workspace với <code>source=ai_generated</code> và generation provenance.</li><li>Kiểm tra Audience hiển thị tên segment/lý do chọn; Forecast hiển thị budget, CPM catalog, frequency, reach cap và công thức.</li><li>Nếu VLM an toàn, run đi tiếp; nếu timeout/rủi ro, run phải dừng review.</li><li>Dù policy là auto-build, run vẫn phải dừng ở launch approval trước create order.</li><li>Sau duyệt launch, order phải ở trạng thái active. Báo cáo hiệu suất phải ghi rõ số liệu tổng hợp là synthetic để minh họa, không giả làm delivery thực.</li></ol>
   <div class="callout danger"><b>Không dùng nút review để “ép qua” lỗi provider.</b> Retry chỉ hợp lệ khi input hoặc external state đã được sửa. VLM timeout chuyển manual review là fail-safe, không phải bằng chứng creative đã đạt.</div>
   <p>Bộ test hiện <b>định nghĩa 128 unique scenarios</b>. Đây là test specification và report contract, không phải tuyên bố cả 128 case đã chạy/passed. Input/expected output cho AI tester nằm trong <code>docs/testing/COMPREHENSIVE-TEST-PLAN.md</code>, <code>SCENARIO-CATALOG.md</code> và <code>AI-TEST-EXECUTOR-PROMPT.md</code>.</p>
 
   <h2 id="roadmap"><span class="n">09</span>Việc còn lại trong roadmap</h2>
   <div class="table"><table><thead><tr><th>Ưu tiên</th><th>Hạng mục</th><th>Release condition</th></tr></thead><tbody><tr><td>FE-0</td><td>Áp dụng golden review 041–080 đã được chủ sở hữu chấp thuận</td><td>Apply edit trước khi đánh dấu approved/edited; validator và exclusion gate pass</td></tr><tr><td>FE-1</td><td>Placement intent → multi-format AI generation → final placement</td><td><b>Code-complete:</b> còn upload và AI journey thật</td></tr><tr><td>FE-2</td><td>Anonymous + account + lịch sử hội thoại</td><td><b>Anonymous foundation complete:</b> HttpOnly identity, History, refresh/resume, owner authorization; còn login/claim/cross-device</td></tr><tr><td>FE-3</td><td>Zalo OA cho Autopilot và Guided rút gọn</td><td>Webhook dedupe, durable task, account link, approval an toàn</td></tr><tr><td>FE-4</td><td>Kiểm tra/sửa campaign và thông báo live qua Zalo</td><td>Owned campaign only, proposal diff, policy-compliant notification</td></tr><tr><td>Later</td><td>Qwen reranker A/B, analytics/report agent, broad chaos</td><td>Deferred theo ưu tiên sản phẩm</td></tr></tbody></table></div>
-  <footer>Advertising Agent · Tài liệu current-state sinh từ code, eval evidence và production roadmap của repository · 2026-07-16</footer>
+  <footer>Advertising Agent · Tài liệu current-state sinh từ code, eval evidence và production roadmap của repository · 2026-07-17</footer>
 </main>
 <script>mermaid.initialize({startOnLoad:true,theme:'dark',themeVariables:{background:'#101c2e',primaryColor:'#14243a',primaryTextColor:'#eef6ff',primaryBorderColor:'#38a3ff',lineColor:'#72baff',fontFamily:'Inter,Segoe UI,sans-serif'},flowchart:{curve:'basis',useMaxWidth:true}})</script>
 </body>

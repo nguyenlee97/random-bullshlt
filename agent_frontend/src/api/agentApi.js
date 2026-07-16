@@ -1092,9 +1092,16 @@ function serviceUnavailable(content, step) {
 
 export const AgentAPI = {
 
-  /** Restore this device's last campaign, or create its first owned campaign. */
-  async initializeIdentity() {
+  /**
+   * Bootstrap the anonymous device identity. Restoring the previous campaign
+   * is opt-in: the product homepage must remain the first screen after every
+   * fresh load, while explicit History actions still restore full context.
+   */
+  async initializeIdentity({ restoreCurrent = true } = {}) {
     await bootstrapIdentity()
+    if (!restoreCurrent) {
+      return { current_conversation_id: CURRENT_CONVERSATION_ID || null }
+    }
     let context = CURRENT_CONVERSATION_ID
       ? await fetchConversation(CURRENT_CONVERSATION_ID)
       : null
@@ -1432,7 +1439,7 @@ export const AgentAPI = {
     }
   },
 
-  async startAutopilot(approvalPolicy = 'critical_only', creativeSource) {
+  async startAutopilot(approvalPolicy = 'critical_only', creativeSource, startKey = '') {
     try {
       const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs`, {
         method: 'POST',
@@ -1442,7 +1449,7 @@ export const AgentAPI = {
           approval_policy: approvalPolicy,
           creative_source: creativeSource,
           actor: 'campaign_operator',
-          idempotency_key: `autopilot-start:${SESSION_ID}:${creativeSource}`,
+          idempotency_key: `autopilot-start:${SESSION_ID}:${creativeSource}:${startKey || 'initial'}`,
         }),
         signal: AbortSignal.timeout(10000),
       })

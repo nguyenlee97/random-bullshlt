@@ -1,4 +1,4 @@
-import { Bot, RotateCcw, MessageSquarePlus, Play, FileText, History } from 'lucide-react'
+import { Bot, RotateCcw, Home, Play, FileText, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDemo } from '@/demo/DemoEngine'
 
@@ -62,17 +62,17 @@ export default function TopBar({ onReset, onNewChat, onOpenHistory, showDemo }) 
           </Button>
         )}
 
-        {/* New Chat — clears chat + resets workspace */}
+        {/* Mode selection lives on the campaign homepage. */}
         <Button
           variant="default"
           size="sm"
           onClick={onNewChat}
           className="gap-1.5 text-xs h-8 bg-brand-500 hover:bg-brand-600"
           id="new-chat-btn"
-          aria-label="Bắt đầu campaign mới"
+          aria-label="Về trang chủ và bắt đầu campaign mới"
         >
-          <MessageSquarePlus className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Chiến dịch mới</span>
+          <Home className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Trang chủ</span>
         </Button>
         {/* Đặt lại — workspace reset only */}
         <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5 text-xs h-8" data-demo="reset-btn" aria-label="Đặt lại workspace">

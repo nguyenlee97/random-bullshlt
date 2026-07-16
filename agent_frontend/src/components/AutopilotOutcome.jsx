@@ -4,7 +4,7 @@ import {
   LayoutDashboard, MapPin, ShieldCheck, Target, Users,
 } from 'lucide-react'
 import SuccessStep from '@/steps/SuccessStep'
-import { buildCampaignOutcome, campaignDeliveryState } from '@/lib/campaignOutcome'
+import { buildCampaignOutcome, buildSyntheticPerformance, campaignDeliveryState } from '@/lib/campaignOutcome'
 
 const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
 
@@ -115,6 +115,11 @@ function SetupReport({ outcome }) {
             <div><dt className="text-slate-500">Order guard</dt><dd className={`font-bold ${outcome.guard.passed ? 'text-green-700' : 'text-amber-700'}`}>{outcome.guard.passed ? 'PASS' : 'Chưa có kết quả'}</dd></div>
             <div><dt className="text-slate-500">Trạng thái giao quảng cáo</dt><dd className="font-bold text-slate-900">{delivery.label}</dd></div>
           </dl>
+          {outcome.forecast.calculation && (
+            <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[10px] leading-4 text-slate-600">
+              Nguồn: {outcome.forecast.calculation.source}. Impression = ngân sách ÷ CPM × 1.000; reach bị giới hạn bởi reach catalog và tần suất {outcome.forecast.frequency || '—'}.
+            </p>
+          )}
         </Section>
 
         <Section icon={Users} title="Audience đã chọn">
@@ -178,27 +183,66 @@ function SetupReport({ outcome }) {
 
 function PerformanceReportState({ outcome }) {
   const delivery = campaignDeliveryState(outcome)
-  const active = delivery.live
+  const report = buildSyntheticPerformance(outcome)
+
+  if (!delivery.live || !report) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center" data-testid="autopilot-performance-report">
+        <BarChart3 className="mx-auto h-8 w-8 text-amber-700" />
+        <h3 className="mt-3 font-black text-amber-950">Báo cáo mở khi campaign đang hoạt động</h3>
+        <p className="mt-2 text-sm text-amber-800">Order {outcome.orderId || ''} hiện ở trạng thái “{delivery.label}”.</p>
+      </div>
+    )
+  }
+
+  const maxImpressions = Math.max(...report.rows.map(row => row.impressions), 1)
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm" data-testid="autopilot-performance-report">
-      <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl ${active ? 'bg-blue-50 text-brand-600' : 'bg-amber-50 text-amber-700'}`}>
-        <BarChart3 className="h-7 w-7" />
+    <div className="space-y-4" data-testid="autopilot-performance-report">
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-950">
+        <p className="font-black">Dữ liệu mô phỏng để xem trước báo cáo</p>
+        <p className="mt-1">Các chỉ số dưới đây được suy ra từ ngân sách, thời gian, forecast và placement của campaign để minh họa cách báo cáo vận hành. Khi có delivery thật, hệ thống sẽ tự thay bằng số liệu thực.</p>
       </div>
-      <h3 className="mt-4 text-lg font-black text-slate-900">
-        {active ? 'Chưa có dữ liệu hiệu suất' : 'Campaign chưa giao quảng cáo'}
-      </h3>
-      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-600">
-        {active
-          ? 'Order đã active nhưng hệ thống chưa nhận đủ impression, click hoặc conversion để tạo báo cáo đáng tin cậy.'
-          : `Order ${outcome.orderId || ''} đang ở trạng thái “${delivery.label}”. Hãy kích hoạt order trước; báo cáo chỉ xuất hiện sau khi có dữ liệu phân phối thực.`}
-      </p>
-      <div className="mx-auto mt-5 max-w-xl rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-left text-xs leading-5 text-blue-900">
-        Advertising Agent không tự tạo số liệu giả trong màn hình này. Báo cáo setup ở tab bên cạnh vẫn dùng toàn bộ artifact thật của Autopilot run.
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <Metric label="Reach" value={fmt(report.metrics.reach)} note="forecast mô phỏng" />
+        <Metric label="Impression" value={fmt(report.metrics.impressions)} note="forecast mô phỏng" />
+        <Metric label="Click" value={fmt(report.metrics.clicks)} note="từ CTR mô phỏng" />
+        <Metric label="CTR" value={`${report.metrics.ctr}%`} note="theo objective" />
+        <Metric label="CPM" value={`${fmt(report.metrics.averageCpm)} ₫`} note="placement catalog" />
+        <Metric label="Chi tiêu" value={`${fmt(report.metrics.spend)} ₫`} note="ngân sách kế hoạch" />
       </div>
-      <a href={`${ADSPILOT_URL}/#/orders`} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-xs font-bold text-white hover:bg-brand-600">
-        Mở trình quản lý quảng cáo <ExternalLink className="h-3.5 w-3.5" />
-      </a>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)]">
+        <Section icon={BarChart3} title="Phân bổ dự kiến theo ngày">
+          <div className="space-y-3">
+            {report.rows.map(row => (
+              <div key={row.label} className="grid grid-cols-[52px_minmax(0,1fr)_90px] items-center gap-2 text-[11px]">
+                <span className="font-semibold text-slate-600">{row.label}</span>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.max(row.impressions / maxImpressions * 100, 3)}%` }} /></div>
+                <span className="text-right font-bold text-slate-900">{fmt(row.impressions)} imp.</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section icon={MapPin} title="Placement đóng góp reach">
+          <ul className="space-y-2">
+            {report.placements.slice(0, 6).map(zone => (
+              <li key={zone.id} className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-[11px]">
+                <div className="min-w-0"><p className="truncate font-bold text-slate-900">{zone.name}</p><p className="text-slate-500">{zone.channel}</p></div>
+                <span className="shrink-0 font-bold text-brand-700">{fmt(zone.reach)}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      </div>
+
+      <div className="text-center">
+        <a href={`${ADSPILOT_URL}/#/orders`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-xs font-bold text-white hover:bg-brand-600">
+          Mở trình quản lý quảng cáo <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
     </div>
   )
 }

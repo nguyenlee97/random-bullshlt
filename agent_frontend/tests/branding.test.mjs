@@ -67,7 +67,6 @@ test('external platform links use product-neutral labels', async () => {
 test('core mode controls keep mobile layout and accessible names', async () => {
   const app = await source('agent_frontend/src/App.jsx')
   const selector = await source('agent_frontend/src/components/ExperienceSelector.jsx')
-  const modeSwitcher = await source('agent_frontend/src/components/ModeSwitcher.jsx')
   const topBar = await source('agent_frontend/src/components/TopBar.jsx')
   const composer = await source('agent_frontend/src/components/ChatPane/ChatComposer.jsx')
   const autopilot = await source('agent_frontend/src/components/AutopilotPanel.jsx')
@@ -78,13 +77,10 @@ test('core mode controls keep mobile layout and accessible names', async () => {
   assert.match(app, /flex-col md:flex-row/)
   assert.match(app, /role="tablist"/)
   assert.match(app, /aria-selected=/)
-  assert.match(modeSwitcher, /aria-label="Chọn chế độ làm việc"/)
-  assert.match(modeSwitcher, /role="tab"/)
-  assert.match(modeSwitcher, /aria-selected=\{selected\}/)
-  assert.match(modeSwitcher, /safe-area-inset-bottom/)
-  assert.match(selector, /aria-label={`Chọn \${mode\.title}/)
+  assert.match(selector, /aria-label={`Bắt đầu \${mode\.title}/)
+  assert.doesNotMatch(app, /<ModeSwitcher/)
   assert.match(topBar, /aria-label="Mở tài liệu kỹ thuật"/)
-  assert.match(topBar, /aria-label="Bắt đầu campaign mới"/)
+  assert.match(topBar, /aria-label="Về trang chủ và bắt đầu campaign mới"/)
   assert.match(composer, /aria-label="Tin nhắn gửi Advertising Agent"/)
   assert.match(composer, /aria-label=\{busy \? 'Advertising Agent đang xử lý' : 'Gửi tin nhắn'\}/)
   assert.match(autopilot, /aria-label="Tạm dừng Autopilot"/)
@@ -133,9 +129,10 @@ test('campaign strategy simulator is integrated into Autopilot', async () => {
   const api = await source('agent_frontend/src/api/agentApi.js')
 
   assert.match(panel, /<StrategySimulator/)
-  assert.match(simulator, /Mô phỏng chiến lược campaign/)
+  assert.match(simulator, /Kịch bản phân bổ theo brief/)
   assert.match(simulator, /Độ phủ dự kiến/)
   assert.match(simulator, /CPM giả định/)
+  assert.match(simulator, /Số liệu này được tính như thế nào/)
   assert.match(simulator, /Chọn phương án này/)
   assert.match(simulator, /triệu \$\{unit\}/)
   assert.match(simulator, /nghìn \$\{unit\}/)
@@ -158,9 +155,9 @@ test('Autopilot requires an explicit creative source and supports automatic gene
   assert.match(panel, /nguồn creative \(tải lên hoặc AI tự tạo\)/)
   assert.match(panel, /disabled=\{loading \|\| prerequisitesLoading\}/)
   assert.doesNotMatch(panel, /disabled=\{!briefReady \|\| !creativeSource/)
-  assert.match(panel, /startAutopilot\(policy, creativeSource\)/)
+  assert.match(panel, /startAutopilot\(policy, creativeSource, startKey\)/)
   assert.match(api, /creative_source: creativeSource/)
-  assert.match(api, /autopilot-start:\$\{SESSION_ID\}:\$\{creativeSource\}/)
+  assert.match(api, /autopilot-start:\$\{SESSION_ID\}:\$\{creativeSource\}:\$\{startKey/)
 })
 
 test('Autopilot exposes a placement-aware bounded creative format plan', async () => {
@@ -184,8 +181,8 @@ test('Autopilot presents ordered stages, generated assets, and locks live strate
   assert.match(panel, /Xem toàn bộ \{orderedTasks\.length\} bước theo thứ tự/)
   assert.match(panel, /Creative đã tạo/)
   assert.match(panel, /<img src=\{file\.url\}/)
-  assert.match(panel, /Muốn đổi phương án, hãy tạm dừng Autopilot trước/)
-  assert.match(panel, /run\?\.status === 'paused'/)
+  assert.match(panel, /Muốn thay đổi, hãy từ chối điểm review hiện tại/)
+  assert.match(panel, /const strategyCanChange = false/)
   assert.match(panel, /Order đang chờ kích hoạt nên test site chưa hiển thị quảng cáo/)
   assert.match(panel, /https:\/\/adspilot\.pawgrammers\.io\.vn/)
   assert.match(simulator, /selectionHint/)
@@ -201,19 +198,19 @@ test('Autopilot presents artifacts without Guided workflow controls', async () =
   assert.doesNotMatch(topbar, /Minimax-M2\.5/)
 })
 
-test('workflow modes are sibling canvases and Autopilot survives tab switches', async () => {
+test('campaign mode is fixed at homepage while Autopilot may open its data editor', async () => {
   const app = await source('agent_frontend/src/App.jsx')
   const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
-  const switcher = await source('agent_frontend/src/components/ModeSwitcher.jsx')
 
   assert.match(app, /data-mode-canvas="guided"/)
   assert.match(app, /data-mode-canvas="autopilot"/)
   assert.match(app, /Autopilot is a sibling canvas, not a banner above the workspace/)
-  assert.match(app, /experienceMode === 'autopilot' \? 'md:flex' : 'md:hidden'/)
+  assert.match(app, /Quay lại Autopilot/)
+  assert.match(app, /startCampaign/)
+  assert.doesNotMatch(app, /<ModeSwitcher/)
   assert.match(app, /bootedRef\.current/)
   assert.match(panel, /sticky top-0/)
   assert.match(panel, /sticky bottom-2/)
-  assert.match(switcher, /Chuyển chế độ không làm mất chat, workspace hoặc tiến độ đang chạy/)
 })
 
 test('workspace proposals have one durable decision lifecycle', async () => {
@@ -251,6 +248,19 @@ test('Autopilot hides stale review actions after a terminal run', async () => {
   assert.match(panel, /const runTerminal = \['completed', 'cancelled', 'failed'\]\.includes\(run\?\.status\)/)
   assert.match(panel, /const waiting = runTerminal \? null/)
   assert.match(panel, /if \(!run\?\.run_id \|\| \['completed', 'cancelled', 'failed'\]\.includes\(run\.status\)\) return/)
+})
+
+test('Autopilot chat is state-aware and performance reporting is clearly synthetic', async () => {
+  const app = await source('agent_frontend/src/App.jsx')
+  const composer = await source('agent_frontend/src/components/ChatPane/ChatComposer.jsx')
+  const outcome = await source('agent_frontend/src/components/AutopilotOutcome.jsx')
+  assert.match(app, /Autopilot đang thực thi và sở hữu workspace/)
+  assert.match(app, /mode: 'review'/)
+  assert.match(app, /mode: 'readonly'/)
+  assert.match(composer, /Đồng ý, tiếp tục/)
+  assert.match(composer, /Chat tạm khóa trong khi Autopilot thực thi/)
+  assert.match(outcome, /Dữ liệu mô phỏng để xem trước báo cáo/)
+  assert.match(outcome, /Khi có delivery thật, hệ thống sẽ tự thay bằng số liệu thực/)
 })
 
 test('demo fallback is labeled and cannot mutate workspace', async () => {

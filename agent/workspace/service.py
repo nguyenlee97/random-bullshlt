@@ -200,6 +200,17 @@ async def set_preferences(
         raise ValueError("at least one preference is required")
 
     current = await get_workspace(session_id)
+    if experience_mode is not None:
+        # The conversation record captures the explicit homepage choice. A
+        # legacy workspace's historical ``guided`` default is not a choice and
+        # must remain migratable to Autopilot.
+        from identity import get_conversation_mode_for_session
+
+        selected_mode = await get_conversation_mode_for_session(session_id)
+        if selected_mode is not None and selected_mode != experience_mode:
+            raise ValueError(
+                "experience mode is fixed for this campaign; create a new campaign to choose another mode"
+            )
     expected = current["revision"] if base_revision is None else base_revision
     workspace_id = current["workspace_id"]
     key = idempotency_key or f"pref_{uuid.uuid4().hex}"

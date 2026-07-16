@@ -207,7 +207,10 @@ async def get_conversation(identity_id: str, conversation_id: str) -> dict:
     session_id = doc["session_id"]
     workspace = await get_workspace(session_id)
     workspace_mode = workspace.get("experience_mode")
-    if workspace_mode and doc.get("experience_mode") != workspace_mode:
+    # An explicit homepage selection belongs to the conversation and is the
+    # source of truth. Only legacy conversations with no selected mode inherit
+    # the historical workspace default during migration.
+    if not doc.get("experience_mode") and workspace_mode:
         await set_conversation_mode_for_session(session_id, workspace_mode)
         doc["experience_mode"] = workspace_mode
     return {
@@ -279,6 +282,30 @@ async def set_conversation_mode_for_session(session_id: str, mode: str) -> None:
             doc["experience_mode"] = mode
             doc["updated_at"] = now
             return
+
+
+async def get_conversation_mode_for_session(session_id: str) -> str | None:
+    """Return the homepage-selected mode for an owned conversation.
+
+    Legacy evaluator sessions and pre-conversation workspaces intentionally
+    return ``None``. Their historical workspace default (``guided``) is not a
+    user choice and therefore must not act as an immutable mode lock.
+    """
+    _, conversations = await _collections()
+    if conversations is not None:
+        doc = await conversations.find_one(
+            {"session_id": session_id}, {"experience_mode": 1}
+        )
+    else:
+        doc = next(
+            (
+                item for item in _mem_conversations.values()
+                if item.get("session_id") == session_id
+            ),
+            None,
+        )
+    mode = (doc or {}).get("experience_mode")
+    return mode if mode in {"guided", "autopilot"} else None
 
 
 async def set_conversation_title_for_session(session_id: str, title: str) -> None:

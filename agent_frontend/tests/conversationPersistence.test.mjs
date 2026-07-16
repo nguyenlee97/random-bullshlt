@@ -5,6 +5,7 @@ import test from 'node:test'
 const api = readFileSync(new URL('../src/api/agentApi.js', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const history = readFileSync(new URL('../src/components/ConversationHistory.jsx', import.meta.url), 'utf8')
+const homepage = readFileSync(new URL('../src/components/ExperienceSelector.jsx', import.meta.url), 'utf8')
 
 test('anonymous device credential uses an HttpOnly cookie with legacy migration only', () => {
   assert.match(api, /anonymous-token/)
@@ -19,6 +20,16 @@ test('campaign resume hydrates transcript, workspace, pending proposals and auto
   assert.match(app, /hydrateMessages\(context\.ui_messages/)
   assert.match(app, /hydrateCanonicalWorkspace\(context\.workspace\)/)
   assert.match(app, /initialRun=\{restoredAutopilotRun\}/)
+  assert.match(app, /context\.experience_mode \|\| context\.workspace\?\.experience_mode/)
+})
+
+test('fresh loads stay on the homepage until a campaign is explicitly opened', () => {
+  assert.match(app, /initializeIdentity\(\{ restoreCurrent: false \}\)/)
+  assert.match(app, /setConversationHistory\(await AgentAPI\.listConversations\(\)\)/)
+  assert.match(homepage, /Bắt đầu campaign mới/)
+  assert.match(homepage, /Tiếp tục campaign đã lưu/)
+  assert.match(homepage, /Campaign Copilot/)
+  assert.doesNotMatch(homepage, /Quy trình từng bước/)
 })
 
 test('history UI exposes resume, archive and new campaign actions', () => {

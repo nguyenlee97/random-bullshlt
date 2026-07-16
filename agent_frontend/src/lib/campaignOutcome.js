@@ -120,3 +120,71 @@ export function campaignDeliveryState(outcome) {
   }
   return { tone: 'neutral', label: status || 'Không xác định', live: false }
 }
+
+const seededNumber = text => [...String(text || 'campaign')].reduce(
+  (hash, char) => ((hash * 31) + char.charCodeAt(0)) >>> 0, 2166136261,
+)
+
+const dateRange = (startValue, endValue) => {
+  const start = new Date(`${startValue || ''}T00:00:00`)
+  const end = new Date(`${endValue || ''}T00:00:00`)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return []
+  const count = Math.min(Math.floor((end - start) / 86400000) + 1, 14)
+  return Array.from({ length: count }, (_, index) => {
+    const value = new Date(start)
+    value.setDate(start.getDate() + index)
+    return value.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+  })
+}
+
+/** Deterministic showcase data derived from one active campaign's real setup. */
+export function buildSyntheticPerformance(outcome) {
+  if (!outcome?.orderId || outcome.orderStatus !== 'active') return null
+  const labels = dateRange(outcome.brief.startDate, outcome.brief.endDate)
+  if (!labels.length) labels.push('Ngày 1', 'Ngày 2', 'Ngày 3')
+  const seed = seededNumber(`${outcome.orderId}:${outcome.brief.brand}`)
+  const weights = labels.map((_, index) => 0.82 + ((seed + index * 37) % 37) / 100)
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0)
+  const totalImpressions = Math.max(Number(outcome.forecast.estimated_impressions || 0), 0)
+  const totalReach = Math.max(Number(outcome.forecast.estimated_reach || 0), 0)
+  const totalSpend = Math.max(Number(outcome.forecast.budget_vnd || Number(outcome.brief.budget || 0) * 1_000_000), 0)
+  const baseCtr = {
+    awareness: 0.85, consideration: 1.15, conversion: 1.55, retention: 1.05,
+  }[outcome.brief.objective] || 1
+  const selected = outcome.strategy.selected || outcome.strategy.recommended
+  const ctr = Math.round((baseCtr + (selected === 'quality_first' ? 0.18 : selected === 'reach_first' ? -0.08 : 0)) * 100) / 100
+  const rows = labels.map((label, index) => {
+    const share = weights[index] / totalWeight
+    const impressions = Math.round(totalImpressions * share)
+    return {
+      label,
+      impressions,
+      reach: Math.round(totalReach * share),
+      clicks: Math.round(impressions * ctr / 100),
+      spend: Math.round(totalSpend * share),
+    }
+  })
+  const clicks = rows.reduce((sum, row) => sum + row.clicks, 0)
+  const placements = (outcome.zones || []).map(zone => ({
+    id: zone.id,
+    name: zone.name || zone.id,
+    channel: zone.channel || zone.platform || 'Placement',
+    cpm: Number(zone.cpm || outcome.forecast.average_cpm || 0),
+    reach: Number(zone.reach || 0),
+  })).sort((left, right) => right.reach - left.reach)
+
+  return {
+    mode: 'synthetic_showcase',
+    labels,
+    rows,
+    placements,
+    metrics: {
+      impressions: totalImpressions,
+      reach: totalReach,
+      clicks,
+      ctr,
+      spend: totalSpend,
+      averageCpm: Number(outcome.forecast.average_cpm || 0),
+    },
+  }
+}

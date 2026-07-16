@@ -67,6 +67,7 @@ const stageStatus = tasks => {
 }
 
 const formatNumber = value => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(Number(value || 0))
+const audienceName = item => item.fullLabel || item.label || item.name || item.code || item._id || 'Segment'
 
 const ARTIFACT_LABELS = {
   brief: 'brief', strategy: 'chiến lược', audience: 'audience',
@@ -97,6 +98,7 @@ const evidenceText = evidence => {
   if (evidence.type === 'order_draft') return `Order draft: ${evidence.placements || 0} placements · idempotency ${evidence.idempotency_key || '—'}`
   if (evidence.type === 'order_create') return `Order create: ${evidence.order_id || 'đã ghi nhận'} · idempotency ${evidence.idempotency_key || '—'}`
   if (evidence.type === 'strategy_simulation') return `Simulator ${evidence.option_ids?.length || 0} phương án · đề xuất ${evidence.selected}`
+  if (evidence.type === 'forecast_inputs') return `${evidence.method || 'forecast'} · ${evidence.zone_count || 0} placement · CPM ${formatNumber(evidence.average_cpm)} ₫ · tần suất ${evidence.frequency || '—'}`
   if (evidence.type === 'creative_source') return `Creative ${evidence.source === 'ai_generate' ? 'AI tự tạo' : 'do người dùng tải lên'} · ${evidence.count || 0} file${evidence.reused ? ' · tái sử dụng' : ''}`
   if (evidence.type === 'placement_intent') return `${evidence.candidate_count || 0} placement sơ bộ · ${evidence.conflict_count || 0} conflict · chưa lọc theo creative`
   if (evidence.type === 'creative_format_plan') return `${evidence.format_count || 0} format: ${(evidence.format_ids || []).join(', ')} · tối đa ${evidence.max_assets || 0} asset · ${evidence.estimated_provider_calls || 0} provider call`
@@ -225,7 +227,8 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun =
       if (!creativeSource) {
         throw new Error('Hãy chọn tải creative lên hoặc để AI tự tạo trước khi bắt đầu.')
       }
-      const created = await AgentAPI.startAutopilot(policy, creativeSource)
+      const startKey = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const created = await AgentAPI.startAutopilot(policy, creativeSource, startKey)
       if (!created?.run_id) throw new Error(created?.detail || 'Không thể khởi động Campaign Autopilot.')
       setRun(created)
     } catch (err) {
@@ -257,11 +260,18 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun =
       const next = await AgentAPI.reviewAutopilotTask(run.run_id, task.task_id, approved)
       if (!next?.run_id) throw new Error(next?.detail || 'Không thể ghi nhận review.')
       setRun(next)
+      return next
     } catch (err) {
       setError(err.message)
+      return null
     } finally {
       setLoading(false)
     }
+  }
+
+  const rejectAndEdit = async (task, editor) => {
+    const next = await review(task, false)
+    if (next) editor?.()
   }
 
   const chooseStrategy = async optionId => {
@@ -309,19 +319,10 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun =
   const forecastResult = taskByKey.forecast?.result || taskByKey.forecast?.pending_artifact?.value || {}
   const orderResult = taskByKey.verify_order?.result?.order || taskByKey.create_order?.result?.order || null
   const orderCreated = taskByKey.create_order?.status === 'succeeded'
-  const strategyCanChange = Boolean(
-    strategyTask
-    && !orderCreated
-    && !runTerminal
-    && (strategyTask.status === 'waiting_review' || (run?.status === 'paused' && strategyTask.status === 'succeeded'))
-  )
+  const strategyCanChange = false
   const strategySelectionHint = orderCreated || runTerminal
-    ? 'Chiến lược đã khóa vì order đã được tạo hoặc run đã hoàn tất.'
-    : strategyTask?.status === 'waiting_review'
-      ? 'Chọn một phương án để Agent tiếp tục.'
-      : run?.status === 'paused'
-        ? 'Run đang tạm dừng; bạn có thể đổi phương án và tính lại các bước phụ thuộc.'
-        : 'Muốn đổi phương án, hãy tạm dừng Autopilot trước để tránh thay đổi giữa lúc Agent đang thực thi.'
+    ? 'Phương án này là một phần của campaign đã hoàn tất.'
+    : 'Autopilot đang sở hữu kế hoạch. Muốn thay đổi, hãy từ chối điểm review hiện tại, chỉnh dữ liệu rồi chạy lại.'
   const executionStages = AUTOPILOT_STAGES.map(stage => {
     const tasks = stage.keys.map(key => taskByKey[key]).filter(Boolean)
     const done = tasks.filter(task => ['succeeded', 'skipped'].includes(task.status)).length
@@ -359,8 +360,11 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun =
       status: run.status,
       progress,
       waitingReview: Boolean(waiting),
+      waitingTaskId: waiting?.task_id || null,
+      waitingTaskKey: waiting?.key || null,
+      waitingMessage: waitingMessage || '',
     } : null)
-  }, [onStatusChange, progress, run?.status, waiting?.task_id])
+  }, [onStatusChange, progress, run?.status, waiting?.task_id, waiting?.key, waitingMessage])
 
   return (
     <section className="h-full w-full overflow-y-auto bg-slate-50/70 p-3 sm:p-5" aria-label="Không gian Campaign Autopilot">
@@ -408,7 +412,7 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun =
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <div className="mb-4">
                 <p className="text-sm font-black text-slate-900">Chọn cách Agent xin duyệt</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Có thể tạm dừng hoặc chuyển về quy trình hướng dẫn bất cứ lúc nào.</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Có thể tạm dừng Autopilot bất cứ lúc nào; campaign này vẫn giữ nguyên mode đã chọn từ trang chủ.</p>
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
                 {POLICY_OPTIONS.map(item => (
@@ -478,6 +482,12 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun =
             </div>
             <span className="text-xs font-semibold text-slate-600">{progress}%</span>
             <div className="flex gap-1.5">
+              {['failed', 'cancelled'].includes(run.status) && (
+                <button onClick={() => { setRun(null); onOpenBrief?.() }} disabled={loading}
+                  className="inline-flex items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-2 text-[11px] font-bold text-brand-700 hover:bg-brand-100">
+                  Chỉnh dữ liệu & chạy lại
+                </button>
+              )}
               {run.status === 'paused' && !run.replan_blocked ? (
                 <button onClick={() => act('resume')} disabled={loading} className="rounded-lg border border-brand-200 p-2 text-brand-600 hover:bg-brand-50" title="Tiếp tục" aria-label="Tiếp tục Autopilot"><Play className="h-3.5 w-3.5" /></button>
               ) : !['completed', 'cancelled', 'failed'].includes(run.status) && (
@@ -646,6 +656,44 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun =
               </article>
             </div>
 
+            {(audienceResult.attrs?.length > 0 || forecastResult.calculation) && (
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {audienceResult.attrs?.length > 0 && (
+                  <details open className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                    <summary className="cursor-pointer text-xs font-black text-slate-900">
+                      Audience đã chọn · {audienceResult.attrs.length} segment
+                    </summary>
+                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                      Chọn từ {audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || 0} ứng viên catalog bằng RAG và selector an toàn.
+                    </p>
+                    <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {audienceResult.attrs.map((item, index) => (
+                        <li key={item._id || item.code || index} className="rounded-lg bg-slate-50 px-2.5 py-2">
+                          <p className="text-[11px] font-bold text-slate-900">{audienceName(item)}</p>
+                          {(item.reason || item.description) && <p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-slate-500">{item.reason || item.description}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
+                {forecastResult.calculation && (
+                  <details open className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                    <summary className="cursor-pointer text-xs font-black text-slate-900">Nguồn của dự báo reach & chi phí</summary>
+                    <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="rounded-lg bg-slate-50 p-2"><dt className="text-slate-500">Ngân sách</dt><dd className="font-bold text-slate-900">{formatNumber(forecastResult.budget_vnd)} ₫</dd></div>
+                      <div className="rounded-lg bg-slate-50 p-2"><dt className="text-slate-500">CPM catalog có trọng số</dt><dd className="font-bold text-slate-900">{formatNumber(forecastResult.average_cpm)} ₫</dd></div>
+                      <div className="rounded-lg bg-slate-50 p-2"><dt className="text-slate-500">Tần suất chiến lược</dt><dd className="font-bold text-slate-900">{forecastResult.frequency || '—'}</dd></div>
+                      <div className="rounded-lg bg-slate-50 p-2"><dt className="text-slate-500">Trần reach inventory</dt><dd className="font-bold text-slate-900">{formatNumber(forecastResult.inventory_reach_cap)}</dd></div>
+                    </dl>
+                    <p className="mt-3 text-[10px] leading-4 text-slate-500">
+                      Impression = ngân sách ÷ CPM × 1.000. Reach = giá trị nhỏ hơn giữa trần inventory và impression ÷ tần suất. Đây là forecast, không phải số liệu delivery.
+                    </p>
+                  </details>
+                )}
+              </div>
+            )}
+
             {orderResult?.status === 'pending' && (
               <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800">
                 Order đang chờ kích hoạt nên test site chưa hiển thị quảng cáo. Đây là trạng thái an toàn sau khi tạo order, không phải lỗi creative.
@@ -708,8 +756,8 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun =
               </div>
               <div className="flex flex-wrap gap-2">
                 {briefRetry && pendingBrief && <button onClick={onOpenChat} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Chat để duyệt</button>}
-                {briefRetry && !pendingBrief && !retryReady && <button onClick={onOpenBrief} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Sửa Brief</button>}
-                {waiting.result?.reason === 'missing_creative' && <button onClick={onOpenCreative} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Creative</button>}
+                {briefRetry && !pendingBrief && !retryReady && <button onClick={() => rejectAndEdit(waiting, onOpenBrief)} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Từ chối & sửa Brief</button>}
+                {waiting.result?.reason === 'missing_creative' && <button onClick={() => rejectAndEdit(waiting, onOpenCreative)} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Từ chối & tải Creative</button>}
                 <button onClick={() => review(waiting, false)} disabled={loading} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">Từ chối</button>
                 <button onClick={() => review(waiting, true)} disabled={loading || (retryAction && !retryReady)} className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}>
                   {retryAction ? 'Kiểm tra lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}

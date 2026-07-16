@@ -64,6 +64,22 @@ async def test_conversations_are_owned_and_archive_is_non_destructive():
 
 
 @pytest.mark.asyncio
+async def test_explicit_homepage_mode_is_not_overwritten_by_legacy_workspace_default():
+    from identity import bootstrap_anonymous, create_conversation, get_conversation
+
+    identity = await bootstrap_anonymous()
+    conversation = await create_conversation(
+        identity["identity_id"], experience_mode="autopilot"
+    )
+
+    restored = await get_conversation(
+        identity["identity_id"], conversation["conversation_id"]
+    )
+    assert restored["experience_mode"] == "autopilot"
+    assert restored["workspace"]["experience_mode"] == "guided"
+
+
+@pytest.mark.asyncio
 async def test_owned_session_rejects_missing_and_foreign_identity_tokens():
     from identity import (
         bootstrap_anonymous,

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Send, Loader2, ChevronLeft } from 'lucide-react'
+import { Send, Loader2, ChevronLeft, LockKeyhole, ShieldCheck } from 'lucide-react'
 
 // ─── Step-specific quick chips ────────────────────────────────────────────────
 const STEP_CHIPS = {
@@ -13,7 +13,7 @@ const STEP_CHIPS = {
   6: ['Thêm người nhận', 'Chỉnh sửa nội dung email'],
 }
 
-export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
+export default function ChatComposer({ busy, currentStep, onSend, onBack, policy = { mode: 'normal' } }) {
   const [text, setText] = useState('')
   const inputRef = useRef(null)
 
@@ -45,7 +45,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
   }
 
   const handleSend = () => {
-    if (!text.trim() || busy) return
+    if (!text.trim() || busy || policy.mode === 'locked') return
     onSend(text.trim())
     setText('')
     // Reset height
@@ -62,14 +62,37 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
   }
 
   const chips = STEP_CHIPS[currentStep] || STEP_CHIPS[0]
+  const locked = policy.mode === 'locked'
+  const reviewOnly = policy.mode === 'review'
+  const placeholder = locked
+    ? 'Chat tạm khóa trong khi Autopilot thực thi'
+    : reviewOnly
+      ? 'Nhập “Đồng ý” hoặc “Từ chối”…'
+      : policy.mode === 'readonly'
+        ? 'Hỏi Agent về audience, creative, forecast, placement hoặc order…'
+        : 'Trao đổi với agent về bước hiện tại... (Shift+Enter xuống dòng)'
 
   return (
     <div
       className="border-t border-border bg-white p-3 flex-shrink-0"
       style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
     >
-      {/* Quick chips — hidden on mobile for steps 0-4, shown on mobile for Report(5)/Email(6) */}
+      {policy.mode !== 'normal' && (
+        <div className={`mb-2.5 flex items-start gap-2 rounded-xl border px-3 py-2 text-[11px] leading-5 ${locked ? 'border-slate-200 bg-slate-50 text-slate-600' : reviewOnly ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-blue-100 bg-blue-50 text-blue-900'}`}>
+          {locked ? <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+          <span>{policy.message}</span>
+        </div>
+      )}
+
+      {/* Autopilot review exposes only explicit decision phrases. */}
       <div data-demo="chat-chips" className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1 mb-2.5 flex-nowrap">
+        {reviewOnly && ['Đồng ý, tiếp tục', 'Từ chối'].map(chip => (
+          <button key={chip} onClick={() => !busy && onSend(chip)} disabled={busy}
+            className="flex-shrink-0 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50">
+            {chip}
+          </button>
+        ))}
+        {!locked && !reviewOnly && policy.mode !== 'readonly' && <>
         {currentStep > 0 && (
           <button
             onClick={onBack}
@@ -89,6 +112,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
             {chip}
           </button>
         ))}
+        </>}
       </div>
 
       {/* Input row */}
@@ -99,9 +123,9 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
           value={text}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="Trao đổi với agent về bước hiện tại... (Shift+Enter xuống dòng)"
+          placeholder={placeholder}
           aria-label="Tin nhắn gửi Advertising Agent"
-          disabled={busy}
+          disabled={busy || locked}
           rows={1}
           className={[
             'flex-1 text-sm resize-none rounded-md border border-input bg-background px-3 py-2',
@@ -116,7 +140,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
 
         <Button
           onClick={handleSend}
-          disabled={busy || !text.trim()}
+          disabled={busy || locked || !text.trim()}
           size="icon"
           className="h-10 w-10 flex-shrink-0 self-end"
           id="chat-send-btn"

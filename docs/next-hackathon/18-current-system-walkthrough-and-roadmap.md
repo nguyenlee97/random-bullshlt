@@ -5,10 +5,12 @@ Purpose: handoff for the next hackathon revamp. This document describes what exi
 
 ## 1. Current product shape
 
-Advertising Agent has two sibling modes:
+Advertising Agent starts on a homepage with campaign history and two fixed-per-campaign experiences:
 
-- **Traditional Guided Workflow**: the operator controls Brief → Audience → Creative → Setup → Result. Freeform chat acts as a workspace-aware Copilot and changes state through durable proposals.
+- **Campaign Copilot**: the operator controls Brief → Audience → Creative → Setup → Result. Freeform chat acts as a workspace-aware Copilot and changes state through durable proposals.
 - **Campaign Autopilot**: the operator supplies an approved brief, chooses an approval policy and creative source, then watches a durable capability plan execute. The run pauses on review boundaries and always pauses before order creation.
+
+Fresh navigation and reload always return to the homepage instead of silently reopening the last workspace. History resumes the exact conversation, workspace and original mode. A mode selected on the homepage is immutable for that campaign; changing approach means creating a new campaign.
 
 MongoDB is the canonical workspace. The browser renders it; it is not a second source of truth. Each artifact has a revision and status. Approved mutations increment the workspace revision and deterministically invalidate only downstream artifacts.
 
@@ -23,7 +25,7 @@ MongoDB is the canonical workspace. The browser renders it; it is not a second s
 | Creative | Deterministic media checks, async VLM analysis, manual-review fallback, zone compatibility |
 | Autopilot | Durable runs/tasks/events, fixed capability allowlist, leases + heartbeat, bounded retries, pause/resume/cancel/replan |
 | Side effects | Order guard, stable idempotency key, explicit launch approval, post-create verification |
-| UX | Vietnamese Guided and Autopilot sibling canvases with plan, evidence, trace and review cards; completed Autopilot runs add Result, Setup report and truthful Performance report tabs |
+| UX | Vietnamese homepage, Campaign Copilot and Autopilot canvases with plan, evidence and review cards; completed Autopilot runs add Result, Setup report and clearly labelled synthetic Performance report tabs |
 
 ## 3. Creative-source contract
 
@@ -34,7 +36,7 @@ Autopilot cannot start until the operator chooses one of:
 
 AI assets use an idempotency key containing run ID, format-plan revision, exact format and brief revision. Zones that accept the same exact dimensions share one generated asset. The deterministic backend filename is a recovery checkpoint: a worker retry after successful upload reuses the stored file instead of paying for a second generation. Prompt version, prompt fingerprint, provider, model and format are persisted as provenance.
 
-AI generation never bypasses VLM/manual review and never bypasses final launch approval. After a successful run, the Result and Setup report are built from canonical artifacts. The Performance report stays in a truthful no-data state until the order is active and real delivery data exists.
+AI generation never bypasses VLM/manual review and never bypasses final launch approval. During execution, Autopilot chat is locked; at a review gate it accepts only an explicit approve/reject decision, and after termination it becomes artifact-grounded read-only Q&A. After successful launch approval, the order is created active. Result and Setup report are built from canonical artifacts; the Performance report uses deterministic synthetic daily data to demonstrate the reporting experience and labels it as synthetic until real delivery replaces it.
 
 ## 4. How audience selection works without reranking
 
@@ -71,13 +73,15 @@ Open:
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3002`
 
-### Guided smoke
+### Campaign Copilot smoke
 
-1. Select Traditional Guided Workflow.
-2. Enter a valid Vietnamese brief.
-3. Ask chat to change budget. Verify it produces a reviewable proposal and does not mutate before approval.
-4. Approve it, retrieve audience, and inspect catalog IDs/source evidence.
-5. Change an earlier input after later artifacts exist. Verify the UI marks only affected artifacts stale.
+1. Refresh and verify the homepage appears with two mode cards and campaign history.
+2. Select Campaign Copilot.
+3. Enter a valid Vietnamese brief.
+4. Ask chat to change budget. Verify it produces a reviewable proposal and does not mutate before approval.
+5. Approve it, retrieve audience, and inspect catalog IDs/source evidence.
+6. Change an earlier input after later artifacts exist. Verify the UI marks only affected artifacts stale.
+7. Return home, resume from history and verify the original mode/workspace is restored.
 
 ### Autopilot upload smoke
 
@@ -92,7 +96,8 @@ Open:
 2. Verify the placement-aware format plan appears and generated files use its exact dimensions with `source=ai_generated` and generation provenance.
 3. Verify VLM timeout, safety warning or low confidence pauses for review.
 4. Verify all policies still stop at final launch approval.
-5. After approval and verified order creation, inspect all three completion tabs and verify a pending order is labeled “Chờ kích hoạt”, not live.
+5. After approval and verified order creation, inspect all three completion tabs and verify the order is active.
+6. Verify the performance report identifies its daily data as synthetic demonstration data until real delivery exists.
 
 ## 6. Comprehensive test handoff
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildCampaignOutcome, campaignDeliveryState } from '../src/lib/campaignOutcome.js'
+import { buildCampaignOutcome, buildSyntheticPerformance, campaignDeliveryState } from '../src/lib/campaignOutcome.js'
 
 test('normalizes Autopilot artifacts for the shared Result surface', () => {
   const outcome = buildCampaignOutcome({
@@ -51,4 +51,26 @@ test('never treats a date-range-only pending order as live', () => {
 
   assert.equal(campaignDeliveryState(outcome).live, false)
   assert.equal(campaignDeliveryState(outcome).label, 'Chờ kích hoạt')
+})
+
+test('builds deterministic synthetic reporting only for active campaigns', () => {
+  const active = buildCampaignOutcome({
+    fallbackBrief: {
+      brand: 'Mixifood', objective: 'conversion', budget: 5,
+      startDate: '2026-07-16', endDate: '2026-07-18',
+    },
+    taskByKey: {
+      generate_strategy: { result: { selected: 'quality_first' } },
+      forecast: { result: { estimated_reach: 30_000, estimated_impressions: 90_000, average_cpm: 55_000, budget_vnd: 5_000_000 } },
+      verify_order: { result: { order: { id: 'ORD-ACTIVE', status: 'active' } } },
+    },
+  })
+  const report = buildSyntheticPerformance(active)
+  assert.equal(report.rows.length, 3)
+  assert.equal(report.metrics.impressions, 90_000)
+  assert.equal(report.metrics.reach, 30_000)
+  assert.equal(report.mode, 'synthetic_showcase')
+
+  const pending = { ...active, orderStatus: 'pending' }
+  assert.equal(buildSyntheticPerformance(pending), null)
 })
