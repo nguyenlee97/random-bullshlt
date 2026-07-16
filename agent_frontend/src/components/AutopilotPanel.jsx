@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, AlertTriangle, Check, Circle, Loader2, Pause, Play, RotateCw,
-  ShieldCheck, Sparkles, Square, Upload, X,
+  ExternalLink, ImageIcon, ListChecks, ShieldCheck, Sparkles, Square, Upload, X,
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
 import StrategySimulator from '@/components/StrategySimulator'
@@ -26,6 +26,44 @@ const TASK_LABELS = {
   create_order: 'Tạo order', verify_order: 'Xác minh order',
   create_setup_report: 'Tạo báo cáo setup',
 }
+
+const TASK_ORDER = [
+  'normalize_brief', 'validate_brief', 'generate_strategy', 'retrieve_audience',
+  'derive_targeting', 'plan_placement_intent', 'plan_creative_formats',
+  'prepare_creatives', 'analyze_creatives', 'rank_placements', 'assign_creatives',
+  'forecast', 'build_order_draft', 'run_order_guard', 'launch_approval',
+  'create_order', 'verify_order', 'create_setup_report',
+]
+
+const TASK_ORDER_INDEX = Object.fromEntries(TASK_ORDER.map((key, index) => [key, index]))
+
+const AUTOPILOT_STAGES = [
+  { label: 'Brief & chiến lược', keys: ['normalize_brief', 'validate_brief', 'generate_strategy'] },
+  { label: 'Audience & targeting', keys: ['retrieve_audience', 'derive_targeting'] },
+  { label: 'Placement & creative', keys: ['plan_placement_intent', 'plan_creative_formats', 'prepare_creatives', 'analyze_creatives', 'rank_placements', 'assign_creatives'] },
+  { label: 'Dự báo & an toàn', keys: ['forecast', 'build_order_draft', 'run_order_guard'] },
+  { label: 'Launch & hoàn tất', keys: ['launch_approval', 'create_order', 'verify_order', 'create_setup_report'] },
+]
+
+const taskStatusClass = status => {
+  if (status === 'succeeded') return 'border-green-200 bg-green-50 text-green-700'
+  if (status === 'running') return 'border-brand-300 bg-brand-50 text-brand-700'
+  if (status === 'waiting_review') return 'border-amber-300 bg-amber-50 text-amber-800'
+  if (['failed', 'cancelled'].includes(status)) return 'border-red-200 bg-red-50 text-red-700'
+  return 'border-slate-200 bg-slate-50 text-slate-500'
+}
+
+const stageStatus = tasks => {
+  const statuses = tasks.map(task => task?.status).filter(Boolean)
+  if (statuses.some(status => ['failed', 'cancelled'].includes(status))) return 'failed'
+  if (statuses.includes('waiting_review')) return 'waiting_review'
+  if (statuses.includes('running')) return 'running'
+  if (statuses.length && statuses.every(status => ['succeeded', 'skipped'].includes(status))) return 'succeeded'
+  if (statuses.some(status => ['succeeded', 'skipped'].includes(status))) return 'running'
+  return 'pending'
+}
+
+const formatNumber = value => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(Number(value || 0))
 
 const ARTIFACT_LABELS = {
   brief: 'brief', strategy: 'chiến lược', audience: 'audience',
@@ -220,7 +258,7 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
   }
 
   const chooseStrategy = async optionId => {
-    if (!run?.run_id || ['completed', 'cancelled', 'failed'].includes(run.status)) return
+    if (!run?.run_id || !strategyCanChange) return
     setLoading(true)
     setError('')
     try {
@@ -235,26 +273,61 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
     }
   }
 
+  const orderedTasks = useMemo(() => [...(run?.tasks || [])].sort((left, right) => (
+    (TASK_ORDER_INDEX[left.key] ?? TASK_ORDER.length) - (TASK_ORDER_INDEX[right.key] ?? TASK_ORDER.length)
+  )), [run?.tasks])
+  const taskByKey = useMemo(() => Object.fromEntries(
+    orderedTasks.map(task => [task.key, task])
+  ), [orderedTasks])
   const progress = useMemo(() => {
-    if (!run?.tasks?.length) return 0
-    const done = run.tasks.filter(task => ['succeeded', 'skipped'].includes(task.status)).length
-    return Math.round(done / run.tasks.length * 100)
-  }, [run])
+    if (!orderedTasks.length) return 0
+    const done = orderedTasks.filter(task => ['succeeded', 'skipped'].includes(task.status)).length
+    return Math.round(done / orderedTasks.length * 100)
+  }, [orderedTasks])
 
   const runTerminal = ['completed', 'cancelled', 'failed'].includes(run?.status)
-  const waiting = runTerminal ? null : run?.tasks?.find(task => task.status === 'waiting_review')
-  const strategyTask = run?.tasks?.find(task => task.key === 'generate_strategy')
-  const formatPlanTask = run?.tasks?.find(task => task.key === 'plan_creative_formats')
+  const waiting = runTerminal ? null : orderedTasks.find(task => task.status === 'waiting_review')
+  const strategyTask = taskByKey.generate_strategy
+  const formatPlanTask = taskByKey.plan_creative_formats
   const formatPlan = formatPlanTask?.result?.formats
     ? formatPlanTask.result
     : formatPlanTask?.pending_artifact?.value
-  const orderCreated = run?.tasks?.some(task => task.key === 'create_order' && task.status === 'succeeded')
-  const strategyCanChange = Boolean(strategyTask && ['waiting_review', 'succeeded'].includes(strategyTask.status) && !orderCreated && !runTerminal)
-  const evidenceRows = useMemo(() => (run?.tasks || []).flatMap(task =>
+  const creativeTask = taskByKey.prepare_creatives
+  const creativeFiles = creativeTask?.result?.files
+    || creativeTask?.pending_artifact?.value?.files
+    || workspaceSnapshot?.artifacts?.creative?.value?.files
+    || []
+  const placementResult = taskByKey.rank_placements?.result || taskByKey.rank_placements?.pending_artifact?.value || {}
+  const audienceResult = taskByKey.retrieve_audience?.result || taskByKey.retrieve_audience?.pending_artifact?.value || {}
+  const forecastResult = taskByKey.forecast?.result || taskByKey.forecast?.pending_artifact?.value || {}
+  const orderResult = taskByKey.verify_order?.result?.order || taskByKey.create_order?.result?.order || null
+  const orderCreated = taskByKey.create_order?.status === 'succeeded'
+  const strategyCanChange = Boolean(
+    strategyTask
+    && !orderCreated
+    && !runTerminal
+    && (strategyTask.status === 'waiting_review' || (run?.status === 'paused' && strategyTask.status === 'succeeded'))
+  )
+  const strategySelectionHint = orderCreated || runTerminal
+    ? 'Chiến lược đã khóa vì order đã được tạo hoặc run đã hoàn tất.'
+    : strategyTask?.status === 'waiting_review'
+      ? 'Chọn một phương án để Agent tiếp tục.'
+      : run?.status === 'paused'
+        ? 'Run đang tạm dừng; bạn có thể đổi phương án và tính lại các bước phụ thuộc.'
+        : 'Muốn đổi phương án, hãy tạm dừng Autopilot trước để tránh thay đổi giữa lúc Agent đang thực thi.'
+  const executionStages = AUTOPILOT_STAGES.map(stage => {
+    const tasks = stage.keys.map(key => taskByKey[key]).filter(Boolean)
+    const done = tasks.filter(task => ['succeeded', 'skipped'].includes(task.status)).length
+    return { ...stage, tasks, done, status: stageStatus(tasks) }
+  })
+  const placementLinks = [...new Map(
+    (placementResult.zones || []).filter(zone => zone.siteUrl).map(zone => [zone.siteUrl, zone])
+  ).values()]
+  const evidenceRows = useMemo(() => orderedTasks.flatMap(task =>
     (task.evidence || []).map((evidence, index) => ({
       key: `${task.task_id}:${index}`, task: TASK_LABELS[task.key] || task.key,
       evidence,
-    }))), [run])
+    }))), [orderedTasks])
   const canonicalBrief = workspaceSnapshot?.artifacts?.brief?.value || null
   const pendingBrief = pendingProposals.some(item => item.artifact === 'brief' || item.field === 'brief')
   const pendingFields = [...new Set(pendingProposals.map(item => item.field || 'workspace'))]
@@ -409,15 +482,40 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-            <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">Tiến độ thực thi</p>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {run.tasks.map(task => (
-                <div key={task.task_id} title={task.error || task.result?.message || TASK_LABELS[task.key]}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium ${task.status === 'succeeded' ? 'border-green-200 bg-green-50 text-green-700' : task.status === 'running' ? 'border-brand-300 bg-brand-50 text-brand-700' : task.status === 'waiting_review' ? 'border-amber-300 bg-amber-50 text-amber-800' : task.status === 'failed' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
-                  {taskIcon(task.status)} {TASK_LABELS[task.key] || task.key}
-                </div>
-              ))}
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">Tiến độ thực thi</p>
+                <p className="mt-1 text-[11px] text-slate-500">5 giai đoạn · {orderedTasks.length} bước theo đúng thứ tự thực thi</p>
+              </div>
+              <ListChecks className="h-5 w-5 text-brand-500" />
             </div>
+            <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              {executionStages.map((stage, index) => (
+                <li key={stage.label} className={`rounded-xl border p-3 ${taskStatusClass(stage.status)}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current/20 bg-white/70 text-[10px] font-black">{index + 1}</span>
+                    <p className="text-[11px] font-bold leading-4">{stage.label}</p>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[10px] font-semibold opacity-80">
+                    <span>{stage.done}/{stage.tasks.length} bước</span>
+                    <span className="inline-flex items-center gap-1">{taskIcon(stage.status)} {stage.status === 'succeeded' ? 'Hoàn tất' : stage.status === 'pending' ? 'Chưa chạy' : RUN_LABELS[stage.status] || stage.status}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
+              <summary className="cursor-pointer text-[11px] font-bold text-slate-700">Xem toàn bộ {orderedTasks.length} bước theo thứ tự</summary>
+              <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {orderedTasks.map((task, index) => (
+                  <li key={task.task_id} title={task.error || task.result?.message || TASK_LABELS[task.key]}
+                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-[11px] font-medium ${taskStatusClass(task.status)}`}>
+                    <span className="w-5 shrink-0 text-right font-black opacity-60">{index + 1}</span>
+                    {taskIcon(task.status)}
+                    <span>{TASK_LABELS[task.key] || task.key}</span>
+                  </li>
+                ))}
+              </ol>
+            </details>
           </div>
 
           {run.replan_blocked && (
@@ -438,23 +536,24 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
             value={strategyTask?.result}
             busy={loading}
             canSelect={strategyCanChange}
+            selectionHint={strategySelectionHint}
             onSelect={chooseStrategy}
           />
 
-          {formatPlan?.formats?.length > 0 && (
+          {(formatPlan?.formats?.length > 0 || creativeFiles.length > 0) && (
             <section className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm" aria-label="Kế hoạch định dạng creative">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-wide text-brand-700">Kế hoạch creative theo placement</p>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Agent gộp các placement cùng kích thước và chỉ chuẩn bị tối đa {formatPlan.max_assets} asset cần thiết.
+                    Agent gộp các placement cùng kích thước và chỉ chuẩn bị tối đa {formatPlan?.max_assets || creativeFiles.length} asset cần thiết.
                   </p>
                 </div>
                 <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-bold text-brand-700">
-                  {formatPlan.source === 'ai_generate' ? `${formatPlan.estimated_provider_calls || 0} lượt tạo AI` : 'Dùng file tải lên'}
+                  {formatPlan?.source === 'ai_generate' ? `${formatPlan.estimated_provider_calls || 0} lượt tạo AI` : 'Dùng file tải lên'}
                 </span>
               </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {formatPlan?.formats?.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {formatPlan.formats.map(item => (
                   <div key={item.format_id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <p className="text-xs font-bold text-slate-800">{item.width} × {item.height}</p>
@@ -462,29 +561,125 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
                     <p className="mt-1 text-[10px] font-semibold text-brand-700">Phủ {item.zone_ids?.length || 0} placement</p>
                   </div>
                 ))}
-              </div>
-              {(formatPlan.unsupported_zone_ids?.length > 0 || formatPlan.omitted_by_cost_cap_zone_ids?.length > 0) && (
+              </div>}
+              {(formatPlan?.unsupported_zone_ids?.length > 0 || formatPlan?.omitted_by_cost_cap_zone_ids?.length > 0) && (
                 <p className="mt-3 text-[11px] leading-5 text-amber-700">
                   {formatPlan.unsupported_zone_ids?.length || 0} placement chưa có format hỗ trợ; {formatPlan.omitted_by_cost_cap_zone_ids?.length || 0} placement ngoài giới hạn chi phí.
                 </p>
               )}
+              {creativeFiles.length > 0 && (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4 text-brand-500" />
+                    <p className="text-xs font-black text-slate-900">Creative đã tạo ({creativeFiles.length})</p>
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {creativeFiles.map((file, index) => (
+                      <article key={file.id || file.url || index} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div className="flex h-40 items-center justify-center bg-[linear-gradient(45deg,#f8fafc_25%,transparent_25%),linear-gradient(-45deg,#f8fafc_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f8fafc_75%),linear-gradient(-45deg,transparent_75%,#f8fafc_75%)] bg-[length:16px_16px] bg-[position:0_0,0_8px,8px_-8px,-8px_0px] p-2">
+                          {file.url ? <img src={file.url} alt={`Creative ${file.formatId || index + 1}`} loading="lazy" className="max-h-full max-w-full object-contain" /> : <ImageIcon className="h-8 w-8 text-slate-300" />}
+                        </div>
+                        <div className="p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-bold text-slate-900" title={file.name}>{file.formatId || file.name || `Creative ${index + 1}`}</p>
+                              <p className="mt-0.5 text-[10px] text-slate-500">{file.width || '—'} × {file.height || '—'} · {file.intendedFormat || 'banner'}</p>
+                            </div>
+                            <span className="rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-bold text-green-700">{taskByKey.analyze_creatives?.status === 'succeeded' ? 'Đã phân tích' : 'Đã tạo'}</span>
+                          </div>
+                          <p className="mt-2 text-[10px] text-slate-500">Phủ {file.intendedZoneIds?.length || 0} placement · {file.generation?.model || 'file tải lên'}</p>
+                          {file.url && <a href={file.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-brand-700 hover:underline">Mở ảnh gốc <ExternalLink className="h-3 w-3" /></a>}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
-          <details className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-bold text-slate-700">
-              <Activity className="h-4 w-4 text-brand-500" /> Bằng chứng vận hành
-              <span className="font-normal text-slate-500">trace · RAG/rerank · guard · idempotency</span>
-            </summary>
-            <div className="mt-2 space-y-1.5 text-[11px]">
-              <p className="rounded-lg bg-white px-2 py-1.5 text-slate-600"><span className="font-bold text-slate-800">Run trace:</span> {run.trace_id || run.run_id}</p>
-              {evidenceRows.length ? evidenceRows.map(row => (
-                <p key={row.key} className="rounded-lg bg-white px-2 py-1.5 text-slate-600">
-                  <span className="font-bold text-slate-800">{row.task}:</span> {evidenceText(row.evidence)}
-                </p>
-              )) : <p className="px-2 py-1 text-slate-500">Bằng chứng sẽ xuất hiện khi các tác vụ hoàn tất.</p>}
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="autopilot-results-title">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Kết quả theo thời gian thực</p>
+                <h3 id="autopilot-results-title" className="mt-1 text-sm font-black text-slate-900">Kết quả Autopilot</h3>
+                <p className="mt-1 text-xs text-slate-500">Tóm tắt các đầu ra có thể kiểm tra, thay cho log kỹ thuật của từng tool.</p>
+              </div>
+              <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${taskByKey.run_order_guard?.result?.passed ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                Guard {taskByKey.run_order_guard?.result?.passed ? 'đã đạt' : 'chưa chạy'}
+              </span>
             </div>
-          </details>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Audience</p>
+                <p className="mt-1 text-lg font-black text-slate-900">{audienceResult.attrs?.length || 0} segment</p>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">{audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || audienceResult.retrieval?.retrieval_candidates || 0} ứng viên RAG · {audienceResult.retrieval?.reranked ? 'đã rerank' : 'selector an toàn'}</p>
+              </article>
+              <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Placement</p>
+                <p className="mt-1 text-lg font-black text-slate-900">{placementResult.selectedZoneIds?.length || 0} vị trí</p>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">Đã lọc theo inventory, conflict và kích thước creative.</p>
+              </article>
+              <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Dự báo</p>
+                <p className="mt-1 text-lg font-black text-slate-900">{formatNumber(forecastResult.estimated_reach)} người</p>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">{formatNumber(forecastResult.estimated_impressions)} lượt hiển thị · CPM {formatNumber(forecastResult.average_cpm)} ₫</p>
+              </article>
+              <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Order</p>
+                <p className="mt-1 text-lg font-black text-slate-900">{orderResult?.id || orderResult?._id || 'Chưa tạo'}</p>
+                <p className={`mt-1 text-[10px] font-bold ${orderResult?.status === 'active' ? 'text-green-700' : orderResult?.status === 'pending' ? 'text-amber-700' : 'text-slate-500'}`}>Trạng thái: {orderResult?.status || '—'}</p>
+              </article>
+            </div>
+
+            {orderResult?.status === 'pending' && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800">
+                Order đang chờ kích hoạt nên test site chưa hiển thị quảng cáo. Đây là trạng thái an toàn sau khi tạo order, không phải lỗi creative.
+              </div>
+            )}
+
+            {orderResult?.warnings?.length > 0 && (
+              <details className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-800">
+                <summary className="cursor-pointer font-bold">{orderResult.warnings.length} cảnh báo cấu hình cần kiểm tra</summary>
+                <ul className="mt-2 list-disc space-y-1 pl-4">
+                  {orderResult.warnings.map((warning, index) => <li key={`${warning}:${index}`}>{warning}</li>)}
+                </ul>
+              </details>
+            )}
+
+            {placementLinks.length > 0 && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <p className="text-xs font-bold text-slate-900">Trang test theo placement</p>
+                <p className="mt-1 text-[11px] text-slate-500">Mở để kiểm tra vị trí. Quảng cáo chỉ xuất hiện khi order ở trạng thái active và site đang dùng cùng backend.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {placementLinks.map(zone => (
+                    <a key={zone.siteUrl} href={zone.siteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-[11px] font-bold text-brand-700 hover:bg-brand-100">
+                      {zone.channel || zone.siteId || 'Test site'} <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ))}
+                  <a href="https://adspilot.pawgrammers.io.vn" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:border-brand-200 hover:text-brand-700">
+                    Mở AdsPilot <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </div>
+            )}
+
+            <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-bold text-slate-700">
+                <Activity className="h-4 w-4 text-brand-500" /> Chi tiết kỹ thuật
+                <span className="font-normal text-slate-500">trace · RAG/rerank · guard · idempotency</span>
+              </summary>
+              <div className="mt-2 space-y-1.5 text-[11px]">
+                <p className="rounded-lg bg-white px-2 py-1.5 text-slate-600"><span className="font-bold text-slate-800">Run trace:</span> {run.trace_id || run.run_id}</p>
+                {evidenceRows.length ? evidenceRows.map(row => (
+                  <p key={row.key} className="rounded-lg bg-white px-2 py-1.5 text-slate-600">
+                    <span className="font-bold text-slate-800">{row.task}:</span> {evidenceText(row.evidence)}
+                  </p>
+                )) : <p className="px-2 py-1 text-slate-500">Chi tiết sẽ xuất hiện khi các tác vụ hoàn tất.</p>}
+              </div>
+            </details>
+          </section>
 
           {waiting && (
             <div className="sticky bottom-2 z-10 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50/95 p-3 shadow-[0_12px_36px_rgba(120,80,0,0.18)] backdrop-blur-md sm:flex-row sm:items-center">

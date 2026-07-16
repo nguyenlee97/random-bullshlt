@@ -91,6 +91,8 @@ STANDARD_PLAN: tuple[dict[str, Any], ...] = (
      "deps": ["verify_order"], "artifact": "report", "review": "none"},
 )
 
+PLAN_ORDER = {spec["key"]: index for index, spec in enumerate(STANDARD_PLAN)}
+
 _mem_runs: dict[str, dict] = {}
 _mem_tasks: dict[str, dict] = {}
 _mem_events: list[dict] = []
@@ -157,6 +159,7 @@ def _new_tasks(run_id: str) -> list[dict]:
         "task_id": _task_id(run_id, spec["key"]),
         "run_id": run_id,
         "key": spec["key"],
+        "plan_index": plan_index,
         "capability": spec["capability"],
         "dependencies": [_task_id(run_id, dep) for dep in spec["deps"]],
         "artifact": spec["artifact"],
@@ -172,7 +175,15 @@ def _new_tasks(run_id: str) -> list[dict]:
         "error": None,
         "created_at": now,
         "updated_at": now,
-    } for spec in STANDARD_PLAN]
+    } for plan_index, spec in enumerate(STANDARD_PLAN)]
+
+
+def _task_order_key(task: dict) -> tuple[int, str]:
+    """Keep plan display stable, including runs created before plan_index existed."""
+    plan_index = task.get("plan_index")
+    if not isinstance(plan_index, int):
+        plan_index = PLAN_ORDER.get(task.get("key"), len(STANDARD_PLAN))
+    return plan_index, str(task.get("created_at") or "")
 
 
 async def create_run(
@@ -257,11 +268,11 @@ async def get_run(run_id: str) -> dict:
     runs, tasks, _ = await _collections()
     if runs is not None:
         run = await runs.find_one({"_id": run_id})
-        task_docs = await tasks.find({"run_id": run_id}).sort("created_at", 1).to_list(None)
+        task_docs = await tasks.find({"run_id": run_id}).to_list(None)
     else:
         run = _mem_runs.get(run_id)
         task_docs = [task for task in _mem_tasks.values() if task["run_id"] == run_id]
-        task_docs.sort(key=lambda item: item["created_at"])
+    task_docs.sort(key=_task_order_key)
     if not run:
         raise KeyError(f"run not found: {run_id}")
     public_run = _public(run)

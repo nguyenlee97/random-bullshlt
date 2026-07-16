@@ -118,7 +118,8 @@ test('campaign strategy simulator is integrated into Autopilot', async () => {
   assert.match(simulator, /nghìn \$\{unit\}/)
   assert.match(api, /selectAutopilotStrategy/)
   assert.match(api, /\/strategy`/)
-  assert.match(panel, /Bằng chứng vận hành/)
+  assert.match(panel, /Kết quả Autopilot/)
+  assert.match(panel, /Chi tiết kỹ thuật/)
   assert.match(panel, /Run trace:/)
   assert.match(panel, /run\.trace_id \|\| run\.run_id/)
   assert.match(panel, /RAG\/rerank/)
@@ -145,10 +146,26 @@ test('Autopilot exposes a placement-aware bounded creative format plan', async (
 
   assert.match(panel, /plan_creative_formats/)
   assert.match(panel, /Kế hoạch creative theo placement/)
-  assert.match(panel, /formatPlan\.max_assets/)
+  assert.match(panel, /formatPlan\?\.max_assets/)
   assert.match(panel, /formatPlan\.estimated_provider_calls/)
   assert.match(docs, /Bounded multi-format generation/)
   assert.doesNotMatch(docs, /Multi-format generation và creative variants vẫn là roadmap/)
+})
+
+test('Autopilot presents ordered stages, generated assets, and locks live strategy changes', async () => {
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  const simulator = await source('agent_frontend/src/components/StrategySimulator.jsx')
+
+  assert.match(panel, /const TASK_ORDER = \[/)
+  assert.match(panel, /const AUTOPILOT_STAGES = \[/)
+  assert.match(panel, /Xem toàn bộ \{orderedTasks\.length\} bước theo thứ tự/)
+  assert.match(panel, /Creative đã tạo/)
+  assert.match(panel, /<img src=\{file\.url\}/)
+  assert.match(panel, /Muốn đổi phương án, hãy tạm dừng Autopilot trước/)
+  assert.match(panel, /run\?\.status === 'paused'/)
+  assert.match(panel, /Order đang chờ kích hoạt nên test site chưa hiển thị quảng cáo/)
+  assert.match(panel, /https:\/\/adspilot\.pawgrammers\.io\.vn/)
+  assert.match(simulator, /selectionHint/)
 })
 
 test('Autopilot presents artifacts without Guided workflow controls', async () => {

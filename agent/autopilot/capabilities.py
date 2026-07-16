@@ -665,9 +665,15 @@ def _build_creatives(files: list[dict], assignments: dict, zone_ids: list[str]) 
         intel = file.get("intel") or {}
         width = intel.get("width") or file.get("width", 0)
         height = intel.get("height") or file.get("height", 0)
+        intended_format = (
+            intel.get("intended_format")
+            or file.get("intendedFormat")
+            or ("skin" if intel.get("is_skin") else "banner")
+        )
         creatives.append({
             "groupId": f"g_{file_idx}", "name": file.get("name", ""),
-            "size": f"{width}x{height}", "format": "banner",
+            "size": "skin" if intended_format == "skin" else f"{width}x{height}",
+            "format": intended_format,
             "url": file.get("url", ""), "zones": assigned_zones,
             "analysisId": file.get("analysisId") or intel.get("analysis_id", ""),
         })

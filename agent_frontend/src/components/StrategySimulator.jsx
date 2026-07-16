@@ -15,7 +15,7 @@ const RISK = {
   high: { label: 'Rủi ro cao', className: 'bg-red-50 text-red-700' },
 }
 
-export default function StrategySimulator({ value, busy, canSelect = true, onSelect }) {
+export default function StrategySimulator({ value, busy, canSelect = true, selectionHint = '', onSelect }) {
   const options = Array.isArray(value?.options) ? value.options : []
   if (!options.length) return null
 
@@ -77,7 +77,10 @@ export default function StrategySimulator({ value, busy, canSelect = true, onSel
 
       <div className="mt-3 flex items-start gap-2 rounded-xl bg-white/80 px-3 py-2 text-xs text-slate-600">
         <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
-        <p><span className="font-bold text-slate-800">Vì sao chọn:</span> {value.selected_reason || 'Phù hợp nhất với objective và ngân sách hiện tại.'}</p>
+        <div>
+          <p><span className="font-bold text-slate-800">Vì sao chọn:</span> {value.selected_reason || 'Phù hợp nhất với objective và ngân sách hiện tại.'}</p>
+          {selectionHint && <p className="mt-1 font-medium text-brand-700">{selectionHint}</p>}
+        </div>
       </div>
     </section>
   )

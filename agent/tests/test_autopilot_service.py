@@ -4,7 +4,7 @@ import pytest
 
 from autopilot import service
 from autopilot.capabilities import (
-    CapabilityResult, _analyze_creatives, _create_order, _generate_strategy,
+    CapabilityResult, _analyze_creatives, _build_creatives, _create_order, _generate_strategy,
     _prepare_creatives, _rank_placements, _retrieve_audience,
 )
 from autopilot import worker
@@ -64,6 +64,54 @@ async def test_run_start_is_idempotent_and_has_fixed_plan():
     assert all(task["status"] == "pending" for task in first["tasks"][1:])
     assert first["trace_id"] == second["trace_id"]
     assert first["creative_source"] == "upload"
+    assert [task["plan_index"] for task in first["tasks"]] == list(
+        range(len(service.STANDARD_PLAN))
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_run_keeps_plan_order_for_legacy_equal_timestamp_tasks():
+    await _seed("legacy-task-order")
+    run = await service.create_run(
+        "legacy-task-order", idempotency_key="legacy-task-order"
+    )
+    run_id = run["run_id"]
+    task_docs = [
+        task for task in service._mem_tasks.values() if task["run_id"] == run_id
+    ]
+    for task in task_docs:
+        task.pop("plan_index", None)
+    service._mem_tasks = {
+        task["task_id"]: task for task in reversed(task_docs)
+    }
+
+    ordered = await service.get_run(run_id)
+
+    assert [task["key"] for task in ordered["tasks"]] == [
+        spec["key"] for spec in service.STANDARD_PLAN
+    ]
+
+
+def test_order_creatives_preserve_skin_and_banner_formats():
+    files = [
+        {
+            "name": "background.png", "url": "https://example.test/skin.png",
+            "width": 1504, "height": 704, "intendedFormat": "skin",
+        },
+        {
+            "name": "box.png", "url": "https://example.test/box.png",
+            "width": 300, "height": 250, "intendedFormat": "banner",
+        },
+    ]
+
+    creatives = _build_creatives(
+        files, {"SKIN_ZONE": 0, "BOX_ZONE": 1}, ["SKIN_ZONE", "BOX_ZONE"]
+    )
+
+    assert creatives[0]["format"] == "skin"
+    assert creatives[0]["size"] == "skin"
+    assert creatives[1]["format"] == "banner"
+    assert creatives[1]["size"] == "300x250"
 
 
 @pytest.mark.asyncio
