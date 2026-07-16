@@ -14,9 +14,11 @@ def isolated_workspace_store(monkeypatch):
 
 def test_dependency_closure_is_selective_and_deterministic():
     assert dependencies.downstream("audience") == [
-        "targeting", "forecast", "order_draft", "order", "report"
+        "targeting", "placement_intent", "creative_format_plan", "placements",
+        "assignments", "forecast", "order_draft", "order", "report",
     ]
     assert "creative" not in dependencies.downstream("audience")
+    assert "creative_verdict" not in dependencies.downstream("targeting")
 
 
 def test_append_only_event_envelopes_include_session_identity():

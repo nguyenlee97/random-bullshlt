@@ -117,6 +117,8 @@ Exit criteria:
 
 This is the first implementation milestone.
 
+Implementation status (2026-07-16): code-complete and deterministic-test green. The capability graph now contains `plan_placement_intent` and `plan_creative_formats`; generated assets are capped, dimension-deduplicated, concurrent and revision-idempotent; final placement runs after creative verdicts. Verification: 202 backend tests, 22 frontend tests and a production frontend build. FE-1 remains open until one real upload journey and one real provider-backed multi-format generation journey pass locally.
+
 ### 6.1 Problem and approach
 
 The current workflow creates or uploads creative before final ad-zone selection. One fixed 300×250 AI asset cannot cover zones with different dimensions and aspect ratios. Moving the whole zone step before creative would make Guided Workflow less natural and would still leave uploaded assets needing compatibility analysis.
@@ -155,12 +157,11 @@ Add a `creative_format_plan` artifact containing source mode, brief/placement re
 
 Each generated asset must preserve:
 
-- run ID, workspace ID and brief revision;
-- placement-intent and format-plan revisions;
+- run ID, brief revision and format-plan revision;
 - exact width/height and intended zone IDs;
 - prompt template version and prompt fingerprint;
-- provider/model, generation attempt and source image lineage;
-- idempotency key: `workspace + run + brief_revision + format_key + variant`;
+- provider/model and generation provenance;
+- idempotency key: `run + format_key + variant + format_plan_revision + brief_revision`;
 - deterministic and VLM verdict IDs.
 
 ### 6.4 Generation policy

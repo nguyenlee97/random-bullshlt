@@ -94,9 +94,11 @@ Before an Autopilot run starts, the operator must choose one creative-source pol
 - `upload`: the run pauses at `prepare_creatives` until a canonical uploaded file exists.
 - `ai_generate`: the durable worker creates, resizes, stores and commits an AI-generated creative, then submits it to the same deterministic and VLM analysis path used for uploads.
 
-The first implementation generates one exact-size `zuma-box` 300×250 asset. Its storage key includes the run ID, format and brief revision; retries recover the deterministic stored asset instead of generating another image. Provider, model, prompt version, prompt fingerprint and format are persisted as provenance.
+Autopilot now performs a creative-agnostic placement-intent pass, groups the best catalog zones by exact dimensions, and prepares a bounded creative-format plan. AI mode generates at most three required format families by default with bounded concurrency; zones sharing dimensions reuse one asset. The durable storage key includes run, format, variant, format-plan revision and brief revision, so retries recover already-persisted assets instead of charging the provider again.
 
-Creative generation is not creative approval. A safety warning, low-confidence verdict or VLM timeout still pauses for a human. All approval policies still stop at the final launch gate before order creation. Multi-format generation is a later slice and must be placement-aware, cost-bounded and idempotent.
+Supported generated families are derived from exact dimensions present in the current zone catalog: 300×250, 300×600, 1160×250, 1160×280, 2032×528 and skin. Unsupported dimensions are reported rather than invented. Provider, model, prompt version, prompt fingerprint, intended zone IDs and source revisions are persisted as provenance.
+
+Creative generation is not creative approval. A safety warning, low-confidence verdict or VLM timeout still pauses for a human. Final placement selection runs only after creative analysis and keeps exact-size or explicitly compatible skin matches. All approval policies still stop at the final launch gate before order creation.
 
 ## 4. Core safety and consistency invariants
 

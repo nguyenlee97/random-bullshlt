@@ -126,6 +126,11 @@ class StaleTaskResult(Exception):
 
 def _public(doc: dict) -> dict:
     result = deepcopy(doc)
+    if isinstance(result.get("artifacts"), dict):
+        # Lazy schema evolution keeps pre-FE1 workspaces readable without a
+        # destructive migration. New artifacts are persisted on first commit.
+        for name in ARTIFACTS:
+            result["artifacts"].setdefault(name, _artifact())
     result.pop("applied_mutations", None)
     result["workspace_id"] = result.get("workspace_id") or result.get("_id")
     result.pop("_id", None)

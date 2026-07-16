@@ -29,7 +29,7 @@
     <div class="card"><h3><span class="status done">ĐÃ CÓ</span> Nền tảng</h3><p>Docker Compose, health/readiness, API key proxy, rate limit, structured logs, metrics, Langfuse, canonical workspace và optimistic revision.</p></div>
     <div class="card"><h3><span class="status done">ĐÃ CÓ</span> Agent</h3><p>Guided workflow, LangGraph freeform, proposal/approval, dependency invalidation, durable Autopilot tasks, pause/resume/retry/replan và final launch gate.</p></div>
     <div class="card"><h3><span class="status done">ĐÃ CÓ</span> Intelligence</h3><p>Hybrid audience RAG, query rewrite, critic selector, deterministic exclusion guard, VLM creative analysis, zone ranking và order guard.</p></div>
-    <div class="card"><h3><span class="status partial">ĐANG GIA CỐ</span> Release</h3><p>Golden-label human review, provider timeout drills, real browser E2E, multi-format AI creative generation và full performance-report loop.</p></div>
+    <div class="card"><h3><span class="status partial">ĐANG GIA CỐ</span> Release</h3><p>Golden-label human review, real upload/provider journeys, browser E2E và full performance-report loop. Multi-format AI generation đã code-complete, đang chờ sign-off journey thật.</p></div>
   </div>
 
   <h2 id="modes"><span class="n">02</span>Hai chế độ làm việc</h2>
@@ -60,12 +60,12 @@ flowchart LR
 flowchart LR
   B[Brief] --> S[Strategy]
   S --> A[Audience] --> T[Targeting]
-  B --> C[Creative]
+  T --> I[Placement intent]
+  I --> FP[Creative format plan]
+  FP --> C[Upload / generate creative]
   C --> V[Creative verdict]
-  S --> P[Placements]
-  V --> AS[Assignments]
-  P --> AS --> F[Forecast] --> D[Order draft] --> G[Order guard] --> H{Launch approval} --> O[Create + verify order] --> R[Report]
-  T --> F
+  I --> P[Final compatible placements]
+  V --> P --> AS[Assignments] --> F[Forecast] --> D[Order draft] --> G[Order guard] --> H{Launch approval} --> O[Create + verify order] --> R[Report]
   </div>
   <p>Ví dụ: đổi budget làm strategy/forecast/order draft stale nhưng không xóa file creative. Thay creative chỉ yêu cầu phân tích, placement compatibility và assignments chạy lại. Kết quả worker chậm bị từ chối nếu input revision đã đổi.</p>
 
@@ -83,20 +83,22 @@ flowchart LR
 
   <h2 id="creative"><span class="n">06</span>Creative: tải lên hoặc để AI tự tạo</h2>
   <p>Trước khi bắt đầu Autopilot, người dùng phải chọn rõ một nguồn:</p>
-  <div class="grid"><div class="card"><h3>Upload</h3><p>Nếu chưa có file, task dừng với hành động retry. Sau khi user upload, run dùng lại canonical file và đi qua deterministic analysis + VLM.</p></div><div class="card"><h3>AI generate</h3><p>Worker gọi <code>openai/gpt-image-1</code>, crop/resize về đúng 300×250, upload idempotently, commit artifact, rồi tự enqueue creative analysis.</p></div></div>
+  <div class="grid"><div class="card"><h3>Upload</h3><p>Nếu chưa có file, task dừng với hành động retry. Sau khi user upload, run dùng lại canonical file và đi qua deterministic analysis + VLM.</p></div><div class="card"><h3>AI generate</h3><p>Worker chọn tối đa ba format exact-size từ placement intent, tạo song song có giới hạn, lưu idempotently, rồi đưa tất cả asset qua cùng luồng creative analysis.</p></div></div>
   <div class="mermaid">
 flowchart LR
-  CH{Creative source} -->|upload| WAIT[Wait for canonical file]
-  CH -->|ai_generate| GEN[Generate image]
-  GEN --> FIT[Exact 300x250 crop]
-  FIT --> STORE[Idempotent storage]
+  PI[Placement intent] --> FP[Deduplicate exact formats<br/>cost cap = 3]
+  FP --> CH{Creative source}
+  CH -->|upload| WAIT[Wait for canonical files]
+  CH -->|ai_generate| GEN[Bounded multi-format generation]
+  GEN --> FIT[Exact-size normalization]
+  FIT --> STORE[Revision-idempotent storage]
   WAIT --> DET[Deterministic checks]
   STORE --> DET
   DET --> VLM[VLM semantic + safety analysis]
-  VLM -->|high confidence, safe| NEXT[Placement compatibility]
+  VLM -->|high confidence, safe| NEXT[Final exact-size placement]
   VLM -->|warning / timeout / low confidence| REVIEW[Human review]
   </div>
-  <div class="callout warn"><b>Phạm vi hiện tại:</b> AI mode tự tạo một Display Box 300×250 để hoàn thành luồng tự động an toàn. Multi-format generation và creative variants vẫn là roadmap; hệ thống không giả vờ đã tạo đủ mọi placement format.</div>
+  <div class="callout warn"><b>Phạm vi hiện tại:</b> Hỗ trợ các family có trong zone catalog: 300×250, 300×600, 1160×250, 1160×280, 2032×528 và skin. Zone cùng kích thước dùng chung một asset; format không hỗ trợ được báo rõ. Mỗi format hiện tạo một variant.</div>
 
   <h2 id="safety"><span class="n">07</span>An toàn, độ bền và observability</h2>
   <div class="grid"><div class="card"><h4>Structured outputs</h4><p>MiniMax dùng function calling vì spike đạt schema-valid 10/10; model output vẫn được Pydantic validate.</p></div><div class="card"><h4>Durable worker</h4><p>Run/task ở Mongo, bounded retry, worker lease + heartbeat, pause/resume/cancel và idempotency boundary.</p></div><div class="card"><h4>Side-effect gate</h4><p>Order guard chạy server-side. Launch approval luôn là human gate; edit sau create không replay side effect.</p></div><div class="card"><h4>Evidence</h4><p>Mỗi task ghi catalog IDs, selector/rerank state, analysis IDs, order guard result, trace ID và artifact revisions.</p></div></div>
@@ -126,7 +128,7 @@ http://localhost:8080/metrics</code></pre>
   <p>Bộ test hiện <b>định nghĩa 128 unique scenarios</b>. Đây là test specification và report contract, không phải tuyên bố cả 128 case đã chạy/passed. Input/expected output cho AI tester nằm trong <code>docs/testing/COMPREHENSIVE-TEST-PLAN.md</code>, <code>SCENARIO-CATALOG.md</code> và <code>AI-TEST-EXECUTOR-PROMPT.md</code>.</p>
 
   <h2 id="roadmap"><span class="n">09</span>Việc còn lại trong roadmap</h2>
-  <div class="table"><table><thead><tr><th>Ưu tiên</th><th>Hạng mục</th><th>Release condition</th></tr></thead><tbody><tr><td>FE-0</td><td>Áp dụng golden review 041–080 đã được chủ sở hữu chấp thuận</td><td>Apply edit trước khi đánh dấu approved/edited; validator và exclusion gate pass</td></tr><tr><td>FE-1</td><td>Placement intent → multi-format AI generation → final placement</td><td>Exact format, dedupe, cost cap, provenance và VLM review</td></tr><tr><td>FE-2</td><td>Anonymous + account + lịch sử hội thoại</td><td>Resume cross-device, claim anonymous chat, owner authorization</td></tr><tr><td>FE-3</td><td>Zalo OA cho Autopilot và Guided rút gọn</td><td>Webhook dedupe, durable task, account link, approval an toàn</td></tr><tr><td>FE-4</td><td>Kiểm tra/sửa campaign và thông báo live qua Zalo</td><td>Owned campaign only, proposal diff, policy-compliant notification</td></tr><tr><td>Later</td><td>Qwen reranker A/B, analytics/report agent, broad chaos</td><td>Deferred theo ưu tiên sản phẩm</td></tr></tbody></table></div>
+  <div class="table"><table><thead><tr><th>Ưu tiên</th><th>Hạng mục</th><th>Release condition</th></tr></thead><tbody><tr><td>FE-0</td><td>Áp dụng golden review 041–080 đã được chủ sở hữu chấp thuận</td><td>Apply edit trước khi đánh dấu approved/edited; validator và exclusion gate pass</td></tr><tr><td>FE-1</td><td>Placement intent → multi-format AI generation → final placement</td><td><b>Code-complete:</b> 202 backend + 22 frontend tests; còn upload và AI journey thật</td></tr><tr><td>FE-2</td><td>Anonymous + account + lịch sử hội thoại</td><td>Resume cross-device, claim anonymous chat, owner authorization</td></tr><tr><td>FE-3</td><td>Zalo OA cho Autopilot và Guided rút gọn</td><td>Webhook dedupe, durable task, account link, approval an toàn</td></tr><tr><td>FE-4</td><td>Kiểm tra/sửa campaign và thông báo live qua Zalo</td><td>Owned campaign only, proposal diff, policy-compliant notification</td></tr><tr><td>Later</td><td>Qwen reranker A/B, analytics/report agent, broad chaos</td><td>Deferred theo ưu tiên sản phẩm</td></tr></tbody></table></div>
   <footer>Advertising Agent · Tài liệu current-state sinh từ code, eval evidence và production roadmap của repository · 2026-07-16</footer>
 </main>
 <script>mermaid.initialize({startOnLoad:true,theme:'dark',themeVariables:{background:'#101c2e',primaryColor:'#14243a',primaryTextColor:'#eef6ff',primaryBorderColor:'#38a3ff',lineColor:'#72baff',fontFamily:'Inter,Segoe UI,sans-serif'},flowchart:{curve:'basis',useMaxWidth:true}})</script>

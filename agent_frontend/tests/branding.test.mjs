@@ -137,6 +137,18 @@ test('Autopilot requires an explicit creative source and supports automatic gene
   assert.match(api, /autopilot-start:\$\{SESSION_ID\}:\$\{creativeSource\}/)
 })
 
+test('Autopilot exposes a placement-aware bounded creative format plan', async () => {
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  const docs = await source('agent_frontend/public/tech-docs.html')
+
+  assert.match(panel, /plan_creative_formats/)
+  assert.match(panel, /Kế hoạch creative theo placement/)
+  assert.match(panel, /formatPlan\.max_assets/)
+  assert.match(panel, /formatPlan\.estimated_provider_calls/)
+  assert.match(docs, /Bounded multi-format generation/)
+  assert.doesNotMatch(docs, /Multi-format generation và creative variants vẫn là roadmap/)
+})
+
 test('Autopilot presents artifacts without Guided workflow controls', async () => {
   const app = await source('agent_frontend/src/App.jsx')
   const workspace = await source('agent_frontend/src/components/WorkspacePane/index.jsx')

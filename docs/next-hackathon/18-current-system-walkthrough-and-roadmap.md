@@ -139,7 +139,7 @@ it does not make the current unedited 041–080 files correct by declaration.
 
 ### P1 — final enhancement product work
 
-- Add two-pass placement planning and generate exact creative formats/variants with cost and quality budgets.
+- **Implemented, pending live journey sign-off:** two-pass placement planning, exact-format deduplication, a three-asset cost cap, bounded AI generation, revision-aware idempotency and final creative-compatible placement ranking.
 - Add anonymous-first accounts, login identities, conversation history and cross-device resume.
 - Add Zalo OA as a channel adapter for Autopilot, simplified Guided flow, campaign status/modification and live notifications.
 - Keep Qwen reranking disabled and defer the post-launch analytics/report agent.
@@ -153,8 +153,8 @@ it does not make the current unedited 041–080 files correct by declaration.
 ## 9. Recommended sequence
 
 1. Apply the accepted golden-label changes and pass focused safety validation.
-2. Implement placement-aware multi-format generation.
-3. Perform one upload and one real AI-generation full journey.
+2. Perform one upload and one real multi-format AI-generation full journey for FE-1 sign-off.
+3. Fix any provider/catalog/UI defects found in those two journeys.
 4. Add anonymous/account identity and resumable conversation history.
 5. Add the Zalo OA channel foundation, campaign operations and notifications.
 6. Execute the complete release suite after the changed journeys stabilize.

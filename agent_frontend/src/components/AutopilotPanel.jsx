@@ -15,7 +15,10 @@ const POLICY_OPTIONS = [
 const TASK_LABELS = {
   normalize_brief: 'Chuẩn hóa brief', validate_brief: 'Kiểm tra brief',
   generate_strategy: 'Xây dựng chiến lược', retrieve_audience: 'Tìm audience',
-  derive_targeting: 'Thiết lập targeting', prepare_creatives: 'Chuẩn bị creative',
+  derive_targeting: 'Thiết lập targeting',
+  plan_placement_intent: 'Đề xuất placement sơ bộ',
+  plan_creative_formats: 'Lập kế hoạch format',
+  prepare_creatives: 'Chuẩn bị creative',
   analyze_creatives: 'Phân tích creative',
   rank_placements: 'Xếp hạng placements', assign_creatives: 'Gán creative',
   forecast: 'Dự báo reach & chi phí', build_order_draft: 'Tạo order draft',
@@ -26,7 +29,9 @@ const TASK_LABELS = {
 
 const ARTIFACT_LABELS = {
   brief: 'brief', strategy: 'chiến lược', audience: 'audience',
-  targeting: 'targeting', creative: 'creative', creative_verdict: 'creative verdict',
+  targeting: 'targeting', placement_intent: 'placement sơ bộ',
+  creative_format_plan: 'kế hoạch format', creative: 'creative',
+  creative_verdict: 'creative verdict',
   placements: 'placements', assignments: 'phân bổ creative', forecast: 'dự báo',
   order_draft: 'order draft', order: 'order', report: 'báo cáo',
 }
@@ -52,7 +57,9 @@ const evidenceText = evidence => {
   if (evidence.type === 'order_create') return `Order create: ${evidence.order_id || 'đã ghi nhận'} · idempotency ${evidence.idempotency_key || '—'}`
   if (evidence.type === 'strategy_simulation') return `Simulator ${evidence.option_ids?.length || 0} phương án · đề xuất ${evidence.selected}`
   if (evidence.type === 'creative_source') return `Creative ${evidence.source === 'ai_generate' ? 'AI tự tạo' : 'do người dùng tải lên'} · ${evidence.count || 0} file${evidence.reused ? ' · tái sử dụng' : ''}`
-  if (evidence.type === 'creative_generation') return `AI creative ${evidence.format_id || ''} · ${evidence.model || 'image model'} · idempotency ${evidence.idempotency_key || '—'}`
+  if (evidence.type === 'placement_intent') return `${evidence.candidate_count || 0} placement sơ bộ · ${evidence.conflict_count || 0} conflict · chưa lọc theo creative`
+  if (evidence.type === 'creative_format_plan') return `${evidence.format_count || 0} format: ${(evidence.format_ids || []).join(', ')} · tối đa ${evidence.max_assets || 0} asset · ${evidence.estimated_provider_calls || 0} provider call`
+  if (evidence.type === 'creative_generation') return `AI tạo ${evidence.count || 0} creative: ${(evidence.format_ids || []).join(', ')}${(evidence.failed_formats || []).length ? ` · lỗi ${(evidence.failed_formats || []).join(', ')}` : ''}`
   if (evidence.type === 'creative_verdicts') return `${evidence.count || 0} creative verdict · ${evidence.revalidated ? 'đã revalidate' : 'hiện hành'}`
   return evidence.type?.replaceAll('_', ' ') || 'evidence'
 }
@@ -237,6 +244,10 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
   const runTerminal = ['completed', 'cancelled', 'failed'].includes(run?.status)
   const waiting = runTerminal ? null : run?.tasks?.find(task => task.status === 'waiting_review')
   const strategyTask = run?.tasks?.find(task => task.key === 'generate_strategy')
+  const formatPlanTask = run?.tasks?.find(task => task.key === 'plan_creative_formats')
+  const formatPlan = formatPlanTask?.result?.formats
+    ? formatPlanTask.result
+    : formatPlanTask?.pending_artifact?.value
   const orderCreated = run?.tasks?.some(task => task.key === 'create_order' && task.status === 'succeeded')
   const strategyCanChange = Boolean(strategyTask && ['waiting_review', 'succeeded'].includes(strategyTask.status) && !orderCreated && !runTerminal)
   const evidenceRows = useMemo(() => (run?.tasks || []).flatMap(task =>
@@ -417,6 +428,36 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
             canSelect={strategyCanChange}
             onSelect={chooseStrategy}
           />
+
+          {formatPlan?.formats?.length > 0 && (
+            <section className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm" aria-label="Kế hoạch định dạng creative">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-brand-700">Kế hoạch creative theo placement</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Agent gộp các placement cùng kích thước và chỉ chuẩn bị tối đa {formatPlan.max_assets} asset cần thiết.
+                  </p>
+                </div>
+                <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-bold text-brand-700">
+                  {formatPlan.source === 'ai_generate' ? `${formatPlan.estimated_provider_calls || 0} lượt tạo AI` : 'Dùng file tải lên'}
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {formatPlan.formats.map(item => (
+                  <div key={item.format_id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs font-bold text-slate-800">{item.width} × {item.height}</p>
+                    <p className="mt-0.5 truncate text-[10px] text-slate-500" title={item.format_id}>{item.format_id}</p>
+                    <p className="mt-1 text-[10px] font-semibold text-brand-700">Phủ {item.zone_ids?.length || 0} placement</p>
+                  </div>
+                ))}
+              </div>
+              {(formatPlan.unsupported_zone_ids?.length > 0 || formatPlan.omitted_by_cost_cap_zone_ids?.length > 0) && (
+                <p className="mt-3 text-[11px] leading-5 text-amber-700">
+                  {formatPlan.unsupported_zone_ids?.length || 0} placement chưa có format hỗ trợ; {formatPlan.omitted_by_cost_cap_zone_ids?.length || 0} placement ngoài giới hạn chi phí.
+                </p>
+              )}
+            </section>
+          )}
 
           <details className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
             <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-bold text-slate-700">

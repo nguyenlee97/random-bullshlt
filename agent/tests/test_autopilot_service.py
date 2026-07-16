@@ -277,7 +277,8 @@ async def test_changing_committed_strategy_replans_only_consumers():
     _mark_tasks(run["run_id"], {
         "normalize_brief": "succeeded", "validate_brief": "succeeded",
         "generate_strategy": "succeeded", "retrieve_audience": "succeeded",
-        "derive_targeting": "succeeded", "prepare_creatives": "succeeded",
+        "derive_targeting": "succeeded", "plan_placement_intent": "succeeded",
+        "plan_creative_formats": "succeeded", "prepare_creatives": "succeeded",
         "analyze_creatives": "succeeded",
         "rank_placements": "succeeded", "assign_creatives": "succeeded",
         "forecast": "queued",
@@ -289,8 +290,9 @@ async def test_changing_committed_strategy_replans_only_consumers():
     assert by_key["generate_strategy"]["status"] == "succeeded"
     assert by_key["generate_strategy"]["result"]["selected"] == "quality_first"
     assert by_key["retrieve_audience"]["status"] == "queued"
-    assert by_key["analyze_creatives"]["status"] == "queued"
-    assert by_key["rank_placements"]["status"] == "queued"
+    assert by_key["plan_placement_intent"]["status"] == "pending"
+    assert by_key["analyze_creatives"]["status"] == "pending"
+    assert by_key["rank_placements"]["status"] == "pending"
     assert by_key["derive_targeting"]["status"] == "pending"
     assert replanned["last_replan"]["changed_artifacts"] == ["strategy"]
 
@@ -365,16 +367,21 @@ async def test_ai_creative_source_generates_without_manual_upload(monkeypatch):
         "generation": {
             "model": "openai/gpt-image-1",
             "promptFingerprint": "abc",
-            "idempotencyKey": "autopilot:run-ai:zuma-box:brief-r1",
+            "idempotencyKey": "autopilot:run-ai:zuma-box:variant-0:plan-r2:brief-r1",
         },
     }
 
-    async def fake_generate(run, workspace):
-        return generated
+    async def fake_generate_many(run, workspace, format_plan, *, concurrency):
+        assert [item["format_id"] for item in format_plan["formats"]] == ["zuma-box"]
+        assert concurrency >= 1
+        return [generated], []
 
-    monkeypatch.setattr(creative_generation, "generate_creative", fake_generate)
+    monkeypatch.setattr(creative_generation, "generate_creatives", fake_generate_many)
     workspace = {"artifacts": {
         "brief": {"revision": 1, "value": BRIEF},
+        "creative_format_plan": {"revision": 2, "value": {
+            "formats": [{"format_id": "zuma-box", "zone_ids": ["ZONE-A"]}],
+        }},
         "creative": {"value": {"files": []}},
     }}
     result = await _prepare_creatives(
@@ -385,8 +392,9 @@ async def test_ai_creative_source_generates_without_manual_upload(monkeypatch):
     assert result.externally_committed is False
     assert result.value == {
         "files": [generated], "uploaded": True, "source": "ai_generate",
+        "formatPlanRevision": 2,
     }
-    assert result.evidence[0]["model"] == "openai/gpt-image-1"
+    assert result.evidence[0]["models"] == ["openai/gpt-image-1"]
 
 
 @pytest.mark.asyncio
@@ -496,7 +504,8 @@ async def test_creative_edit_replans_only_creative_dependent_branch():
     _mark_tasks(run["run_id"], {
         "normalize_brief": "succeeded", "validate_brief": "succeeded",
         "generate_strategy": "succeeded", "retrieve_audience": "succeeded",
-        "derive_targeting": "succeeded", "prepare_creatives": "succeeded",
+        "derive_targeting": "succeeded", "plan_placement_intent": "succeeded",
+        "plan_creative_formats": "succeeded", "prepare_creatives": "succeeded",
         "analyze_creatives": "succeeded",
         "rank_placements": "succeeded", "assign_creatives": "succeeded",
         "forecast": "queued",
@@ -514,7 +523,7 @@ async def test_creative_edit_replans_only_creative_dependent_branch():
     assert by_key["generate_strategy"]["status"] == "succeeded"
     assert by_key["retrieve_audience"]["status"] == "succeeded"
     assert by_key["derive_targeting"]["status"] == "succeeded"
-    assert by_key["rank_placements"]["status"] == "queued"
+    assert by_key["rank_placements"]["status"] == "pending"
     assert by_key["analyze_creatives"]["status"] == "queued"
     assert by_key["assign_creatives"]["status"] == "pending"
     assert by_key["forecast"]["status"] == "pending"

@@ -7,6 +7,8 @@ ARTIFACTS = (
     "strategy",
     "audience",
     "targeting",
+    "placement_intent",
+    "creative_format_plan",
     "creative",
     "creative_verdict",
     "placements",
@@ -31,14 +33,18 @@ FIELD_TO_ARTIFACT = {
 }
 
 DEPENDENTS = {
-    "brief": {"strategy", "audience", "targeting", "creative_verdict", "placements"},
-    "strategy": {"audience", "targeting", "creative_verdict", "placements"},
-    "audience": {"targeting", "forecast"},
-    "targeting": {"forecast"},
-    # Placement ranking uses measured creative dimensions/intended format, so
-    # replacing creative assets must recompute both semantic verdict and zones.
-    "creative": {"creative_verdict", "placements"},
-    "creative_verdict": {"assignments"},
+    "brief": {"strategy", "creative_verdict"},
+    "strategy": {"audience", "creative_verdict", "placement_intent"},
+    "audience": {"targeting", "placement_intent", "forecast"},
+    "targeting": {"placement_intent", "forecast"},
+    "placement_intent": {"creative_format_plan", "placements"},
+    # Creative source is run-specific. AI-generated assets are invalidated by
+    # the Autopilot task graph and their format-plan revision key; uploaded
+    # assets must not become stale merely because targeting/placement changed.
+    "creative_format_plan": set(),
+    "creative": {"creative_verdict"},
+    # Final placement ranking is a second pass over actual approved creatives.
+    "creative_verdict": {"placements"},
     "placements": {"assignments", "forecast"},
     "assignments": {"forecast"},
     "forecast": {"order_draft"},

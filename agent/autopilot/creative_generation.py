@@ -1,6 +1,7 @@
 """AI creative generation and durable asset persistence for Autopilot."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 from io import BytesIO
@@ -14,6 +15,36 @@ from workspace.service import get_workspace
 
 
 DEFAULT_FORMAT_ID = "zuma-box"
+
+
+def generation_idempotency_key(
+    run_id: str,
+    format_id: str,
+    *,
+    brief_revision: int,
+    format_plan_revision: int,
+    variant: int = 0,
+) -> str:
+    return (
+        f"autopilot:{run_id}:{format_id}:variant-{variant}:"
+        f"plan-r{format_plan_revision}:brief-r{brief_revision}"
+    )
+
+
+def _default_intended_format(format_id: str) -> str:
+    return "skin" if format_id == "znews-Background" else "banner"
+
+
+def _assert_current_inputs(
+    current: dict, *, brief_revision: int, format_plan_revision: int,
+) -> None:
+    artifacts = current.get("artifacts", {})
+    current_brief = int(artifacts.get("brief", {}).get("revision", 0))
+    current_plan = int(artifacts.get("creative_format_plan", {}).get("revision", 0))
+    if current_brief != brief_revision:
+        raise RuntimeError("brief changed while AI creative was being generated")
+    if current_plan != format_plan_revision:
+        raise RuntimeError("creative format plan changed while AI creative was being generated")
 
 
 def _fit_png(image_b64: str, width: int, height: int) -> str:
@@ -40,6 +71,9 @@ async def generate_creative(
     workspace: dict,
     *,
     format_id: str = DEFAULT_FORMAT_ID,
+    intended_format: str | None = None,
+    intended_zone_ids: list[str] | None = None,
+    variant: int = 0,
 ) -> dict:
     """Generate, resize and persist one deterministic Autopilot creative asset.
 
@@ -48,10 +82,13 @@ async def generate_creative(
     writing another file.
     """
     brief_item = workspace.get("artifacts", {}).get("brief", {})
+    format_plan_item = workspace.get("artifacts", {}).get("creative_format_plan", {})
     brief = brief_item.get("value") or {}
     brief_revision = int(brief_item.get("revision", 0))
-    idempotency_key = (
-        f"autopilot:{run['run_id']}:{format_id}:brief-r{brief_revision}"
+    format_plan_revision = int(format_plan_item.get("revision", 0))
+    idempotency_key = generation_idempotency_key(
+        run["run_id"], format_id, brief_revision=brief_revision,
+        format_plan_revision=format_plan_revision, variant=variant,
     )
     digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:24]
     filename = f"creative_ai_{digest}.png"
@@ -67,11 +104,10 @@ async def generate_creative(
         width = int(AD_FORMATS[format_id]["width"])
         height = int(AD_FORMATS[format_id]["height"])
         current = await get_workspace(run["session_id"])
-        current_revision = int(
-            current.get("artifacts", {}).get("brief", {}).get("revision", 0)
+        _assert_current_inputs(
+            current, brief_revision=brief_revision,
+            format_plan_revision=format_plan_revision,
         )
-        if current_revision != brief_revision:
-            raise RuntimeError("brief changed while AI creative was being recovered")
         return {
             "id": idempotency_key,
             "name": filename,
@@ -79,11 +115,16 @@ async def generate_creative(
             "size": int(existing.headers.get("content-length") or 0),
             "type": "image/png", "mimeType": "image/png",
             "width": width, "height": height,
-            "formatId": format_id, "intendedFormat": format_id,
+            "formatId": format_id,
+            "intendedFormat": intended_format or _default_intended_format(format_id),
+            "intendedZoneIds": list(intended_zone_ids or []),
             "source": "ai_generated",
             "generation": {
                 "idempotencyKey": idempotency_key, **provenance,
-                "formatId": format_id, "reused": True,
+                "formatId": format_id, "variant": variant,
+                "briefRevision": brief_revision,
+                "formatPlanRevision": format_plan_revision,
+                "reused": True,
             },
         }
 
@@ -116,11 +157,10 @@ async def generate_creative(
         raise RuntimeError("AI creative upload returned no durable asset URL")
 
     current = await get_workspace(run["session_id"])
-    current_revision = int(
-        current.get("artifacts", {}).get("brief", {}).get("revision", 0)
+    _assert_current_inputs(
+        current, brief_revision=brief_revision,
+        format_plan_revision=format_plan_revision,
     )
-    if current_revision != brief_revision:
-        raise RuntimeError("brief changed while AI creative was being generated")
 
     generation = {
         "idempotencyKey": idempotency_key,
@@ -129,6 +169,9 @@ async def generate_creative(
         "promptVersion": generated.get("promptVersion", "image-gen-v1"),
         "promptFingerprint": generated.get("promptFingerprint", ""),
         "formatId": format_id,
+        "variant": variant,
+        "briefRevision": brief_revision,
+        "formatPlanRevision": format_plan_revision,
         "reused": bool(stored.get("reused")),
     }
     return {
@@ -141,7 +184,45 @@ async def generate_creative(
         "width": width,
         "height": height,
         "formatId": format_id,
-        "intendedFormat": format_id,
+        "intendedFormat": intended_format or _default_intended_format(format_id),
+        "intendedZoneIds": list(intended_zone_ids or []),
         "source": "ai_generated",
         "generation": generation,
     }
+
+
+async def generate_creatives(
+    run: dict,
+    workspace: dict,
+    format_plan: dict,
+    *,
+    concurrency: int = 2,
+) -> tuple[list[dict], list[dict]]:
+    """Generate all planned formats with bounded concurrency and partial evidence."""
+    formats = list(format_plan.get("formats") or [])
+    semaphore = asyncio.Semaphore(max(1, min(int(concurrency or 1), 4)))
+
+    async def one(spec: dict) -> dict:
+        async with semaphore:
+            return await generate_creative(
+                run,
+                workspace,
+                format_id=spec["format_id"],
+                intended_format=spec.get("intended_format"),
+                intended_zone_ids=spec.get("zone_ids") or [],
+                variant=0,
+            )
+
+    results = await asyncio.gather(*(one(spec) for spec in formats), return_exceptions=True)
+    generated: list[dict] = []
+    failures: list[dict] = []
+    for spec, result in zip(formats, results):
+        if isinstance(result, Exception):
+            failures.append({
+                "format_id": spec.get("format_id"),
+                "zone_ids": spec.get("zone_ids") or [],
+                "error": str(result)[:300],
+            })
+        else:
+            generated.append(result)
+    return generated, failures

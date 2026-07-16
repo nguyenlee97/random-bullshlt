@@ -149,6 +149,34 @@ AD_FORMATS: dict[str, dict] = {
             "cut off if cropped slightly."
         ),
     },
+    "display-halfpage-300x600": {
+        "label": "Display Halfpage (300×600)",
+        "width": 300, "height": 600,
+        "layoutDescription": (
+            "A tall 1:2 display banner. Keep the brand mark and short headline in the "
+            "top quarter, place the main product or campaign visual in the center, and "
+            "use the lower quarter for one concise benefit and a clear call to action."
+        ),
+        "safeZoneConstraint": (
+            "1. CANVAS CONSTRAINTS & SAFE ZONE (CRITICAL): The final asset is exactly "
+            "300x600. Keep all text and logos at least 18 pixels from every edge. Do not "
+            "place small text over a busy background and do not design for later stretching."
+        ),
+    },
+    "znews-masthead-1160x250": {
+        "label": "ZingNews Masthead (1160×250)",
+        "width": 1160, "height": 250,
+        "layoutDescription": (
+            "A wide 1160x250 masthead. Arrange a short headline and brand mark on the "
+            "left, a strong campaign or product visual in the center, and one concise "
+            "call to action on the right. Preserve generous breathing room."
+        ),
+        "safeZoneConstraint": (
+            "1. CANVAS CONSTRAINTS & SAFE ZONE (CRITICAL): The final asset is exactly "
+            "1160x250. Keep all critical content inside a centered horizontal safe area "
+            "with at least 28 pixels of margin on every edge."
+        ),
+    },
     "zuma-Left": {
         "label": "Side Slider Left (465×1200)",
         "width": 465, "height": 1200,

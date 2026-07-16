@@ -6,9 +6,10 @@ and leases are owned by the durable worker rather than hidden inside prompts.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from config import config
 from models import BriefData
 from session import get_or_create_session
 from workspace.service import get_workspace
@@ -236,6 +237,114 @@ async def _derive_targeting(run: dict, workspace: dict) -> CapabilityResult:
     )
 
 
+async def _plan_placement_intent(run: dict, workspace: dict) -> CapabilityResult:
+    """Rank inventory before creative exists; no compatibility decision is made here."""
+    from tools.order_api import fetch_zone_conflicts
+    from tools.zone_ranker import rank_zones
+
+    brief = _artifact(workspace, "brief", {})
+    ranked = await rank_zones(
+        objective=brief.get("objective", "awareness"),
+        budget=brief.get("budget", 0),
+        kpi=brief.get("kpi", ""),
+        creative_files=[],
+        limit=100,
+    )
+    conflicts = await fetch_zone_conflicts(
+        brief.get("startDate", ""), brief.get("endDate", "")
+    )
+    available = [zone for zone in ranked if not conflicts.get(zone["id"])]
+    strategy = _artifact(workspace, "strategy", {})
+    selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
+    if selected == "reach_first":
+        available.sort(
+            key=lambda zone: (
+                float(zone.get("cpm") or 10**12),
+                -float(zone.get("score") or 0),
+            )
+        )
+    elif selected == "quality_first":
+        available.sort(
+            key=lambda zone: (
+                float(zone.get("viewability") or zone.get("vi") or 0),
+                float(zone.get("ctr") or 0),
+                float(zone.get("score") or 0),
+            ),
+            reverse=True,
+        )
+    candidates = available[:12]
+    if not candidates:
+        return CapabilityResult(
+            value={
+                "candidate_zone_ids": [], "candidates": [],
+                "reason": "no_available_inventory", "review_action": "retry",
+                "message": "Không có placement trống cho thời gian chiến dịch.",
+            },
+            evidence=[{"type": "placement_intent", "candidate_count": 0,
+                       "conflict_count": len(conflicts)}],
+            force_review=True,
+        )
+    now = datetime.now(timezone.utc)
+    value = {
+        "kind": "placement_intent",
+        "candidate_zone_ids": [zone["id"] for zone in candidates],
+        "candidates": candidates,
+        "strategy_id": selected,
+        "inventory_checked_at": now,
+        "expires_at": now + timedelta(minutes=10),
+        "selection_method": "creative_agnostic_zone_rank_v1",
+    }
+    return CapabilityResult(
+        value=value,
+        evidence=[{
+            "type": "placement_intent",
+            "candidate_count": len(candidates),
+            "candidate_zone_ids": value["candidate_zone_ids"],
+            "conflict_count": len(conflicts),
+            "strategy_id": selected,
+        }],
+    )
+
+
+async def _plan_creative_formats(run: dict, workspace: dict) -> CapabilityResult:
+    from autopilot.placement_planning import build_creative_format_plan
+
+    intent_item = workspace.get("artifacts", {}).get("placement_intent", {})
+    intent = dict(intent_item.get("value") or {})
+    intent["artifact_revision"] = int(intent_item.get("revision", 0))
+    source = run.get("creative_source", "upload")
+    plan = build_creative_format_plan(
+        intent,
+        source=source,
+        max_assets=config.AUTOPILOT_MAX_GENERATED_ASSETS,
+    )
+    plan["brief_revision"] = int(
+        workspace.get("artifacts", {}).get("brief", {}).get("revision", 0)
+    )
+    if source == "ai_generate" and not plan["formats"]:
+        return CapabilityResult(
+            value={
+                **plan, "reason": "no_supported_generation_format",
+                "review_action": "retry",
+                "message": "Các placement đề xuất chưa có format AI được hỗ trợ.",
+            },
+            evidence=[{"type": "creative_format_plan", "format_count": 0}],
+            force_review=True,
+        )
+    return CapabilityResult(
+        value=plan,
+        evidence=[{
+            "type": "creative_format_plan",
+            "source": source,
+            "format_count": len(plan["formats"]),
+            "format_ids": [item["format_id"] for item in plan["formats"]],
+            "covered_zone_ids": plan["covered_zone_ids"],
+            "estimated_provider_calls": plan["estimated_provider_calls"],
+            "max_assets": plan["max_assets"],
+        }],
+    )
+
+
 async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
     creative = _artifact(workspace, "creative", {})
     files = creative.get("files", []) if isinstance(creative, dict) else []
@@ -264,36 +373,93 @@ async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
     if source != "ai_generate":
         raise ValueError(f"unsupported creative source: {source}")
 
-    generated_for_run = [
-        item for item in files
-        if item.get("source") == "ai_generated"
-        and str((item.get("generation") or {}).get("idempotencyKey", "")).startswith(
-            f"autopilot:{run['run_id']}:"
-        )
-    ]
-    if generated_for_run:
+    format_plan_item = workspace.get("artifacts", {}).get("creative_format_plan", {})
+    format_plan = format_plan_item.get("value") or {}
+    formats = list(format_plan.get("formats") or [])
+    if not formats:
         return CapabilityResult(
-            value=creative,
+            value={
+                "files": [], "uploaded": False, "source": "ai_generate",
+                "reason": "missing_creative_format_plan",
+                "message": "Chưa có kế hoạch format creative hợp lệ.",
+                "review_action": "retry",
+            },
+            evidence=[{"type": "input_required", "artifact": "creative_format_plan"}],
+            force_review=True,
+        )
+
+    from autopilot.creative_generation import (
+        generate_creatives,
+        generation_idempotency_key,
+    )
+    brief_revision = int(
+        workspace.get("artifacts", {}).get("brief", {}).get("revision", 0)
+    )
+    plan_revision = int(format_plan_item.get("revision", 0))
+    expected_keys = [
+        generation_idempotency_key(
+            run["run_id"], spec["format_id"], brief_revision=brief_revision,
+            format_plan_revision=plan_revision, variant=0,
+        )
+        for spec in formats
+    ]
+    by_key = {
+        (item.get("generation") or {}).get("idempotencyKey"): item
+        for item in files if item.get("source") == "ai_generated"
+    }
+    if all(key in by_key for key in expected_keys):
+        generated_for_run = [by_key[key] for key in expected_keys]
+        return CapabilityResult(
+            value={
+                "files": generated_for_run, "uploaded": True,
+                "source": "ai_generate", "formatPlanRevision": plan_revision,
+            },
             evidence=[{"type": "creative_source", "source": "ai_generate",
                        "count": len(generated_for_run), "reused": True}],
             externally_committed=True,
         )
 
-    from autopilot.creative_generation import generate_creative
-    generated = await generate_creative(run, workspace)
+    generated, failures = await generate_creatives(
+        run,
+        workspace,
+        format_plan,
+        concurrency=config.AUTOPILOT_CREATIVE_GENERATION_CONCURRENCY,
+    )
+    value = {
+        "files": generated,
+        "uploaded": bool(generated),
+        "source": "ai_generate",
+        "formatPlanRevision": plan_revision,
+    }
+    evidence = [{
+        "type": "creative_generation",
+        "source": "ai_generate",
+        "count": len(generated),
+        "format_ids": [item.get("formatId") for item in generated],
+        "models": sorted({
+            (item.get("generation") or {}).get("model")
+            for item in generated if (item.get("generation") or {}).get("model")
+        }),
+        "idempotency_keys": [
+            (item.get("generation") or {}).get("idempotencyKey") for item in generated
+        ],
+        "failed_formats": [item.get("format_id") for item in failures],
+        "format_plan_revision": plan_revision,
+    }]
+    if failures:
+        return CapabilityResult(
+            value={
+                **value, "generation_failures": failures,
+                "reason": "creative_generation_partial_failure",
+                "message": "Một số format chưa tạo được; các asset đã lưu sẽ được tái sử dụng khi thử lại.",
+                "review_action": "retry",
+            },
+            evidence=evidence,
+            force_review=True,
+        )
     return CapabilityResult(
-        value={"files": [generated], "uploaded": True, "source": "ai_generate"},
-        evidence=[{
-            "type": "creative_generation", "source": "ai_generate",
-            "count": 1, "format_id": generated.get("formatId"),
-            "model": (generated.get("generation") or {}).get("model"),
-            "prompt_fingerprint": (
-                generated.get("generation") or {}
-            ).get("promptFingerprint"),
-            "idempotency_key": (
-                generated.get("generation") or {}
-            ).get("idempotencyKey"),
-        }],
+        value=value,
+        evidence=evidence,
     )
 
 
@@ -373,10 +539,12 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
     files = enrich_files_with_intel(
         (creative or {}).get("files", []), await get_intel(run["session_id"])
     )
+    intent = _artifact(workspace, "placement_intent", {})
+    candidate_ids = set(intent.get("candidate_zone_ids") or [])
     ranked = await rank_zones(
         objective=brief.get("objective", "awareness"),
         budget=brief.get("budget", 0), kpi=brief.get("kpi", ""),
-        creative_files=files, limit=12,
+        creative_files=files, limit=100,
     )
     conflicts = await fetch_zone_conflicts(
         brief.get("startDate", ""), brief.get("endDate", "")
@@ -387,7 +555,8 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
     compatible_modes = {"exact_size", "skin_match"}
     available = [
         zone for zone in ranked
-        if not conflicts.get(zone["id"])
+        if (not candidate_ids or zone["id"] in candidate_ids)
+        and not conflicts.get(zone["id"])
         and zone.get("match_mode") in compatible_modes
     ]
     strategy = _artifact(workspace, "strategy", {})
@@ -421,7 +590,7 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
         value={"selectedZoneIds": [zone["id"] for zone in available],
                "zones": available, "phase": "zones"},
         evidence=[{"type": "zone_catalog", "ids": [zone["id"] for zone in available],
-                   "strategy_id": selected},
+                   "strategy_id": selected, "placement_intent_candidates": len(candidate_ids)},
                   {"type": "conflict_check", "excluded": len(ranked) - len(available)}],
     )
 
@@ -637,6 +806,8 @@ CAPABILITIES = {
     "generate_strategy_options": _generate_strategy,
     "retrieve_and_rank_audience": _retrieve_audience,
     "derive_targeting_and_exclusions": _derive_targeting,
+    "plan_placement_intent": _plan_placement_intent,
+    "plan_creative_formats": _plan_creative_formats,
     "prepare_creatives": _prepare_creatives,
     "analyze_creatives": _analyze_creatives,
     "rank_available_placements": _rank_placements,

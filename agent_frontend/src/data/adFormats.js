@@ -58,6 +58,20 @@ export const AD_FORMATS = [
     usageHint: 'Medium Rectangle — kích thước IAB chuẩn, phổ biến nhất trên desktop',
   },
   {
+    id: 'display-halfpage-300x600',
+    label: 'Display Halfpage 300×600',
+    width: 300, height: 600,
+    cropAnchor: 'center',
+    usageHint: 'Halfpage dọc — kích thước chính xác cho sidebar 300×600',
+  },
+  {
+    id: 'znews-masthead-1160x250',
+    label: 'ZingNews Masthead 1160×250',
+    width: 1160, height: 250,
+    cropAnchor: 'center',
+    usageHint: 'Masthead ngang 1160×250 — không kéo giãn từ format 1160×280',
+  },
+  {
     id: 'zuma-Left',
     label: 'Sticky Side Slider Left (465×1200)',
     width: 465, height: 1200,

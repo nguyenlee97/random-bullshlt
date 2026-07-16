@@ -96,6 +96,12 @@ class Config:
     AUTOPILOT_TASK_MAX_ATTEMPTS: int = int(
         os.getenv("AUTOPILOT_TASK_MAX_ATTEMPTS", "3")
     )
+    AUTOPILOT_MAX_GENERATED_ASSETS: int = int(
+        os.getenv("AUTOPILOT_MAX_GENERATED_ASSETS", "3")
+    )
+    AUTOPILOT_CREATIVE_GENERATION_CONCURRENCY: int = int(
+        os.getenv("AUTOPILOT_CREATIVE_GENERATION_CONCURRENCY", "2")
+    )
     # Critic / judge model (different family+provider than generator — see ADR).
     CRITIC_BASE_URL: str = os.getenv("CRITIC_BASE_URL", "")
     CRITIC_API_KEY: str = os.getenv("CRITIC_API_KEY", "") or os.getenv("JUDGE_API_KEY", "")
