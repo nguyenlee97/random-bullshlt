@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useChat } from '@/hooks/useChat'
 import TopBar from '@/components/TopBar'
 import ConversationHistory from '@/components/ConversationHistory'
+import DeleteConversationDialog from '@/components/DeleteConversationDialog'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
 import ExperienceSelector from '@/components/ExperienceSelector'
@@ -119,6 +120,9 @@ export default function App() {
   const [conversationHistory, setConversationHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [currentStep, setCurrentStep] = useState(0)
   const [stepStatuses, setStepStatuses] = useState(STEPS.map(() => 'pending'))
   const [formState, setFormState] = useState(initialState)
@@ -862,6 +866,49 @@ export default function App() {
     setConversationHistory(prev => prev.filter(item => item.conversation_id !== conversationId))
   }, [])
 
+  const requestDeleteConversation = useCallback((conversation) => {
+    setDeleteError('')
+    setDeleteTarget({ type: 'one', conversation })
+  }, [])
+
+  const requestDeleteAllConversations = useCallback(() => {
+    if (!conversationHistory.length) return
+    setDeleteError('')
+    setDeleteTarget({ type: 'all', count: conversationHistory.length })
+  }, [conversationHistory.length])
+
+  const closeDeleteDialog = useCallback(() => {
+    if (deleteBusy) return
+    setDeleteTarget(null)
+    setDeleteError('')
+  }, [deleteBusy])
+
+  const confirmDeleteConversations = useCallback(async () => {
+    if (!deleteTarget || deleteBusy) return
+    setDeleteBusy(true)
+    setDeleteError('')
+    try {
+      if (deleteTarget.type === 'all') {
+        await AgentAPI.deleteAllConversations()
+        setConversationHistory([])
+        setDeleteTarget(null)
+        if (currentConversationId || experienceMode) handleNewChat()
+        return
+      }
+
+      const conversationId = deleteTarget.conversation?.conversation_id
+      if (!conversationId) throw new Error('Không xác định được cuộc trò chuyện cần xóa.')
+      await AgentAPI.deleteConversation(conversationId)
+      setConversationHistory(prev => prev.filter(item => item.conversation_id !== conversationId))
+      setDeleteTarget(null)
+      if (conversationId === currentConversationId) handleNewChat()
+    } catch (error) {
+      setDeleteError(error.message || 'Không thể xóa cuộc trò chuyện.')
+    } finally {
+      setDeleteBusy(false)
+    }
+  }, [currentConversationId, deleteBusy, deleteTarget, experienceMode, handleNewChat])
+
   // Listen for agent:reset event from BlockRenderer ActionResetBlock
   useEffect(() => {
     const handler = () => handleReset()
@@ -1157,16 +1204,22 @@ export default function App() {
 
   if (!experienceMode) {
     return (
-      <ExperienceSelector
-        onSelect={startCampaign}
-        busy={modeSelectionBusy}
-        error={modeSelectionError}
-        conversations={conversationHistory}
-        historyLoading={historyLoading}
-        historyError={historyError}
-        onResume={resumeConversation}
-        onArchive={archiveConversation}
-      />
+      <>
+        <ExperienceSelector
+          onSelect={startCampaign}
+          busy={modeSelectionBusy}
+          error={modeSelectionError}
+          conversations={conversationHistory}
+          historyLoading={historyLoading}
+          historyError={historyError}
+          onResume={resumeConversation}
+          onArchive={archiveConversation}
+          onDelete={requestDeleteConversation}
+          onDeleteAll={requestDeleteAllConversations}
+        />
+        <DeleteConversationDialog target={deleteTarget} busy={deleteBusy} error={deleteError}
+          onCancel={closeDeleteDialog} onConfirm={confirmDeleteConversations} />
+      </>
     )
   }
 
@@ -1198,7 +1251,12 @@ export default function App() {
         onResume={resumeConversation}
         onNew={handleNewChat}
         onArchive={archiveConversation}
+        onDelete={requestDeleteConversation}
+        onDeleteAll={requestDeleteAllConversations}
       />
+
+      <DeleteConversationDialog target={deleteTarget} busy={deleteBusy} error={deleteError}
+        onCancel={closeDeleteDialog} onConfirm={confirmDeleteConversations} />
 
       {workspaceConflict && (
         <div className="flex items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">

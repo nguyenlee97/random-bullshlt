@@ -702,6 +702,20 @@ function applyConversationContext(context) {
   return context
 }
 
+function clearConversationContext(conversationId = null) {
+  if (conversationId && CURRENT_CONVERSATION_ID !== conversationId) return
+  CURRENT_CONVERSATION_ID = ''
+  SESSION_ID = _genSessionId()
+  WORKSPACE_REVISION = null
+  _workspaceMutationKeys.clear()
+  storageSet('conversation-id', '')
+  storageSet('session-id', '')
+  if (typeof window !== 'undefined') {
+    window.__AGENT_CONVERSATION_ID__ = ''
+    window.__AGENT_SESSION_ID__ = SESSION_ID
+  }
+}
+
 function conversationMessages(context) {
   const messages = (context?.messages || []).map(item => ({
     id: generateId(),
@@ -1142,6 +1156,36 @@ export const AgentAPI = {
       { method: 'POST', signal: AbortSignal.timeout(5000) },
     )
     return response.ok
+  },
+
+  async deleteConversation(conversationId) {
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/conversations/${encodeURIComponent(conversationId)}`,
+      { method: 'DELETE', signal: AbortSignal.timeout(15000) },
+    )
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const detail = data.detail
+      throw new Error(detail?.message || detail || 'Không thể xóa cuộc trò chuyện.')
+    }
+    clearConversationContext(conversationId)
+    return data
+  },
+
+  async deleteAllConversations() {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/conversations`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmation: 'DELETE_ALL' }),
+      signal: AbortSignal.timeout(30000),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const detail = data.detail
+      throw new Error(detail?.message || detail || 'Không thể xóa toàn bộ lịch sử.')
+    }
+    clearConversationContext()
+    return data
   },
 
   currentConversationId() {

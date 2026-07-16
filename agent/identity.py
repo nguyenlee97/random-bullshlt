@@ -21,6 +21,22 @@ _mem_identity_by_hash: dict[str, str] = {}
 _mem_conversations: dict[str, dict] = {}
 
 
+class ConversationRunActive(Exception):
+    """Raised when deletion would race a non-terminal Autopilot run."""
+
+    def __init__(self, conversations: list[dict]):
+        self.conversations = conversations
+        titles = ", ".join(
+            str(item.get("title") or item.get("conversation_id"))
+            for item in conversations[:3]
+        )
+        suffix = "…" if len(conversations) > 3 else ""
+        super().__init__(
+            f"Autopilot đang chạy trong: {titles}{suffix}. "
+            "Hãy hủy run trước khi xóa cuộc trò chuyện."
+        )
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -237,6 +253,95 @@ async def archive_conversation(identity_id: str, conversation_id: str) -> dict:
         doc["archived_at"] = now
         doc["updated_at"] = now
     return {"ok": True, "conversation_id": conversation_id, "archived_at": now}
+
+
+async def _assert_conversations_deletable(docs: list[dict]) -> None:
+    """Reject deletion while any owned Autopilot run can still execute."""
+    from autopilot.service import RUN_TERMINAL, get_latest_run
+
+    active: list[dict] = []
+    for doc in docs:
+        run = await get_latest_run(doc["session_id"])
+        if run and run.get("status") not in RUN_TERMINAL:
+            active.append({
+                "conversation_id": doc.get("conversation_id") or doc.get("_id"),
+                "title": doc.get("title"),
+                "run_id": run.get("run_id"),
+                "run_status": run.get("status"),
+            })
+    if active:
+        raise ConversationRunActive(active)
+
+
+async def delete_conversation(identity_id: str, conversation_id: str) -> dict:
+    """Permanently delete one owned conversation and its agent artifacts.
+
+    Campaign orders live in the Node backend and remain as business records.
+    """
+    doc = await _owned_conversation(identity_id, conversation_id)
+    if not doc:
+        raise KeyError("conversation not found")
+    await _assert_conversations_deletable([doc])
+
+    from session import delete_session_data
+
+    deleted_artifacts = await delete_session_data(doc["session_id"])
+    _, conversations = await _collections()
+    if conversations is not None:
+        result = await conversations.delete_one({
+            "_id": conversation_id, "identity_id": identity_id,
+        })
+        if result.deleted_count != 1:
+            raise KeyError("conversation not found")
+    else:
+        _mem_conversations.pop(conversation_id, None)
+    return {
+        "ok": True,
+        "deleted_count": 1,
+        "conversation_id": conversation_id,
+        "session_id": doc["session_id"],
+        "deleted_artifacts": deleted_artifacts,
+        "orders_retained": True,
+    }
+
+
+async def delete_all_conversations(identity_id: str) -> dict:
+    """Permanently delete every active or archived conversation for an owner."""
+    _, conversations = await _collections()
+    if conversations is not None:
+        docs = await conversations.find({"identity_id": identity_id}).to_list(length=None)
+    else:
+        docs = [
+            item for item in _mem_conversations.values()
+            if item.get("identity_id") == identity_id
+        ]
+    await _assert_conversations_deletable(docs)
+
+    from session import delete_session_data
+
+    artifact_counts: dict[str, int] = {}
+    for doc in docs:
+        deleted = await delete_session_data(doc["session_id"])
+        for collection, count in deleted.items():
+            artifact_counts[collection] = artifact_counts.get(collection, 0) + int(count)
+
+    ids = [doc.get("conversation_id") or doc.get("_id") for doc in docs]
+    if conversations is not None:
+        result = await conversations.delete_many({
+            "identity_id": identity_id, "_id": {"$in": ids},
+        })
+        deleted_count = result.deleted_count
+    else:
+        for conversation_id in ids:
+            _mem_conversations.pop(conversation_id, None)
+        deleted_count = len(ids)
+    return {
+        "ok": True,
+        "deleted_count": deleted_count,
+        "conversation_ids": ids,
+        "deleted_artifacts": artifact_counts,
+        "orders_retained": True,
+    }
 
 
 async def touch_conversation_for_session(

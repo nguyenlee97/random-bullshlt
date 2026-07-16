@@ -6,6 +6,7 @@ const api = readFileSync(new URL('../src/api/agentApi.js', import.meta.url), 'ut
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const history = readFileSync(new URL('../src/components/ConversationHistory.jsx', import.meta.url), 'utf8')
 const homepage = readFileSync(new URL('../src/components/ExperienceSelector.jsx', import.meta.url), 'utf8')
+const deleteDialog = readFileSync(new URL('../src/components/DeleteConversationDialog.jsx', import.meta.url), 'utf8')
 
 test('anonymous device credential uses an HttpOnly cookie with legacy migration only', () => {
   assert.match(api, /anonymous-token/)
@@ -37,4 +38,15 @@ test('history UI exposes resume, archive and new campaign actions', () => {
   assert.match(history, /onResume/)
   assert.match(history, /onArchive/)
   assert.match(history, /onNew/)
+})
+
+test('conversation deletion is available individually and in bulk with safety confirmation', () => {
+  assert.match(api, /deleteConversation\(conversationId\)/)
+  assert.match(api, /deleteAllConversations\(\)/)
+  assert.match(api, /confirmation: 'DELETE_ALL'/)
+  assert.match(homepage, /Xóa tất cả/)
+  assert.match(history, /Xóa toàn bộ lịch sử/)
+  assert.match(deleteDialog, /role="alertdialog"/)
+  assert.match(deleteDialog, /XÓA TẤT CẢ/)
+  assert.match(deleteDialog, /Thao tác này không thể hoàn tác/)
 })

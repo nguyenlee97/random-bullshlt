@@ -120,6 +120,8 @@ http://localhost:8080/health
 http://localhost:8080/metrics</code></pre>
   <h3>Test Campaign Copilot nhanh</h3>
   <ol><li>Tải mới trang và xác nhận luôn thấy trang chủ, hai mode và lịch sử campaign.</li><li>Chọn <b>Campaign Copilot</b>, nhập brief tiếng Việt, yêu cầu chat sửa budget và kiểm tra proposal chưa tự ghi.</li><li>Duyệt proposal; mở Audience và kiểm tra segment có ID/catalog source.</li><li>Sửa lại brief sau khi đã có audience; kiểm tra banner stale/recompute thay vì reset mọi thứ.</li><li>Về trang chủ, mở lại campaign trong lịch sử và xác nhận mode cùng workspace được khôi phục đúng.</li></ol>
+  <h3>Test xóa lịch sử an toàn</h3>
+  <ol><li>Ở trang chủ hoặc ngăn lịch sử, bấm <b>Xóa</b> trên một campaign và xác nhận hộp thoại hiển thị đúng tên campaign.</li><li>Bấm <b>Giữ lại</b> và xác nhận campaign chưa bị xóa.</li><li>Với một campaign thử nghiệm đã kết thúc, mở lại hộp thoại và xác nhận xóa; campaign phải biến mất khỏi lịch sử và không thể resume.</li><li>Mở <b>Xóa tất cả</b>; nút xác nhận phải bị khóa cho đến khi nhập đúng <code>XÓA TẤT CẢ</code>. Không cần hoàn tất thao tác trong môi trường có dữ liệu cần giữ.</li><li>Campaign đang có Autopilot run chưa kết thúc phải từ chối xóa. Dừng run trước rồi thử lại. Xóa hội thoại không xóa AdsPilot order đã tạo.</li></ol>
   <h3>Test Autopilot upload</h3>
   <ol><li>Chọn Autopilot trên trang chủ, tạo và duyệt brief.</li><li>Chọn “Tôi sẽ tải creative lên”, chọn policy, bắt đầu.</li><li>Xác nhận chat bị khóa khi run đang chạy và chỉ nhận duyệt/từ chối khi có review gate.</li><li>Xác nhận run dừng ở “Chuẩn bị creative” nếu chưa có file.</li><li>Upload file, bấm retry; xác nhận VLM result hoặc manual-review card.</li></ol>
   <h3>Test Autopilot AI generate</h3>

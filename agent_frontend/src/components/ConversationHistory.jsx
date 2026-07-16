@@ -1,4 +1,4 @@
-import { Archive, Clock3, History, Loader2, MessageSquarePlus, X } from 'lucide-react'
+import { Archive, Clock3, History, Loader2, MessageSquarePlus, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const modeLabel = mode => mode === 'autopilot' ? 'Campaign Autopilot' : mode === 'guided' ? 'Campaign Copilot' : 'Chưa chọn cách làm việc'
@@ -15,7 +15,7 @@ const formatTime = value => {
 
 export default function ConversationHistory({
   open, onClose, conversations, currentId, loading, error,
-  onResume, onNew, onArchive,
+  onResume, onNew, onArchive, onDelete, onDeleteAll,
 }) {
   if (!open) return null
   return (
@@ -40,6 +40,13 @@ export default function ConversationHistory({
             <MessageSquarePlus className="h-4 w-4" />
             Tạo chiến dịch mới
           </Button>
+          {conversations.length > 0 && (
+            <button type="button" onClick={onDeleteAll}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50"
+              aria-label="Xóa toàn bộ lịch sử, kể cả cuộc trò chuyện đã lưu trữ">
+              <Trash2 className="h-3.5 w-3.5" /> Xóa toàn bộ lịch sử
+            </button>
+          )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -67,11 +74,18 @@ export default function ConversationHistory({
                       <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatTime(item.last_message_at || item.updated_at)}</span>
                     </div>
                   </button>
-                  {!active && (
-                    <button type="button" onClick={() => onArchive(item.conversation_id)} className="mt-2 flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-red-600">
-                      <Archive className="h-3 w-3" /> Lưu trữ
+                  <div className="mt-2 flex items-center gap-3">
+                    {!active && (
+                      <button type="button" onClick={() => onArchive(item.conversation_id)} className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-700"
+                        aria-label={`Lưu trữ ${item.title || 'campaign'}`}>
+                        <Archive className="h-3 w-3" /> Lưu trữ
+                      </button>
+                    )}
+                    <button type="button" onClick={() => onDelete(item)} className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700"
+                      aria-label={`Xóa ${item.title || 'campaign'}`}>
+                      <Trash2 className="h-3 w-3" /> Xóa
                     </button>
-                  )}
+                  </div>
                 </div>
               )
             })}

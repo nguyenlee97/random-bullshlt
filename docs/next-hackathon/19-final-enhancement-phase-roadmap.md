@@ -208,7 +208,9 @@ The shared adapter converts Autopilot's numeric creative indices into stable cre
 
 ## 7. FE-2 — Accounts, anonymous use and conversation history
 
-Implementation status (2026-07-17): the anonymous foundation is code-complete and locally verified. The agent now issues a hashed, server-owned anonymous identity through an HttpOnly SameSite cookie; creates opaque owned conversation/session IDs; lists, archives and resumes campaigns; restores the canonical workspace, full display transcript, pending proposal cards and latest Autopilot run; and keeps the short LLM context window separate from the longer UI transcript. Fresh load/reload opens the homepage with the two mode entrances and campaign history. Resuming history restores the campaign's immutable mode and exact state. Existing pre-FE-2 evaluator sessions remain migration-compatible, but every session attached to a conversation now requires the owning identity for chat, workspace, proposal, creative and Autopilot APIs.
+Implementation status (2026-07-17): the anonymous foundation is code-complete and locally verified. The agent now issues a hashed, server-owned anonymous identity through an HttpOnly SameSite cookie; creates opaque owned conversation/session IDs; lists, archives, permanently deletes and resumes campaigns; restores the canonical workspace, full display transcript, pending proposal cards and latest Autopilot run; and keeps the short LLM context window separate from the longer UI transcript. Fresh load/reload opens the homepage with the two mode entrances and campaign history. Resuming history restores the campaign's immutable mode and exact state. Existing pre-FE-2 evaluator sessions remain migration-compatible, but every session attached to a conversation now requires the owning identity for chat, workspace, proposal, creative and Autopilot APIs.
+
+Permanent deletion is intentionally distinct from archive. A user may delete one conversation after confirming its campaign name, or delete all active and archived conversations only after typing `XÓA TẤT CẢ`. Deletion removes the transcript, canonical workspace, proposals, creative jobs, Autopilot runs/events/tasks and graph checkpoints for the owned session. AdsPilot campaign orders remain business records. A conversation with a non-terminal Autopilot run cannot be deleted until that run is stopped or reaches a terminal state.
 
 Local verification: 209 backend tests, 30 frontend tests, production frontend build, browser create/list/resume/refresh journey, and a cookie-backed API journey that restored workspace revision 1 while the same workspace request without the owner cookie returned HTTP 401.
 
@@ -281,6 +283,8 @@ POST /api/conversations
 GET  /api/conversations/:id
 POST /api/conversations/:id/claim
 POST /api/conversations/:id/archive
+DELETE /api/conversations/:id
+DELETE /api/conversations   # body confirmation=DELETE_ALL
 
 POST /api/channel-links
 POST /api/channel-links/:token/confirm
@@ -296,6 +300,8 @@ Every workspace, run, proposal and order operation must resolve the actor server
 - Login from another browser lists and resumes account-owned conversations.
 - Claiming an anonymous conversation preserves messages, workspace revision, pending proposals and Autopilot run state.
 - Two users cannot read or mutate each other's conversations by guessing IDs.
+- Individual deletion requires confirmation and removes the conversation plus session-linked agent artifacts, while retaining AdsPilot orders.
+- Delete-all includes archived conversations, requires the explicit confirmation phrase, and is rejected while any selected conversation has a non-terminal Autopilot run.
 - A user may unlink Zalo without deleting web history.
 
 ## 8. FE-3 — Zalo OA channel foundation

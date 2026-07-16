@@ -64,6 +64,89 @@ async def test_conversations_are_owned_and_archive_is_non_destructive():
 
 
 @pytest.mark.asyncio
+async def test_delete_conversation_removes_owned_history_and_session_artifacts():
+    from identity import (
+        bootstrap_anonymous,
+        create_conversation,
+        delete_conversation,
+        get_conversation,
+        list_conversations,
+    )
+    from session import add_message
+
+    identity = await bootstrap_anonymous()
+    removed = await create_conversation(identity["identity_id"], title="Remove me")
+    kept = await create_conversation(identity["identity_id"], title="Keep me")
+    await add_message(removed["session_id"], "user", "secret brief")
+
+    result = await delete_conversation(
+        identity["identity_id"], removed["conversation_id"]
+    )
+
+    assert result["ok"] is True
+    assert result["orders_retained"] is True
+    assert result["deleted_artifacts"]["agent_sessions"] == 1
+    conversations = await list_conversations(identity["identity_id"])
+    assert [item["conversation_id"] for item in conversations] == [kept["conversation_id"]]
+    with pytest.raises(KeyError):
+        await get_conversation(identity["identity_id"], removed["conversation_id"])
+
+
+@pytest.mark.asyncio
+async def test_delete_all_conversations_includes_archived_items():
+    from identity import (
+        archive_conversation,
+        bootstrap_anonymous,
+        create_conversation,
+        delete_all_conversations,
+        list_conversations,
+    )
+
+    identity = await bootstrap_anonymous()
+    first = await create_conversation(identity["identity_id"])
+    await create_conversation(identity["identity_id"])
+    await archive_conversation(identity["identity_id"], first["conversation_id"])
+
+    result = await delete_all_conversations(identity["identity_id"])
+
+    assert result["deleted_count"] == 2
+    assert result["orders_retained"] is True
+    assert await list_conversations(identity["identity_id"], include_archived=True) == []
+
+
+@pytest.mark.asyncio
+async def test_delete_rejects_non_terminal_autopilot_run():
+    from autopilot.service import create_run
+    from identity import (
+        ConversationRunActive,
+        bootstrap_anonymous,
+        create_conversation,
+        delete_conversation,
+        list_conversations,
+    )
+    from workspace.service import apply_mutation, get_workspace
+
+    identity = await bootstrap_anonymous()
+    conversation = await create_conversation(
+        identity["identity_id"], experience_mode="autopilot"
+    )
+    workspace = await get_workspace(conversation["session_id"])
+    await apply_mutation(
+        conversation["session_id"], "brief", BRIEF,
+        base_revision=workspace["revision"], actor="test",
+        idempotency_key="delete-active-run:brief",
+    )
+    await create_run(
+        conversation["session_id"], creative_source="ai_generate",
+        idempotency_key="delete-active-run",
+    )
+
+    with pytest.raises(ConversationRunActive, match="Autopilot đang chạy"):
+        await delete_conversation(identity["identity_id"], conversation["conversation_id"])
+    assert len(await list_conversations(identity["identity_id"])) == 1
+
+
+@pytest.mark.asyncio
 async def test_explicit_homepage_mode_is_not_overwritten_by_legacy_workspace_default():
     from identity import bootstrap_anonymous, create_conversation, get_conversation
 

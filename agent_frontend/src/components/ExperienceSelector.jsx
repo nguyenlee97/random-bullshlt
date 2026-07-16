@@ -1,6 +1,6 @@
 import {
   Archive, ArrowRight, Bot, Check, Clock3, History, Loader2,
-  Route, ShieldCheck, Sparkles,
+  Route, ShieldCheck, Sparkles, Trash2,
 } from 'lucide-react'
 
 const modes = [
@@ -36,7 +36,7 @@ const formatTime = value => {
 
 export default function ExperienceSelector({
   onSelect, busy, error, conversations = [], historyLoading = false,
-  historyError = '', onResume, onArchive,
+  historyError = '', onResume, onArchive, onDelete, onDeleteAll,
 }) {
   return (
     <main className="h-screen h-[100dvh] overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top_left,_#dcebff_0,_#f4f7fb_38%,_#eef4fb_100%)] px-5 py-8 sm:px-8 sm:py-12">
@@ -108,7 +108,16 @@ export default function ExperienceSelector({
               <h2 id="campaign-history-title" className="mt-2 text-2xl font-black text-slate-900">Tiếp tục campaign đã lưu</h2>
               <p className="mt-1 text-sm text-slate-600">Mở lại đúng chat, workspace, chế độ và tiến độ trước đó.</p>
             </div>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">{conversations.length} campaign</span>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">{conversations.length} campaign</span>
+              {conversations.length > 0 && (
+                <button type="button" onClick={onDeleteAll}
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-red-600 hover:bg-red-50"
+                  aria-label="Xóa toàn bộ lịch sử, kể cả cuộc trò chuyện đã lưu trữ">
+                  <Trash2 className="h-3 w-3" /> Xóa tất cả
+                </button>
+              )}
+            </div>
           </div>
 
           {historyLoading && (
@@ -136,9 +145,16 @@ export default function ExperienceSelector({
                       <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatTime(item.last_message_at || item.updated_at)}</span>
                     </div>
                   </button>
-                  <button type="button" onClick={() => onArchive(item.conversation_id)} className="mt-3 flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-red-600">
-                    <Archive className="h-3 w-3" /> Lưu trữ
-                  </button>
+                  <div className="mt-3 flex items-center gap-3">
+                    <button type="button" onClick={() => onArchive(item.conversation_id)} className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-700"
+                      aria-label={`Lưu trữ ${item.title || 'campaign'}`}>
+                      <Archive className="h-3 w-3" /> Lưu trữ
+                    </button>
+                    <button type="button" onClick={() => onDelete(item)} className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700"
+                      aria-label={`Xóa ${item.title || 'campaign'}`}>
+                      <Trash2 className="h-3 w-3" /> Xóa
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>

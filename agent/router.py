@@ -72,6 +72,10 @@ class _ConversationCreateRequest(BaseModel):
     experience_mode: str | None = None
 
 
+class _ConversationDeleteAllRequest(BaseModel):
+    confirmation: str
+
+
 @agent_router.post("/auth/anonymous")
 async def anonymous_bootstrap(request: Request, response: Response):
     from identity import bootstrap_anonymous
@@ -130,6 +134,38 @@ async def conversations_archive(conversation_id: str, request: Request):
         return await archive_conversation(identity["identity_id"], conversation_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="conversation not found") from exc
+
+
+@agent_router.delete("/conversations/{conversation_id}")
+async def conversations_delete(conversation_id: str, request: Request):
+    from identity import ConversationRunActive, delete_conversation
+    identity = await _request_identity(request)
+    try:
+        return await delete_conversation(identity["identity_id"], conversation_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="conversation not found") from exc
+    except ConversationRunActive as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": str(exc), "active_conversations": exc.conversations},
+        ) from exc
+
+
+@agent_router.delete("/conversations")
+async def conversations_delete_all(
+    request: Request, body: _ConversationDeleteAllRequest,
+):
+    from identity import ConversationRunActive, delete_all_conversations
+    if body.confirmation != "DELETE_ALL":
+        raise HTTPException(status_code=422, detail="invalid delete-all confirmation")
+    identity = await _request_identity(request)
+    try:
+        return await delete_all_conversations(identity["identity_id"])
+    except ConversationRunActive as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": str(exc), "active_conversations": exc.conversations},
+        ) from exc
 
 
 @agent_router.get("/logs/{session_id}")
