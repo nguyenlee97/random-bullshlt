@@ -13,6 +13,10 @@ The first run builds all services and idempotently seeds 310 audience segments,
 35 placements, three sample campaigns, and 180 analytics records. Open:
 
 - Application: http://localhost:5175
+- AdsPilot campaign manager: http://localhost:5173
+- ZNews mock site: http://localhost:5176
+- Báo Mới mock site: http://localhost:5177
+- ZingMP3 mock site: http://localhost:5178
 - Agent health/readiness: http://localhost:8080/health and http://localhost:8080/ready
 - Backend health: http://localhost:3000/api/health
 - Prometheus: http://localhost:9090
@@ -24,10 +28,33 @@ Useful checks:
 ```powershell
 docker compose logs -f agent backend frontend
 docker compose exec -T backend node seed/smoke-test.js
+node backend/seed/local-ad-stack-smoke.js
 cd agent
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
 .\venv\Scripts\python.exe -m pytest tests -q
 ```
+
+## Verify an Autopilot order on the local ad stack
+
+All local surfaces use the same backend at `http://localhost:3000` and the same
+MongoDB `adspilot` database. Local mock sites do not render canned fallback ads:
+an empty slot really means that no active local order matched that placement.
+
+1. Complete an Autopilot run and approve order creation.
+2. Open http://localhost:5173/#/orders and find the new order.
+3. The order is intentionally created as `pending`. Choose **Activate** to make
+   it `active` after reviewing its placements, creative mappings, dates and warnings.
+4. Use the local test-site links shown in the Autopilot result, or open the mock
+   sites above. Refresh the matching page after activation.
+5. Confirm delivery directly when debugging:
+
+```powershell
+Invoke-RestMethod "http://localhost:3000/api/ads/check?zone=ZingMP3_Masthead&site=zingmp3"
+```
+
+The response must contain the same `campaignId` and creative URL as the order.
+Impressions and clicks from the local mock sites are written back to the local
+backend and become available to its analytics endpoints.
 
 Stop the stack while preserving local data:
 

@@ -6,6 +6,8 @@ import {
 import { AgentAPI } from '@/api/agentApi'
 import StrategySimulator from '@/components/StrategySimulator'
 
+const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
+
 const POLICY_OPTIONS = [
   { value: 'critical_only', label: 'Duyệt các bước quan trọng', note: 'Khuyến nghị' },
   { value: 'review_every_stage', label: 'Duyệt từng giai đoạn', note: 'Kiểm soát tối đa' },
@@ -658,8 +660,8 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
                       {zone.channel || zone.siteId || 'Test site'} <ExternalLink className="h-3 w-3" />
                     </a>
                   ))}
-                  <a href="https://adspilot.pawgrammers.io.vn" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:border-brand-200 hover:text-brand-700">
-                    Mở AdsPilot <ExternalLink className="h-3 w-3" />
+                  <a href={`${ADSPILOT_URL}/#/orders`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:border-brand-200 hover:text-brand-700">
+                    Quản lý order trên AdsPilot <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
               </div>

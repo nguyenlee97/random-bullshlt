@@ -17,6 +17,7 @@ const AD_API_BASE = _isVPS
 
 const AD_SITE_ID  = 'baomoi.com';
 const AD_TIMEOUT  = 4000;
+const ALLOW_FALLBACK_ADS = window.__ADSTACK_CONFIG__?.allowFallbackAds ?? _isVPS;
 
 // ── Impression / Click Tracking ──────────────────────────────────────────────
 function trackImpression(campaignId, placementId) {
@@ -239,14 +240,16 @@ async function fetchAdForZone(zoneId) {
             };
         }
 
-        console.log(`[AdAgent] No live campaign for ${zoneId}. Using fallback.`);
-        return getFallbackMockAd(zoneId);
+        console.log(`[AdAgent] No live campaign for ${zoneId}.`);
+        return ALLOW_FALLBACK_ADS
+            ? getFallbackMockAd(zoneId)
+            : { hasAd: false, zoneId, reason: 'no_active_campaign' };
 
     } catch (error) {
-        console.warn(`[AdAgent] Backend unreachable for zone ${zoneId}: ${error.message}. Using fallback.`);
-        return new Promise(resolve =>
-            setTimeout(() => resolve(getFallbackMockAd(zoneId)), 200 + Math.random() * 300)
-        );
+        console.warn(`[AdAgent] Backend unreachable for zone ${zoneId}: ${error.message}.`);
+        return ALLOW_FALLBACK_ADS
+            ? getFallbackMockAd(zoneId)
+            : { hasAd: false, zoneId, reason: 'backend_unreachable' };
     }
 }
 

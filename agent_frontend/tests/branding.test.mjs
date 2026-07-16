@@ -104,6 +104,29 @@ test('agent credential stays behind the frontend proxy', async () => {
   assert.match(compose, /127\.0\.0\.1:27017:27017/)
 })
 
+test('local Compose includes AdsPilot and truthful mock-site ad delivery', async () => {
+  const compose = await source('docker-compose.yml')
+  const dockerfile = await source('agent_frontend/Dockerfile')
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  const znewsApi = await source('znews_replicate/api.js')
+  const baomoiApi = await source('baomoi_replicate/api.js')
+  const zingmp3Api = await source('zingmp3_replicate/api.js')
+
+  assert.match(compose, /127\.0\.0\.1:5173:80/)
+  assert.match(compose, /127\.0\.0\.1:5176:80/)
+  assert.match(compose, /127\.0\.0\.1:5177:80/)
+  assert.match(compose, /127\.0\.0\.1:5178:80/)
+  assert.match(compose, /SITE_URL_MODE=local/)
+  assert.match(compose, /VITE_ADSPILOT_URL: http:\/\/localhost:5173/)
+  assert.match(dockerfile, /ARG VITE_ADSPILOT_URL=/)
+  assert.match(panel, /import\.meta\.env\.VITE_ADSPILOT_URL/)
+  for (const api of [znewsApi, baomoiApi, zingmp3Api]) {
+    assert.match(api, /ALLOW_FALLBACK_ADS/)
+    assert.match(api, /reason: 'no_active_campaign'/)
+    assert.match(api, /reason: 'backend_unreachable'/)
+  }
+})
+
 test('campaign strategy simulator is integrated into Autopilot', async () => {
   const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
   const simulator = await source('agent_frontend/src/components/StrategySimulator.jsx')

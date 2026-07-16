@@ -21,6 +21,7 @@ const AD_API_BASE = _isVPS
 
 const AD_SITE_ID  = 'znews.vn';
 const AD_TIMEOUT  = 4000; // ms before giving up on backend
+const ALLOW_FALLBACK_ADS = window.__ADSTACK_CONFIG__?.allowFallbackAds ?? _isVPS;
 
 // ── Impression / Click Tracking ──────────────────────────────────────────────
 /**
@@ -187,15 +188,17 @@ async function fetchAdForZone(zoneId) {
             };
         }
 
-        // Backend responded but no active campaign → use fallback
-        console.log(`[AdAgent] No live campaign for ${zoneId}. Using fallback.`);
-        return getFallbackMockAd(zoneId);
+        // Local verification must never look successful because of a canned ad.
+        console.log(`[AdAgent] No live campaign for ${zoneId}.`);
+        return ALLOW_FALLBACK_ADS
+            ? getFallbackMockAd(zoneId)
+            : { hasAd: false, zoneId, reason: 'no_active_campaign' };
 
     } catch (error) {
-        console.warn(`[AdAgent] Backend unreachable for zone ${zoneId}: ${error.message}. Using fallback.`);
-        return new Promise(resolve =>
-            setTimeout(() => resolve(getFallbackMockAd(zoneId)), 200 + Math.random() * 300)
-        );
+        console.warn(`[AdAgent] Backend unreachable for zone ${zoneId}: ${error.message}.`);
+        return ALLOW_FALLBACK_ADS
+            ? getFallbackMockAd(zoneId)
+            : { hasAd: false, zoneId, reason: 'backend_unreachable' };
     }
 }
 

@@ -320,7 +320,7 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
   const dateRange = brief?.startDate && brief?.endDate
     ? `${brief.startDate} → ${brief.endDate}` : brief?.startDate || '—'
 
-  const ADSPILOT_URL = 'https://adspilot.pawgrammers.io.vn'
+  const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
   const ADSPILOT_ORDERS = `${ADSPILOT_URL}/#/orders`
 
   // Group selected zone IDs by platform siteUrl so each platform only captures
