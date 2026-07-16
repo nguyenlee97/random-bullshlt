@@ -331,6 +331,7 @@ class _WorkspacePreferencesRequest(BaseModel):
     session_id: str = "default"
     experience_mode: str | None = None
     approval_policy: str | None = None
+    creative_source: str | None = None
     base_revision: int | None = None
     actor: str = "campaign_operator"
     idempotency_key: str = ""
@@ -350,6 +351,7 @@ async def workspace_preferences(request: _WorkspacePreferencesRequest):
             request.session_id,
             experience_mode=request.experience_mode,
             approval_policy=request.approval_policy,
+            creative_source=request.creative_source,
             base_revision=request.base_revision,
             actor=request.actor,
             idempotency_key=request.idempotency_key,
@@ -586,6 +588,7 @@ async def commit_workspace(request: _WorkspaceMutationRequest):
 class _AutopilotStartRequest(BaseModel):
     session_id: str = "default"
     approval_policy: str = "critical_only"
+    creative_source: str
     actor: str = "campaign_operator"
     idempotency_key: str = ""
 
@@ -619,6 +622,7 @@ async def autopilot_start(request: _AutopilotStartRequest):
         return await create_run(
             request.session_id,
             approval_policy=request.approval_policy,
+            creative_source=request.creative_source,
             actor=request.actor,
             idempotency_key=request.idempotency_key,
         )

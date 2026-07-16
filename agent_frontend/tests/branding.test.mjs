@@ -124,6 +124,19 @@ test('campaign strategy simulator is integrated into Autopilot', async () => {
   assert.match(panel, /RAG\/rerank/)
 })
 
+test('Autopilot requires an explicit creative source and supports automatic generation', async () => {
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  const api = await source('agent_frontend/src/api/agentApi.js')
+
+  assert.match(panel, /Tôi sẽ tải creative lên/)
+  assert.match(panel, /Để AI tự tạo creative/)
+  assert.match(panel, /creativeSource === 'ai_generate'/)
+  assert.match(panel, /!briefReady \|\| !creativeSource/)
+  assert.match(panel, /startAutopilot\(policy, creativeSource\)/)
+  assert.match(api, /creative_source: creativeSource/)
+  assert.match(api, /autopilot-start:\$\{SESSION_ID\}:\$\{creativeSource\}/)
+})
+
 test('Autopilot presents artifacts without Guided workflow controls', async () => {
   const app = await source('agent_frontend/src/App.jsx')
   const workspace = await source('agent_frontend/src/components/WorkspacePane/index.jsx')

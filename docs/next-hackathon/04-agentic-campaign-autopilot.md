@@ -87,6 +87,17 @@ The ideal flow is:
 
 The UI must not expose private model reasoning. It exposes task rationale, evidence, decisions, and validation results.
 
+### 3.4 Creative source is an explicit run input
+
+Before an Autopilot run starts, the operator must choose one creative-source policy:
+
+- `upload`: the run pauses at `prepare_creatives` until a canonical uploaded file exists.
+- `ai_generate`: the durable worker creates, resizes, stores and commits an AI-generated creative, then submits it to the same deterministic and VLM analysis path used for uploads.
+
+The first implementation generates one exact-size `zuma-box` 300×250 asset. Its storage key includes the run ID, format and brief revision; retries recover the deterministic stored asset instead of generating another image. Provider, model, prompt version, prompt fingerprint and format are persisted as provenance.
+
+Creative generation is not creative approval. A safety warning, low-confidence verdict or VLM timeout still pauses for a human. All approval policies still stop at the final launch gate before order creation. Multi-format generation is a later slice and must be placement-aware, cost-bounded and idempotent.
+
 ## 4. Core safety and consistency invariants
 
 These rules are non-negotiable:

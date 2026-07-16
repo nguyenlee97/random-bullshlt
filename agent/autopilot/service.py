@@ -56,10 +56,14 @@ STANDARD_PLAN: tuple[dict[str, Any], ...] = (
      "deps": ["generate_strategy"], "artifact": "audience", "review": "stage"},
     {"key": "derive_targeting", "capability": "derive_targeting_and_exclusions",
      "deps": ["retrieve_audience"], "artifact": "targeting", "review": "stage"},
+    {"key": "prepare_creatives", "capability": "prepare_creatives",
+     "deps": ["validate_brief"], "artifact": "creative", "review": "none"},
     {"key": "analyze_creatives", "capability": "analyze_creatives",
-     "deps": ["generate_strategy"], "artifact": "creative_verdict", "review": "critical"},
+     "deps": ["generate_strategy", "prepare_creatives"],
+     "artifact": "creative_verdict", "review": "critical"},
     {"key": "rank_placements", "capability": "rank_available_placements",
-     "deps": ["generate_strategy"], "artifact": "placements", "review": "stage"},
+     "deps": ["generate_strategy", "prepare_creatives"],
+     "artifact": "placements", "review": "stage"},
     {"key": "assign_creatives", "capability": "assign_creatives_to_placements",
      "deps": ["analyze_creatives", "rank_placements"], "artifact": "assignments",
      "review": "stage"},
@@ -168,11 +172,14 @@ async def create_run(
     session_id: str,
     *,
     approval_policy: str = "critical_only",
+    creative_source: str = "upload",
     actor: str = "campaign_operator",
     idempotency_key: str = "",
 ) -> dict:
     if approval_policy not in APPROVAL_POLICIES:
         raise ValueError("unsupported approval_policy")
+    if creative_source not in {"upload", "ai_generate"}:
+        raise ValueError("creative_source must be upload or ai_generate")
     key = idempotency_key.strip() or f"autopilot:{session_id}:{uuid.uuid4().hex}"
     runs, tasks, _ = await _collections()
     if runs is not None:
@@ -197,6 +204,7 @@ async def create_run(
 
     pref = await set_preferences(
         session_id, experience_mode="autopilot", approval_policy=approval_policy,
+        creative_source=creative_source,
         base_revision=workspace["revision"], actor=actor,
         idempotency_key=f"{key}:preferences",
     )
@@ -211,6 +219,7 @@ async def create_run(
         "workspace_revision": workspace["revision"],
         "plan_revision": 1, "status": "queued",
         "approval_policy": approval_policy, "started_by": actor,
+        "creative_source": creative_source,
         "idempotency_key": key, "cancel_requested": False,
         "pause_requested": False, "current_task_id": None,
         "created_at": now, "updated_at": now,
@@ -231,7 +240,9 @@ async def create_run(
         async with _lock:
             _mem_runs[run_id] = run
             _mem_tasks.update({task["task_id"]: task for task in task_docs})
-    await _emit(run_id, "run_created", {"approval_policy": approval_policy})
+    await _emit(run_id, "run_created", {
+        "approval_policy": approval_policy, "creative_source": creative_source,
+    })
     return await get_run(run_id)
 
 
@@ -583,6 +594,31 @@ async def claim_next_task(worker_id: str, lease_seconds: int | None = None) -> d
                 if task["task_id"] == candidate["task_id"]
             )
     return None
+
+
+async def renew_task_lease(
+    task_id: str, worker_id: str, lease_seconds: int | None = None,
+) -> bool:
+    """Extend a running task lease while a long provider call is in flight."""
+    lease_seconds = lease_seconds or config.AUTOPILOT_TASK_LEASE_SECONDS
+    _, tasks, _ = await _collections()
+    now = _now()
+    updates = {
+        "lease_expires_at": now + timedelta(seconds=lease_seconds),
+        "updated_at": now,
+    }
+    if tasks is not None:
+        result = await tasks.update_one(
+            {"_id": task_id, "status": "running", "lease_owner": worker_id},
+            {"$set": updates},
+        )
+        return result.modified_count == 1
+    async with _lock:
+        task = _mem_tasks.get(task_id)
+        if not task or task.get("status") != "running" or task.get("lease_owner") != worker_id:
+            return False
+        task.update(updates)
+        return True
 
 
 async def complete_task(

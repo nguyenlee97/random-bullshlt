@@ -14,6 +14,7 @@ from autopilot.service import (
     fail_task,
     get_run,
     reconcile_active_runs,
+    renew_task_lease,
 )
 from config import config
 from workspace.service import commit_artifact_result, get_task_context
@@ -26,12 +27,32 @@ def worker_running() -> bool:
     return bool(_worker_task and not _worker_task.done())
 
 
+async def _lease_heartbeat(task: dict, stop: asyncio.Event) -> None:
+    interval = max(5.0, config.AUTOPILOT_TASK_LEASE_SECONDS / 3)
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+            return
+        except asyncio.TimeoutError:
+            try:
+                renewed = await renew_task_lease(task["task_id"], task["lease_owner"])
+            except Exception:
+                return
+            if not renewed:
+                return
+
+
 async def _process(task: dict) -> None:
     run = await get_run(task["run_id"])
     context = None
-    if task.get("artifact"):
-        context = await get_task_context(run["session_id"], task["artifact"])
+    heartbeat_stop = asyncio.Event()
+    heartbeat = asyncio.create_task(
+        _lease_heartbeat(task, heartbeat_stop),
+        name=f"autopilot-lease-{task['task_id']}",
+    )
     try:
+        if task.get("artifact"):
+            context = await get_task_context(run["session_id"], task["artifact"])
         output = await execute(task, run)
         needs_review = output.force_review or _needs_review(task, run["approval_policy"])
         pending_artifact = None
@@ -65,6 +86,9 @@ async def _process(task: dict) -> None:
             "task_id": task["task_id"], "error": str(exc)[:500],
         })
         await fail_task(task["task_id"], str(exc), retryable=True)
+    finally:
+        heartbeat_stop.set()
+        await heartbeat
 
 
 async def _loop() -> None:

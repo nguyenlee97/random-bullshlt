@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, AlertTriangle, Check, Circle, Loader2, Pause, Play, RotateCw,
-  ShieldCheck, Sparkles, Square, X,
+  ShieldCheck, Sparkles, Square, Upload, X,
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
 import StrategySimulator from '@/components/StrategySimulator'
@@ -15,7 +15,8 @@ const POLICY_OPTIONS = [
 const TASK_LABELS = {
   normalize_brief: 'Chuẩn hóa brief', validate_brief: 'Kiểm tra brief',
   generate_strategy: 'Xây dựng chiến lược', retrieve_audience: 'Tìm audience',
-  derive_targeting: 'Thiết lập targeting', analyze_creatives: 'Phân tích creative',
+  derive_targeting: 'Thiết lập targeting', prepare_creatives: 'Chuẩn bị creative',
+  analyze_creatives: 'Phân tích creative',
   rank_placements: 'Xếp hạng placements', assign_creatives: 'Gán creative',
   forecast: 'Dự báo reach & chi phí', build_order_draft: 'Tạo order draft',
   run_order_guard: 'Kiểm tra an toàn', launch_approval: 'Duyệt launch',
@@ -50,6 +51,8 @@ const evidenceText = evidence => {
   if (evidence.type === 'order_draft') return `Order draft: ${evidence.placements || 0} placements · idempotency ${evidence.idempotency_key || '—'}`
   if (evidence.type === 'order_create') return `Order create: ${evidence.order_id || 'đã ghi nhận'} · idempotency ${evidence.idempotency_key || '—'}`
   if (evidence.type === 'strategy_simulation') return `Simulator ${evidence.option_ids?.length || 0} phương án · đề xuất ${evidence.selected}`
+  if (evidence.type === 'creative_source') return `Creative ${evidence.source === 'ai_generate' ? 'AI tự tạo' : 'do người dùng tải lên'} · ${evidence.count || 0} file${evidence.reused ? ' · tái sử dụng' : ''}`
+  if (evidence.type === 'creative_generation') return `AI creative ${evidence.format_id || ''} · ${evidence.model || 'image model'} · idempotency ${evidence.idempotency_key || '—'}`
   if (evidence.type === 'creative_verdicts') return `${evidence.count || 0} creative verdict · ${evidence.revalidated ? 'đã revalidate' : 'hiện hành'}`
   return evidence.type?.replaceAll('_', ' ') || 'evidence'
 }
@@ -78,6 +81,7 @@ const validateBrief = brief => {
 
 export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceRefresh, onOpenChat, onOpenBrief, onOpenCreative, onStatusChange }) {
   const [policy, setPolicy] = useState('critical_only')
+  const [creativeSource, setCreativeSource] = useState(null)
   const [run, setRun] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -91,8 +95,30 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
   }, [onWorkspaceRefresh])
 
   useEffect(() => {
-    if (canonicalWorkspace) setWorkspaceSnapshot(canonicalWorkspace)
+    if (canonicalWorkspace) {
+      setWorkspaceSnapshot(canonicalWorkspace)
+      if (['upload', 'ai_generate'].includes(canonicalWorkspace.creative_source)) {
+        setCreativeSource(canonicalWorkspace.creative_source)
+      }
+    }
   }, [canonicalWorkspace])
+
+  const chooseCreativeSource = async value => {
+    if (loading) return
+    setLoading(true)
+    setCreativeSource(value)
+    setError('')
+    try {
+      const result = await AgentAPI.setWorkspacePreferences('autopilot', policy, value)
+      if (result?.ok === false) throw new Error(result?.detail || 'Không thể lưu lựa chọn creative.')
+      await loadPrerequisites()
+    } catch (err) {
+      setCreativeSource(null)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const loadPrerequisites = useCallback(async () => {
     const [workspace, proposals] = await Promise.all([
@@ -144,7 +170,10 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
       if (!canonicalBrief || validationErrors.length) {
         throw new Error(`Brief đã duyệt chưa hợp lệ: ${validationErrors.join(', ')}.`)
       }
-      const created = await AgentAPI.startAutopilot(policy)
+      if (!creativeSource) {
+        throw new Error('Hãy chọn tải creative lên hoặc để AI tự tạo trước khi bắt đầu.')
+      }
+      const created = await AgentAPI.startAutopilot(policy, creativeSource)
       if (!created?.run_id) throw new Error(created?.detail || 'Không thể khởi động Campaign Autopilot.')
       setRun(created)
     } catch (err) {
@@ -257,6 +286,29 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
             </div>
           </div>
 
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-3">
+              <p className="text-sm font-black text-slate-900">Creative cho chiến dịch</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Chọn cách chuẩn bị creative. Lựa chọn này độc lập với chính sách duyệt của Agent.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={() => chooseCreativeSource('upload')}
+                aria-pressed={creativeSource === 'upload'}
+                className={`rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${creativeSource === 'upload' ? 'border-brand-400 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-brand-200 hover:bg-brand-50/50'}`}>
+                <span className="flex items-center gap-2 text-sm font-bold text-slate-900"><Upload className="h-4 w-4 text-brand-600" /> Tôi sẽ tải creative lên</span>
+                <span className="mt-2 block text-xs leading-5 text-slate-500">Agent sẽ tạm dừng ở bước Creative để bạn tải file và duyệt kết quả phân tích.</span>
+                {creativeSource === 'upload' && <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đã chọn</span>}
+              </button>
+              <button type="button" onClick={() => chooseCreativeSource('ai_generate')}
+                aria-pressed={creativeSource === 'ai_generate'}
+                className={`rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${creativeSource === 'ai_generate' ? 'border-brand-400 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-brand-200 hover:bg-brand-50/50'}`}>
+                <span className="flex items-center gap-2 text-sm font-bold text-slate-900"><Sparkles className="h-4 w-4 text-brand-600" /> Để AI tự tạo creative</span>
+                <span className="mt-2 block text-xs leading-5 text-slate-500">Agent tự tạo, lưu và kiểm tra creative. Bạn chỉ cần review nếu có rủi ro hoặc độ tin cậy thấp.</span>
+                {creativeSource === 'ai_generate' && <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đã chọn</span>}
+              </button>
+            </div>
+          </div>
+
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <div className="mb-4">
@@ -301,7 +353,7 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
               <p className="text-sm font-bold text-slate-900">Sẵn sàng để Agent lập kế hoạch?</p>
               <p className="mt-1 text-xs text-slate-500">Agent luôn dừng trước hành động tạo order để bạn xác nhận.</p>
             </div>
-            <button type="button" disabled={!briefReady || loading || prerequisitesLoading} onClick={start}
+            <button type="button" disabled={!briefReady || !creativeSource || loading || prerequisitesLoading} onClick={start}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-500 px-6 text-sm font-bold text-white shadow-sm hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
               Bắt đầu Autopilot
@@ -315,6 +367,7 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
               <Sparkles className="h-4 w-4 text-brand-500" />
               <span className="text-sm font-bold text-slate-900">Campaign Autopilot</span>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Plan v{run.plan_revision || 1}</span>
+              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700">{run.creative_source === 'ai_generate' ? 'AI tự tạo creative' : 'Creative tải lên'}</span>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${run.status === 'waiting_review' ? 'bg-amber-100 text-amber-800' : run.status === 'failed' ? 'bg-red-100 text-red-700' : run.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-brand-50 text-brand-700'}`}>{RUN_LABELS[run.status] || run.status}</span>
             </div>
             <div className="h-1.5 min-w-[130px] flex-1 overflow-hidden rounded-full bg-slate-100">

@@ -236,6 +236,67 @@ async def _derive_targeting(run: dict, workspace: dict) -> CapabilityResult:
     )
 
 
+async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
+    creative = _artifact(workspace, "creative", {})
+    files = creative.get("files", []) if isinstance(creative, dict) else []
+    source = run.get("creative_source", "upload")
+
+    if source == "upload":
+        if files:
+            return CapabilityResult(
+                value=creative,
+                evidence=[{"type": "creative_source", "source": "upload",
+                           "count": len(files), "reused": True}],
+                externally_committed=True,
+            )
+        return CapabilityResult(
+            value={
+                "files": [], "uploaded": False, "source": "upload",
+                "reason": "missing_creative",
+                "message": "Hãy tải ít nhất một creative để Autopilot tiếp tục.",
+                "review_action": "retry",
+            },
+            evidence=[{"type": "input_required", "artifact": "creative",
+                       "source": "upload"}],
+            force_review=True,
+        )
+
+    if source != "ai_generate":
+        raise ValueError(f"unsupported creative source: {source}")
+
+    generated_for_run = [
+        item for item in files
+        if item.get("source") == "ai_generated"
+        and str((item.get("generation") or {}).get("idempotencyKey", "")).startswith(
+            f"autopilot:{run['run_id']}:"
+        )
+    ]
+    if generated_for_run:
+        return CapabilityResult(
+            value=creative,
+            evidence=[{"type": "creative_source", "source": "ai_generate",
+                       "count": len(generated_for_run), "reused": True}],
+            externally_committed=True,
+        )
+
+    from autopilot.creative_generation import generate_creative
+    generated = await generate_creative(run, workspace)
+    return CapabilityResult(
+        value={"files": [generated], "uploaded": True, "source": "ai_generate"},
+        evidence=[{
+            "type": "creative_generation", "source": "ai_generate",
+            "count": 1, "format_id": generated.get("formatId"),
+            "model": (generated.get("generation") or {}).get("model"),
+            "prompt_fingerprint": (
+                generated.get("generation") or {}
+            ).get("promptFingerprint"),
+            "idempotency_key": (
+                generated.get("generation") or {}
+            ).get("idempotencyKey"),
+        }],
+    )
+
+
 async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
     from creative_intel.service import enqueue_analysis, get_intel
     creative = _artifact(workspace, "creative", {})
@@ -576,6 +637,7 @@ CAPABILITIES = {
     "generate_strategy_options": _generate_strategy,
     "retrieve_and_rank_audience": _retrieve_audience,
     "derive_targeting_and_exclusions": _derive_targeting,
+    "prepare_creatives": _prepare_creatives,
     "analyze_creatives": _analyze_creatives,
     "rank_available_placements": _rank_placements,
     "assign_creatives_to_placements": _assign_creatives,

@@ -38,7 +38,12 @@ async def test_runtime_failure_keeps_readiness_false(monkeypatch):
     monkeypatch.setattr(embeddings, "embed_sparse", broken)
     await runtime.stop_prewarm()
     await runtime.start_prewarm()
-    await asyncio.sleep(0.02)
+    # A busy suite may delay the default thread-pool worker. Poll the actual
+    # lifecycle condition instead of assuming the failure finishes in 20 ms.
+    for _ in range(100):
+        if not runtime.runtime_status()["warming"]:
+            break
+        await asyncio.sleep(0.01)
     status = runtime.runtime_status()
     assert status["ready"] is False
     assert status["warming"] is False

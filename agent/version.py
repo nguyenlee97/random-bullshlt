@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-16.1"
+BUILD_VERSION = "2026-07-16.2"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -85,6 +85,9 @@ BUILD_FEATURES = [
     "transactional-campaign-workspace", # revisioned canonical artifacts + typed proposals
     "nonlinear-artifact-recompute",     # dependency-aware stale/reuse orchestration
     "durable-campaign-autopilot",       # persisted runs/tasks, leases, review, pause/resume/cancel
+    "autopilot-creative-source",         # explicit upload or autonomous AI-generation run policy
+    "autopilot-idempotent-image-gen",    # exact-size asset provenance + storage recovery checkpoint
+    "autopilot-lease-heartbeat",         # long provider calls retain durable worker ownership
     "advertising-agent-blue-ui",        # Zalo-inspired original blue identity + two-mode selector
     "switchable-mode-canvases",          # Guided/Autopilot tabs with durable desktop/mobile state
     "campaign-strategy-simulator",      # three deterministic, auditable strategy scenarios

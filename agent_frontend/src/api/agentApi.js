@@ -1248,7 +1248,7 @@ export const AgentAPI = {
     }
   },
 
-  async setWorkspacePreferences(experienceMode, approvalPolicy = null) {
+  async setWorkspacePreferences(experienceMode, approvalPolicy = null, creativeSource = null) {
     try {
       if (WORKSPACE_REVISION == null) await this.getWorkspace()
       const res = await agentFetch(`${AGENT_URL}/api/agent/workspace/preferences`, {
@@ -1258,9 +1258,10 @@ export const AgentAPI = {
           session_id: SESSION_ID,
           experience_mode: experienceMode,
           approval_policy: approvalPolicy,
+          creative_source: creativeSource,
           base_revision: WORKSPACE_REVISION,
           actor: 'campaign_operator',
-          idempotency_key: `experience:${SESSION_ID}:${experienceMode}:${approvalPolicy || ''}`,
+          idempotency_key: `experience:${SESSION_ID}:${experienceMode}:${approvalPolicy || ''}:${creativeSource || ''}`,
         }),
         signal: AbortSignal.timeout(5000),
       })
@@ -1275,7 +1276,7 @@ export const AgentAPI = {
     }
   },
 
-  async startAutopilot(approvalPolicy = 'critical_only') {
+  async startAutopilot(approvalPolicy = 'critical_only', creativeSource) {
     try {
       const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs`, {
         method: 'POST',
@@ -1283,8 +1284,9 @@ export const AgentAPI = {
         body: JSON.stringify({
           session_id: SESSION_ID,
           approval_policy: approvalPolicy,
+          creative_source: creativeSource,
           actor: 'campaign_operator',
-          idempotency_key: `autopilot-start:${SESSION_ID}`,
+          idempotency_key: `autopilot-start:${SESSION_ID}:${creativeSource}`,
         }),
         signal: AbortSignal.timeout(10000),
       })

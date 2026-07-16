@@ -76,6 +76,7 @@ def _default_workspace(session_id: str, form_state: dict | None = None) -> dict:
         "revision": 0,
         "experience_mode": "guided",
         "approval_policy": "review_every_stage",
+        "creative_source": None,
         "artifacts": _legacy_artifacts(form_state or {}),
         "events": [],
         "applied_mutations": [],
@@ -176,6 +177,7 @@ async def set_preferences(
     *,
     experience_mode: str | None = None,
     approval_policy: str | None = None,
+    creative_source: str | None = None,
     base_revision: int | None = None,
     actor: str = "campaign_operator",
     idempotency_key: str = "",
@@ -187,7 +189,9 @@ async def set_preferences(
         None, "review_every_stage", "critical_only", "auto_build_draft"
     }:
         raise ValueError("unsupported approval_policy")
-    if experience_mode is None and approval_policy is None:
+    if creative_source not in {None, "upload", "ai_generate"}:
+        raise ValueError("creative_source must be upload or ai_generate")
+    if experience_mode is None and approval_policy is None and creative_source is None:
         raise ValueError("at least one preference is required")
 
     current = await get_workspace(session_id)
@@ -198,6 +202,7 @@ async def set_preferences(
         name: value for name, value in {
             "experience_mode": experience_mode,
             "approval_policy": approval_policy,
+            "creative_source": creative_source,
         }.items() if value is not None and current.get(name) != value
     }
     if not changed:

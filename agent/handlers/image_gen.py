@@ -3,13 +3,15 @@ AI Image Generation handler — uses VNG Cloud gpt-image-1.
 Tracks per-session generation count (max 10).
 Builds a safe-zone prompt from the format catalog + campaign brief.
 """
-import os
+import hashlib
 import httpx
 from config import config
 from session import log_event
 
 # ─── Max generations per session ─────────────────────────────────────────────
 MAX_GENERATIONS = 10
+IMAGE_MODEL = "openai/gpt-image-1"
+PROMPT_VERSION = "image-gen-v1"
 
 # In-memory generation counter: { session_id: int }
 _gen_count: dict[str, int] = {}
@@ -247,6 +249,20 @@ def _build_prompt(fmt: dict, brief: dict, custom_prompt: str = "") -> str:
     )
 
 
+def generation_provenance(brief: dict, format_id: str, custom_prompt: str = "") -> dict:
+    """Return stable metadata for one generation request without calling MaaS."""
+    fmt = AD_FORMATS.get(format_id)
+    if not fmt:
+        raise ValueError(f"Unknown format_id: {format_id}")
+    prompt = _build_prompt(fmt, brief, custom_prompt=custom_prompt)
+    return {
+        "provider": "vngcloud_maas",
+        "model": IMAGE_MODEL,
+        "promptVersion": PROMPT_VERSION,
+        "promptFingerprint": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+    }
+
+
 # ─── Handler ──────────────────────────────────────────────────────────────────
 async def handle_generate_image(session_id: str, brief: dict, format_id: str, custom_prompt: str = "") -> dict:
     """
@@ -270,6 +286,7 @@ async def handle_generate_image(session_id: str, brief: dict, format_id: str, cu
 
     # Build prompt
     prompt = _build_prompt(fmt, brief, custom_prompt=custom_prompt)
+    provenance = generation_provenance(brief, format_id, custom_prompt)
 
     # Call VNG Cloud image API
     api_key = config.AI_PLATFORM_API_KEY
@@ -285,7 +302,7 @@ async def handle_generate_image(session_id: str, brief: dict, format_id: str, cu
                     "Authorization": f"Bearer {api_key}",
                 },
                 json={
-                    "model": "openai/gpt-image-1",
+                    "model": IMAGE_MODEL,
                     "prompt": prompt,
                     "n": 1,
                     "quality": "medium",
@@ -321,6 +338,7 @@ async def handle_generate_image(session_id: str, brief: dict, format_id: str, cu
             "width": fmt["width"],
             "height": fmt["height"],
             "remaining": remaining,
+            **provenance,
         }
 
     except httpx.TimeoutException:

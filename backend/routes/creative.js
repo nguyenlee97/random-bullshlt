@@ -97,7 +97,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
 // Used by AI agent passing image bytes from image generation API
 // Returns: { ok, url, filename, size }
 router.post('/upload-base64', (req, res) => {
-    const { base64, filename: rawName, mimeType } = req.body || {};
+    const { base64, filename: rawName, mimeType, idempotencyKey: rawKey } = req.body || {};
 
     if (!base64) {
         return res.status(400).json({ error: '"base64" field is required.' });
@@ -127,7 +127,10 @@ router.post('/upload-base64', (req, res) => {
         if (ALLOWED_EXTENSIONS.has(candidate)) ext = candidate;
     }
 
-    const filename = uniqueName(`upload${ext}`);
+    const idempotencyKey = String(rawKey || '').trim();
+    const filename = idempotencyKey
+        ? `creative_ai_${crypto.createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 24)}${ext}`
+        : uniqueName(`upload${ext}`);
     const filepath = path.join(UPLOADS_DIR, filename);
 
     let buffer;
@@ -145,22 +148,30 @@ router.post('/upload-base64', (req, res) => {
         });
     }
 
-    fs.writeFile(filepath, buffer, (err) => {
+    const respond = (reused = false) => res.status(reused ? 200 : 201).json({
+        ok: true,
+        url: buildPublicUrl(req, filename),
+        filename,
+        size: buffer.length,
+        mimeType: mimeType || 'image/jpeg',
+        reused,
+    });
+
+    // A deterministic filename makes Autopilot retries and worker recovery
+    // idempotent at the storage boundary. Never overwrite an existing asset.
+    if (idempotencyKey && fs.existsSync(filepath)) {
+        return respond(true);
+    }
+
+    fs.writeFile(filepath, buffer, { flag: idempotencyKey ? 'wx' : 'w' }, (err) => {
+        if (err && err.code === 'EEXIST') return respond(true);
         if (err) {
             console.error('[Creative] Write failed:', err);
             return res.status(500).json({ error: 'Failed to save file to disk.' });
         }
 
-        const url = buildPublicUrl(req, filename);
         console.log(`[Creative] Base64 upload: ${filename} (${(buffer.length / 1024).toFixed(1)} KB)`);
-
-        res.status(201).json({
-            ok:       true,
-            url,
-            filename,
-            size:     buffer.length,
-            mimeType: mimeType || 'image/jpeg',
-        });
+        respond(false);
     });
 });
 

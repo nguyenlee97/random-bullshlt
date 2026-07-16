@@ -5,7 +5,7 @@ import pytest
 from autopilot import service
 from autopilot.capabilities import (
     CapabilityResult, _analyze_creatives, _create_order, _generate_strategy,
-    _rank_placements, _retrieve_audience,
+    _prepare_creatives, _rank_placements, _retrieve_audience,
 )
 from autopilot import worker
 from workspace.service import (
@@ -36,12 +36,14 @@ async def test_preferences_are_revisioned_without_invalidating_artifacts():
     before = await get_workspace("prefs")
     result = await set_preferences(
         "prefs", experience_mode="autopilot", approval_policy="critical_only",
+        creative_source="ai_generate",
         base_revision=before["revision"], actor="test", idempotency_key="pref-1",
     )
     after = await get_workspace("prefs")
     assert result["workspace_revision"] == before["revision"] + 1
     assert after["experience_mode"] == "autopilot"
     assert after["approval_policy"] == "critical_only"
+    assert after["creative_source"] == "ai_generate"
     assert after["artifacts"]["brief"]["status"] == "approved"
 
 
@@ -61,6 +63,29 @@ async def test_run_start_is_idempotent_and_has_fixed_plan():
     assert first["tasks"][0]["status"] == "queued"
     assert all(task["status"] == "pending" for task in first["tasks"][1:])
     assert first["trace_id"] == second["trace_id"]
+    assert first["creative_source"] == "upload"
+
+
+@pytest.mark.asyncio
+async def test_run_persists_explicit_ai_creative_source():
+    await _seed("start-ai-creative")
+    run = await service.create_run(
+        "start-ai-creative", creative_source="ai_generate",
+        idempotency_key="start-ai-creative",
+    )
+    workspace = await get_workspace("start-ai-creative")
+    assert run["creative_source"] == "ai_generate"
+    assert workspace["creative_source"] == "ai_generate"
+
+
+@pytest.mark.asyncio
+async def test_run_rejects_unknown_creative_source():
+    await _seed("start-invalid-creative")
+    with pytest.raises(ValueError, match="creative_source"):
+        await service.create_run(
+            "start-invalid-creative", creative_source="surprise-me",
+            idempotency_key="start-invalid-creative",
+        )
 
 
 @pytest.mark.asyncio
@@ -252,7 +277,8 @@ async def test_changing_committed_strategy_replans_only_consumers():
     _mark_tasks(run["run_id"], {
         "normalize_brief": "succeeded", "validate_brief": "succeeded",
         "generate_strategy": "succeeded", "retrieve_audience": "succeeded",
-        "derive_targeting": "succeeded", "analyze_creatives": "succeeded",
+        "derive_targeting": "succeeded", "prepare_creatives": "succeeded",
+        "analyze_creatives": "succeeded",
         "rank_placements": "succeeded", "assign_creatives": "succeeded",
         "forecast": "queued",
     })
@@ -290,6 +316,77 @@ async def test_expired_worker_lease_is_recovered():
     recovered = await service.get_run(run["run_id"])
     assert recovered["tasks"][0]["status"] == "queued"
     assert recovered["tasks"][0]["lease_owner"] is None
+
+
+@pytest.mark.asyncio
+async def test_running_worker_can_renew_its_lease():
+    await _seed("lease-renew")
+    run = await service.create_run("lease-renew", idempotency_key="lease-renew")
+    task = await service.claim_next_task("live-worker", lease_seconds=10)
+    previous_expiry = task["lease_expires_at"]
+    assert await service.renew_task_lease(task["task_id"], "live-worker", 30)
+    renewed = await service.get_run(run["run_id"])
+    renewed_task = next(item for item in renewed["tasks"] if item["task_id"] == task["task_id"])
+    assert renewed_task["lease_expires_at"] > previous_expiry
+    assert not await service.renew_task_lease(task["task_id"], "wrong-worker", 30)
+
+
+@pytest.mark.asyncio
+async def test_upload_creative_source_waits_for_a_file():
+    workspace = {"artifacts": {"creative": {"value": {"files": []}}}}
+    result = await _prepare_creatives(
+        {"run_id": "run-upload", "creative_source": "upload"}, workspace
+    )
+    assert result.force_review is True
+    assert result.value["reason"] == "missing_creative"
+    assert result.value["review_action"] == "retry"
+
+
+@pytest.mark.asyncio
+async def test_upload_creative_source_reuses_canonical_files():
+    creative = {"files": [{"url": "https://cdn.example/creative.png"}]}
+    workspace = {"artifacts": {"creative": {"value": creative}}}
+    result = await _prepare_creatives(
+        {"run_id": "run-upload", "creative_source": "upload"}, workspace
+    )
+    assert result.value == creative
+    assert result.externally_committed is True
+    assert result.force_review is False
+
+
+@pytest.mark.asyncio
+async def test_ai_creative_source_generates_without_manual_upload(monkeypatch):
+    import autopilot.creative_generation as creative_generation
+
+    generated = {
+        "url": "http://localhost:3000/uploads/ai.png",
+        "formatId": "zuma-box",
+        "source": "ai_generated",
+        "generation": {
+            "model": "openai/gpt-image-1",
+            "promptFingerprint": "abc",
+            "idempotencyKey": "autopilot:run-ai:zuma-box:brief-r1",
+        },
+    }
+
+    async def fake_generate(run, workspace):
+        return generated
+
+    monkeypatch.setattr(creative_generation, "generate_creative", fake_generate)
+    workspace = {"artifacts": {
+        "brief": {"revision": 1, "value": BRIEF},
+        "creative": {"value": {"files": []}},
+    }}
+    result = await _prepare_creatives(
+        {"run_id": "run-ai", "session_id": "ai", "creative_source": "ai_generate"},
+        workspace,
+    )
+    assert result.force_review is False
+    assert result.externally_committed is False
+    assert result.value == {
+        "files": [generated], "uploaded": True, "source": "ai_generate",
+    }
+    assert result.evidence[0]["model"] == "openai/gpt-image-1"
 
 
 @pytest.mark.asyncio
@@ -399,7 +496,8 @@ async def test_creative_edit_replans_only_creative_dependent_branch():
     _mark_tasks(run["run_id"], {
         "normalize_brief": "succeeded", "validate_brief": "succeeded",
         "generate_strategy": "succeeded", "retrieve_audience": "succeeded",
-        "derive_targeting": "succeeded", "analyze_creatives": "succeeded",
+        "derive_targeting": "succeeded", "prepare_creatives": "succeeded",
+        "analyze_creatives": "succeeded",
         "rank_placements": "succeeded", "assign_creatives": "succeeded",
         "forecast": "queued",
     })
