@@ -261,6 +261,10 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
   const displayBrief = canonicalBrief || brief || {}
   const briefErrors = useMemo(() => validateBrief(canonicalBrief), [canonicalBrief])
   const briefReady = Boolean(canonicalBrief) && briefErrors.length === 0 && !pendingProposals.length && !prerequisitesLoading
+  const startBlockers = [
+    !briefReady ? 'brief đã duyệt và hợp lệ' : null,
+    !creativeSource ? 'nguồn creative (tải lên hoặc AI tự tạo)' : null,
+  ].filter(Boolean)
   const retryAction = waiting?.result?.review_action === 'retry'
   const briefRetry = retryAction && waiting?.key === 'validate_brief'
   const retryReady = !briefRetry || (Boolean(canonicalBrief) && briefErrors.length === 0 && !pendingBrief)
@@ -362,13 +366,21 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
           <div className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-brand-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
             <div>
               <p className="text-sm font-bold text-slate-900">Sẵn sàng để Agent lập kế hoạch?</p>
-              <p className="mt-1 text-xs text-slate-500">Agent luôn dừng trước hành động tạo order để bạn xác nhận.</p>
+              {startBlockers.length ? (
+                <p className="mt-1 text-xs font-medium text-amber-700">
+                  Còn thiếu: {startBlockers.join(' và ')}. Bấm bắt đầu để xem hướng dẫn chi tiết.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-500">Agent luôn dừng trước hành động tạo order để bạn xác nhận.</p>
+              )}
             </div>
-            <button type="button" disabled={!briefReady || !creativeSource || loading || prerequisitesLoading} onClick={start}
+            <button type="button" disabled={loading || prerequisitesLoading} onClick={start}
+              aria-describedby={startBlockers.length ? 'autopilot-start-requirements' : undefined}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-500 px-6 text-sm font-bold text-white shadow-sm hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
               Bắt đầu Autopilot
             </button>
+            {startBlockers.length > 0 && <span id="autopilot-start-requirements" className="sr-only">Cần hoàn tất {startBlockers.join(' và ')}</span>}
           </div>
         </div>
       ) : (
