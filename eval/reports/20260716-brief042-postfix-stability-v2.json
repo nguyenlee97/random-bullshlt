@@ -1,0 +1,703 @@
+{
+  "label": "20260716-brief042-postfix-stability-v2",
+  "created_at": "2026-07-16T02:58:36.241137+00:00",
+  "agent_url": "http://localhost:8080",
+  "k": 15,
+  "expect_rag": true,
+  "summary": {
+    "n": 10,
+    "errors": 0,
+    "mean_recall@15": 0.667,
+    "mean_mrr@15": 1.0,
+    "exclusion_violations_total": 0,
+    "judge_score": null,
+    "unknown_recommendations_total": 0,
+    "source_grounding_violations_total": 0,
+    "rag_fallbacks": 0,
+    "mean_recommendations": 6,
+    "p50_latency_s": 3.91,
+    "p95_latency_s": 5.28
+  },
+  "results": [
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 5.4,
+      "rag": {
+        "queries": [
+          "Alta Capital Advisory | consideration | 800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí | Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành.",
+          "Small business owners",
+          "Entrepreneurship",
+          "Business services"
+        ],
+        "candidates": 85,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 1,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 2748,
+          "retrieve": 382,
+          "rerank": 0,
+          "generate": 2207
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT017",
+          "fullLabel": "Small business (business & finance)",
+          "reason": "Nhắm trực tiếp chủ doanh nghiệp nhỏ, đúng đối tượng cần tư vấn quản trị tài chính và mở rộng kinh doanh."
+        },
+        {
+          "segmentId": "INT005",
+          "fullLabel": "Business (business & finance)",
+          "reason": "Bao phủ nhóm người quan tâm đến hoạt động kinh doanh đang vận hành, phù hợp với dịch vụ tư vấn cho SME."
+        },
+        {
+          "segmentId": "INT009",
+          "fullLabel": "Entrepreneurship (business & finance)",
+          "reason": "Phù hợp với chủ shop/chủ doanh nghiệp đang xây dựng và phát triển mô hình kinh doanh."
+        },
+        {
+          "segmentId": "INT011",
+          "fullLabel": "Management (business & finance)",
+          "reason": "Liên quan trực tiếp đến nhu cầu quản trị vận hành và ra quyết định tài chính của chủ doanh nghiệp."
+        },
+        {
+          "segmentId": "BEH009",
+          "fullLabel": "New Active Business (< 24 months)",
+          "reason": "Nhắm các doanh nghiệp mới vận hành, thường có nhu cầu lập kế hoạch tăng trưởng và quản lý vốn."
+        },
+        {
+          "segmentId": "INT014",
+          "fullLabel": "Retail (industry)",
+          "reason": "Phù hợp với nhóm chủ shop/doanh nghiệp bán lẻ đang hoạt động, đúng mô tả không nhắm nhà đầu tư cá nhân."
+        }
+      ]
+    },
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 3.99,
+      "rag": {
+        "queries": [
+          "Alta Capital Advisory | consideration | 800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí | Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành.",
+          "Small business owners",
+          "Entrepreneurship",
+          "Business finance"
+        ],
+        "candidates": 85,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 1,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 1199,
+          "retrieve": 174,
+          "rerank": 0,
+          "generate": 2599
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT017",
+          "fullLabel": "Small business (business & finance)",
+          "reason": "Phù hợp trực tiếp với chủ doanh nghiệp nhỏ là nhóm mục tiêu chính của dịch vụ tư vấn."
+        },
+        {
+          "segmentId": "INT009",
+          "fullLabel": "Entrepreneurship (business & finance)",
+          "reason": "Bao phủ tín hiệu về người đang khởi nghiệp hoặc điều hành doanh nghiệp, phù hợp nhu cầu tư vấn mở rộng và quản lý vốn."
+        },
+        {
+          "segmentId": "INT011",
+          "fullLabel": "Management (business & finance)",
+          "reason": "Liên quan đến nhu cầu quản trị vận hành và tài chính của chủ doanh nghiệp đang điều hành SME."
+        },
+        {
+          "segmentId": "INT005",
+          "fullLabel": "Business (business & finance)",
+          "reason": "Segment rộng nhưng vẫn trực tiếp phản ánh đối tượng doanh nghiệp đang hoạt động, hỗ trợ mở rộng tệp đúng mục tiêu."
+        },
+        {
+          "segmentId": "BEH009",
+          "fullLabel": "New Active Business (< 24 months)",
+          "reason": "Nhắm các doanh nghiệp mới vận hành, thường có nhu cầu lập kế hoạch tăng trưởng và quản lý dòng vốn."
+        },
+        {
+          "segmentId": "BEH008",
+          "fullLabel": "New Active Business (< 12 months)",
+          "reason": "Biến thể gần hơn của tín hiệu doanh nghiệp mới, phù hợp với nhóm chủ shop/doanh nghiệp vừa bắt đầu cần tư vấn tài chính."
+        }
+      ]
+    },
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 3.56,
+      "rag": {
+        "queries": [
+          "Alta Capital Advisory | consideration | 800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí | Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành.",
+          "Small business owners",
+          "Entrepreneurship",
+          "Business services"
+        ],
+        "candidates": 85,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 1,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 1234,
+          "retrieve": 139,
+          "rerank": 0,
+          "generate": 2173
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT017",
+          "fullLabel": "Small business (business & finance)",
+          "reason": "Phù hợp trực tiếp với chủ doanh nghiệp nhỏ là nhóm mục tiêu chính của dịch vụ tư vấn."
+        },
+        {
+          "segmentId": "INT005",
+          "fullLabel": "Business (business & finance)",
+          "reason": "Bao phủ nhóm người đang vận hành hoạt động kinh doanh, phù hợp với nhu cầu quản trị và mở rộng doanh nghiệp."
+        },
+        {
+          "segmentId": "INT009",
+          "fullLabel": "Entrepreneurship (business & finance)",
+          "reason": "Nhắm đến người khởi nghiệp/chủ doanh nghiệp có nhu cầu lập kế hoạch tăng trưởng và quản lý vốn."
+        },
+        {
+          "segmentId": "INT011",
+          "fullLabel": "Management (business & finance)",
+          "reason": "Liên quan đến nhu cầu quản trị tài chính và điều hành doanh nghiệp của SME."
+        },
+        {
+          "segmentId": "INT014",
+          "fullLabel": "Retail (industry)",
+          "reason": "Phù hợp với chủ shop/doanh nghiệp bán lẻ đang vận hành, đúng với mô tả không nhắm nhà đầu tư cá nhân."
+        },
+        {
+          "segmentId": "BEH009",
+          "fullLabel": "New Active Business (< 24 months)",
+          "reason": "Nhắm các doanh nghiệp mới hoạt động, thường có nhu cầu tư vấn mở rộng và tối ưu dòng vốn."
+        }
+      ]
+    },
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 3.84,
+      "rag": {
+        "queries": [
+          "Alta Capital Advisory | consideration | 800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí | Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành.",
+          "Small business owners",
+          "Entrepreneurship",
+          "Business finance"
+        ],
+        "candidates": 85,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 1,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 1227,
+          "retrieve": 238,
+          "rerank": 0,
+          "generate": 2345
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT017",
+          "fullLabel": "Small business (business & finance)",
+          "reason": "Nhắm trực tiếp chủ doanh nghiệp nhỏ, đúng nhóm cần tư vấn quản trị tài chính và mở rộng kinh doanh."
+        },
+        {
+          "segmentId": "INT009",
+          "fullLabel": "Entrepreneurship (business & finance)",
+          "reason": "Phù hợp với nhóm chủ shop/chủ doanh nghiệp đang vận hành và có nhu cầu phát triển, tối ưu kế hoạch kinh doanh."
+        },
+        {
+          "segmentId": "INT011",
+          "fullLabel": "Management (business & finance)",
+          "reason": "Liên quan đến nhu cầu quản trị vận hành và tài chính của người ra quyết định trong SME."
+        },
+        {
+          "segmentId": "INT005",
+          "fullLabel": "Business (business & finance)",
+          "reason": "Bao phủ tín hiệu doanh nghiệp nói chung, phù hợp với dịch vụ tư vấn cho chủ doanh nghiệp đang hoạt động."
+        },
+        {
+          "segmentId": "BEH009",
+          "fullLabel": "New Active Business (< 24 months)",
+          "reason": "Nhắm các doanh nghiệp mới vận hành, thường có nhu cầu lập kế hoạch vốn và tăng trưởng sớm."
+        },
+        {
+          "segmentId": "BEH008",
+          "fullLabel": "New Active Business (< 12 months)",
+          "reason": "Biến thể gần nghĩa mạnh hơn của doanh nghiệp mới, phù hợp để bắt nhóm đang cần tư vấn tài chính ngay từ giai đoạn đầu."
+        }
+      ]
+    },
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 3.69,
+      "rag": {
+        "queries": [
+          "Alta Capital Advisory | consideration | 800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí | Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành.",
+          "Small business owners",
+          "Entrepreneurship",
+          "Business finance"
+        ],
+        "candidates": 85,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 1,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 1189,
+          "retrieve": 125,
+          "rerank": 0,
+          "generate": 2355
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT017",
+          "fullLabel": "Small business (business & finance)",
+          "reason": "Phù hợp trực tiếp với nhóm chủ doanh nghiệp nhỏ là đối tượng chính của dịch vụ tư vấn."
+        },
+        {
+          "segmentId": "INT009",
+          "fullLabel": "Entrepreneurship (business & finance)",
+          "reason": "Bao phủ tín hiệu về người đang khởi nghiệp hoặc điều hành doanh nghiệp, gần với nhu cầu lập kế hoạch tăng trưởng."
+        },
+        {
+          "segmentId": "INT011",
+          "fullLabel": "Management (business & finance)",
+          "reason": "Liên quan đến nhu cầu quản trị vận hành và tài chính của chủ doanh nghiệp đang điều hành."
+        },
+        {
+          "segmentId": "INT005",
+          "fullLabel": "Business (business & finance)",
+          "reason": "Segment rộng nhưng vẫn trực tiếp phản ánh nhu cầu kinh doanh và ra quyết định của SME."
+        },
+        {
+          "segmentId": "BEH009",
+          "fullLabel": "New Active Business (< 24 months)",
+          "reason": "Nhắm các doanh nghiệp mới vận hành, thường có nhu cầu tư vấn mở rộng và quản lý vốn sớm."
+        },
+        {
+          "segmentId": "BEH008",
+          "fullLabel": "New Active Business (< 12 months)",
+          "reason": "Biến thể gần nghĩa mạnh hơn của doanh nghiệp mới, phù hợp với nhu cầu xây nền tài chính và kế hoạch tăng trưởng."
+        }
+      ]
+    },
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 4.22,
+      "rag": {
+        "queries": [
+          "Alta Capital Advisory | consideration | 800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí | Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành.",
+          "Small business owners",
+          "Business services",
+          "Entrepreneurship"
+        ],
+        "candidates": 85,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 1,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 1302,
+          "retrieve": 119,
+          "rerank": 0,
+          "generate": 2778
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT017",
+          "fullLabel": "Small business (business & finance)",
+          "reason": "Phù hợp trực tiếp với chủ doanh nghiệp nhỏ là nhóm mục tiêu chính của dịch vụ tư vấn."
+        },
+        {
+          "segmentId": "INT009",
+          "fullLabel": "Entrepreneurship (business & finance)",
+          "reason": "Bao phủ tín hiệu về người đang khởi nghiệp hoặc điều hành doanh nghiệp, gần với nhu cầu lập kế hoạch tăng trưởng."
+        },
+        {
+          "segmentId": "INT005",
+          "fullLabel": "Business (business & finance)",
+          "reason": "Nhóm rộng về kinh doanh, phù hợp để mở rộng tệp chủ doanh nghiệp đang vận hành."
+        },
+        {
+          "segmentId": "INT011",
+          "fullLabel": "Management (business & finance)",
+          "reason": "Liên quan đến nhu cầu quản trị tài chính và điều hành doanh nghiệp của SME."
+        },
+        {
+          "segmentId": "BEH009",
+          "fullLabel": "New Active Business (< 24 months)",
+          "reason": "Nhắm các doanh nghiệp mới hoạt động, thường có nhu cầu tư vấn mở rộng và quản lý vốn."
+        },
+        {
+          "segmentId": "BEH008",
+          "fullLabel": "New Active Business (< 12 months)",
+          "reason": "Phủ thêm nhóm doanh nghiệp rất mới, có khả năng cần hỗ trợ lập kế hoạch tài chính sớm."
+        }
+      ]
+    },
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 3.91,
+      "rag": {
+        "queries": [
+          "Alta Capital Advisory | consideration | 800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí | Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành.",
+          "Small business owners",
+          "Entrepreneurship",
+          "Business finance"
+        ],
+        "candidates": 85,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 1,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 1244,
+          "retrieve": 216,
+          "rerank": 0,
+          "generate": 2429
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT017",
+          "fullLabel": "Small business (business & finance)",
+          "reason": "Phù hợp trực tiếp với chủ doanh nghiệp nhỏ là đối tượng chính cần tư vấn quản trị tài chính và mở rộng kinh doanh."
+        },
+        {
+          "segmentId": "INT009",
+          "fullLabel": "Entrepreneurship (business & finance)",
+          "reason": "Nhắm nhóm có xu hướng khởi nghiệp/vận hành doanh nghiệp, gần với nhu cầu tư vấn chiến lược và vốn cho SME."
+        },
+        {
+          "segmentId": "INT011",
+          "fullLabel": "Management (business & finance)",
+          "reason": "Liên quan đến nhu cầu quản trị vận hành và tài chính của chủ doanh nghiệp đang điều hành hoạt động."
+        },
+        {
+          "segmentId": "INT005",
+          "fullLabel": "Business (business & finance)",
+          "reason": "Bao phủ nhóm quan tâm đến kinh doanh nói chung, phù hợp với dịch vụ tư vấn cho doanh nghiệp đang hoạt động."
+        },
+        {
+          "segmentId": "BEH009",
+          "fullLabel": "New Active Business (< 24 months)",
+          "reason": "Nhắm doanh nghiệp mới vận hành dưới 24 tháng, thường có nhu cầu lập kế hoạch tăng trưởng và quản lý vốn."
+        },
+        {
+          "segmentId": "BEH008",
+          "fullLabel": "New Active Business (< 12 months)",
+          "reason": "Nhắm doanh nghiệp rất mới, phù hợp với nhu cầu tư vấn nền tảng về tài chính và mở rộng ngay từ giai đoạn đầu."
+        }
+      ]
+    },
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 3.51,
+      "rag": {
+        "queries": [
+          "Alta Capital Advisory | consideration | 800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí | Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành.",
+          "Small business owners",
+          "Entrepreneurship",
+          "Business finance"
+        ],
+        "candidates": 85,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 1,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 1184,
+          "retrieve": 124,
+          "rerank": 0,
+          "generate": 2187
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT017",
+          "fullLabel": "Small business (business & finance)",
+          "reason": "Nhắm trực tiếp chủ doanh nghiệp nhỏ, đúng nhóm cần tư vấn quản trị tài chính và mở rộng kinh doanh."
+        },
+        {
+          "segmentId": "INT009",
+          "fullLabel": "Entrepreneurship (business & finance)",
+          "reason": "Phù hợp với nhóm chủ shop/chủ doanh nghiệp đang vận hành và có nhu cầu phát triển doanh nghiệp."
+        },
+        {
+          "segmentId": "INT011",
+          "fullLabel": "Management (business & finance)",
+          "reason": "Liên quan trực tiếp đến nhu cầu quản trị vận hành và quản lý vốn của SME."
+        },
+        {
+          "segmentId": "INT005",
+          "fullLabel": "Business (business & finance)",
+          "reason": "Bao phủ rộng nhóm người quan tâm đến hoạt động kinh doanh, phù hợp với dịch vụ tư vấn cho doanh nghiệp đang hoạt động."
+        },
+        {
+          "segmentId": "BEH009",
+          "fullLabel": "New Active Business (< 24 months)",
+          "reason": "Nhắm các doanh nghiệp mới vận hành, thường có nhu cầu lập kế hoạch tăng trưởng và quản lý tài chính."
+        },
+        {
+          "segmentId": "BEH008",
+          "fullLabel": "New Active Business (< 12 months)",
+          "reason": "Phù hợp với doanh nghiệp rất mới, thường cần tư vấn về vốn, kế hoạch mở rộng và quản trị tài chính ngay từ đầu."
+        }
+      ]
+    },
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 4.39,
+      "rag": {
+        "queries": [
+          "Alta Capital Advisory | consideration | 800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí | Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành.",
+          "Small business owners",
+          "Entrepreneurship",
+          "Business finance"
+        ],
+        "candidates": 85,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 1,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 1235,
+          "retrieve": 152,
+          "rerank": 0,
+          "generate": 2967
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT017",
+          "fullLabel": "Small business (business & finance)",
+          "reason": "Phù hợp trực tiếp với chủ doanh nghiệp nhỏ là nhóm mục tiêu chính của dịch vụ tư vấn."
+        },
+        {
+          "segmentId": "INT009",
+          "fullLabel": "Entrepreneurship (business & finance)",
+          "reason": "Bao phủ tín hiệu về người đang khởi nghiệp hoặc điều hành doanh nghiệp, gần với nhu cầu lập kế hoạch tăng trưởng và quản lý vốn."
+        },
+        {
+          "segmentId": "INT011",
+          "fullLabel": "Management (business & finance)",
+          "reason": "Liên quan đến nhu cầu quản trị vận hành và tài chính của chủ doanh nghiệp đang điều hành."
+        },
+        {
+          "segmentId": "INT005",
+          "fullLabel": "Business (business & finance)",
+          "reason": "Segment rộng nhưng vẫn trực tiếp liên quan đến đối tượng doanh nghiệp SME cần tư vấn kinh doanh và tài chính."
+        },
+        {
+          "segmentId": "BEH009",
+          "fullLabel": "New Active Business (< 24 months)",
+          "reason": "Nhắm các doanh nghiệp mới vận hành, thường có nhu cầu xây nền tảng tài chính và kế hoạch mở rộng."
+        },
+        {
+          "segmentId": "BEH008",
+          "fullLabel": "New Active Business (< 12 months)",
+          "reason": "Bao phủ nhóm doanh nghiệp rất mới, phù hợp với nhu cầu tư vấn sớm về vốn và quản trị tài chính."
+        }
+      ]
+    },
+    {
+      "id": "brief_042",
+      "tags": [
+        "consideration",
+        "vi",
+        "full_catalog_only"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 5.28,
+      "rag": {
+        "queries": [
+          "Alta Capital Advisory | consideration | 800 chủ doanh nghiệp nhỏ đăng ký tư vấn miễn phí | Dịch vụ tư vấn đầu tư & quản trị tài chính cho chủ doanh nghiệp nhỏ và vừa (SME), giúp lập kế hoạch mở rộng và quản lý vốn. Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ shop/doanh nghiệp đang vận hành.",
+          "Small business owners",
+          "Business and finance",
+          "Entrepreneurship"
+        ],
+        "candidates": 85,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 1,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 1519,
+          "retrieve": 129,
+          "rerank": 0,
+          "generate": 3617
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT017",
+          "fullLabel": "Small business (business & finance)",
+          "reason": "Phù hợp trực tiếp với chủ doanh nghiệp nhỏ là nhóm mục tiêu chính của dịch vụ tư vấn."
+        },
+        {
+          "segmentId": "INT009",
+          "fullLabel": "Entrepreneurship (business & finance)",
+          "reason": "Bao phủ tín hiệu về người đang khởi nghiệp hoặc điều hành doanh nghiệp, gần với nhu cầu tư vấn mở rộng và quản lý vốn."
+        },
+        {
+          "segmentId": "INT005",
+          "fullLabel": "Business (business & finance)",
+          "reason": "Là segment rộng nhưng vẫn trực tiếp liên quan đến đối tượng doanh nghiệp đang vận hành và nhu cầu quản trị tài chính."
+        },
+        {
+          "segmentId": "INT011",
+          "fullLabel": "Management (business & finance)",
+          "reason": "Phù hợp với nhu cầu quản trị, lập kế hoạch và tối ưu vận hành tài chính của chủ SME."
+        },
+        {
+          "segmentId": "BEH009",
+          "fullLabel": "New Active Business (< 24 months)",
+          "reason": "Nhắm tới doanh nghiệp mới hoạt động, thường có nhu cầu tư vấn tăng trưởng và quản lý vốn sớm."
+        },
+        {
+          "segmentId": "BEH008",
+          "fullLabel": "New Active Business (< 12 months)",
+          "reason": "Bao phủ nhóm doanh nghiệp rất mới, có khả năng cần hỗ trợ lập kế hoạch tài chính và mở rộng ngay từ đầu."
+        }
+      ]
+    }
+  ]
+}

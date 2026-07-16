@@ -167,6 +167,8 @@ async def main():
                     help="repeat selected cases to measure stochastic stability")
     ap.add_argument("--k", type=int, default=15)
     ap.add_argument("--concurrency", type=int, default=3)
+    ap.add_argument("--request-interval", type=float, default=0,
+                    help="minimum seconds between case starts (for production rate limits)")
     ap.add_argument("--no-judge", action="store_true")
     ap.add_argument("--label", default="", help="report filename label")
     ap.add_argument("--expect-rag", action="store_true",
@@ -189,11 +191,20 @@ async def main():
     headers = {"X-API-Key": args.api_key} if args.api_key else {}
     golden_to_segment, segment_to_label = load_catalog_maps()
     sem = asyncio.Semaphore(args.concurrency)
+    pace_lock = asyncio.Lock()
+    last_started = 0.0
     results = []
 
     async with httpx.AsyncClient() as client:
         async def guarded(bf):
+            nonlocal last_started
             async with sem:
+                if args.request_interval > 0:
+                    async with pace_lock:
+                        delay = args.request_interval - (time.monotonic() - last_started)
+                        if delay > 0:
+                            await asyncio.sleep(delay)
+                        last_started = time.monotonic()
                 try:
                     res = await eval_one(client, bf, args.agent_url, headers,
                                          golden_to_segment, segment_to_label,

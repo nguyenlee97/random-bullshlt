@@ -12,7 +12,9 @@ Safety rails:
 """
 import asyncio
 import json
+import re
 import time
+import unicodedata
 
 from pydantic import BaseModel, Field
 
@@ -57,19 +59,54 @@ def _rank_merged(merged: dict[str, dict]) -> list[dict]:
     return ordered
 
 
+def _fold_text(value: object) -> str:
+    """Normalize Vietnamese/English text for conservative phrase matching."""
+    text = str(value or "").casefold().replace("đ", "d")
+    text = "".join(
+        char for char in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(char)
+    )
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
+
+
 def _guard_reason(brief: dict, segment: dict) -> str | None:
     """Deterministic taxonomy guards for explicit business/consumer conflicts."""
-    notes = str(brief.get("notes") or "").casefold()
+    notes = _fold_text(brief.get("notes"))
     industrial_b2b = "b2b" in notes and any(
         marker in notes for marker in ("industrial", "procurement", "mro"))
     rejects_leisure = any(
-        marker in notes for marker in ("not leisure", "không nhắm khách du lịch",
-                                       "không phải khách du lịch"))
+        marker in notes for marker in ("not leisure", "khong nham khach du lich",
+                                       "khong phai khach du lich"))
     consumer_travel = (
-        str(segment.get("category") or "").casefold() == "hobbies and activities"
-        and str(segment.get("subcategory") or "").casefold().startswith("travel"))
+        _fold_text(segment.get("category")) == "hobbies and activities"
+        and _fold_text(segment.get("subcategory")).startswith("travel"))
     if industrial_b2b and rejects_leisure and consumer_travel:
         return "b2b_consumer_leisure"
+
+    # A campaign for business owners may legitimately mention investment while
+    # explicitly rejecting retail/individual investors. The catalog taxonomy is
+    # the deterministic distinction: Personal finance > Investment represents
+    # the rejected consumer audience, while Investment banking remains eligible.
+    rejects_retail_investors = any(marker in notes for marker in (
+        "khong nham nha dau tu ca nhan",
+        "khong nham nha dau tu nho le",
+        "loai tru nha dau tu ca nhan",
+        "loai tru nha dau tu nho le",
+        "tranh nha dau tu ca nhan",
+        "tranh nha dau tu nho le",
+        "exclude retail investor",
+        "exclude individual investor",
+        "not target retail investor",
+        "not target individual investor",
+        "no retail investor",
+        "no individual investor",
+    ))
+    personal_finance_investment = (
+        _fold_text(segment.get("subcategory")).startswith("personal finance")
+        and _fold_text(segment.get("name")) == "investment"
+    )
+    if rejects_retail_investors and personal_finance_investment:
+        return "retail_investor_excluded"
     return None
 
 
@@ -184,7 +221,19 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
     rerank_s = time.time() - stage_t0
     RAG_STAGE_SECONDS.labels(stage="rerank").observe(rerank_s)
     reranked = [candidates[i] for i in order] if order else candidates
-    top = reranked[: config.RAG_TOP_FINAL]
+
+    # Remove deterministic conflicts before selection so the model can still
+    # return the required six safe recommendations. The same guard is applied
+    # again after selection as defense in depth.
+    eligible, guard_rejected = [], 0
+    for candidate in reranked:
+        guard_reason = _guard_reason(brief, candidate)
+        if guard_reason:
+            RAG_GUARD_REJECTED.labels(reason=guard_reason).inc()
+            guard_rejected += 1
+            continue
+        eligible.append(candidate)
+    top = eligible[: config.RAG_TOP_FINAL]
     RAG_CANDIDATES.observe(len(top))
 
     # 4. LLM reasons over candidates only (same prompt family as old path)
@@ -201,7 +250,7 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
 
     # 5. candidate-ID validation ⛔ — LLM may not invent segments
     label_map = {(c.get("fullLabel") or c.get("name", "")): c for c in top}
-    enriched, dropped, guard_rejected = [], 0, 0
+    enriched, dropped = [], 0
     for rec in recs:
         seg = label_map.get(rec.get("fullLabel", ""))
         if seg:

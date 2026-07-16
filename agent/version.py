@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-15.6"
+BUILD_VERSION = "2026-07-16.1"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -72,6 +72,8 @@ BUILD_FEATURES = [
     "phase2-rag-index-integrity",     # catalog fingerprint + model/runtime metadata readiness
     "phase2-rerank-integrated",       # Qwen MaaS adapter retained; disabled after eval regression
     "phase2-rag-eval-gates",          # stable segmentId metrics + retrieval/end-to-end reports
+    "rag-negative-intent-guard",      # deterministic pre-selector filtering for explicit exclusions
+    "eval-production-rate-pacing",    # canonical eval respects the deployed recommendation limit
     "langfuse-windows-console-fix",   # tracing init no longer fails on cp1252 console output
     "phase3-creative-intel",          # PIL deterministic pass + review queue + optional VLM
     "phase3-durable-creative-worker", # Mongo-backed recoverable creative analysis jobs

@@ -128,6 +128,47 @@ def test_b2b_leisure_guard_uses_catalog_taxonomy():
     assert _guard_reason(brief, industry) is None
 
 
+@pytest.mark.parametrize("notes", [
+    "Không nhắm nhà đầu tư cá nhân nhỏ lẻ, tập trung chủ doanh nghiệp SME.",
+    "Loại trừ nhà đầu tư nhỏ lẻ; chỉ phục vụ doanh nghiệp đang vận hành.",
+    "B2B capital advisory. Do not target retail investors.",
+])
+def test_retail_investor_guard_honors_explicit_negative_intent(notes):
+    retail_investment = {
+        "category": "Business and industry",
+        "subcategory": "Personal finance (banking)",
+        "name": "Investment",
+        "fullLabel": "Investment (business & finance)",
+    }
+
+    assert _guard_reason({"notes": notes}, retail_investment) == \
+        "retail_investor_excluded"
+
+
+def test_retail_investor_guard_preserves_business_investment_segments():
+    brief = {"notes": "Không nhắm nhà đầu tư cá nhân; tập trung chủ doanh nghiệp SME."}
+    investment_banking = {
+        "category": "Business and industry",
+        "subcategory": "Banking (Finance)",
+        "name": "Investment banking",
+        "fullLabel": "Investment banking (banking)",
+    }
+
+    assert _guard_reason(brief, investment_banking) is None
+
+
+def test_retail_investor_guard_requires_an_explicit_exclusion():
+    brief = {"notes": "Ứng dụng đầu tư cho nhà đầu tư cá nhân mới bắt đầu."}
+    retail_investment = {
+        "category": "Business and industry",
+        "subcategory": "Personal finance",
+        "name": "Investment",
+        "fullLabel": "Investment (business & finance)",
+    }
+
+    assert _guard_reason(brief, retail_investment) is None
+
+
 @pytest.mark.asyncio
 async def test_rewritten_qdrant_queries_execute_concurrently(monkeypatch):
     import rag.embeddings as embeddings

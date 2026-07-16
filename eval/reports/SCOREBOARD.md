@@ -6,6 +6,23 @@ Catalog: 310 segments
 
 Set: 80 briefs (`brief_001`–`brief_080`)
 
+## 2026-07-16 final-output exclusion remediation
+
+The deployed final-output path now normalizes Vietnamese and English negative
+audience intent and removes deterministic taxonomy conflicts before the critic
+selects its six recommendations. The post-selection guard remains as defense in
+depth. The evaluator also supports production-aware request pacing so the
+deployed `10/minute` recommendation limit does not create artificial 429 errors.
+
+| Cases | Errors | Recall@15 | MRR@15 | Final exclusions | Unknown IDs | Grounding violations | Fallbacks | Mean recs | p50 | p95 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 80 | 0 | 0.819 | 0.851 | **0** | 0 | 0 | 0 | 6 | 4.20 s | 5.51 s |
+
+The previously stochastic `brief_042` retail-investor conflict passed 10/10
+post-fix repetitions with six recommendations per run and zero exclusions.
+Reports: `20260716-current-final-rag-postfix.json` and
+`20260716-brief042-postfix-stability-v2.json`.
+
 ## 2026-07-15 external-QA remediation rerun
 
 The no-flag retrieval runner now mirrors the deployed candidate: raw brief plus
