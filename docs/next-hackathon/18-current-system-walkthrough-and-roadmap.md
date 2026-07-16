@@ -23,18 +23,18 @@ MongoDB is the canonical workspace. The browser renders it; it is not a second s
 | Creative | Deterministic media checks, async VLM analysis, manual-review fallback, zone compatibility |
 | Autopilot | Durable runs/tasks/events, fixed capability allowlist, leases + heartbeat, bounded retries, pause/resume/cancel/replan |
 | Side effects | Order guard, stable idempotency key, explicit launch approval, post-create verification |
-| UX | Vietnamese Guided and Autopilot sibling canvases with plan, evidence, trace and review cards |
+| UX | Vietnamese Guided and Autopilot sibling canvases with plan, evidence, trace and review cards; completed Autopilot runs add Result, Setup report and truthful Performance report tabs |
 
 ## 3. Creative-source contract
 
 Autopilot cannot start until the operator chooses one of:
 
 1. `upload`: the run waits at `prepare_creatives` until at least one canonical file exists. Retry reuses the file; it does not generate one.
-2. `ai_generate`: the worker generates one `zuma-box` 300×250 creative using `openai/gpt-image-1`, crops/resizes it server-side, persists it through the backend, commits it to the creative artifact and automatically submits it for the same creative-intelligence checks as uploads.
+2. `ai_generate`: the worker derives a placement-aware format plan, generates at most three exact-size assets using the configured image provider, normalizes and persists them through the backend, commits them to the creative artifact and automatically submits them to the same creative-intelligence checks as uploads.
 
-AI assets use an idempotency key containing run ID, format and brief revision. The deterministic backend filename is a recovery checkpoint: a worker retry after successful upload reuses the stored file instead of paying for a second generation. Prompt version, prompt fingerprint, provider, model and format are persisted as provenance.
+AI assets use an idempotency key containing run ID, format-plan revision, exact format and brief revision. Zones that accept the same exact dimensions share one generated asset. The deterministic backend filename is a recovery checkpoint: a worker retry after successful upload reuses the stored file instead of paying for a second generation. Prompt version, prompt fingerprint, provider, model and format are persisted as provenance.
 
-This first slice intentionally generates one exact-size format. Multi-format variants are a later milestone. AI generation never bypasses VLM/manual review and never bypasses final launch approval.
+AI generation never bypasses VLM/manual review and never bypasses final launch approval. After a successful run, the Result and Setup report are built from canonical artifacts. The Performance report stays in a truthful no-data state until the order is active and real delivery data exists.
 
 ## 4. How audience selection works without reranking
 
@@ -89,9 +89,10 @@ Open:
 ### Autopilot AI-generation smoke
 
 1. Select AI generation and start.
-2. Verify a 300×250 file appears in the creative artifact with `source=ai_generated` and generation provenance.
+2. Verify the placement-aware format plan appears and generated files use its exact dimensions with `source=ai_generated` and generation provenance.
 3. Verify VLM timeout, safety warning or low confidence pauses for review.
 4. Verify all policies still stop at final launch approval.
+5. After approval and verified order creation, inspect all three completion tabs and verify a pending order is labeled “Chờ kích hoạt”, not live.
 
 ## 6. Comprehensive test handoff
 
@@ -139,7 +140,7 @@ it does not make the current unedited 041–080 files correct by declaration.
 
 ### P1 — final enhancement product work
 
-- **Implemented, pending live journey sign-off:** two-pass placement planning, exact-format deduplication, a three-asset cost cap, bounded AI generation, revision-aware idempotency and final creative-compatible placement ranking.
+- **Implemented, pending live journey sign-off:** two-pass placement planning, exact-format deduplication, a three-asset cost cap, bounded AI generation, revision-aware idempotency, final creative-compatible placement ranking, and completed-run Result/Setup/Performance report parity.
 - Add anonymous-first accounts, login identities, conversation history and cross-device resume.
 - Add Zalo OA as a channel adapter for Autopilot, simplified Guided flow, campaign status/modification and live notifications.
 - Keep Qwen reranking disabled and defer the post-launch analytics/report agent.

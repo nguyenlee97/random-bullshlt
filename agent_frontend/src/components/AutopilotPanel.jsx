@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
 import StrategySimulator from '@/components/StrategySimulator'
+import AutopilotOutcome from '@/components/AutopilotOutcome'
 
 const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
 
@@ -600,7 +601,13 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
             </section>
           )}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="autopilot-results-title">
+          {run.status === 'completed' && orderResult ? (
+            <AutopilotOutcome
+              workspace={workspaceSnapshot}
+              taskByKey={taskByKey}
+              fallbackBrief={displayBrief}
+            />
+          ) : <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="autopilot-results-title">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">Kết quả theo thời gian thực</p>
@@ -681,7 +688,7 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, onWorkspaceR
                 )) : <p className="px-2 py-1 text-slate-500">Chi tiết sẽ xuất hiện khi các tác vụ hoàn tất.</p>}
               </div>
             </details>
-          </section>
+          </section>}
 
           {waiting && (
             <div className="sticky bottom-2 z-10 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50/95 p-3 shadow-[0_12px_36px_rgba(120,80,0,0.18)] backdrop-blur-md sm:flex-row sm:items-center">

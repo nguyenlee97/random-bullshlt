@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: approved direction; implementation not yet complete
+Status: in progress; FE-1 implementation and Autopilot outcome parity are code-complete, live journey sign-off remains
 
 Scope: finish the current campaign agent, add placement-aware creative generation, then add identity, conversation history, and Zalo OA as a first-class channel.
 
@@ -26,7 +26,7 @@ The web application remains the richest workspace. Zalo is a conversational cont
 | Provider/restart drills | Downgraded from a broad product milestone to two small release checks around irreversible or paid side effects: generated-image retry and order-creation retry. Exhaustive chaos testing is deferred. |
 | Multi-format generation | Highest-priority product feature. Add placement intent before AI generation, then finalize placements after creative analysis. |
 | Qwen reranker | Leave configured but disabled; no A/B work in this phase. |
-| Analytics/report agent | Low priority and deferred. Basic campaign status may be exposed through Zalo, but a new optimization/report agent is out of scope. |
+| Analytics/report agent | Low priority and deferred. Autopilot now has a real setup report and a truthful performance-data state; a new post-launch optimization/report agent remains out of scope. |
 | Identity | Anonymous-first. Add account ownership and conversation history, then Google/Zalo/local identities behind one user model. |
 | Zalo integration | Reuse the proven adapter pattern from `them-ga-ran`: signature-verified webhook, immediate acknowledgement, durable background processing, persisted rotating OA tokens, channel identity mapping, and isolated message rendering. |
 
@@ -39,7 +39,8 @@ The local Compose stack currently provides:
 - Node campaign backend at `http://localhost:3000`.
 - MongoDB, Qdrant, Prometheus, Grafana, LangGraph workspaces/runs and creative workers.
 - Guided and Autopilot modes, workspace proposals, non-linear invalidation, audience RAG, creative intelligence, order guard and idempotent order creation.
-- AI creative source with one 300×250 format and persisted generation provenance.
+- Placement-aware AI creative generation with exact-size deduplication, a three-asset cap and persisted generation provenance.
+- Completed Autopilot runs expose Result, Setup report and Performance report tabs. Result/setup use real workspace artifacts; performance remains empty until real delivery data exists.
 
 The local readiness endpoint reports MongoDB, backend, RAG index/runtime, creative worker and Autopilot worker ready. This is a good development baseline, not proof that the complete user journey is defect-free.
 
@@ -117,7 +118,7 @@ Exit criteria:
 
 This is the first implementation milestone.
 
-Implementation status (2026-07-16): code-complete and deterministic-test green. The capability graph now contains `plan_placement_intent` and `plan_creative_formats`; generated assets are capped, dimension-deduplicated, concurrent and revision-idempotent; final placement runs after creative verdicts. Verification: 202 backend tests, 22 frontend tests and a production frontend build. FE-1 remains open until one real upload journey and one real provider-backed multi-format generation journey pass locally.
+Implementation status (2026-07-16): code-complete and deterministic-test green. The capability graph now contains `plan_placement_intent` and `plan_creative_formats`; generated assets are capped, dimension-deduplicated, concurrent and revision-idempotent; final placement runs after creative verdicts. Completed runs now normalize those artifacts into the shared Guided Result surface plus a dedicated setup report, while pending orders are never labeled live. Verification after the outcome enhancement: 27 frontend tests and a production frontend build; the existing backend capability tests remain green from the FE-1 slice. FE-1 remains open until one real upload journey and one real provider-backed multi-format generation journey pass locally.
 
 ### 6.1 Problem and approach
 
@@ -194,6 +195,16 @@ Autopilot performs placement intent automatically after audience/targeting. Its 
 - Retry after persisted upload causes no duplicate provider charge or backend file.
 - Final placement contains only catalog-valid zones and compatible approved assets.
 - VLM/manual-review and final-launch gates remain intact.
+
+### 6.7 Completed-run outcome contract
+
+After `create_setup_report` succeeds, Autopilot exposes three operator-facing tabs:
+
+1. **Kết quả:** reuses the Guided campaign result surface, including placements, creative mappings, forecast and local preview links.
+2. **Báo cáo setup:** renders brief, selected strategy, audience, targeting, placements, creative assignments, forecast, guard and order state from canonical workspace artifacts.
+3. **Báo cáo hiệu suất:** shows a truthful no-data or not-active state until actual delivery records exist. It must not silently generate demo metrics or present synthetic analytics as live campaign performance.
+
+The shared adapter converts Autopilot's numeric creative indices into stable creative IDs and unwraps verified order artifacts. When an order artifact exists, `order.status` is authoritative for live delivery; campaign dates alone must never turn a pending order into a live result.
 
 ## 7. FE-2 — Accounts, anonymous use and conversation history
 

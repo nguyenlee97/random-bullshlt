@@ -291,7 +291,7 @@ function PlatformScreenshotRow({ zone }) {
 
 
 // ─── Main SuccessStep export ───────────────────────────────────────────────────
-export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSize, setup, allZones, recoZones }) {
+export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSize, setup, allZones, recoZones, order, forecast }) {
   const ids = selectedZoneIds || []
   const dynamicPool = [...(recoZones || []), ...(allZones || [])]
   const selectedZones = ids.map(id => {
@@ -308,10 +308,19 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
 
   const assignments = setup?.assignments || {}
   const files = setup?.creativeFiles || []
-  const live = isLive(brief)
+  const hasOrderState = Boolean(order && Object.keys(order).length)
+  const live = hasOrderState ? order.status === 'active' : isLive(brief)
+  const deliveryLabel = order?.status === 'active'
+    ? 'LIVE'
+    : order?.status === 'pending'
+      ? 'CHỜ KÍCH HOẠT'
+      : order?.status
+        ? String(order.status).toUpperCase()
+        : null
 
   const budgetPerZone = selectedZones.length > 0 ? (brief?.budget || 0) / selectedZones.length : 0
-  const totalEstImps = selectedZones.reduce((sum, z) => sum + estImpressions(z, budgetPerZone), 0)
+  const totalEstImps = Number(forecast?.estimated_impressions)
+    || selectedZones.reduce((sum, z) => sum + estImpressions(z, budgetPerZone), 0)
   const avgCTR = selectedZones.length > 0
     ? (selectedZones.reduce((s, z) => s + z.ctr, 0) / selectedZones.length).toFixed(2) : '—'
   const avgVI = selectedZones.length > 0
@@ -343,14 +352,14 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
           <div>
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle2 className="w-7 h-7" />
-              <h2 className="text-xl font-black">Chiến dịch đã được tạo!</h2>
+              <h2 className="text-xl font-black">{order?.status === 'pending' ? 'Order đã tạo, chờ kích hoạt' : 'Chiến dịch đã được tạo!'}</h2>
             </div>
             <p className="text-sm text-white/80">{brief?.brand} · {brief?.objective} · {dateRange}</p>
           </div>
-          {live && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-green-400/30 border border-green-300/50">
-              <div className="w-2 h-2 rounded-full bg-green-300 animate-pulse" />
-              <span className="text-xs font-bold text-green-100">LIVE</span>
+          {deliveryLabel && (
+            <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${live ? 'bg-green-400/30 border-green-300/50' : 'bg-amber-300/20 border-amber-200/40'}`}>
+              <div className={`w-2 h-2 rounded-full ${live ? 'bg-green-300 animate-pulse' : 'bg-amber-200'}`} />
+              <span className={`text-xs font-bold ${live ? 'text-green-100' : 'text-amber-100'}`}>{deliveryLabel}</span>
             </div>
           )}
         </div>
