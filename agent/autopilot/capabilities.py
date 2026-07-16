@@ -836,6 +836,7 @@ async def _launch_approval(run: dict, workspace: dict) -> CapabilityResult:
 async def _create_order(run: dict, workspace: dict) -> CapabilityResult:
     from tools.order_api import create_order
     from validation.order_guard import guard_order
+    from session import update_order_ids
     draft_item = workspace.get("artifacts", {}).get("order_draft", {})
     if draft_item.get("status") != "approved":
         raise RuntimeError("order draft is stale or missing; replan before launch")
@@ -854,9 +855,16 @@ async def _create_order(run: dict, workspace: dict) -> CapabilityResult:
     result = await create_order(payload)
     if result.get("error"):
         raise RuntimeError(f"order API rejected launch: {result}")
+    order_id = result.get("id") or result.get("_id")
+    if order_id:
+        session = await get_or_create_session(run["session_id"])
+        order_ids = list(dict.fromkeys([
+            *(session.get("created_order_ids") or []), str(order_id),
+        ]))
+        await update_order_ids(run["session_id"], order_ids)
     return CapabilityResult(
         value={"order": result, "idempotency_key": payload["idempotencyKey"]},
-        evidence=[{"type": "order_api", "order_id": result.get("id") or result.get("_id"),
+        evidence=[{"type": "order_api", "order_id": order_id,
                    "idempotency_key": payload["idempotencyKey"]}],
     )
 

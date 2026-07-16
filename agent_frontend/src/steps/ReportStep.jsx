@@ -738,13 +738,15 @@ function TabCharts({ tabId, records }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ReportStep — Main Component
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function ReportStep({ data, onChange, isDone, formState, onSendChat }) {
+export default function ReportStep({ data, onChange, isDone, formState, onSendChat, onRetry }) {
   const [activeTab, setActiveTab] = useState('daily_ops')
   const [records, setRecords] = useState([])
   const [reportStatus, setReportStatus] = useState(null)
   const [analyses, setAnalyses] = useState({})
   const [loading, setLoading] = useState(true)
   const [allReady, setAllReady] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const pollRef = useRef(null)
   const campaignId = data?.campaignId || formState?.report?.campaignId || ''
 
@@ -754,7 +756,7 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
 
   // Poll report status
   useEffect(() => {
-    if (!campaignId || allReady) return
+    if (!campaignId || allReady || failed || retrying) return
 
     const poll = async () => {
       const status = await AgentAPI.getReportStatus(campaignId)
@@ -775,13 +777,30 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
         setAnalyses(analysisMap)
         setLoading(false)
         onChange?.({ ...data, analyzed: true, campaignId })
+      } else if (status.errors > 0 && status.ready + status.errors >= status.total) {
+        clearInterval(pollRef.current)
+        setLoading(false)
+        setFailed(true)
       }
     }
 
     poll()
     pollRef.current = setInterval(poll, 3000)
     return () => clearInterval(pollRef.current)
-  }, [campaignId, allReady])
+  }, [campaignId, allReady, failed, retrying])
+
+  const retryGeneration = async () => {
+    setRetrying(true)
+    setFailed(false)
+    setLoading(true)
+    setReportStatus(null)
+    try {
+      if (onRetry) await onRetry()
+      else await AgentAPI.reportEntry()
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   // Get questions for current tab
   const currentAnalysis = analyses[activeTab] || analyses['daily_ops']
@@ -810,6 +829,22 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
           <p className="text-xs text-muted-foreground mt-1">Đang chuẩn bị tạo báo cáo mô phỏng...</p>
         </div>
         <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
+      </div>
+    )
+  }
+
+  if (failed) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center" role="alert">
+        <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
+        <h3 className="mt-3 font-bold text-red-950">Không thể tạo báo cáo</h3>
+        <p className="mt-2 text-xs leading-5 text-red-800">
+          {reportStatus?.errors || 0}/{reportStatus?.total || 6} hạng mục gặp lỗi. Kiểm tra cấu hình model rồi thử tạo lại.
+        </p>
+        <button type="button" onClick={retryGeneration} disabled={retrying}
+          className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-60">
+          {retrying ? 'Đang thử lại…' : 'Tạo lại báo cáo'}
+        </button>
       </div>
     )
   }

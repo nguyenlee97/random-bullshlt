@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: in progress; FE-1 implementation and Autopilot outcome parity are code-complete, live journey sign-off remains
+Status: in progress; FE-1 implementation, Autopilot outcome parity and the shared analytical report module are code-complete, live journey sign-off remains
 
 Scope: finish the current campaign agent, add placement-aware creative generation, then add identity, conversation history, and Zalo OA as a first-class channel.
 
@@ -26,7 +26,7 @@ The web application remains the richest workspace. Zalo is a conversational cont
 | Provider/restart drills | Downgraded from a broad product milestone to two small release checks around irreversible or paid side effects: generated-image retry and order-creation retry. Exhaustive chaos testing is deferred. |
 | Multi-format generation | Highest-priority product feature. Add placement intent before AI generation, then finalize placements after creative analysis. |
 | Qwen reranker | Leave configured but disabled; no A/B work in this phase. |
-| Analytics/report agent | Low priority and deferred. Autopilot now has a real setup report and a truthful performance-data state; a new post-launch optimization/report agent remains out of scope. |
+| Analytics/report agent | The current Copilot analytical report module is now shared with Autopilot, including six generated report views and cached report Q&A. A future live-delivery optimization/anomaly agent remains low priority and out of scope. |
 | Identity | Anonymous-first. Add account ownership and conversation history, then Google/Zalo/local identities behind one user model. |
 | Zalo integration | Reuse the proven adapter pattern from `them-ga-ran`: signature-verified webhook, immediate acknowledgement, durable background processing, persisted rotating OA tokens, channel identity mapping, and isolated message rendering. |
 
@@ -40,7 +40,7 @@ The local Compose stack currently provides:
 - MongoDB, Qdrant, Prometheus, Grafana, LangGraph workspaces/runs and creative workers.
 - Guided and Autopilot modes, workspace proposals, non-linear invalidation, audience RAG, creative intelligence, order guard and idempotent order creation.
 - Placement-aware AI creative generation with exact-size deduplication, a three-asset cap and persisted generation provenance.
-- Completed Autopilot runs expose Result, Setup report and Performance report tabs. Result/setup use real workspace artifacts; performance remains empty until real delivery data exists.
+- Completed Autopilot runs expose Result, Setup report and Analytical report tabs. Result/setup use real workspace artifacts; the shared report module generates clearly labelled synthetic showcase delivery data, six analytical views and cached report Q&A from the verified campaign setup.
 
 The local readiness endpoint reports MongoDB, backend, RAG index/runtime, creative worker and Autopilot worker ready. This is a good development baseline, not proof that the complete user journey is defect-free.
 
@@ -202,7 +202,9 @@ After `create_setup_report` succeeds, Autopilot exposes three operator-facing ta
 
 1. **Kết quả:** reuses the Guided campaign result surface, including placements, creative mappings, forecast and local preview links.
 2. **Báo cáo setup:** renders brief, selected strategy, audience, targeting, placements, creative assignments, forecast, guard and order state from canonical workspace artifacts.
-3. **Báo cáo hiệu suất:** when the verified order is active, shows deterministic synthetic daily metrics derived from the real setup artifacts so a hackathon user can understand the report experience. The UI must label them as synthetic demonstration data and replace them with real delivery records when available.
+3. **Báo cáo phân tích:** reuses the same full `ReportStep` as Campaign Copilot. Once the verified order is active, the backend generates clearly labelled synthetic showcase delivery records and six cached analyses (`daily_ops`, `awareness`, `consideration`, `conversion`, `retention`, `executive`). The user can inspect KPI cards/charts, switch report type and ask report questions in chat; Autopilot terminal chat yields report questions to the shared report handler while other post-run questions remain artifact-grounded.
+
+Report generation is idempotent. A generation lease prevents duplicate provider work and duplicate analytics records, retry clears terminal error rows, and a stale lease can be reclaimed after a backend restart. The synthetic data is a hackathon demonstration contract, not live delivery truth; a future provider-backed analytics pipeline can replace the data source without creating a second UI/report conversation model.
 
 The shared adapter converts Autopilot's numeric creative indices into stable creative IDs and unwraps verified order artifacts. When an order artifact exists, `order.status` is authoritative for live delivery; campaign dates alone must never turn a pending order into a live result. An Autopilot order is created as `active` only after the explicit final launch approval and successful order verification.
 

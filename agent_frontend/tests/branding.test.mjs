@@ -250,7 +250,7 @@ test('Autopilot hides stale review actions after a terminal run', async () => {
   assert.match(panel, /if \(!run\?\.run_id \|\| \['completed', 'cancelled', 'failed'\]\.includes\(run\.status\)\) return/)
 })
 
-test('Autopilot chat is state-aware and performance reporting is clearly synthetic', async () => {
+test('Autopilot chat is state-aware and reuses the full report module', async () => {
   const app = await source('agent_frontend/src/App.jsx')
   const composer = await source('agent_frontend/src/components/ChatPane/ChatComposer.jsx')
   const outcome = await source('agent_frontend/src/components/AutopilotOutcome.jsx')
@@ -259,8 +259,11 @@ test('Autopilot chat is state-aware and performance reporting is clearly synthet
   assert.match(app, /mode: 'readonly'/)
   assert.match(composer, /Đồng ý, tiếp tục/)
   assert.match(composer, /Chat tạm khóa trong khi Autopilot thực thi/)
-  assert.match(outcome, /Dữ liệu mô phỏng để xem trước báo cáo/)
-  assert.match(outcome, /Khi có delivery thật, hệ thống sẽ tự thay bằng số liệu thực/)
+  assert.match(outcome, /lazy\(\(\) => import\('@\/steps\/ReportStep'\)\)/)
+  assert.match(outcome, /data-testid="autopilot-report-module"/)
+  assert.match(outcome, /onSendChat=\{onSendReportQuestion\}/)
+  assert.doesNotMatch(outcome, /PerformanceReportState/)
+  assert.match(app, /onReportActivate=\{initializeReport\}/)
 })
 
 test('demo fallback is labeled and cannot mutate workspace', async () => {

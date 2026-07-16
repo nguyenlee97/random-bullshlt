@@ -156,6 +156,10 @@ async def route_autopilot_chat(
         )
 
     if status in TERMINAL:
+        # A completed Autopilot campaign uses the same isolated analytics Q&A
+        # handler as Copilot while the Report module is active.
+        if status == "completed" and step == 5:
+            return None
         context = _read_only_context(workspace, run)
         system = (
             "Bạn là trợ lý đọc kết quả Campaign Autopilot. Chỉ trả lời bằng tiếng Việt từ JSON artifact "

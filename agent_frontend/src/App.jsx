@@ -636,48 +636,76 @@ export default function App() {
 
   // Report-entry: when user reaches step 5 with step 4 done → trigger report generation
   const reportEntryFiredRef = useRef(false)
+  const applyReportEntryResponse = useCallback((data) => {
+    if (!data) return
+    const campaignId = data.workspace_update?.value?.campaignId || ''
+    setFormState(prev => ({
+      ...prev,
+      report: {
+        ...prev.report,
+        campaignId: campaignId || prev.report?.campaignId || '',
+      },
+    }))
+    window.dispatchEvent(new CustomEvent('agent:inject_message', {
+      detail: {
+        id: generateId(),
+        role: 'assistant',
+        content: data.text || '',
+        blocks: data.blocks || [],
+        timestamp: new Date().toISOString(),
+        metadata: data.meta || { tool: 'report_entry', model: 'none', step: 5 },
+        suggestions: data.suggestions || [],
+      },
+    }))
+  }, [])
+
+  const initializeReport = useCallback(async (campaignId = '', options = {}) => {
+    setCurrentStep(5)
+    if (campaignId) {
+      setFormState(prev => ({
+        ...prev,
+        report: { ...prev.report, campaignId },
+      }))
+    }
+    const reportKey = String(campaignId || currentConversationId || 'current-campaign')
+    if (!options.force && reportEntryFiredRef.current === reportKey) return null
+    reportEntryFiredRef.current = reportKey
+    log.step(`report-entry triggered for ${reportKey}`)
+    try {
+      const data = await AgentAPI.reportEntry()
+      if (!data || data.role === 'error' || data.metadata?.tool === 'agent_unavailable') {
+        throw new Error(data?.content || 'Không thể khởi tạo báo cáo campaign.')
+      }
+      applyReportEntryResponse(data)
+      return data
+    } catch (error) {
+      reportEntryFiredRef.current = false
+      log.error('report-entry failed', error.message)
+      throw error
+    }
+  }, [applyReportEntryResponse, currentConversationId])
+
   useEffect(() => {
     if (
+      experienceMode === 'guided' &&
       currentStep === 5 &&
       stepStatuses[4] === 'done' &&
       !reportEntryFiredRef.current
     ) {
-      reportEntryFiredRef.current = true
-      ;(async () => {
-        log.step('report-entry triggered — calling AgentAPI.reportEntry')
-        try {
-          const data = await AgentAPI.reportEntry()
-          if (data) {
-            // Extract campaignId from workspace_update
-            const campaignId = data.workspace_update?.value?.campaignId || ''
-
-            // Store report context in formState
-            setFormState(prev => ({
-              ...prev,
-              report: {
-                ...prev.report,
-                campaignId: campaignId || prev.report?.campaignId || '',
-              },
-            }))
-
-            // Inject intro message into chat
-            const msg = {
-              id: generateId(),
-              role: 'assistant',
-              content: data.text || '',
-              blocks: data.blocks || [],
-              timestamp: new Date().toISOString(),
-              metadata: data.meta || { tool: 'report_entry', model: 'none', step: 5 },
-              suggestions: data.suggestions || [],
-            }
-            window.dispatchEvent(new CustomEvent('agent:inject_message', { detail: msg }))
-          }
-        } catch (e) {
-          log.error('report-entry failed', e.message)
-        }
-      })()
+      initializeReport().catch(() => {})
     }
-  }, [currentStep, stepStatuses[4]])
+  }, [currentStep, experienceMode, initializeReport, stepStatuses[4]])
+
+  const updateAutopilotReport = useCallback((value) => {
+    setFormState(prev => ({
+      ...prev,
+      report: typeof value === 'function' ? value(prev.report) : value,
+    }))
+  }, [])
+
+  const exitAutopilotReport = useCallback(() => {
+    setCurrentStep(4)
+  }, [])
 
   // Auto-advance when setup Phase 3 confirms
   useEffect(() => {
@@ -1347,6 +1375,11 @@ export default function App() {
             onOpenBrief={() => openAutopilotEditor(0)}
             onOpenCreative={() => openAutopilotEditor(2)}
             onStatusChange={setAutopilotSummary}
+            reportState={formState.report}
+            onReportChange={updateAutopilotReport}
+            onSendReportQuestion={sendMessage}
+            onReportActivate={initializeReport}
+            onReportExit={exitAutopilotReport}
           />
         </div>
 

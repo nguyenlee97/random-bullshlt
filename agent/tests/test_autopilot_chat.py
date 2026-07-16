@@ -76,3 +76,20 @@ async def test_waiting_review_records_only_explicit_decision(monkeypatch):
     approved = await route_autopilot_chat("Đồng ý, tiếp tục", "session-2", 3)
     assert approved.meta.tool == "autopilot_review_chat"
     assert decisions == [True]
+
+
+@pytest.mark.asyncio
+async def test_completed_autopilot_yields_step5_to_shared_report_chat(monkeypatch):
+    import autopilot.service as service
+    import workspace.service as workspace_service
+
+    async def fake_workspace(session_id):
+        return {"experience_mode": "autopilot", "artifacts": {}}
+
+    async def fake_run(session_id):
+        return {"run_id": "run-report", "status": "completed", "tasks": []}
+
+    monkeypatch.setattr(workspace_service, "get_workspace", fake_workspace)
+    monkeypatch.setattr(service, "get_latest_run", fake_run)
+
+    assert await route_autopilot_chat("Tóm tắt CTR", "session-report", 5) is None

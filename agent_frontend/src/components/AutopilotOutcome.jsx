@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import {
-  BarChart3, CheckCircle2, ExternalLink, FileText, ImageIcon,
+  BarChart3, CheckCircle2, FileText, ImageIcon,
   LayoutDashboard, MapPin, ShieldCheck, Target, Users,
 } from 'lucide-react'
 import SuccessStep from '@/steps/SuccessStep'
-import { buildCampaignOutcome, buildSyntheticPerformance, campaignDeliveryState } from '@/lib/campaignOutcome'
+import { buildCampaignOutcome, campaignDeliveryState } from '@/lib/campaignOutcome'
 
-const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
+const ReportStep = lazy(() => import('@/steps/ReportStep'))
 
 const fmt = value => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(Number(value || 0))
 
@@ -34,7 +34,7 @@ const TARGETING_LABELS = {
 const TABS = [
   { id: 'result', label: 'Kết quả', icon: CheckCircle2 },
   { id: 'setup', label: 'Báo cáo setup', icon: FileText },
-  { id: 'performance', label: 'Báo cáo hiệu suất', icon: BarChart3 },
+  { id: 'report', label: 'Báo cáo phân tích', icon: BarChart3 },
 ]
 
 function Metric({ label, value, note }) {
@@ -181,75 +181,29 @@ function SetupReport({ outcome }) {
   )
 }
 
-function PerformanceReportState({ outcome }) {
-  const delivery = campaignDeliveryState(outcome)
-  const report = buildSyntheticPerformance(outcome)
-
-  if (!delivery.live || !report) {
-    return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center" data-testid="autopilot-performance-report">
-        <BarChart3 className="mx-auto h-8 w-8 text-amber-700" />
-        <h3 className="mt-3 font-black text-amber-950">Báo cáo mở khi campaign đang hoạt động</h3>
-        <p className="mt-2 text-sm text-amber-800">Order {outcome.orderId || ''} hiện ở trạng thái “{delivery.label}”.</p>
-      </div>
-    )
-  }
-
-  const maxImpressions = Math.max(...report.rows.map(row => row.impressions), 1)
-
-  return (
-    <div className="space-y-4" data-testid="autopilot-performance-report">
-      <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-950">
-        <p className="font-black">Dữ liệu mô phỏng để xem trước báo cáo</p>
-        <p className="mt-1">Các chỉ số dưới đây được suy ra từ ngân sách, thời gian, forecast và placement của campaign để minh họa cách báo cáo vận hành. Khi có delivery thật, hệ thống sẽ tự thay bằng số liệu thực.</p>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-        <Metric label="Reach" value={fmt(report.metrics.reach)} note="forecast mô phỏng" />
-        <Metric label="Impression" value={fmt(report.metrics.impressions)} note="forecast mô phỏng" />
-        <Metric label="Click" value={fmt(report.metrics.clicks)} note="từ CTR mô phỏng" />
-        <Metric label="CTR" value={`${report.metrics.ctr}%`} note="theo objective" />
-        <Metric label="CPM" value={`${fmt(report.metrics.averageCpm)} ₫`} note="placement catalog" />
-        <Metric label="Chi tiêu" value={`${fmt(report.metrics.spend)} ₫`} note="ngân sách kế hoạch" />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)]">
-        <Section icon={BarChart3} title="Phân bổ dự kiến theo ngày">
-          <div className="space-y-3">
-            {report.rows.map(row => (
-              <div key={row.label} className="grid grid-cols-[52px_minmax(0,1fr)_90px] items-center gap-2 text-[11px]">
-                <span className="font-semibold text-slate-600">{row.label}</span>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.max(row.impressions / maxImpressions * 100, 3)}%` }} /></div>
-                <span className="text-right font-bold text-slate-900">{fmt(row.impressions)} imp.</span>
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <Section icon={MapPin} title="Placement đóng góp reach">
-          <ul className="space-y-2">
-            {report.placements.slice(0, 6).map(zone => (
-              <li key={zone.id} className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-[11px]">
-                <div className="min-w-0"><p className="truncate font-bold text-slate-900">{zone.name}</p><p className="text-slate-500">{zone.channel}</p></div>
-                <span className="shrink-0 font-bold text-brand-700">{fmt(zone.reach)}</span>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      </div>
-
-      <div className="text-center">
-        <a href={`${ADSPILOT_URL}/#/orders`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-xs font-bold text-white hover:bg-brand-600">
-          Mở trình quản lý quảng cáo <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      </div>
-    </div>
-  )
-}
-
-export default function AutopilotOutcome({ workspace, taskByKey, fallbackBrief }) {
+export default function AutopilotOutcome({
+  workspace, taskByKey, fallbackBrief, reportState, onReportChange,
+  onSendReportQuestion, onReportActivate, onReportExit,
+}) {
   const [activeTab, setActiveTab] = useState('result')
+  const [reportInitError, setReportInitError] = useState('')
   const outcome = useMemo(() => buildCampaignOutcome({ workspace, taskByKey, fallbackBrief }), [workspace, taskByKey, fallbackBrief])
+  const reportData = { ...(reportState || {}), campaignId: outcome.orderId }
+  const reportFormState = { brief: outcome.brief, report: reportData }
+
+  const selectTab = async tabId => {
+    setActiveTab(tabId)
+    if (tabId !== 'report') {
+      onReportExit?.()
+      return
+    }
+    setReportInitError('')
+    try {
+      await onReportActivate?.(outcome.orderId)
+    } catch (error) {
+      setReportInitError(error.message || 'Không thể khởi tạo báo cáo campaign.')
+    }
+  }
 
   if (!outcome.orderId) return null
 
@@ -268,7 +222,7 @@ export default function AutopilotOutcome({ workspace, taskByKey, fallbackBrief }
           const Icon = tab.icon
           const selected = activeTab === tab.id
           return (
-            <button key={tab.id} type="button" role="tab" aria-selected={selected} onClick={() => setActiveTab(tab.id)}
+            <button key={tab.id} type="button" role="tab" aria-selected={selected} onClick={() => selectTab(tab.id)}
               className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 text-[11px] font-bold transition ${selected ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
               <Icon className="h-3.5 w-3.5" /> <span>{tab.label}</span>
             </button>
@@ -290,7 +244,22 @@ export default function AutopilotOutcome({ workspace, taskByKey, fallbackBrief }
           />
         )}
         {activeTab === 'setup' && <SetupReport outcome={outcome} />}
-        {activeTab === 'performance' && <PerformanceReportState outcome={outcome} />}
+        {activeTab === 'report' && (
+          <div className="space-y-3" data-testid="autopilot-report-module">
+            {reportInitError && (
+              <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{reportInitError}</p>
+            )}
+            <Suspense fallback={<div className="py-12 text-center text-sm text-slate-500">Đang tải module báo cáo…</div>}>
+              <ReportStep
+                data={reportData}
+                onChange={onReportChange}
+                formState={reportFormState}
+                onSendChat={onSendReportQuestion}
+                onRetry={() => onReportActivate?.(outcome.orderId, { force: true })}
+              />
+            </Suspense>
+          </div>
+        )}
       </div>
     </section>
   )

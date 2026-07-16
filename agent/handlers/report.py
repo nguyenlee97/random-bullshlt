@@ -20,13 +20,41 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
     segment = form.get("segment", {})
     order_ids = session.get("created_order_ids", [])
 
+    # Autopilot stores its authoritative result in the canonical workspace,
+    # while the older Copilot flow also mirrors data into ``form_state``.
+    # Read both so one report pipeline works for either experience.
+    canonical_workspace = {}
+    try:
+        from workspace.service import get_workspace
+        canonical_workspace = await get_workspace(session_id)
+    except Exception as exc:
+        await log_event(session_id, "warn", {
+            "handler": "report_entry", "workspace_error": str(exc),
+        })
+    artifacts = canonical_workspace.get("artifacts", {})
+
+    def artifact_value(name: str) -> dict:
+        value = (artifacts.get(name, {}) or {}).get("value")
+        return value if isinstance(value, dict) else {}
+
+    canonical_brief = artifact_value("brief")
+    canonical_audience = artifact_value("audience")
+    canonical_placements = artifact_value("placements")
+    canonical_order = artifact_value("order")
+    canonical_order = canonical_order.get("order", canonical_order)
+    if canonical_brief:
+        brief = canonical_brief
+    if canonical_audience:
+        segment = canonical_audience
+
     brand = brief.get("brand", "Unknown")
     objective = brief.get("objective", "awareness")
     budget = brief.get("budget", 100)
     start_date = brief.get("startDate", "2026-06-17")
 
     # Build campaign ID from first order
-    campaign_id = order_ids[0] if order_ids else f"CAMP-{session_id[:8]}"
+    canonical_order_id = canonical_order.get("id") or canonical_order.get("_id")
+    campaign_id = str(canonical_order_id or (order_ids[0] if order_ids else f"CAMP-{session_id[:8]}"))
 
     # Build zone list — prefer fetching real order from backend
     zones = []
@@ -66,7 +94,21 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
                         for c in order_data.get("creatives", []):
                             placements.extend(c.get("zones", []))
                     placements = list(dict.fromkeys(placements))  # deduplicate
-                    zones = [infer_zone(zid) for zid in placements[:8]]
+                    canonical_zone_by_id = {
+                        str(zone.get("id")): zone
+                        for zone in canonical_placements.get("zones", [])
+                        if zone.get("id")
+                    }
+                    zones = []
+                    for zid in placements[:8]:
+                        source = canonical_zone_by_id.get(str(zid), {})
+                        fallback = infer_zone(str(zid))
+                        zones.append({
+                            "id": str(zid),
+                            "channel": source.get("channel") or source.get("platform") or fallback["channel"],
+                            "format": source.get("format") or source.get("size") or fallback["format"],
+                            "cpm": source.get("cpm") or fallback["cpm"],
+                        })
                     # Also update brief from order if session was stale
                     if not brand or brand == "Unknown":
                         brand = order_data.get("brand", brand)
@@ -83,6 +125,22 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
             await log_event(session_id, "warn", {"handler": "report_entry", "fetch_order_error": str(e)})
 
     # Fall back to session form_state if order fetch failed
+    if not zones:
+        canonical_zones = canonical_placements.get("zones", [])
+        canonical_selected = canonical_placements.get("selectedZoneIds", [])
+        selected = set(str(item) for item in canonical_selected)
+        for zone in canonical_zones:
+            zid = str(zone.get("id") or "")
+            if not zid or (selected and zid not in selected):
+                continue
+            fallback = infer_zone(zid)
+            zones.append({
+                "id": zid,
+                "channel": zone.get("channel") or zone.get("platform") or fallback["channel"],
+                "format": zone.get("format") or zone.get("size") or fallback["format"],
+                "cpm": zone.get("cpm") or fallback["cpm"],
+            })
+
     if not zones:
         reco_zones = setup.get("recoZones", []) or setup.get("allZones", [])
         selected_ids = setup.get("selectedZoneIds", [])
@@ -115,7 +173,10 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
         "startDate": start_date,
         "zones": zones,
         "audience": [
-            {"name": a.get("name", ""), "context": a.get("category", "")}
+            {
+                "name": a.get("fullLabel") or a.get("label") or a.get("name", ""),
+                "context": a.get("category") or a.get("reason", ""),
+            }
             for a in segment.get("attrs", [])[:5]
         ],
     }
@@ -141,7 +202,10 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
         "gen_status": gen_status.get("status", "unknown"),
     }
     from session import update_form_state
-    await update_form_state(session_id, "report_context", report_ctx)
+    await update_form_state(
+        session_id, "report_context", report_ctx,
+        sync_workspace=canonical_workspace.get("experience_mode") != "autopilot",
+    )
 
     await log_event(session_id, "report_entry", {
         "campaign_id": campaign_id,

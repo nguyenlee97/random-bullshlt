@@ -129,7 +129,12 @@ const validateBrief = brief => {
   return errors
 }
 
-export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun = null, onWorkspaceRefresh, onOpenChat, onOpenBrief, onOpenCreative, onStatusChange }) {
+export default function AutopilotPanel({
+  brief, canonicalWorkspace, initialRun = null, onWorkspaceRefresh,
+  onOpenChat, onOpenBrief, onOpenCreative, onStatusChange,
+  reportState, onReportChange, onSendReportQuestion,
+  onReportActivate, onReportExit,
+}) {
   const [policy, setPolicy] = useState('critical_only')
   const [creativeSource, setCreativeSource] = useState(null)
   const [run, setRun] = useState(initialRun)
@@ -620,6 +625,11 @@ export default function AutopilotPanel({ brief, canonicalWorkspace, initialRun =
               workspace={workspaceSnapshot}
               taskByKey={taskByKey}
               fallbackBrief={displayBrief}
+              reportState={reportState}
+              onReportChange={onReportChange}
+              onSendReportQuestion={onSendReportQuestion}
+              onReportActivate={onReportActivate}
+              onReportExit={onReportExit}
             />
           ) : <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="autopilot-results-title">
             <div className="flex flex-wrap items-start justify-between gap-3">
