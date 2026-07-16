@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "catalog": "SCENARIO-CATALOG.md",
-  "scenario_count": 116,
+  "scenario_count": 128,
   "scenarios": [
     {"id":"UI-001","suite":"ui_ux","priority":"P0","execution_mode":"browser","title":"Desktop mode selector and identity"},
     {"id":"UI-002","suite":"ui_ux","priority":"P0","execution_mode":"browser","title":"Guided mode layout"},
@@ -13,6 +13,7 @@
     {"id":"UI-008","suite":"ui_ux","priority":"P0","execution_mode":"browser","title":"Actionable error UX"},
     {"id":"UI-009","suite":"ui_ux","priority":"P1","execution_mode":"browser","title":"New campaign reset"},
     {"id":"UI-010","suite":"ui_ux","priority":"P1","execution_mode":"browser","title":"Safe log export"},
+    {"id":"UI-011","suite":"ui_ux","priority":"P0","execution_mode":"browser","title":"Autopilot creative-source selector"},
 
     {"id":"API-001","suite":"api","priority":"P0","execution_mode":"api","title":"Health readiness and version"},
     {"id":"API-002","suite":"api","priority":"P0","execution_mode":"api","title":"Agent API-key boundary"},
@@ -73,6 +74,10 @@
     {"id":"CR-006","suite":"creative","priority":"P1","execution_mode":"failure_injection","title":"VLM timeout fallback"},
     {"id":"CR-007","suite":"creative","priority":"P1","execution_mode":"failure_injection","title":"Creative job restart recovery"},
     {"id":"CR-008","suite":"creative","priority":"P0","execution_mode":"api_browser","title":"Audited manual creative override"},
+    {"id":"CR-009","suite":"creative","priority":"P0","execution_mode":"api_browser","title":"Generated creative provenance and formats"},
+    {"id":"CR-010","suite":"creative","priority":"P0","execution_mode":"api_browser","title":"Generated creative safety review"},
+    {"id":"CR-011","suite":"creative","priority":"P1","execution_mode":"failure_injection","title":"Generation replay and restart idempotency"},
+    {"id":"CR-012","suite":"creative","priority":"P1","execution_mode":"failure_injection","title":"Image provider failure recovery"},
 
     {"id":"ORD-001","suite":"order","priority":"P1","execution_mode":"api_browser","title":"Objective-aware placement ranking"},
     {"id":"ORD-002","suite":"order","priority":"P0","execution_mode":"api_browser","title":"Placement date conflict guard"},
@@ -97,6 +102,12 @@
     {"id":"AUTO-010","suite":"autopilot","priority":"P0","execution_mode":"api_browser","title":"Mid-run replanning"},
     {"id":"AUTO-011","suite":"autopilot","priority":"P1","execution_mode":"browser","title":"Strategy simulator propagation"},
     {"id":"AUTO-012","suite":"autopilot","priority":"P0","execution_mode":"api","title":"Launch approval idempotency"},
+    {"id":"AUTO-013","suite":"autopilot","priority":"P0","execution_mode":"api_browser","title":"Creative source required before start"},
+    {"id":"AUTO-014","suite":"autopilot","priority":"P0","execution_mode":"api_browser","title":"Upload-source pause behavior"},
+    {"id":"AUTO-015","suite":"autopilot","priority":"P0","execution_mode":"api_browser","title":"Fully automatic AI creative generation"},
+    {"id":"AUTO-016","suite":"autopilot","priority":"P0","execution_mode":"api_browser","title":"Generated creative review boundary"},
+    {"id":"AUTO-017","suite":"autopilot","priority":"P1","execution_mode":"failure_injection","title":"Generation restart recovery"},
+    {"id":"AUTO-018","suite":"autopilot","priority":"P1","execution_mode":"api_browser","title":"Mid-run creative-source replan"},
 
     {"id":"REP-001","suite":"reporting","priority":"P1","execution_mode":"browser","title":"Result uses real order data"},
     {"id":"REP-002","suite":"reporting","priority":"P1","execution_mode":"api_browser","title":"Report question routing"},
@@ -131,6 +142,7 @@
 
     {"id":"JOURNEY-GUIDED-01","suite":"journey","priority":"P0","execution_mode":"browser","title":"Guided end-to-end campaign"},
     {"id":"JOURNEY-AUTO-01","suite":"journey","priority":"P0","execution_mode":"browser","title":"Autopilot end-to-end campaign"},
+    {"id":"JOURNEY-AUTO-AIGEN-01","suite":"journey","priority":"P0","execution_mode":"browser","title":"Autopilot AI-generated creative journey"},
     {"id":"JOURNEY-NONLINEAR-01","suite":"journey","priority":"P0","execution_mode":"browser","title":"Nonlinear editing journey"},
     {"id":"JOURNEY-RECOVERY-01","suite":"journey","priority":"P0","execution_mode":"failure_injection","title":"Restart and recovery journey"}
   ]

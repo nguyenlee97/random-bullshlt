@@ -16,6 +16,7 @@ Each case must be recorded once in `report.json`. `P0` is release blocking, `P1`
 | UI-008 | P0 | Trigger a 422 validation error and a simulated 503 provider error. | Vietnamese, actionable error; user input remains available; no false success/advance. | Raw traceback, blank bubble, workspace mutation. |
 | UI-009 | P1 | Click `Chiến dịch mới`, confirm reset. | New session ID; chat/workspace/run state reset; old session no longer receives requests. | Old history or pending proposal reappears. |
 | UI-010 | P1 | Export log after one proposal and approval. | JSON contains ordered conversation, tools, session/build identifiers and network evidence; secrets/redacted data absent. | API key, DB URI, chain-of-thought or malformed JSON. |
+| UI-011 | P0 | In Autopilot with an approved Brief, inspect the start configuration at desktop and 390×844. | Two mutually exclusive Vietnamese choices are visible: upload creative or let AI generate automatically; neither is silently preselected; selected value survives refresh. | Hidden default, ambiguous wording, clipped mobile choice, or approval policy presented as the creative source. |
 
 ## API and service contracts
 
@@ -100,6 +101,10 @@ Each case must be recorded once in `report.json`. `P0` is release blocking, `P1`
 | CR-006 | P1 | Gemma timeout/invalid schema. | Deterministic fallback and `needs_review`; job terminates with error evidence. | Infinite pending or optimistic approval. |
 | CR-007 | P1 | Stop agent during queued/running analysis, restart. | Durable jobs recover/lease safely and reach one terminal state. | Duplicate analyses or lost job. |
 | CR-008 | P0 | Manual override a review-required creative with operator reason. | Durable actor/reason/timestamp audit; Setup unblocks only afterward. | Anonymous or reasonless override. |
+| CR-009 | P0 | Run AI generation for two required placement formats. | Exactly one persisted asset per required format, exact dimensions, durable provider/model/prompt-version provenance and source=`ai_generated`; both enter the normal analysis queue. | Browser-only blobs, missing provenance, wrong dimensions, or skipped analysis. |
+| CR-010 | P0 | Generated creative receives unsafe or low-confidence verdict. | Autopilot pauses at creative review and exposes evidence plus retry/regenerate/manual-upload actions. | Auto-override, silent deletion, assignment, or order readiness. |
+| CR-011 | P1 | Replay the same generation task and idempotency key, including one agent restart. | Existing generation jobs/assets are reused; one terminal asset per requested format. | Duplicate files, duplicate analysis jobs, or changed provenance. |
+| CR-012 | P1 | Make the image provider timeout or return invalid output. | Task reaches a bounded failed/needs-review state and offers retry or switch to upload; no successful artifact is recorded. | Infinite running state, fabricated image, or automatic launch continuation. |
 
 ## Setup, assignments and orders
 
@@ -132,6 +137,12 @@ Each case must be recorded once in `report.json`. `P0` is release blocking, `P1`
 | AUTO-010 | P0 | Edit Brief mid-run. | Plan revision increments; affected task subtree replans; unaffected safe work retained. | Stale task commits. |
 | AUTO-011 | P1 | Change strategy simulator option. | Selected option, assumptions and downstream tasks update audibly; no order yet. | UI-only change ignored by run. |
 | AUTO-012 | P0 | Approve launch twice/replay request. | First creates at most one order; replay 409/idempotent; stable key evidence. | Duplicate order. |
+| AUTO-013 | P0 | Approved Brief but no creative source; call start through UI and API. | Start remains disabled in UI and API returns a validation error naming `creative_source`; no run is created. | Implicit upload/AI default or hidden run creation. |
+| AUTO-014 | P0 | Select `upload`, start `critical_only`, allow reversible tasks to progress. | Run configuration persists `creative_source=upload`; creative task pauses with an upload review request and no generation job. | Image provider call or fabricated creative. |
+| AUTO-015 | P0 | Select `ai_generate`, start `auto_build_draft`, provide no manual creative interaction. | After strategy/placement requirements exist, Autopilot creates format-specific generation jobs, analyzes safe outputs, assigns compatible assets and reaches an order-ready draft while still stopping before launch. | Manual upload required for a safe run, skipped review pipeline, or automatic order creation. |
+| AUTO-016 | P0 | AI-generated creative is unsafe/low-confidence. | Run enters `needs_review`; downstream assignment/order tasks remain blocked; only authenticated human action can override. | Policy auto-approval or launch continuation. |
+| AUTO-017 | P1 | Restart agent while AI generation is queued/running, then retry/resume. | Durable task/job recovers with stable IDs and no duplicate asset; progress evidence remains attached to the run trace. | Lost job, duplicate image, or new unrelated run trace. |
+| AUTO-018 | P1 | Change source from `upload` to `ai_generate` or vice versa during a nonterminal run and approve impact. | Plan revision increments; creative and dependent artifacts invalidate/replan; unaffected audience/targeting remain reusable; old in-flight results cannot commit. | Silent mode switch, stale creative commit, or whole-workspace reset. |
 
 ## Reports and exports
 
@@ -192,5 +203,6 @@ In addition to isolated cases, run these uninterrupted journeys:
 2. `JOURNEY-AUTO-01`: UI-003 → BR-001 → BR-002 → AUTO-003 → AUTO-009 → AUTO-010 → AUTO-012 → REP-001.
 3. `JOURNEY-NONLINEAR-01`: UI-002 → NL-001 → BR-011 → NL-003 → WS-006 → ORD-009.
 4. `JOURNEY-RECOVERY-01`: BR-001 → RES-001 → AUTO-003 → RES-007 → AUTO-012.
+5. `JOURNEY-AUTO-AIGEN-01`: UI-003 → BR-001 → BR-002 → UI-011 → AUTO-015 → CR-009 → CR-010 (safe-verdict variant) → ORD-003 → AUTO-012 → REP-001.
 
 For journeys, include a parent result plus references to each constituent scenario result; do not duplicate defect records.

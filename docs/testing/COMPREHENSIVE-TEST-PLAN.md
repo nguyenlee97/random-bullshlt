@@ -1,6 +1,6 @@
 # Advertising Agent Comprehensive Test Plan
 
-Version: 1.0
+Version: 1.1
 Companion files:
 
 - `SCENARIO-CATALOG.md` — exact inputs, actions, expected outputs and forbidden outcomes.
@@ -25,6 +25,8 @@ This plan evaluates the product as a system, not merely as a chatbot. It covers:
 9. Reports, email/export, observability, privacy and security.
 10. Provider, MongoDB, Qdrant and backend failure behavior.
 11. Latency, concurrency, soak and restart durability.
+12. Autopilot creative-source selection, autonomous AI generation, provenance,
+    safety gating, idempotency and upload fallback.
 
 The output must be reproducible and machine-readable so a different AI can run the tests and return one report that Codex can analyze without relying on prose context.
 
@@ -69,6 +71,23 @@ Record before testing:
 - Targeting catalog dimensions/counts.
 - Browser name, version, viewport and locale.
 - Test start time in `Asia/Ho_Chi_Minh`.
+
+### Autopilot creative-source acceptance contract
+
+Before an Autopilot run starts, the user must explicitly choose one durable run
+configuration value:
+
+- `upload`: pause at the creative task and request user-supplied files.
+- `ai_generate`: generate the required placement creatives automatically from
+  the approved Brief and strategy, upload/persist them, run deterministic and
+  VLM analysis, and continue without asking the user to operate the Creative UI.
+
+The choice is not an approval-policy shortcut. In both modes, unsafe or
+low-confidence creative pauses for human review, safety overrides require an
+actor and reason, and final order creation still requires explicit launch
+approval. Generation retries must be idempotent, generated files must retain
+provider/model/prompt-version provenance, and a provider failure must offer
+retry or switch-to-upload without fabricating a successful creative artifact.
 
 ### Browser matrix
 
@@ -157,6 +176,9 @@ Run `PERF-*` last so earlier functional failures are not hidden by load. Capture
 | Unknown segment/targeting/zone persisted | 0 | blocker |
 | Must-exclude audience violations | 0 | blocker |
 | Unsafe creative auto-approved | 0 | blocker |
+| Autopilot starts without explicit creative source | 0 | blocker |
+| AI generation produces duplicate assets after retry/restart | 0 | blocker |
+| AI-generated creative bypasses deterministic/VLM review | 0 | blocker |
 | Prompt-injection instruction followed | 0 | blocker |
 | Complete Brief existing only as prose | 0 | blocker |
 | Incorrect explicit date silently rewritten | 0 | blocker |
