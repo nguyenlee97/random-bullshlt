@@ -122,30 +122,39 @@ Review artifacts:
 
 ## 8. Remaining roadmap
 
-### P0 — release blockers
+The detailed continuation is now defined in `19-final-enhancement-phase-roadmap.md`.
+It prioritizes placement-aware multi-format generation, followed by anonymous/account
+identity with conversation history, then a channel-agnostic Zalo OA integration.
 
-- Human-review and apply the golden-label audit; rerun validators and RAG safety gates.
-- Add real browser E2E for desktop/mobile Guided and Autopilot journeys, refresh/reconnect and stale workspace UX.
-- Run provider failure drills for LLM, image, VLM, Qdrant, Mongo and backend storage; prove no duplicate image or order.
+The user has accepted the independent golden-label recommendations. This is
+authorization to apply the proposed edits and record human-owned review statuses;
+it does not make the current unedited 041–080 files correct by declaration.
+
+### P0 — closeout and truth gates
+
+- Apply the accepted golden-label audit; rerun validators and RAG safety gates.
+- Execute changed-journey browser/API scenarios. The 128-case manifest exists but has not all been executed.
+- Keep only minimal restart/retry checks around generated-image cost and exactly-once order creation; defer broad chaos work.
 - Run a complete campaign smoke through final launch approval and verified order using a known-safe creative.
 
-### P1 — next-hackathon differentiators
+### P1 — final enhancement product work
 
-- Generate multiple placement-aware creative formats/variants with cost and quality budgets.
-- A/B reranker off/on and enable only if quality improves without breaking latency/cost gates.
-- Add post-launch analytics ingestion, anomaly detection, recommendations and approved report delivery.
-- Improve plan estimation, actionable blocked-state questions and richer evidence drill-down.
+- Add two-pass placement planning and generate exact creative formats/variants with cost and quality budgets.
+- Add anonymous-first accounts, login identities, conversation history and cross-device resume.
+- Add Zalo OA as a channel adapter for Autopilot, simplified Guided flow, campaign status/modification and live notifications.
+- Keep Qwen reranking disabled and defer the post-launch analytics/report agent.
 
-### P2 — production hardening
+### P2 — later hardening
 
-- Authenticated identity, RBAC, tenant isolation and safety-override audit reasons.
+- Extend owner authorization into organization RBAC and tenant isolation after account ownership is stable.
 - Horizontal-worker concurrency tests and operational SLO/error-budget dashboards.
 - Data retention/deletion policy, backup/restore drills and formal incident runbooks.
 
 ## 9. Recommended sequence
 
-1. Apply and human-sign-off golden labels.
-2. Rebuild the local stack and execute the 128-case deterministic/API subset.
-3. Add browser runtime and close the UI/E2E gap.
-4. Perform one upload and one AI-generation full journey.
-5. Only after the release gate is green, start the next set of product features.
+1. Apply the accepted golden-label changes and pass focused safety validation.
+2. Implement placement-aware multi-format generation.
+3. Perform one upload and one real AI-generation full journey.
+4. Add anonymous/account identity and resumable conversation history.
+5. Add the Zalo OA channel foundation, campaign operations and notifications.
+6. Execute the complete release suite after the changed journeys stabilize.
