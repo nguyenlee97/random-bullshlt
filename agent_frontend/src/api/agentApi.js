@@ -1164,6 +1164,17 @@ export const AgentAPI = {
     return response.json()
   },
 
+  async startZaloAuth({ intent = 'login', returnTo = '/' } = {}) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/auth/zalo/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intent, return_to: returnTo }),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể bắt đầu đăng nhập Zalo.')
+    return response.json()
+  },
+
   async logoutAccount() {
     const response = await agentFetch(`${AGENT_URL}/api/agent/auth/logout`, {
       method: 'POST', signal: AbortSignal.timeout(5000),
@@ -1187,6 +1198,31 @@ export const AgentAPI = {
       { method: 'DELETE', signal: AbortSignal.timeout(5000) },
     )
     if (!response.ok) throw await responseError(response, 'Không thể thu hồi phiên đăng nhập.')
+    return response.json()
+  },
+
+  async startZaloChannelLink() {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/channel-links/zalo`, {
+      method: 'POST', signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể tạo mã liên kết Zalo OA.')
+    return response.json()
+  },
+
+  async getZaloChannelLink(attemptId) {
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/channel-links/zalo/${encodeURIComponent(attemptId)}`,
+      { signal: AbortSignal.timeout(5000) },
+    )
+    if (!response.ok) throw await responseError(response, 'Không thể kiểm tra liên kết Zalo OA.')
+    return response.json()
+  },
+
+  async unlinkZaloChannel() {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/channel-links/zalo`, {
+      method: 'DELETE', signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể hủy liên kết Zalo OA.')
     return response.json()
   },
 

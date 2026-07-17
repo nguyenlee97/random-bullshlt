@@ -7,6 +7,7 @@ const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const hook = readFileSync(new URL('../src/hooks/useIdentity.js', import.meta.url), 'utf8')
 const auth = readFileSync(new URL('../src/components/AuthDialog.jsx', import.meta.url), 'utf8')
 const accountMenu = readFileSync(new URL('../src/components/AccountMenu.jsx', import.meta.url), 'utf8')
+const zaloLink = readFileSync(new URL('../src/components/ZaloLinkDialog.jsx', import.meta.url), 'utf8')
 const history = readFileSync(new URL('../src/components/ConversationHistory.jsx', import.meta.url), 'utf8')
 const home = readFileSync(new URL('../src/components/ExperienceSelector.jsx', import.meta.url), 'utf8')
 
@@ -24,6 +25,19 @@ test('local account API and state expose register login logout me and session re
   assert.match(hook, /useIdentity/)
   assert.match(auth, /'new-password'/)
   assert.match(auth, /'current-password'/)
+})
+
+test('Zalo is the primary login while local auth remains an explicit test fallback', () => {
+  for (const method of ['startZaloAuth', 'startZaloChannelLink', 'getZaloChannelLink', 'unlinkZaloChannel']) {
+    assert.match(api, new RegExp(`${method}\\(`))
+  }
+  assert.match(auth, /Tiếp tục với Zalo/)
+  assert.match(auth, /email dành cho kiểm thử/)
+  assert.match(hook, /account\.startZalo|AgentAPI\.startZaloAuth|startZalo/)
+  assert.match(accountMenu, /Kết nối đăng nhập Zalo/)
+  assert.match(accountMenu, /Liên kết chat Zalo OA/)
+  assert.match(zaloLink, /LINK \$\{attempt\.link_code\}/)
+  assert.match(zaloLink, /getZaloChannelLink/)
 })
 
 test('account and device histories are labeled and only device campaigns can claim', () => {

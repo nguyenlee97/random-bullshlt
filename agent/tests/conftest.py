@@ -85,4 +85,22 @@ def reset_session_col(monkeypatch):
         monkeypatch.setattr(accounts, "_mem_auth_audit_events", [], raising=False)
     except ImportError:
         pass
+    try:
+        import zalo_auth
+        monkeypatch.setattr(zalo_auth, "_mem_attempts", {}, raising=False)
+        monkeypatch.setattr(
+            zalo_auth, "_attempt_lock", __import__("asyncio").Lock(), raising=False
+        )
+    except ImportError:
+        pass
+    try:
+        import zalo_channel
+        monkeypatch.setattr(zalo_channel, "_mem_links", {}, raising=False)
+        monkeypatch.setattr(zalo_channel, "_mem_channel_identities", {}, raising=False)
+        monkeypatch.setattr(zalo_channel, "_mem_events", {}, raising=False)
+        monkeypatch.setattr(
+            zalo_channel, "_mem_lock", __import__("asyncio").Lock(), raising=False
+        )
+    except ImportError:
+        pass
     yield

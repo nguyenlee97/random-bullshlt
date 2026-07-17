@@ -1,8 +1,8 @@
 # Advertising Agent — Final Enhancement Phase Roadmap
 
-Date: 2026-07-16
+Date: 2026-07-18
 
-Status: in progress; FE-1 implementation, strict-review edit/resume, Autopilot outcome parity and the shared analytical report module are code-complete, upload/provider journey sign-off remains
+Status: in progress; FE-1 implementation and FE-2B are complete; Zalo Login plus explicit OA account linking are locally code-complete, while real Zalo consent, shared-OA activation and the FE-3 agent worker remain pending
 
 Scope: finish the current campaign agent, add placement-aware creative generation, then add identity, conversation history, and Zalo OA as a first-class channel.
 
@@ -27,7 +27,7 @@ The web application remains the richest workspace. Zalo is a conversational cont
 | Multi-format generation | Highest-priority product feature. Add placement intent before AI generation, then finalize placements after creative analysis. |
 | Qwen reranker | Leave configured but disabled; no A/B work in this phase. |
 | Analytics/report agent | The current Copilot analytical report module is now shared with Autopilot, including six generated report views and cached report Q&A. A future live-delivery optimization/anomaly agent remains low priority and out of scope. |
-| Identity | Anonymous-first. Add account ownership and conversation history, then Google/Zalo/local identities behind one user model. |
+| Identity | Anonymous-first. Zalo is the primary login provider; local email/password remains a temporary testing/rollback provider on the same user model. Google login is not planned. |
 | Zalo integration | Reuse the proven adapter pattern from `them-ga-ran`: signature-verified webhook, immediate acknowledgement, durable background processing, persisted rotating OA tokens, channel identity mapping, and isolated message rendering. |
 
 ## 3. Current baseline
@@ -236,7 +236,7 @@ Permanent deletion is intentionally distinct from archive. A user may delete one
 
 Local verification after FE-2B: 242 backend tests, 58 frontend tests, production frontend build, live additive-index inspection and two independent cookie-jar browser journeys covering anonymous creation, explicit claim, old-device denial, cross-device account resume, foreign-account isolation and anonymous use after logout.
 
-Remaining FE-2 work is deliberately split into later provider/policy slices: email verification and password reset, Google OIDC, Zalo Login, account retention policy and broader production/tenant hardening. Local registration/login, account session management/CSRF, explicit anonymous claim and cross-device ownership tests are complete; FE-2 as a whole is not.
+Zalo Login and explicit Zalo identity attachment were implemented locally on 2026-07-18. The flow uses Social OAuth v4 PKCE, one-time Mongo TTL attempts bound to the current browser/account session, provider identity `(zalo, profile.id)`, and the same opaque FE-2B account cookie. Zalo access tokens are request-local only. Login never claims anonymous conversations. Local auth remains visible only as a testing fallback; Google login is no longer planned. Live Zalo consent is pending callback registration and credentials. Evidence is in `23-zalo-login-oa-link-foundation-evidence.md`.
 
 Completed execution slice (2026-07-17): **FE-2B local accounts, secure account sessions, explicit anonymous-conversation claim and cross-device resume**. The implementation contract and rollback boundary remain in `20-fe2b-local-accounts-handoff.md`; completion evidence is in `22-fe2b-local-accounts-evidence.md`.
 
@@ -257,7 +257,7 @@ users
   _id, display_name, status, created_at, last_seen_at
 
 auth_identities
-  user_id, provider(local|google|zalo), provider_subject,
+  user_id, provider(local|zalo), provider_subject,
   verified_email_or_phone, password_hash?, created_at
 
 anonymous_identities
@@ -280,9 +280,8 @@ Recommended delivery order:
 
 1. Anonymous identity plus conversation list/resume.
 2. Local username/email and password using Argon2id, verification and reset flow.
-3. Google OAuth/OIDC.
-4. Zalo Login.
-5. Zalo OA channel-link flow.
+3. Zalo Login using the existing account session authority.
+4. Zalo OA channel-link flow.
 
 Use secure, HTTP-only, SameSite cookies for web sessions. Do not put long-lived access tokens in local storage. Add CSRF protection for cookie-authenticated mutations, session revocation, login rate limits and an audit record for account/channel linking.
 
@@ -299,8 +298,8 @@ POST /api/auth/register
 POST /api/auth/login
 POST /api/auth/logout
 GET  /api/auth/me
-GET  /api/auth/google/start|callback
-GET  /api/auth/zalo/start|callback
+POST /api/agent/auth/zalo/start
+GET  /api/agent/auth/zalo/callback
 
 GET  /api/conversations
 POST /api/conversations
@@ -310,9 +309,9 @@ POST /api/conversations/:id/archive
 DELETE /api/conversations/:id
 DELETE /api/conversations   # body confirmation=DELETE_ALL
 
-POST /api/channel-links
-POST /api/channel-links/:token/confirm
-DELETE /api/channel-links/:id
+POST   /api/agent/channel-links/zalo
+GET    /api/agent/channel-links/zalo/:attempt_id
+DELETE /api/agent/channel-links/zalo
 ```
 
 Every workspace, run, proposal and order operation must resolve the actor server-side. A browser-provided `user_id`, `workspace_id` or conversation owner is never trusted by itself.
@@ -329,6 +328,8 @@ Every workspace, run, proposal and order operation must resolve the actor server
 - A user may unlink Zalo without deleting web history.
 
 ## 8. FE-3 — Zalo OA channel foundation
+
+Implementation status (2026-07-18): the first transport/identity foundation is locally code-complete. The Agent API now exposes a fail-closed raw-body signature-verified webhook, validates the configured App/OA and timestamp, deduplicates durable `channel_events`, and links a Zalo OA-scoped sender to an authenticated account only after that sender transmits a short-lived one-time `LINK` code. Login and OA IDs are never assumed interchangeable. The frontend can initiate and poll this explicit link and can unlink the OA without deleting web history. The durable agent-turn worker, OA rotating token manager, outbound delivery/receipt retry, Guided/Autopilot channel renderer and real-OA activation remain FE-3 work.
 
 ### 8.1 Reuse from `them-ga-ran`
 
@@ -403,6 +404,8 @@ Official references: [Zalo for Developers](https://developers.zalo.me/), [Zalo O
 - Repeated final approval creates one order.
 - Text/image outputs render correctly; unsupported UI blocks become concise text plus a deep link.
 
+Locally verified in the foundation slice: invalid signatures create no event; valid events are normalized and stored once; replay is idempotent; link codes are stored hashed, expire, and can be consumed once; a verified OA sender links to exactly one internal user; unlink preserves the account and web history. Worker/send assertions above remain pending and must not be marked complete from these foundation tests.
+
 ## 9. FE-4 — Zalo campaign operations and notifications
 
 After FE-3 is stable, expose a narrow campaign-operations tool set:
@@ -439,12 +442,12 @@ Required before calling the final enhancement complete:
 1. FE-0 golden edits and focused regression closeout.
 2. FE-1 placement intent, format planner and multi-format generation.
 3. User manual upload and real AI-generation journeys; fix journey defects.
-4. FE-2 anonymous identity and conversation history, then login providers.
-5. FE-3 Zalo adapter, durable event delivery and account linking.
+4. FE-2 anonymous identity, conversation history and Zalo Login behind one user model.
+5. Complete FE-3 Zalo worker, rotating OA tokens, outbound delivery and channel rendering on top of the verified webhook/account-link foundation.
 6. FE-4 campaign operations and live notification.
 7. FE-5 full suite, browser evidence and demo rehearsal.
 
-Do not implement Google, Zalo and local auth as three separate user systems. Do not build a second agent for Zalo. Do not begin the analytics/report agent until campaign creation and channel journeys are stable.
+Do not build a second auth authority or a second agent for Zalo. Keep temporary local auth and Zalo identities attached to the same internal user. Do not begin the analytics/report agent until campaign creation and channel journeys are stable.
 
 ## 12. Deferred backlog
 

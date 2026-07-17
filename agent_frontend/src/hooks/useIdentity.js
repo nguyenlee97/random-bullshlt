@@ -5,6 +5,8 @@ const anonymousState = {
   authenticated: false,
   user: null,
   anonymous_identity_present: true,
+  auth_methods: { local_test: true, zalo: false, zalo_oa_link: false },
+  channels: { zalo_oa: null },
 }
 
 export function useIdentity() {
@@ -27,6 +29,8 @@ export function useIdentity() {
         authenticated: true,
         user: result.user,
         anonymous_identity_present: true,
+        auth_methods: identity.auth_methods,
+        channels: identity.channels,
       }
       setIdentity(current)
       return { ...result, identity: current }
@@ -36,7 +40,7 @@ export function useIdentity() {
     } finally {
       setBusy(false)
     }
-  }, [])
+  }, [identity.auth_methods, identity.channels])
 
   const login = useCallback(async credentials => {
     setBusy(true)
@@ -47,6 +51,8 @@ export function useIdentity() {
         authenticated: true,
         user: result.user,
         anonymous_identity_present: true,
+        auth_methods: identity.auth_methods,
+        channels: identity.channels,
       }
       setIdentity(current)
       return { ...result, identity: current }
@@ -56,7 +62,38 @@ export function useIdentity() {
     } finally {
       setBusy(false)
     }
+  }, [identity.auth_methods, identity.channels])
+
+  const startZalo = useCallback(async (intent = 'login') => {
+    setBusy(true)
+    setError('')
+    try {
+      const result = await AgentAPI.startZaloAuth({
+        intent,
+        returnTo: window.location.pathname,
+      })
+      window.location.assign(result.authorization_url)
+      return result
+    } catch (caught) {
+      setError(caught.message)
+      setBusy(false)
+      throw caught
+    }
   }, [])
+
+  const unlinkZaloChannel = useCallback(async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await AgentAPI.unlinkZaloChannel()
+      return await refresh()
+    } catch (caught) {
+      setError(caught.message)
+      throw caught
+    } finally {
+      setBusy(false)
+    }
+  }, [refresh])
 
   const logout = useCallback(async () => {
     setBusy(true)
@@ -85,7 +122,9 @@ export function useIdentity() {
     refresh,
     register,
     login,
+    startZalo,
     logout,
+    unlinkZaloChannel,
     clearError,
     listSessions: AgentAPI.listAccountSessions,
     revokeSession: AgentAPI.revokeAccountSession,

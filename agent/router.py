@@ -251,12 +251,24 @@ async def account_logout(request: Request, response: Response):
 
 @agent_router.get("/auth/me")
 async def account_me(request: Request, response: Response):
+    from zalo_auth import oauth_ready
+    from zalo_channel import channel_ready, get_linked_channel_for_user
     actor = await _request_actor(request, require_any=False)
     _set_csrf_cookie(request, response)
+    zalo_channel = (
+        await get_linked_channel_for_user(actor["user_id"])
+        if actor.get("user_id") else None
+    )
     return {
         "authenticated": bool(actor.get("user_id")),
         "user": actor.get("user") if actor.get("user_id") else None,
         "anonymous_identity_present": bool(actor.get("anonymous_id")),
+        "auth_methods": {
+            "local_test": True,
+            "zalo": oauth_ready(),
+            "zalo_oa_link": channel_ready(),
+        },
+        "channels": {"zalo_oa": zalo_channel},
     }
 
 

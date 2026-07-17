@@ -231,12 +231,16 @@ async def check_auth_rate_limit(kind: str, *, client_ip: str, email: str) -> Non
 
 
 async def _find_local_identity(email_normalized: str) -> dict | None:
+    return await _find_provider_identity("local", email_normalized)
+
+
+async def _find_provider_identity(provider: str, provider_subject: str) -> dict | None:
     collections = await _collections()
     if collections is not None:
         return await collections["identities"].find_one({
-            "provider": "local", "provider_subject": email_normalized,
+            "provider": provider, "provider_subject": provider_subject,
         })
-    return _mem_auth_identities.get(("local", email_normalized))
+    return _mem_auth_identities.get((provider, provider_subject))
 
 
 async def _find_user(user_id: str) -> dict | None:
@@ -292,14 +296,131 @@ async def create_local_account(email: str, password: str, display_name: str) -> 
     return public_user(user, identity)
 
 
-def public_user(user: dict, identity: dict | None = None) -> dict:
+def public_user(user: dict, identity: dict | list[dict] | None = None) -> dict:
+    identities = identity if isinstance(identity, list) else ([identity] if identity else [])
+    local = next((item for item in identities if item.get("provider") == "local"), None)
+    zalo = next((item for item in identities if item.get("provider") == "zalo"), None)
     return {
         "user_id": user["user_id"],
         "display_name": user["display_name"],
-        "email": (identity or {}).get("email_normalized"),
-        "email_verified": bool((identity or {}).get("email_verified", False)),
+        "email": (local or {}).get("email_normalized"),
+        "email_verified": bool((local or {}).get("email_verified", False)),
+        "avatar_url": (zalo or {}).get("avatar_url"),
+        "providers": sorted({item.get("provider") for item in identities if item.get("provider")}),
         "status": user.get("status", "active"),
     }
+
+
+def _normalize_provider_subject(value: str) -> str:
+    normalized = (value or "").strip()
+    if not 1 <= len(normalized) <= 200 or any(ord(char) < 32 for char in normalized):
+        raise ValidationError("provider subject is invalid")
+    return normalized
+
+
+def _safe_avatar_url(value: str | None) -> str | None:
+    url = (value or "").strip()
+    if not url:
+        return None
+    if len(url) > 1000 or not url.startswith("https://"):
+        return None
+    return url
+
+
+async def authenticate_zalo_account(
+    provider_subject: str,
+    display_name: str,
+    *,
+    avatar_url: str | None = None,
+    link_user_id: str | None = None,
+) -> dict:
+    """Find/create a Zalo account or explicitly attach Zalo to an active user.
+
+    The Zalo access token is deliberately not accepted by this storage layer and
+    therefore cannot be persisted accidentally.  A subject already attached to
+    another user is never merged by name, email, or any browser-provided owner ID.
+    """
+    subject = _normalize_provider_subject(provider_subject)
+    clean_name = normalize_display_name(display_name or "Zalo user")
+    clean_avatar = _safe_avatar_url(avatar_url)
+    now = _now()
+    existing = await _find_provider_identity("zalo", subject)
+    if existing:
+        if link_user_id and existing.get("user_id") != link_user_id:
+            raise AccountConflict("zalo identity already belongs to another account")
+        user = await _find_user(existing.get("user_id", ""))
+        if not user or user.get("status") != "active":
+            raise AccountDisabled("account is disabled")
+        updates = {
+            "profile_name": clean_name,
+            "avatar_url": clean_avatar,
+            "updated_at": now,
+        }
+        collections = await _collections()
+        if collections is not None:
+            await collections["identities"].update_one(
+                {"_id": existing["_id"]}, {"$set": updates}
+            )
+            await collections["users"].update_one(
+                {"_id": user["_id"]}, {"$set": {"last_seen_at": now, "updated_at": now}}
+            )
+        else:
+            existing.update(updates)
+            user["last_seen_at"] = now
+            user["updated_at"] = now
+        identities = await _find_identities_for_user(user["user_id"])
+        await _audit("account_login_verified", user_id=user["user_id"], provider="zalo")
+        return public_user(user, identities)
+
+    if link_user_id:
+        user = await _find_user(link_user_id)
+        if not user or user.get("status") != "active":
+            raise AccountDisabled("account is disabled")
+        user_id = user["user_id"]
+    else:
+        user_id = f"usr_{uuid.uuid4().hex}"
+        user = {
+            "_id": user_id,
+            "user_id": user_id,
+            "display_name": clean_name,
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "last_seen_at": now,
+        }
+
+    identity_id = f"aid_{uuid.uuid4().hex}"
+    identity = {
+        "_id": identity_id,
+        "identity_id": identity_id,
+        "user_id": user_id,
+        "provider": "zalo",
+        "provider_subject": subject,
+        "profile_name": clean_name,
+        "avatar_url": clean_avatar,
+        "created_at": now,
+        "updated_at": now,
+    }
+    collections = await _collections()
+    if collections is not None:
+        if not link_user_id:
+            await collections["users"].insert_one(user)
+        try:
+            await collections["identities"].insert_one(identity)
+        except DuplicateKeyError as exc:
+            if not link_user_id:
+                await collections["users"].delete_one({"_id": user_id})
+            raise AccountConflict("zalo identity already belongs to an account") from exc
+    else:
+        key = ("zalo", subject)
+        if key in _mem_auth_identities:
+            raise AccountConflict("zalo identity already belongs to an account")
+        if not link_user_id:
+            _mem_users[user_id] = user
+        _mem_auth_identities[key] = identity
+    event = "account_identity_linked" if link_user_id else "account_registered"
+    await _audit(event, user_id=user_id, provider="zalo")
+    return public_user(user, await _find_identities_for_user(user_id))
 
 
 async def authenticate_local_account(email: str, password: str) -> dict:
@@ -384,7 +505,7 @@ async def require_account_session(token: str | None) -> dict:
     user = await _find_user(session["user_id"])
     if not user or user.get("status") != "active":
         raise PermissionError("account session is invalid or expired")
-    identity = await _find_identity_for_user(user["user_id"])
+    identities = await _find_identities_for_user(user["user_id"])
     if collections is not None:
         await collections["sessions"].update_one(
             {"_id": session["_id"]}, {"$set": {"last_seen_at": now}}
@@ -393,21 +514,18 @@ async def require_account_session(token: str | None) -> dict:
         session["last_seen_at"] = now
     return {
         "session": _public(session),
-        "user": public_user(user, identity),
+        "user": public_user(user, identities),
     }
 
 
-async def _find_identity_for_user(user_id: str) -> dict | None:
+async def _find_identities_for_user(user_id: str) -> list[dict]:
     collections = await _collections()
     if collections is not None:
-        return await collections["identities"].find_one({
-            "user_id": user_id, "provider": "local",
-        })
-    return next(
-        (doc for doc in _mem_auth_identities.values()
-         if doc.get("user_id") == user_id and doc.get("provider") == "local"),
-        None,
-    )
+        return await collections["identities"].find({"user_id": user_id}).to_list(length=20)
+    return [
+        doc for doc in _mem_auth_identities.values()
+        if doc.get("user_id") == user_id
+    ]
 
 
 async def revoke_account_session(user_id: str, session_id: str) -> bool:

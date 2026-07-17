@@ -5,6 +5,7 @@ import TopBar from '@/components/TopBar'
 import ConversationHistory from '@/components/ConversationHistory'
 import DeleteConversationDialog from '@/components/DeleteConversationDialog'
 import AuthDialog from '@/components/AuthDialog'
+import ZaloLinkDialog from '@/components/ZaloLinkDialog'
 import ClaimConversationDialog from '@/components/ClaimConversationDialog'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
@@ -135,6 +136,7 @@ export default function App() {
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [authDialogOpen, setAuthDialogOpen] = useState(false)
+  const [zaloLinkDialogOpen, setZaloLinkDialogOpen] = useState(false)
   const [claimTarget, setClaimTarget] = useState(null)
   const [claimBusy, setClaimBusy] = useState(false)
   const [claimError, setClaimError] = useState('')
@@ -523,6 +525,16 @@ export default function App() {
       try {
         await AgentAPI.initializeIdentity({ restoreCurrent: false })
         await account.refresh()
+        const authParams = new URLSearchParams(window.location.search)
+        if (authParams.get('auth_error')) {
+          setModeSelectionError('Không thể hoàn tất đăng nhập Zalo. Vui lòng thử lại.')
+        }
+        if (authParams.has('auth') || authParams.has('auth_error')) {
+          authParams.delete('auth')
+          authParams.delete('auth_error')
+          const nextQuery = authParams.toString()
+          window.history.replaceState({}, '', `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`)
+        }
         setHistoryLoading(true)
         setConversationHistory(await AgentAPI.listConversations())
       } catch (error) {
@@ -990,6 +1002,27 @@ export default function App() {
       // useIdentity owns the rendered error and preserves the current workspace.
     }
   }, [account.login, account.register])
+
+  const startZaloLogin = useCallback(async () => {
+    try { await account.startZalo('login') }
+    catch {
+      // useIdentity owns the rendered error.
+    }
+  }, [account.startZalo])
+
+  const linkZaloLogin = useCallback(async () => {
+    try { await account.startZalo('link') }
+    catch (error) { setHistoryError(error.message) }
+  }, [account.startZalo])
+
+  const refreshAfterZaloChannelLink = useCallback(async () => {
+    await account.refresh()
+  }, [account.refresh])
+
+  const unlinkZaloChannel = useCallback(async () => {
+    try { await account.unlinkZaloChannel() }
+    catch (error) { setHistoryError(error.message) }
+  }, [account.unlinkZaloChannel])
 
   const logoutAccount = useCallback(async () => {
     const current = conversationHistory.find(item => item.conversation_id === currentConversationId)
@@ -1521,11 +1554,17 @@ export default function App() {
           onLogout={logoutAccount}
           onLoadSessions={account.listSessions}
           onRevokeSession={account.revokeSession}
+          onLinkZalo={linkZaloLogin}
+          onOpenZaloOA={() => setZaloLinkDialogOpen(true)}
+          onUnlinkZaloOA={unlinkZaloChannel}
         />
         <DeleteConversationDialog target={deleteTarget} busy={deleteBusy} error={deleteError}
           onCancel={closeDeleteDialog} onConfirm={confirmDeleteConversations} />
         <AuthDialog open={authDialogOpen} busy={account.busy} error={account.error}
-          onClose={closeAuthDialog} onSubmit={submitAuth} />
+          zaloAvailable={account.identity.auth_methods?.zalo}
+          onClose={closeAuthDialog} onSubmit={submitAuth} onZalo={startZaloLogin} />
+        <ZaloLinkDialog open={zaloLinkDialogOpen} onClose={() => setZaloLinkDialogOpen(false)}
+          onLinked={refreshAfterZaloChannelLink} />
         <ClaimConversationDialog conversation={claimTarget} busy={claimBusy} error={claimError}
           onCancel={() => !claimBusy && setClaimTarget(null)} onConfirm={confirmClaimConversation} />
       </>
@@ -1554,6 +1593,9 @@ export default function App() {
         onLogout={logoutAccount}
         onLoadSessions={account.listSessions}
         onRevokeSession={account.revokeSession}
+        onLinkZalo={linkZaloLogin}
+        onOpenZaloOA={() => setZaloLinkDialogOpen(true)}
+        onUnlinkZaloOA={unlinkZaloChannel}
       />
 
       <ConversationHistory
@@ -1575,7 +1617,10 @@ export default function App() {
         onCancel={closeDeleteDialog} onConfirm={confirmDeleteConversations} />
 
       <AuthDialog open={authDialogOpen} busy={account.busy} error={account.error}
-        onClose={closeAuthDialog} onSubmit={submitAuth} />
+        zaloAvailable={account.identity.auth_methods?.zalo}
+        onClose={closeAuthDialog} onSubmit={submitAuth} onZalo={startZaloLogin} />
+      <ZaloLinkDialog open={zaloLinkDialogOpen} onClose={() => setZaloLinkDialogOpen(false)}
+        onLinked={refreshAfterZaloChannelLink} />
       <ClaimConversationDialog conversation={claimTarget} busy={claimBusy} error={claimError}
         onCancel={() => !claimBusy && setClaimTarget(null)} onConfirm={confirmClaimConversation} />
 

@@ -6,6 +6,7 @@ import AccountMenu from '@/components/AccountMenu'
 export default function TopBar({
   onReset, onNewChat, onOpenHistory, showDemo,
   identity, identityBusy, onLogin, onLogout, onLoadSessions, onRevokeSession,
+  onLinkZalo, onOpenZaloOA, onUnlinkZaloOA,
 }) {
   const demo = useDemo()
 
@@ -25,7 +26,8 @@ export default function TopBar({
       <div className="ml-auto flex items-center gap-2">
 
         <AccountMenu identity={identity} busy={identityBusy} onLogin={onLogin} onLogout={onLogout}
-          onLoadSessions={onLoadSessions} onRevokeSession={onRevokeSession} compact />
+          onLoadSessions={onLoadSessions} onRevokeSession={onRevokeSession}
+          onLinkZalo={onLinkZalo} onOpenZaloOA={onOpenZaloOA} onUnlinkZaloOA={onUnlinkZaloOA} compact />
 
         <Button
           variant="outline"

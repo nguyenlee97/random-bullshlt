@@ -14,8 +14,12 @@ from config import config
 async def _lifespan(_app):
     from accounts import ensure_account_indexes
     from identity import ensure_identity_indexes
+    from zalo_auth import ensure_zalo_auth_indexes
+    from zalo_channel import ensure_zalo_channel_indexes
     await ensure_account_indexes()
     await ensure_identity_indexes()
+    await ensure_zalo_auth_indexes()
+    await ensure_zalo_channel_indexes()
     if config.USE_RAG_AUDIENCE:
         from rag.runtime import start_prewarm
         await start_prewarm()
@@ -187,7 +191,9 @@ async def version():
 
 # Import router after app is created to avoid circular imports
 from router import agent_router  # noqa: E402
+from zalo_routes import zalo_router  # noqa: E402
 app.include_router(agent_router, prefix="/api/agent")
+app.include_router(zalo_router, prefix="/api/agent")
 
 
 print(f"\n🚀 Advertising Agent v{BUILD_VERSION} starting on port {config.AGENT_PORT}")

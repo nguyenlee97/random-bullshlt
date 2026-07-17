@@ -102,6 +102,44 @@ class Config:
         os.getenv("AUTH_LOGIN_ACCOUNT_LIMIT", "10")
     )
 
+    # Zalo Login uses the Social OAuth v4 endpoints.  It deliberately mints the
+    # same opaque Advertising Agent session as local login; Zalo tokens never
+    # become browser/session credentials and are not persisted.
+    ZALO_LOGIN_ENABLED: bool = (
+        os.getenv("ZALO_LOGIN_ENABLED", "false").lower() == "true"
+    )
+    ZALO_APP_ID: str = os.getenv("ZALO_APP_ID", "")
+    ZALO_APP_SECRET: str = os.getenv("ZALO_APP_SECRET", "")
+    ZALO_LOGIN_REDIRECT_URI: str = os.getenv(
+        "ZALO_LOGIN_REDIRECT_URI",
+        "https://agent.pawgrammers.io.vn/agent/api/agent/auth/zalo/callback",
+    )
+    ZALO_LOGIN_PERMISSION_URL: str = os.getenv(
+        "ZALO_LOGIN_PERMISSION_URL", "https://oauth.zaloapp.com/v4/permission"
+    )
+    ZALO_LOGIN_TOKEN_URL: str = os.getenv(
+        "ZALO_LOGIN_TOKEN_URL", "https://oauth.zaloapp.com/v4/access_token"
+    )
+    ZALO_PROFILE_URL: str = os.getenv(
+        "ZALO_PROFILE_URL", "https://graph.zalo.me/v2.0/me"
+    )
+    ZALO_OAUTH_ATTEMPT_TTL_SECONDS: int = int(
+        os.getenv("ZALO_OAUTH_ATTEMPT_TTL_SECONDS", "600")
+    )
+
+    # OA transport is independently gated so Zalo Login can ship before the OA
+    # webhook is moved from another application.  Signature verification always
+    # fails closed when this switch is enabled and the OA secret is missing.
+    ZALO_OA_ENABLED: bool = os.getenv("ZALO_OA_ENABLED", "false").lower() == "true"
+    ZALO_OA_ID: str = os.getenv("ZALO_OA_ID", "")
+    ZALO_OA_SECRET: str = os.getenv("ZALO_OA_SECRET", "")
+    ZALO_WEBHOOK_MAX_SKEW_SECONDS: int = int(
+        os.getenv("ZALO_WEBHOOK_MAX_SKEW_SECONDS", "600")
+    )
+    ZALO_CHANNEL_LINK_TTL_SECONDS: int = int(
+        os.getenv("ZALO_CHANNEL_LINK_TTL_SECONDS", "600")
+    )
+
     # ── Phase 1: LangGraph (production-plan/02) ───────────────────────────────
     # Strangler flag: false = original freeform.py path (default, safe);
     # true = LangGraph graph path (flip only after parity run passes).

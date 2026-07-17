@@ -39,6 +39,7 @@ export default function ExperienceSelector({
   onSelect, busy, error, conversations = [], historyLoading = false,
   historyError = '', onResume, onArchive, onDelete, onDeleteAll, onClaim,
   identity, identityBusy, onLogin, onLogout, onLoadSessions, onRevokeSession,
+  onLinkZalo, onOpenZaloOA, onUnlinkZaloOA,
 }) {
   return (
     <main className="h-screen h-[100dvh] overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top_left,_#dcebff_0,_#f4f7fb_38%,_#eef4fb_100%)] px-5 py-8 sm:px-8 sm:py-12">
@@ -54,7 +55,8 @@ export default function ExperienceSelector({
             </div>
           </div>
           <AccountMenu identity={identity} busy={identityBusy} onLogin={onLogin} onLogout={onLogout}
-            onLoadSessions={onLoadSessions} onRevokeSession={onRevokeSession} />
+            onLoadSessions={onLoadSessions} onRevokeSession={onRevokeSession}
+            onLinkZalo={onLinkZalo} onOpenZaloOA={onOpenZaloOA} onUnlinkZaloOA={onUnlinkZaloOA} />
         </div>
 
         <section className="pt-12 sm:pt-16" aria-labelledby="home-title">
