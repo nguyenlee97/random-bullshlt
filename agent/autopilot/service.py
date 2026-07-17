@@ -942,8 +942,13 @@ async def select_strategy(
         raise RunConflict("strategy cannot change after order creation")
 
     task = next((item for item in run["tasks"] if item["key"] == "generate_strategy"), None)
-    if not task or task["status"] not in {"waiting_review", "succeeded"}:
-        raise RunConflict("strategy options are not ready")
+    if not task or task["status"] != "waiting_review":
+        raise RunConflict("strategy can only change during its own review stage")
+    waiting_task = next(
+        (item for item in run["tasks"] if item["status"] == "waiting_review"), None
+    )
+    if not waiting_task or waiting_task["task_id"] != task["task_id"]:
+        raise RunConflict("strategy review stage has already passed")
     value = deepcopy(task.get("result") or {})
     options = value.get("options") if isinstance(value, dict) else None
     selected_option = next(
@@ -970,33 +975,16 @@ async def select_strategy(
     })
 
     _, tasks, _ = await _collections()
-    updates = {"result": value, "evidence": evidence, "updated_at": _now()}
-    if task["status"] == "waiting_review":
-        pending = deepcopy(task.get("pending_artifact") or {})
-        if pending.get("artifact") != "strategy":
-            raise RunConflict("strategy review has no pending artifact")
-        pending["value"] = value
-        updates["pending_artifact"] = pending
-        if tasks is not None:
-            await tasks.update_one({"_id": task["task_id"]}, {"$set": updates})
-        else:
-            _mem_tasks[task["task_id"]].update(updates)
-        await _emit(run_id, "strategy_selected", {
-            "task_id": task["task_id"], "option_id": option_id, "actor": actor,
-        })
-        return await get_run(run_id)
-
-    from workspace.service import apply_mutation
-    workspace = await get_workspace(run["session_id"])
-    current = workspace.get("artifacts", {}).get("strategy", {}).get("value") or {}
-    if current.get("selected") == option_id:
-        return run
-    await apply_mutation(
-        run["session_id"], "strategy", value,
-        base_revision=workspace["revision"], actor=actor,
-        reason=f"Campaign Strategy Simulator: {selection_reason}",
-        idempotency_key=f"{run_id}:strategy:{option_id}:{workspace['revision']}",
-    )
+    pending = deepcopy(task.get("pending_artifact") or {})
+    if pending.get("artifact") != "strategy":
+        raise RunConflict("strategy review has no pending artifact")
+    pending["value"] = value
+    updates = {
+        "result": value,
+        "evidence": evidence,
+        "pending_artifact": pending,
+        "updated_at": _now(),
+    }
     if tasks is not None:
         await tasks.update_one({"_id": task["task_id"]}, {"$set": updates})
     else:
@@ -1004,8 +992,7 @@ async def select_strategy(
     await _emit(run_id, "strategy_selected", {
         "task_id": task["task_id"], "option_id": option_id, "actor": actor,
     })
-    reconciled = await reconcile_workspace_changes(run_id)
-    return reconciled["run"]
+    return await get_run(run_id)
 
 
 async def recover_expired_leases() -> int:

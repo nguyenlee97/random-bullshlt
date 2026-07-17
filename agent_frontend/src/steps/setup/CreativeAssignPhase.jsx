@@ -153,7 +153,7 @@ function AssignRow({ zone, files, assignedFileId, onAssign, onGroupSameSize, gro
 }
 
 // ─── Phase 2 component ─────────────────────────────────────────────────────────
-export default function CreativeAssignPhase({ data, onChange, files, allZones, recoZones }) {
+export default function CreativeAssignPhase({ data, onChange, files, allZones, recoZones, repairMode = false }) {
   const selectedZones = getSelectedZones(data.selectedZoneIds || [], allZones || null, recoZones || null)
   const assignments = data.assignments || {}
 
@@ -291,15 +291,23 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones, r
         ))}
       </div>
 
-      {/* Proceed to confirm */}
-      <Button
-        onClick={() => onChange({ ...data, phase: 'confirm' })}
-        className="w-full gap-2"
-        id="proceed-to-confirm-btn"
-      >
-        <ArrowRight className="w-4 h-4" />
-        Xem tổng kết & xác nhận tạo chiến dịch
-      </Button>
+      {/* Guided setup owns order confirmation. Autopilot repairs are persisted
+          by the workspace footer so the existing run remains in control. */}
+      {repairMode ? (
+        <div className="rounded-xl border border-brand-200 bg-brand-50 px-3 py-2.5 text-xs leading-relaxed text-brand-800">
+          Gán một creative đã duyệt cho từng placement, sau đó dùng nút
+          <strong> Lưu &amp; quay lại Autopilot</strong> ở cuối màn hình.
+        </div>
+      ) : (
+        <Button
+          onClick={() => onChange({ ...data, phase: 'confirm' })}
+          className="w-full gap-2"
+          id="proceed-to-confirm-btn"
+        >
+          <ArrowRight className="w-4 h-4" />
+          Xem tổng kết & xác nhận tạo chiến dịch
+        </Button>
+      )}
     </div>
   )
 }

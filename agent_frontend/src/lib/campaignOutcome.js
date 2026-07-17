@@ -55,12 +55,28 @@ const normalizeCreative = (file, index) => ({
   url: file?.url || file?.dataUrl || '',
 })
 
-const normalizeAssignments = (rawAssignments, files) => Object.fromEntries(
-  Object.entries(asObject(rawAssignments)).flatMap(([zoneId, rawFile]) => {
+export const normalizeCreativeFiles = (files = []) => files.map(normalizeCreative)
+
+export const normalizeAssignmentsForEditor = (rawAssignments, files = []) => {
+  const candidate = asObject(rawAssignments)
+  const assignments = asObject(candidate.assignments || candidate)
+  return Object.fromEntries(
+    Object.entries(assignments).flatMap(([zoneId, rawFile]) => {
     const index = Number(rawFile)
     if (Number.isInteger(index) && files[index]) return [[zoneId, files[index].id]]
     const existing = files.find(file => file.id === String(rawFile) || file.name === rawFile)
     return existing ? [[zoneId, existing.id]] : []
+    }),
+  )
+}
+
+export const assignmentsToFileIndexes = (rawAssignments, files = []) => Object.fromEntries(
+  Object.entries(asObject(rawAssignments)).flatMap(([zoneId, rawFile]) => {
+    const fileIndex = files.findIndex((file, index) => (
+      String(file?.id || file?._id || `autopilot-creative-${index}`) === String(rawFile)
+      || file?.name === rawFile
+    ))
+    return fileIndex >= 0 ? [[zoneId, fileIndex]] : []
   }),
 )
 
@@ -117,9 +133,9 @@ export function buildCampaignOutcome({ workspace, taskByKey = {}, fallbackBrief 
     artifactValue(workspace, 'order_guard'),
   ))
 
-  const files = (creative.files || []).map(normalizeCreative)
+  const files = normalizeCreativeFiles(creative.files || [])
   const rawAssignments = assignmentArtifact.assignments || assignmentArtifact
-  const assignments = normalizeAssignments(rawAssignments, files)
+  const assignments = normalizeAssignmentsForEditor(rawAssignments, files)
   const zones = placements.zones || []
   const selectedZoneIds = placements.selectedZoneIds || zones.map(zone => zone.id).filter(Boolean)
 

@@ -17,6 +17,11 @@ import { canApproveWorkflowStep } from '@/lib/workflowValidation'
 import { normalizeAudienceSelection } from '@/lib/audience'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
 import {
+  assignmentsToFileIndexes,
+  normalizeAssignmentsForEditor,
+  normalizeCreativeFiles,
+} from '@/lib/campaignOutcome'
+import {
   deriveStepStatuses,
   firstRecomputeStep,
   isStepReachable,
@@ -133,6 +138,7 @@ export default function App() {
   const [canonicalWorkspace, setCanonicalWorkspace] = useState(null)
   const [recomputePlan, setRecomputePlan] = useState(null)
   const [autopilotEditorArtifact, setAutopilotEditorArtifact] = useState(null)
+  const autopilotEditorArtifactRef = useRef(null)
   const workspaceRef = useRef(null)
   const mainRef = useRef(null)
   const bootedRef = useRef(false)
@@ -209,30 +215,45 @@ export default function App() {
     if (!workspace) return
     const artifacts = workspace.artifacts || {}
     setCanonicalWorkspace(workspace)
-    setFormState(prev => ({
-      ...prev,
-      ...(artifacts.brief?.value ? { brief: artifacts.brief.value } : {}),
-      ...((artifacts.audience?.value || artifacts.targeting?.value) ? {
-        segment: {
-          ...prev.segment,
-          ...(artifacts.audience?.value || {}),
-          targeting: artifacts.targeting?.value || prev.segment?.targeting || {},
-        },
-      } : {}),
-      ...(artifacts.creative?.value ? {
-        creative: mergeCreativeVerdicts(
-          artifacts.creative.value,
-          artifacts.creative_verdict?.value,
-        ),
-      } : {}),
-      ...((artifacts.placements?.value || artifacts.assignments?.value) ? {
-        setup: {
-          ...prev.setup,
-          ...(artifacts.placements?.value || {}),
-          assignments: artifacts.assignments?.value || artifacts.placements?.value?.assignments || {},
-        },
-      } : {}),
-    }))
+    setFormState(prev => {
+      const creative = artifacts.creative?.value
+        ? mergeCreativeVerdicts(
+            artifacts.creative.value,
+            artifacts.creative_verdict?.value,
+          )
+        : prev.creative
+      const files = normalizeCreativeFiles(creative?.files || [])
+      const rawAssignments = artifacts.assignments?.value?.assignments
+        || artifacts.assignments?.value
+        || artifacts.placements?.value?.assignments
+        || {}
+      return {
+        ...prev,
+        ...(artifacts.brief?.value ? { brief: artifacts.brief.value } : {}),
+        ...((artifacts.audience?.value || artifacts.targeting?.value) ? {
+          segment: {
+            ...prev.segment,
+            ...(artifacts.audience?.value || {}),
+            targeting: artifacts.targeting?.value || prev.segment?.targeting || {},
+          },
+        } : {}),
+        ...(artifacts.creative?.value ? {
+          creative: { ...creative, files },
+        } : {}),
+        ...((artifacts.placements?.value || artifacts.assignments?.value) ? {
+          setup: {
+            ...prev.setup,
+            ...(artifacts.placements?.value || {}),
+            phase: autopilotEditorArtifactRef.current === 'assignments'
+              ? 'assign'
+              : (artifacts.placements?.value?.phase || prev.setup?.phase),
+            assignments: autopilotEditorArtifactRef.current === 'assignments'
+              ? (prev.setup?.assignments || {})
+              : normalizeAssignmentsForEditor(rawAssignments, files),
+          },
+        } : {}),
+      }
+    })
     setStepStatuses(prev => deriveStepStatuses(prev, workspace))
     setWorkspaceConflict(null)
     AgentAPI.getRecomputePlan().then(plan => {
@@ -778,6 +799,45 @@ export default function App() {
         },
       }
       if (result.shouldAdvance) {
+        autopilotEditorArtifactRef.current = null
+        setAutopilotEditorArtifact(null)
+        setActiveTab('autopilot')
+      }
+      return result
+    }
+    if (editingStep === 3 && autopilotEditorArtifact === 'assignments') {
+      const selectedZoneIds = formState.setup?.selectedZoneIds || []
+      const files = normalizeCreativeFiles(formState.creative?.files || [])
+      const assignments = assignmentsToFileIndexes(formState.setup?.assignments || {}, files)
+      const missing = selectedZoneIds.filter(zoneId => !Number.isInteger(assignments[zoneId]))
+      if (!selectedZoneIds.length || missing.length) {
+        return {
+          shouldAdvance: false,
+          response: {
+            content: missing.length
+              ? `Hãy gán creative cho mọi placement trước khi lưu: ${missing.join(', ')}.`
+              : 'Không có placement nào để gán creative.',
+          },
+        }
+      }
+      const mutation = await AgentAPI.commitWorkspace('assignments', {
+        assignments,
+        selection: {
+          source: 'operator',
+          reason: 'Operator manually assigned approved creatives during Autopilot review',
+          selected_at: new Date().toISOString(),
+        },
+      })
+      const result = {
+        shouldAdvance: Boolean(mutation?.ok),
+        response: mutation?.ok ? null : {
+          content: mutation?.conflict
+            ? 'Workspace vừa thay đổi ở nơi khác. Hãy tải lại rồi thử lại.'
+            : 'Không thể lưu phân bổ creative. Hãy kiểm tra kết nối rồi thử lại.',
+        },
+      }
+      if (result.shouldAdvance) {
+        autopilotEditorArtifactRef.current = null
         setAutopilotEditorArtifact(null)
         setActiveTab('autopilot')
       }
@@ -791,6 +851,7 @@ export default function App() {
       markApproved: false,
     })
     if (result?.shouldAdvance) {
+      autopilotEditorArtifactRef.current = null
       setAutopilotEditorArtifact(null)
       setActiveTab('autopilot')
     }
@@ -1252,11 +1313,20 @@ export default function App() {
   }, [])
 
   const canApprove = canApproveWorkflowStep(currentStep, formState, stepStatuses)
-  const canSaveAutopilotEditor = canApproveWorkflowStep(
-    currentStep,
-    formState,
-    stepStatuses.map((status, index) => index === currentStep ? 'pending' : status),
-  )
+  const canSaveAutopilotEditor = autopilotEditorArtifact === 'assignments'
+    ? Boolean(formState.setup?.selectedZoneIds?.length)
+      && formState.setup.selectedZoneIds.every(zoneId => {
+        const fileId = formState.setup?.assignments?.[zoneId]
+        return Boolean(fileId) && (formState.creative?.files || []).some(file => (
+          String(file.id || file._id) === String(fileId)
+          && ['auto_approved', 'approved_override'].includes(file.analysisStatus)
+        ))
+      })
+    : canApproveWorkflowStep(
+        currentStep,
+        formState,
+        stepStatuses.map((status, index) => index === currentStep ? 'pending' : status),
+      )
 
   const openFirstRecomputeStep = useCallback(() => {
     const step = firstRecomputeStep(recomputePlan)
@@ -1267,6 +1337,7 @@ export default function App() {
   }, [recomputePlan, busy])
 
   const openAutopilotEditor = useCallback((step, artifact = null) => {
+    autopilotEditorArtifactRef.current = artifact
     setAutopilotEditorArtifact(artifact)
     handlePartialReset(step)
     setActiveTab('workspace')
@@ -1287,6 +1358,35 @@ export default function App() {
       }))
     }
     openAutopilotEditor(1, taskKey === 'derive_targeting' ? 'targeting' : 'audience')
+  }, [openAutopilotEditor, setFormStateWithEvents])
+
+  const openAutopilotAssignmentEditor = useCallback(({
+    placements = {}, creativeFiles = [], assignmentValue = {},
+  } = {}) => {
+    const files = normalizeCreativeFiles(creativeFiles)
+    const zones = placements.zones || []
+    const selectedZoneIds = placements.selectedZoneIds || zones.map(zone => zone.id).filter(Boolean)
+    const rawAssignments = assignmentValue?.assignments || assignmentValue || {}
+    setFormStateWithEvents(prev => ({
+      ...prev,
+      creative: {
+        ...prev.creative,
+        uploaded: files.length > 0,
+        files,
+      },
+      setup: {
+        ...prev.setup,
+        initialized: true,
+        phase: 'assign',
+        allZones: zones,
+        recoZones: zones,
+        selectedZoneIds,
+        assignments: normalizeAssignmentsForEditor(rawAssignments, files),
+        created: false,
+        submitted: false,
+      },
+    }))
+    openAutopilotEditor(3, 'assignments')
   }, [openAutopilotEditor, setFormStateWithEvents])
 
   // ── isMobile helper (used for conditional inline styles) ──────────────────
@@ -1441,7 +1541,11 @@ export default function App() {
             autopilotMode={experienceMode === 'autopilot'}
             autopilotEditorArtifact={autopilotEditorArtifact}
             onAutopilotSave={handleAutopilotEditorSave}
-            onReturnToAutopilot={() => setActiveTab('autopilot')}
+            onReturnToAutopilot={() => {
+              autopilotEditorArtifactRef.current = null
+              setAutopilotEditorArtifact(null)
+              setActiveTab('autopilot')
+            }}
           />
         </div>
 
@@ -1462,6 +1566,7 @@ export default function App() {
             onOpenBrief={() => openAutopilotEditor(0, 'brief')}
             onOpenAudience={openAutopilotAudienceEditor}
             onOpenCreative={() => openAutopilotEditor(2, 'creative')}
+            onOpenAssignments={openAutopilotAssignmentEditor}
             onStatusChange={setAutopilotSummary}
             reportState={formState.report}
             onReportChange={updateAutopilotReport}

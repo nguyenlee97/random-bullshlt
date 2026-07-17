@@ -8,7 +8,7 @@ import AutopilotReview from '@/components/AutopilotReview'
 import StrategySimulator from '@/components/StrategySimulator'
 import AutopilotOutcome from '@/components/AutopilotOutcome'
 import { creativePlacementCoverage } from '@/lib/campaignOutcome'
-import { defaultPlacementSelection } from '@/lib/creativeIntel'
+import { defaultPlacementSelection, mergeCreativeVerdicts } from '@/lib/creativeIntel'
 
 const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
 
@@ -135,7 +135,7 @@ const validateBrief = brief => {
 
 export default function AutopilotPanel({
   brief, canonicalWorkspace, initialRun = null, onWorkspaceRefresh,
-  onOpenChat, onOpenBrief, onOpenAudience, onOpenCreative, onStatusChange,
+  onOpenChat, onOpenBrief, onOpenAudience, onOpenCreative, onOpenAssignments, onStatusChange,
   reportState, onReportChange, onSendReportQuestion,
   onReportActivate, onReportExit,
 }) {
@@ -339,10 +339,14 @@ export default function AutopilotPanel({
     ? formatPlanTask.result
     : formatPlanTask?.pending_artifact?.value
   const creativeTask = taskByKey.prepare_creatives
-  const creativeFiles = creativeTask?.result?.files
-    || creativeTask?.pending_artifact?.value?.files
-    || workspaceSnapshot?.artifacts?.creative?.value?.files
-    || []
+  const creativeValue = creativeTask?.result
+    || creativeTask?.pending_artifact?.value
+    || workspaceSnapshot?.artifacts?.creative?.value
+    || {}
+  const creativeFiles = mergeCreativeVerdicts(
+    creativeValue,
+    workspaceSnapshot?.artifacts?.creative_verdict?.value,
+  ).files || []
   const assignmentResult = taskByKey.assign_creatives?.result
     || taskByKey.assign_creatives?.pending_artifact?.value
     || workspaceSnapshot?.artifacts?.assignments?.value
@@ -354,8 +358,10 @@ export default function AutopilotPanel({
   const forecastResult = taskByKey.forecast?.result || taskByKey.forecast?.pending_artifact?.value || {}
   const orderResult = taskByKey.verify_order?.result?.order || taskByKey.create_order?.result?.order || null
   const orderCreated = taskByKey.create_order?.status === 'succeeded'
-  const strategyCanChange = Boolean(waiting) && !orderCreated && !runTerminal
-    && ['waiting_review', 'succeeded'].includes(strategyTask?.status)
+  const strategyCanChange = waiting?.key === 'generate_strategy'
+    && strategyTask?.status === 'waiting_review'
+    && !orderCreated
+    && !runTerminal
   const strategySelectionHint = orderCreated || runTerminal
     ? 'Phương án này là một phần của campaign đã hoàn tất.'
     : strategyCanChange
@@ -392,10 +398,10 @@ export default function AutopilotPanel({
     || (waiting?.key === 'launch_approval'
       ? 'Kiểm tra bản order cuối cùng trước khi tạo chiến dịch.'
       : 'Kiểm tra bằng chứng và xác nhận để tiếp tục.')
-  const waitingEdit = waiting?.key === 'validate_brief'
-    ? { label: 'Sửa Brief', action: onOpenBrief }
+  const waitingEdits = waiting?.key === 'validate_brief'
+    ? [{ label: 'Sửa Brief', action: onOpenBrief }]
     : ['retrieve_audience', 'derive_targeting'].includes(waiting?.key)
-      ? {
+      ? [{
           label: waiting.key === 'derive_targeting' ? 'Chỉnh targeting' : 'Chỉnh audience',
           action: () => onOpenAudience?.({
             ...audienceResult,
@@ -403,10 +409,22 @@ export default function AutopilotPanel({
               ? (waiting.pending_artifact?.value || waiting.result || {})
               : (workspaceSnapshot?.artifacts?.targeting?.value || {}),
           }, waiting.key),
-        }
-      : ['prepare_creatives', 'analyze_creatives', 'rank_placements', 'assign_creatives'].includes(waiting?.key)
-        ? { label: waiting?.result?.reason === 'missing_creative' ? 'Tải creative lên' : 'Chỉnh hoặc thay creative', action: onOpenCreative }
-        : null
+        }]
+      : waiting?.key === 'assign_creatives'
+        ? [
+            { label: 'Tải creative mới', action: onOpenCreative },
+            {
+              label: 'Tự gán creative',
+              action: () => onOpenAssignments?.({
+                placements: placementResult,
+                creativeFiles,
+                assignmentValue: waiting.result || assignmentResult,
+              }),
+            },
+          ]
+        : ['prepare_creatives', 'analyze_creatives', 'rank_placements'].includes(waiting?.key)
+          ? [{ label: waiting?.result?.reason === 'missing_creative' ? 'Tải creative lên' : 'Chỉnh hoặc thay creative', action: onOpenCreative }]
+          : []
 
   useEffect(() => {
     if (waiting?.key !== 'plan_placement_intent') {
@@ -839,7 +857,9 @@ export default function AutopilotPanel({
               </div>
               <div className="flex flex-wrap gap-2">
                 {briefRetry && pendingBrief && <button onClick={onOpenChat} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Chat để duyệt</button>}
-                {waitingEdit?.action && <button onClick={() => openEditor(waitingEdit.action)} disabled={loading} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">{waitingEdit.label}</button>}
+                {waitingEdits.map(edit => edit.action && (
+                  <button key={edit.label} onClick={() => openEditor(edit.action)} disabled={loading} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">{edit.label}</button>
+                ))}
                 <button onClick={cancelRunWithConfirmation} disabled={loading} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700">Hủy run</button>
                 <button onClick={() => review(waiting, true)} disabled={loading || (retryAction && !retryReady) || (waiting.key === 'plan_placement_intent' && !placementSelection.length)} className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}>
                   {retryAction ? 'Kiểm tra lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}

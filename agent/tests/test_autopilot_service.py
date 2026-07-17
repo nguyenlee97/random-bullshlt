@@ -4,7 +4,7 @@ import pytest
 
 from autopilot import service
 from autopilot.capabilities import (
-    CapabilityResult, _analyze_creatives, _build_creatives, _build_order_draft,
+    CapabilityResult, _analyze_creatives, _assign_creatives, _build_creatives, _build_order_draft,
     _create_order, _create_setup_report, _forecast, _generate_strategy,
     _plan_placement_intent, _prepare_creatives, _rank_placements, _retrieve_audience,
 )
@@ -438,7 +438,7 @@ async def test_operator_can_edit_pending_placement_shortlist_before_review():
 
 
 @pytest.mark.asyncio
-async def test_changing_committed_strategy_replans_only_consumers():
+async def test_strategy_is_locked_after_its_review_stage_passes():
     await _seed("strategy-replan")
     run = await service.create_run(
         "strategy-replan", approval_policy="auto_build_draft",
@@ -462,16 +462,57 @@ async def test_changing_committed_strategy_replans_only_consumers():
     })
     service._mem_tasks[f"{run['run_id']}:generate_strategy"]["result"] = simulated.value
 
-    replanned = await service.select_strategy(run["run_id"], "quality_first")
-    by_key = {task["key"]: task for task in replanned["tasks"]}
-    assert by_key["generate_strategy"]["status"] == "succeeded"
-    assert by_key["generate_strategy"]["result"]["selected"] == "quality_first"
-    assert by_key["retrieve_audience"]["status"] == "queued"
-    assert by_key["plan_placement_intent"]["status"] == "pending"
-    assert by_key["analyze_creatives"]["status"] == "pending"
-    assert by_key["rank_placements"]["status"] == "pending"
-    assert by_key["derive_targeting"]["status"] == "pending"
-    assert replanned["last_replan"]["changed_artifacts"] == ["strategy"]
+    with pytest.raises(service.RunConflict, match="own review stage"):
+        await service.select_strategy(run["run_id"], "quality_first")
+
+
+@pytest.mark.asyncio
+async def test_operator_creative_assignments_override_failed_auto_match(monkeypatch):
+    async def fake_intel(_session_id):
+        return {}
+
+    async def fake_zone_map():
+        return {
+            "BaoMoi_Background": {
+                "id": "BaoMoi_Background", "name": "Bao Moi Background",
+                "size": "1504x704", "format": "image",
+            },
+        }
+
+    monkeypatch.setattr("creative_intel.service.get_intel", fake_intel)
+    monkeypatch.setattr("tools.zone_catalog.get_zone_map", fake_zone_map)
+    monkeypatch.setattr(
+        "tools.creative_match.enrich_files_with_intel",
+        lambda files, _intel: [
+            {**file, "intel": {"effective_status": "approved_override"}}
+            for file in files
+        ],
+    )
+    workspace = {"artifacts": {
+        "creative": {"value": {"files": [{
+            "id": "creative-1", "name": "background.png",
+        }]}},
+        "placements": {"value": {
+            "selectedZoneIds": ["BaoMoi_Background"],
+            "zones": [{"id": "BaoMoi_Background"}],
+        }},
+        "assignments": {
+            "status": "approved", "updated_by": "campaign_operator",
+            "value": {
+                "assignments": {"BaoMoi_Background": 0},
+                "selection": {"source": "operator"},
+            },
+        },
+    }}
+
+    result = await _assign_creatives({"session_id": "manual-assign"}, workspace)
+
+    assert result.force_review is False
+    assert result.value["manual_override"] is True
+    assert result.value["assignments"] == {"BaoMoi_Background": 0}
+    assert result.evidence == [{
+        "type": "manual_creative_assignment", "count": 1, "passed": True,
+    }]
 
 
 @pytest.mark.asyncio

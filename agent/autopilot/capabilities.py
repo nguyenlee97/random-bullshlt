@@ -722,6 +722,46 @@ async def _assign_creatives(run: dict, workspace: dict) -> CapabilityResult:
     zone_ids = _placement_ids(placement_value)
     zone_map = await get_zone_map()
     zones = [zone_map[zone_id] for zone_id in zone_ids if zone_id in zone_map]
+    assignment_artifact = workspace.get("artifacts", {}).get("assignments", {})
+    assignment_value = assignment_artifact.get("value") or {}
+    existing_assignments = (
+        assignment_value.get("assignments", assignment_value)
+        if isinstance(assignment_value, dict) else {}
+    )
+    selection = assignment_value.get("selection", {}) \
+        if isinstance(assignment_value, dict) else {}
+    operator_selected = (
+        selection.get("source") == "operator"
+        or assignment_artifact.get("updated_by") == "campaign_operator"
+    )
+    approved_file_indexes = {
+        index for index, file in enumerate(files)
+        if (
+            file.get("analysisStatus")
+            or (file.get("intel") or {}).get("effective_status")
+        ) in {"auto_approved", "approved_override"}
+    }
+    manual_assignments = {
+        zone_id: file_index
+        for zone_id, file_index in existing_assignments.items()
+        if zone_id in zone_ids
+        and isinstance(file_index, int)
+        and file_index in approved_file_indexes
+    }
+    if operator_selected and zone_ids and len(manual_assignments) == len(zone_ids):
+        return CapabilityResult(
+            value={
+                "assignments": manual_assignments,
+                "selection": selection or {"source": "operator"},
+                "manual_override": True,
+                "warnings": assignment_value.get("warnings", []),
+            },
+            evidence=[{
+                "type": "manual_creative_assignment",
+                "count": len(manual_assignments),
+                "passed": True,
+            }],
+        )
     result = auto_assign(zones, files)
     if len(result["assignments"]) != len(zones):
         return CapabilityResult(

@@ -10,9 +10,9 @@ function zoneNameFromId(id) { return id.replace(/_/g, ' ') }
 function platformFromId(id) { return id.split('_')[0] || id }
 function placementFromId(id) { return id.split('_').slice(1).join(' ') || id }
 
-export default function SetupStep({ data, onChange, brief, creative, segment, isDone }) {
+export default function SetupStep({ data, onChange, brief, creative, segment, isDone, assignmentRepair = false }) {
   const files = creative?.files || []
-  const phase = data.phase || 'zones'
+  const phase = assignmentRepair ? 'assign' : (data.phase || 'zones')
   const isInitialized = data.initialized || false
   const allZones = data.allZones || ALL_ZONES
   const recoZones = data.recoZones || []
@@ -160,6 +160,7 @@ export default function SetupStep({ data, onChange, brief, creative, segment, is
         files={files}
         allZones={allZones}
         recoZones={recoZones}
+        repairMode={assignmentRepair}
       />
     )
   }

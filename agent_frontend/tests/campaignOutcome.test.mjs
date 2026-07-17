@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import {
   buildCampaignOutcome, buildSyntheticPerformance, campaignDeliveryState,
   campaignWarningText, creativePlacementCoverage, placementIdsFromValue,
+  assignmentsToFileIndexes, normalizeAssignmentsForEditor, normalizeCreativeFiles,
 } from '../src/lib/campaignOutcome.js'
 
 test('reads placement IDs from review-stage artifact shapes', () => {
@@ -26,6 +27,25 @@ test('derives uploaded creative coverage from the final assignment artifact', ()
     ),
     [['zone-1'], ['zone-existing', 'zone-2']],
   )
+})
+
+test('translates assignment file indexes for the manual Autopilot editor and back', () => {
+  const files = normalizeCreativeFiles([
+    { id: 'creative-a', name: 'a.png' },
+    { name: 'b.png' },
+  ])
+  const editorAssignments = normalizeAssignmentsForEditor(
+    { assignments: { 'zone-a': 0, 'zone-b': 1 } },
+    files,
+  )
+  assert.deepEqual(editorAssignments, {
+    'zone-a': 'creative-a',
+    'zone-b': 'autopilot-creative-1',
+  })
+  assert.deepEqual(assignmentsToFileIndexes(editorAssignments, files), {
+    'zone-a': 0,
+    'zone-b': 1,
+  })
 })
 
 test('normalizes Autopilot artifacts for the shared Result surface', () => {

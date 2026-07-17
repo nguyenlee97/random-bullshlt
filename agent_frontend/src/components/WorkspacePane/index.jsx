@@ -84,6 +84,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           creative={formState.creative}
           segment={formState.segment}
           isDone={isReadOnly}
+          assignmentRepair={autopilotMode && autopilotEditorArtifact === 'assignments'}
           onReRecommend={() => {}}
         />
       )
@@ -262,7 +263,9 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           )}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-slate-600">
-              {currentStep === 2
+              {autopilotEditorArtifact === 'assignments'
+                ? 'Chọn một creative đã được duyệt cho từng placement. Lưu phân bổ để Autopilot tiếp tục đúng run hiện tại.'
+                : currentStep === 2
                 ? 'Bạn có thể tải thêm creative. Khi đã đủ, Agent sẽ phân tích, lưu vào workspace và đưa bạn trở lại đúng điểm review của Autopilot.'
                 : 'Lưu thay đổi để quay lại đúng điểm review hiện tại; run sẽ không bắt đầu lại từ đầu.'}
             </p>
