@@ -1,6 +1,6 @@
 import {
   Archive, ArrowRight, Bot, Check, Clock3, History, Loader2,
-  Route, ShieldCheck, Sparkles, Trash2,
+  Route, ShieldCheck, Sparkles, Trash2, Zap,
 } from 'lucide-react'
 
 const modes = [
@@ -53,8 +53,8 @@ export default function ExperienceSelector({
 
         <section className="pt-12 sm:pt-16" aria-labelledby="home-title">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white/80 px-3 py-1 text-xs font-semibold text-brand-700 shadow-sm">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Mỗi campaign có một cách làm việc cố định
+            <Zap className="h-3.5 w-3.5 text-orange-500" />
+            Lên camp tốc độ, tự động hoàn toàn
           </span>
           <h1 id="home-title" className="mt-4 max-w-3xl text-3xl font-black tracking-tight text-slate-900 sm:text-5xl">
             Bắt đầu campaign mới
