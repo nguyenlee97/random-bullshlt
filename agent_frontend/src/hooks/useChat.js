@@ -303,10 +303,12 @@ export function useChat({
 
   const STEP_LABELS = ['Brief', 'Audience', 'Creative', 'Setup', 'Result', 'Report', 'Email']
 
-  const approveStep = useCallback(async (stepIndex, stepData) => {
+  const approveStep = useCallback(async (stepIndex, stepData, options = {}) => {
     if (busy) return { response: null, shouldAdvance: false }
+    const silent = options.silent === true
+    const markApproved = options.markApproved !== false
     setBusy(true)
-    startThinking()
+    if (!silent) startThinking()
 
     log.step(`approveStep ${stepIndex} (${STEP_LABELS[stepIndex] ?? '?'}) → start`, {
       stepData_keys: Object.keys(stepData || {}),
@@ -424,14 +426,14 @@ export function useChat({
         }
     }
 
-    stopThinking(response)
+    if (!silent) stopThinking(response)
     log.step(`approveStep ${stepIndex} ← done`, {
       tool: response?.metadata?.tool,
       content_preview: response?.content?.slice(0, 150),
       blocks: response?.blocks?.map(b => b.type),
     })
     setBusy(false)
-    if (shouldAdvance && onStepApproved) onStepApproved(stepIndex)
+    if (shouldAdvance && markApproved && onStepApproved) onStepApproved(stepIndex)
     return { response, shouldAdvance }
   }, [busy, startThinking, stopThinking, onStepApproved, onCreativePrepared])
 

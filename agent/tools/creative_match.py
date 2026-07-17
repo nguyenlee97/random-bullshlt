@@ -8,9 +8,109 @@ from __future__ import annotations
 import re
 
 
+# One shared tolerance for Guided assignment, Autopilot format coverage, and
+# final placement ranking.  A 45% ratio delta is useful as a UI warning band,
+# but is too loose for an autonomous launch.  Fifteen percent preserves the
+# existing manual matcher boundary while still accepting correctly composed
+# assets exported at a different pixel size.
+STRONG_RATIO_DIFF = 0.02
+GOOD_RATIO_DIFF = 0.08
+MAX_RATIO_DIFF = 0.15
+
+
 def _parse_dims(size_str: str) -> tuple[int, int] | None:
     m = re.match(r"(\d+)[xX×](\d+)", size_str or "")
     return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def dimension_match(
+    file_width: int | float,
+    file_height: int | float,
+    target_width: int | float,
+    target_height: int | float,
+) -> tuple[str, float | None]:
+    """Classify a measured asset against a target rectangle.
+
+    Exact pixels are preferred.  Otherwise the aspect-ratio delta determines
+    whether the delivery frame can safely use the asset.  The returned mode is
+    intentionally shared with ``zone_ranker`` and Autopilot coverage checks.
+    """
+    try:
+        fw, fh = float(file_width), float(file_height)
+        tw, th = float(target_width), float(target_height)
+    except (TypeError, ValueError):
+        return "unknown_dimensions", None
+    if min(fw, fh, tw, th) <= 0:
+        return "unknown_dimensions", None
+    if fw == tw and fh == th:
+        return "exact_size", 0.0
+    target_ratio = tw / th
+    diff = abs(target_ratio - (fw / fh)) / target_ratio
+    if diff < STRONG_RATIO_DIFF:
+        return "strong_ratio", diff
+    if diff < GOOD_RATIO_DIFF:
+        return "same_ratio", diff
+    if diff < MAX_RATIO_DIFF:
+        return "acceptable_ratio", diff
+    return "incompatible_ratio", diff
+
+
+def _normalized_hint(value: object) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower().replace("×", "x"))
+
+
+def match_file_to_format(file: dict, format_spec: dict) -> dict:
+    """Match an uploaded file to one planned format without trusting its name alone.
+
+    ``formatId`` and a descriptive filename express operator intent.  When real
+    dimensions are available they must still be within the shared ratio safety
+    boundary.  Skin/background formats additionally require an explicit skin
+    hint so a wide banner is not silently used as a page takeover.
+    """
+    target_width = int(format_spec.get("width") or 0)
+    target_height = int(format_spec.get("height") or 0)
+    format_id = str(format_spec.get("format_id") or format_spec.get("format_key") or "")
+    intended_format = str(format_spec.get("intended_format") or "banner").lower()
+    filename_hint = _normalized_hint(file.get("name"))
+    format_hint = _normalized_hint(format_id)
+    size_hint = _normalized_hint(f"{target_width}x{target_height}")
+    explicit_hint = bool(
+        (file.get("formatId") and str(file.get("formatId")) == format_id)
+        or (format_hint and format_hint in filename_hint)
+        or (size_hint and size_hint in filename_hint)
+    )
+    skin_hint = bool(
+        str(file.get("intendedFormat") or "").lower() == "skin"
+        or "skin" in filename_hint
+        or "background" in filename_hint
+        or (file.get("formatId") and str(file.get("formatId")) == format_id)
+    )
+
+    intel = file.get("intel") or {}
+    width = intel.get("width") or file.get("width") or 0
+    height = intel.get("height") or file.get("height") or 0
+    mode, ratio_diff = dimension_match(width, height, target_width, target_height)
+    dimensions_accepted = mode in {
+        "exact_size", "strong_ratio", "same_ratio", "acceptable_ratio",
+    }
+
+    if intended_format == "skin" and not skin_hint:
+        return {"matched": False, "mode": "missing_skin_hint", "ratio_diff": ratio_diff}
+    if dimensions_accepted:
+        return {
+            "matched": True,
+            "mode": mode,
+            "ratio_diff": ratio_diff,
+            "explicit_hint": explicit_hint or skin_hint,
+        }
+    if mode == "unknown_dimensions" and (explicit_hint or (intended_format == "skin" and skin_hint)):
+        return {
+            "matched": True,
+            "mode": "explicit_format_hint",
+            "ratio_diff": None,
+            "explicit_hint": True,
+        }
+    return {"matched": False, "mode": mode, "ratio_diff": ratio_diff}
 
 
 def enrich_files_with_intel(files: list[dict], intel_docs: list[dict]) -> list[dict]:
@@ -92,19 +192,18 @@ def score_file_for_zone(file: dict, zone: dict) -> tuple[int, list[str]]:
 
     if zone_dims and fw > 0 and fh > 0:
         zw, zh = zone_dims
-        z_ratio = zw / zh
-        f_ratio = fw / fh
-        diff = abs(z_ratio - f_ratio) / z_ratio if z_ratio > 0 else 1
+        mode, diff = dimension_match(fw, fh, zw, zh)
 
-        if diff < 0.02:
+        if mode in {"exact_size", "strong_ratio"}:
             score += 8
-        elif diff < 0.08:
+        elif mode == "same_ratio":
             score += 4
-        elif diff < 0.15:
+        elif mode == "acceptable_ratio":
             score += 1
             warnings.append(f"Tỷ lệ hơi lệch ({diff*100:.0f}%)")
-        else:
-            score -= 4
+        elif mode == "incompatible_ratio":
+            # A misleading filename must never outweigh measured geometry.
+            score = min(score - 4, -4)
             warnings.append(f"Tỷ lệ không phù hợp ({diff*100:.0f}% lệch)")
 
     file_ext = (file.get("type", "") or fname.rsplit(".", 1)[-1]).lower()

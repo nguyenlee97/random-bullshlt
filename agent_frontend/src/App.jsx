@@ -742,6 +742,29 @@ export default function App() {
     }
   }, [currentStep, formState, approveStep, experienceMode])
 
+  const handleAutopilotEditorSave = useCallback(async () => {
+    const editingStep = currentStep
+    const data = {
+      brief: formState.brief,
+      creative: formState.creative,
+      attrs: formState.segment.attrs,
+      size: formState.segment.size,
+      targeting: formState.segment.targeting || {},
+      selectedZoneIds: formState.setup.selectedZoneIds,
+      recoZones: formState.setup.recoZones,
+      campaigns: formState.setup.campaigns || [],
+    }
+    // This is an Autopilot data repair, not a Guided-step confirmation. Keep
+    // validation and canonical persistence, but do not inject a Guided chat
+    // message or advance the Guided step machine.
+    const result = await approveStep(editingStep, data, {
+      silent: true,
+      markApproved: false,
+    })
+    if (result?.shouldAdvance) setActiveTab('autopilot')
+    return result
+  }, [approveStep, currentStep, formState])
+
   const handleStepJump = useCallback((i) => {
     if (busy) return
     if (i >= 0 && i < STEPS.length && isStepReachable(i, currentStep, stepStatuses)) {
@@ -1197,6 +1220,11 @@ export default function App() {
   }, [])
 
   const canApprove = canApproveWorkflowStep(currentStep, formState, stepStatuses)
+  const canSaveAutopilotEditor = canApproveWorkflowStep(
+    currentStep,
+    formState,
+    stepStatuses.map((status, index) => index === currentStep ? 'pending' : status),
+  )
 
   const openFirstRecomputeStep = useCallback(() => {
     const step = firstRecomputeStep(recomputePlan)
@@ -1356,7 +1384,7 @@ export default function App() {
               <button type="button" onClick={() => setActiveTab('autopilot')} className="inline-flex items-center gap-1 rounded-lg border border-brand-200 bg-white px-2.5 py-1.5 font-bold hover:bg-brand-100">
                 <ArrowLeft className="h-3.5 w-3.5" /> Quay lại Autopilot
               </button>
-              <span>Đây là form chỉnh dữ liệu của campaign; chế độ vẫn là Campaign Autopilot.</span>
+              <span>Run đang tạm dừng. Chỉnh dữ liệu bên dưới, sau đó dùng nút lưu ở cuối màn hình để quay lại đúng run này.</span>
             </div>
           )}
           <WorkspacePane
@@ -1368,7 +1396,7 @@ export default function App() {
             setFormState={setFormStateWithEvents}
             onStepJump={handleStepJump}
             onApprove={handleApprove}
-            canApprove={canApprove}
+            canApprove={experienceMode === 'autopilot' ? canSaveAutopilotEditor : canApprove}
             busy={busy}
             onPartialReset={handlePartialReset}
             recoFromChat={audienceRecommendation}
@@ -1377,7 +1405,9 @@ export default function App() {
             workspaceRevision={canonicalWorkspace?.revision}
             creativeFormatPlan={canonicalWorkspace?.artifacts?.creative_format_plan?.value}
             onOpenRecompute={openFirstRecomputeStep}
-            autopilotMode={false}
+            autopilotMode={experienceMode === 'autopilot'}
+            onAutopilotSave={handleAutopilotEditorSave}
+            onReturnToAutopilot={() => setActiveTab('autopilot')}
           />
         </div>
 

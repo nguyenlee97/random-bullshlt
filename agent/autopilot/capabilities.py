@@ -403,24 +403,31 @@ async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
 
     if source == "upload":
         if files:
+            from tools.creative_match import match_file_to_format
+
             format_plan = _artifact(workspace, "creative_format_plan", {})
             required = list(format_plan.get("formats") or []) \
                 if isinstance(format_plan, dict) else []
-            missing = [
-                item for item in required
-                if not any(
-                    (
-                        int(file.get("width") or 0) == int(item.get("width") or 0)
-                        and int(file.get("height") or 0) == int(item.get("height") or 0)
-                    ) or (
-                        file.get("formatId")
-                        and file.get("formatId") == item.get("format_id")
-                    )
+            matches = []
+            missing = []
+            for item in required:
+                candidates = [
+                    {"file": file, **match_file_to_format(file, item)}
                     for file in files
-                )
-            ]
+                ]
+                matched = next((candidate for candidate in candidates if candidate["matched"]), None)
+                if matched:
+                    matches.append({
+                        "format_id": item.get("format_id"),
+                        "file_name": matched["file"].get("name"),
+                        "mode": matched.get("mode"),
+                        "ratio_diff": matched.get("ratio_diff"),
+                    })
+                else:
+                    missing.append(item)
             coverage = {
                 "required": len(required), "covered": len(required) - len(missing),
+                "matches": matches,
                 "missing": [{
                     "format_id": item.get("format_id"),
                     "width": item.get("width"), "height": item.get("height"),
@@ -648,10 +655,14 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
     conflicts = await fetch_zone_conflicts(
         brief.get("startDate", ""), brief.get("endDate", "")
     )
-    # The current backend does not resize creatives; same-ratio assets still
-    # produce booking warnings. Automatic launch therefore requires exact
-    # pixels (or an explicitly approved skin format).
-    compatible_modes = {"exact_size", "skin_match"}
+    # Delivery uses the explicit zone→creative assignment produced in the next
+    # task.  Exact pixels are preferred, while assets inside the same 15% ratio
+    # boundary as the Guided matcher are also safe to keep.  Larger mismatches
+    # remain excluded even when their filename claims the target format.
+    compatible_modes = {
+        "exact_size", "strong_ratio", "same_ratio", "acceptable_ratio",
+        "skin_match",
+    }
     available = [
         zone for zone in ranked
         if (not candidate_ids or zone["id"] in candidate_ids)
@@ -661,11 +672,17 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
     strategy = _artifact(workspace, "strategy", {})
     selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
     if selected == "reach_first":
-        available.sort(key=lambda zone: (float(zone.get("cpm") or 10**12), -float(zone.get("score") or 0)))
+        available.sort(
+            key=lambda zone: (
+                -float(zone.get("reach") or 0),
+                float(zone.get("cpm") or 10**12),
+                -float(zone.get("score") or 0),
+            )
+        )
     elif selected == "quality_first":
         available.sort(
             key=lambda zone: (
-                float(zone.get("viewability") or 0),
+                float(zone.get("viewability") or zone.get("vi") or 0),
                 float(zone.get("ctr") or 0),
                 float(zone.get("score") or 0),
             ),

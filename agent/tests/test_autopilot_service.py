@@ -555,6 +555,32 @@ async def test_upload_creative_source_pauses_for_partial_format_coverage():
 
 
 @pytest.mark.asyncio
+async def test_upload_creative_source_accepts_same_ratio_at_different_pixels():
+    workspace = {"artifacts": {
+        "creative": {"value": {"files": [{
+            "url": "https://cdn.example/mixifood-znews-masthead.png",
+            "name": "mixifood-znews-masthead.png",
+            "width": 928,
+            "height": 200,
+        }]}},
+        "creative_format_plan": {"value": {"formats": [{
+            "format_id": "znews-masthead-1160x250",
+            "width": 1160,
+            "height": 250,
+            "intended_format": "banner",
+            "zone_ids": ["znews-home"],
+        }]}},
+    }}
+    result = await _prepare_creatives(
+        {"run_id": "run-upload-ratio", "creative_source": "upload"}, workspace
+    )
+    assert result.force_review is False
+    assert result.value["files"][0]["width"] == 928
+    assert result.evidence[1]["covered"] == 1
+    assert result.evidence[1]["matches"][0]["mode"] in {"strong_ratio", "same_ratio"}
+
+
+@pytest.mark.asyncio
 async def test_ai_creative_source_generates_without_manual_upload(monkeypatch):
     import autopilot.creative_generation as creative_generation
 
@@ -966,7 +992,7 @@ async def test_no_compatible_placement_requests_new_creative(monkeypatch):
         return []
 
     async def fake_rank(**_kwargs):
-        return [{"id": "BAD", "match_mode": "same_ratio"}]
+        return [{"id": "BAD", "match_mode": "nearest_ratio"}]
 
     async def no_conflicts(_start, _end):
         return {}
@@ -982,3 +1008,63 @@ async def test_no_compatible_placement_requests_new_creative(monkeypatch):
     assert result.force_review is True
     assert result.value["reason"] == "no_compatible_placements"
     assert result.value["review_action"] == "retry"
+
+
+@pytest.mark.asyncio
+async def test_final_placement_ranking_keeps_ratio_compatible_candidate(monkeypatch):
+    import creative_intel.service as creative_service
+    import tools.order_api as order_api
+    import tools.zone_ranker as zone_ranker
+
+    async def fake_intel(_session_id):
+        return []
+
+    async def fake_rank(**_kwargs):
+        return [{"id": "RATIO", "match_mode": "same_ratio", "score": 10}]
+
+    async def no_conflicts(_start, _end):
+        return {}
+
+    monkeypatch.setattr(creative_service, "get_intel", fake_intel)
+    monkeypatch.setattr(zone_ranker, "rank_zones", fake_rank)
+    monkeypatch.setattr(order_api, "fetch_zone_conflicts", no_conflicts)
+    workspace = {"artifacts": {
+        "brief": {"value": BRIEF},
+        "creative": {"value": {"files": [{"name": "ratio.png"}]}},
+        "placement_intent": {"value": {"candidate_zone_ids": ["RATIO"]}},
+    }}
+    result = await _rank_placements({"session_id": "ratio-compatible"}, workspace)
+    assert result.force_review is False
+    assert result.value["selectedZoneIds"] == ["RATIO"]
+
+
+@pytest.mark.asyncio
+async def test_final_reach_first_order_matches_preliminary_strategy(monkeypatch):
+    import creative_intel.service as creative_service
+    import tools.order_api as order_api
+    import tools.zone_ranker as zone_ranker
+
+    async def fake_intel(_session_id):
+        return []
+
+    async def fake_rank(**_kwargs):
+        return [
+            {"id": "cheap", "match_mode": "exact_size", "reach": 100_000, "cpm": 10_000, "score": 90},
+            {"id": "premium", "match_mode": "same_ratio", "reach": 800_000, "cpm": 70_000, "score": 80},
+            {"id": "mid", "match_mode": "acceptable_ratio", "reach": 400_000, "cpm": 35_000, "score": 85},
+        ]
+
+    async def no_conflicts(_start, _end):
+        return {}
+
+    monkeypatch.setattr(creative_service, "get_intel", fake_intel)
+    monkeypatch.setattr(zone_ranker, "rank_zones", fake_rank)
+    monkeypatch.setattr(order_api, "fetch_zone_conflicts", no_conflicts)
+    workspace = {"artifacts": {
+        "brief": {"value": BRIEF},
+        "creative": {"value": {"files": [{"name": "ratio.png"}]}},
+        "strategy": {"value": {"selected": "reach_first"}},
+        "placement_intent": {"value": {"candidate_zone_ids": ["cheap", "premium", "mid"]}},
+    }}
+    result = await _rank_placements({"session_id": "final-reach"}, workspace)
+    assert result.value["selectedZoneIds"] == ["premium", "mid", "cheap"]

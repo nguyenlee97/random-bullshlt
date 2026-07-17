@@ -1,4 +1,5 @@
 import { AlertTriangle, CheckCircle2, FileImage, MapPin, Target, Users } from 'lucide-react'
+import { matchPlannedFormat } from '@/lib/creativeCompatibility'
 
 const number = value => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(Number(value || 0))
 const audienceName = item => item?.fullLabel || item?.label || item?.name || item?.code || item?._id || 'Segment'
@@ -196,24 +197,23 @@ function FormatReview({ value }) {
 function CreativeReview({ value, formatPlan }) {
   const files = value.files || []
   const formats = formatPlan?.formats || []
-  const covered = formats.filter(format => files.some(file => (
-    Number(file.width) === Number(format.width) && Number(file.height) === Number(format.height)
-  )))
+  const covered = formats.filter(format => files.some(file => matchPlannedFormat(file, format).matched))
   return (
     <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-3">
         <Stat label="Creative đã tải" value={`${files.length} file`} />
         <Stat label="Format yêu cầu" value={`${formats.length} format`} />
-        <Stat label="Khớp kích thước" value={`${covered.length}/${formats.length || 0}`} note="Backend chỉ tự launch khi pixel khớp chính xác hoặc là skin đã duyệt." />
+        <Stat label="Format tương thích" value={`${covered.length}/${formats.length || 0}`} note="Ưu tiên đúng pixel; chấp nhận cùng tỷ lệ với độ lệch dưới 15%. Skin cần được gắn đúng loại." />
       </div>
       {formats.length > 0 && (
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {formats.map(item => {
-            const match = files.find(file => Number(file.width) === Number(item.width) && Number(file.height) === Number(item.height))
+            const matchedFile = files.find(file => matchPlannedFormat(file, item).matched)
+            const match = matchedFile ? matchPlannedFormat(matchedFile, item) : null
             return (
               <li key={item.format_id} className={`rounded-xl border px-3 py-2.5 ${match ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
                 <p className="text-xs font-bold text-slate-900">{item.width} × {item.height}px</p>
-                <p className={`mt-1 text-[10px] font-bold ${match ? 'text-green-700' : 'text-amber-800'}`}>{match ? `Đã có: ${match.name}` : 'Cần tải file phù hợp'}</p>
+                <p className={`mt-1 text-[10px] font-bold ${match ? 'text-green-700' : 'text-amber-800'}`}>{match ? `Đã có: ${matchedFile.name} · ${match.label}` : 'Cần tải file đúng tỷ lệ/format'}</p>
               </li>
             )
           })}

@@ -6,18 +6,11 @@ import { cn } from '@/lib/utils'
 import { Upload, FileText, X, ZoomIn, CheckCircle2, AlertCircle, Sparkles, Wand2, Loader2 } from 'lucide-react'
 import AdImageGenerator from './creative/AdImageGenerator'
 import { overrideCreative } from '@/api/agentApi'
+import { inferIntendedFormat, matchPlannedFormat } from '@/lib/creativeCompatibility'
 
 function fmtSize(bytes) {
   if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
   return (bytes / 1024).toFixed(0) + ' KB'
-}
-
-const SKIN_FORMAT_IDS = new Set(['zuma-Left', 'zuma-Right', 'znews-Background'])
-const inferIntendedFormat = (file) => {
-  if (file.intendedFormat) return file.intendedFormat
-  if (SKIN_FORMAT_IDS.has(file.formatId)) return 'skin'
-  if (file.type?.startsWith('video/')) return 'video'
-  return 'banner'
 }
 
 // ─── Read image/video resolution on frontend ──────────────────────────────────
@@ -227,7 +220,7 @@ function TabBar({ tab, setTab }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function CreativeStep({ data, onChange, isDone, brief, segment, formatPlan }) {
+export default function CreativeStep({ data, onChange, isDone, brief, segment, formatPlan, autopilotMode = false }) {
   const fileInputRef = useRef(null)
   const [lightboxFile, setLightboxFile] = useState(null)
   const [dragging, setDragging] = useState(false)
@@ -325,13 +318,18 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
               <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-brand-800">Format Autopilot đang cần</p>
-                <p className="mt-1 text-[10px] leading-4 text-brand-700">Tải đúng pixel để placement được giữ lại khi xếp hạng. Nếu thiếu format, Autopilot sẽ loại placement không có creative tương thích thay vì launch sai.</p>
+                <p className="mt-1 text-[10px] leading-4 text-brand-700">
+                  Đúng pixel là tốt nhất. Ảnh khác kích thước vẫn được chấp nhận khi cùng chiều và tỷ lệ lệch dưới 15%; tên file hoặc Format giúp Agent ghép đúng placement nhưng không thể bù cho ảnh sai tỷ lệ.
+                </p>
+                <p className="mt-1 text-[10px] leading-4 text-brand-700">
+                  Nên đặt tên theo mẫu <strong>brand-format-kích-thước.png</strong>, ví dụ <strong>mixifood-znews-masthead-1160x250.png</strong>. Với skin, thêm <strong>skin</strong>/<strong>background</strong> vào tên hoặc chọn “Skin / Background” trên file.
+                </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {formatPlan.formats.map(item => {
-                    const matched = files.some(file => Number(file.width) === Number(item.width) && Number(file.height) === Number(item.height))
+                    const match = files.map(file => matchPlannedFormat(file, item)).find(result => result.matched)
                     return (
-                      <span key={item.format_id} className={cn('rounded-full border px-2 py-1 text-[10px] font-bold', matched ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-white text-amber-800')}>
-                        {item.width}×{item.height} · {matched ? 'đã có' : 'còn thiếu'}
+                      <span key={item.format_id} className={cn('rounded-full border px-2 py-1 text-[10px] font-bold', match ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-white text-amber-800')}>
+                        {item.width}×{item.height} · {match ? match.label : 'còn thiếu'}
                       </span>
                     )
                   })}
@@ -388,6 +386,17 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
                 ))}
               </div>
             </div>
+          )}
+
+          {autopilotMode && files.length > 0 && (
+            <Card className="border-emerald-200 bg-emerald-50">
+              <CardContent className="py-3 flex items-start gap-2">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                <p className="text-xs leading-relaxed text-emerald-800">
+                  Đã thêm {files.length} creative. Bạn có thể tải thêm; khi đã đủ, bấm <strong>“Phân tích, lưu & quay lại Autopilot”</strong> ở cuối màn hình. Nút này sẽ đưa bạn về đúng run đang tạm dừng.
+                </p>
+              </CardContent>
+            </Card>
           )}
 
           {files.length === 0 && (

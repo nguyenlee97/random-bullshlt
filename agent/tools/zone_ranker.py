@@ -59,6 +59,8 @@ def _kpi_bonus(zone: dict, kpi: str, max_reach: float) -> float:
 
 def _size_compat(zone: dict, files: list[dict]) -> tuple[float, str]:
     """Score creative-zone size compatibility. Handles skin zones."""
+    from tools.creative_match import dimension_match
+
     if not files:
         return 0.0, "no_creative"
 
@@ -78,7 +80,6 @@ def _size_compat(zone: dict, files: list[dict]) -> tuple[float, str]:
     if not zone_dims:
         return 0.0, "no_zone_size"
     zw, zh = zone_dims
-    zone_ratio = zw / zh
 
     best_bonus, best_mode = -1.0, "no_match"
     for f in files:
@@ -89,11 +90,17 @@ def _size_compat(zone: dict, files: list[dict]) -> tuple[float, str]:
             continue
         if fw == zw and fh == zh:
             return 0.30, "exact_size"
-        diff = abs(zone_ratio - fw / fh) / zone_ratio
-        if diff <= 0.03:
-            bonus, mode = 0.20, "same_ratio"
+        mode, diff = dimension_match(fw, fh, zw, zh)
+        if mode == "strong_ratio":
+            bonus = 0.24
+        elif mode == "same_ratio":
+            bonus = 0.20
+        elif mode == "acceptable_ratio":
+            bonus = 0.08
+        elif mode == "incompatible_ratio":
+            bonus, mode = max(-0.35, 0.12 - float(diff or 1)), "nearest_ratio"
         else:
-            bonus, mode = max(-0.35, 0.12 - diff), "nearest_ratio"
+            bonus = 0.0
         if bonus > best_bonus:
             best_bonus, best_mode = bonus, mode
 

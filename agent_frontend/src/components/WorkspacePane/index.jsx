@@ -1,4 +1,4 @@
-import { forwardRef, lazy, Suspense, useImperativeHandle, useRef, useCallback } from 'react'
+import { forwardRef, lazy, Suspense, useImperativeHandle, useRef, useCallback, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -33,10 +33,11 @@ const STEP_DESCS = [
 ]
 
 const WorkspacePane = forwardRef(function WorkspacePane(
-  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false },
+  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false, onAutopilotSave, onReturnToAutopilot },
   ref
 ) {
   const bodyRef = useRef(null)
+  const [autopilotSaveMessage, setAutopilotSaveMessage] = useState('')
 
   useImperativeHandle(ref, () => ({
     flash() {
@@ -52,6 +53,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
   const step = steps[currentStep]
   const isDone = stepStatuses[currentStep] === 'done'
   const isStale = stepStatuses[currentStep] === 'stale'
+  const isReadOnly = isDone && !autopilotMode
 
   const updateFormSlice = useCallback((slice, val) => {
     setFormState(prev => ({
@@ -71,9 +73,9 @@ const WorkspacePane = forwardRef(function WorkspacePane(
 
   const renderStep = () => {
     switch (currentStep) {
-      case 0: return <BriefStep data={formState.brief} onChange={v => updateFormSlice('brief', v)} isDone={isDone} />
-      case 1: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isDone} brief={formState.brief} recoFromChat={recoFromChat} />
-      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isDone} brief={formState.brief} segment={formState.segment} formatPlan={creativeFormatPlan} />
+      case 0: return <BriefStep data={formState.brief} onChange={v => updateFormSlice('brief', v)} isDone={isReadOnly} />
+      case 1: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isReadOnly} brief={formState.brief} recoFromChat={recoFromChat} />
+      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isReadOnly} brief={formState.brief} segment={formState.segment} formatPlan={creativeFormatPlan} autopilotMode={autopilotMode} />
       case 3: return (
         <SetupStep
           data={formState.setup}
@@ -81,7 +83,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           brief={formState.brief}
           creative={formState.creative}
           segment={formState.segment}
-          isDone={isDone}
+          isDone={isReadOnly}
           onReRecommend={() => {}}
         />
       )
@@ -119,6 +121,17 @@ const WorkspacePane = forwardRef(function WorkspacePane(
         </Suspense>
       )
       default: return null
+    }
+  }
+
+  const saveAutopilotEditor = async () => {
+    setAutopilotSaveMessage('')
+    const result = await onAutopilotSave?.()
+    if (!result?.shouldAdvance) {
+      setAutopilotSaveMessage(
+        String(result?.response?.content || 'Chưa thể lưu thay đổi. Kiểm tra thông tin trong form rồi thử lại.')
+          .replaceAll('**', '')
+      )
     }
   }
 
@@ -197,7 +210,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
               {step.heroLabel && (
                 <Badge variant="violet" className="text-[10px]">{step.heroLabel}</Badge>
               )}
-              {isDone && <Badge variant="green" className="text-[10px]">Hoàn thành</Badge>}
+              {isDone && !autopilotMode && <Badge variant="green" className="text-[10px]">Hoàn thành</Badge>}
               {isStale && <Badge variant="amber" className="text-[10px]">Cần xem lại</Badge>}
             </div>
           </div>
@@ -207,7 +220,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           {renderStep()}
 
           {/* Re-edit banner for completed input steps (brief, creative, audience) */}
-          {(isDone || isStale) && currentStep <= 3 && onPartialReset && (
+          {!autopilotMode && (isDone || isStale) && currentStep <= 3 && onPartialReset && (
             <div className="mt-4 flex items-center gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50">
               <div className="flex-1">
                 <p className="text-xs font-semibold text-amber-800">
@@ -240,6 +253,34 @@ const WorkspacePane = forwardRef(function WorkspacePane(
         onBack={() => onStepJump(currentStep - 1)}
         onNext={() => onStepJump(currentStep + 1)}
       />}
+      {autopilotMode && (
+        <div className="flex-shrink-0 border-t border-brand-100 bg-white px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.05)] sm:px-5">
+          {autopilotSaveMessage && (
+            <div role="alert" className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+              {autopilotSaveMessage}
+            </div>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-slate-600">
+              {currentStep === 2
+                ? 'Bạn có thể tải thêm creative. Khi đã đủ, Agent sẽ phân tích, lưu vào workspace và đưa bạn trở lại đúng điểm review của Autopilot.'
+                : 'Lưu thay đổi để quay lại đúng điểm review hiện tại; run sẽ không bắt đầu lại từ đầu.'}
+            </p>
+            <div className="flex shrink-0 gap-2">
+              <button type="button" onClick={onReturnToAutopilot} disabled={busy}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                Quay lại chưa lưu
+              </button>
+              <button type="button" onClick={saveAutopilotEditor} disabled={!canApprove || busy}
+                className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-bold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50">
+                {busy
+                  ? (currentStep === 2 ? 'Đang phân tích & lưu…' : 'Đang lưu…')
+                  : (currentStep === 2 ? 'Phân tích, lưu & quay lại Autopilot' : 'Lưu & quay lại Autopilot')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 })
