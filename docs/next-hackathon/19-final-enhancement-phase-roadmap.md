@@ -238,6 +238,8 @@ Local verification: 209 backend tests, 30 frontend tests, production frontend bu
 
 Remaining FE-2 work is deliberately split into later slices: local account registration/login and anonymous claim, Google OIDC, Zalo Login, account session management/CSRF, and cross-device ownership tests. Anonymous identity plus same-device history/resume is complete; FE-2 as a whole is not.
 
+Next execution slice (prepared 2026-07-17): **FE-2B local accounts, secure account sessions, explicit anonymous-conversation claim and cross-device resume**. The implementation contract, invariants, API design, tests and rollback boundary are recorded in `20-fe2b-local-accounts-handoff.md`; a copy-ready new-task prompt is in `21-fe2b-new-task-prompt.md`.
+
 ### 7.1 Experience rules
 
 - A visitor may start immediately as an anonymous user.
