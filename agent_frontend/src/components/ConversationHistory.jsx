@@ -1,4 +1,4 @@
-import { Archive, Clock3, History, Loader2, MessageSquarePlus, Trash2, X } from 'lucide-react'
+import { Archive, Clock3, History, Loader2, MessageSquarePlus, Save, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const modeLabel = mode => mode === 'autopilot' ? 'Campaign Autopilot' : mode === 'guided' ? 'Campaign Copilot' : 'Chưa chọn cách làm việc'
@@ -15,7 +15,7 @@ const formatTime = value => {
 
 export default function ConversationHistory({
   open, onClose, conversations, currentId, loading, error,
-  onResume, onNew, onArchive, onDelete, onDeleteAll,
+  onResume, onNew, onArchive, onDelete, onDeleteAll, onClaim,
 }) {
   if (!open) return null
   return (
@@ -71,10 +71,18 @@ export default function ConversationHistory({
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
                       <span>{modeLabel(item.experience_mode)}</span>
+                      <span className={`rounded-full px-2 py-0.5 font-bold ${item.ownership === 'account' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {item.ownership === 'account' ? 'Tài khoản' : 'Trên thiết bị'}
+                      </span>
                       <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatTime(item.last_message_at || item.updated_at)}</span>
                     </div>
                   </button>
                   <div className="mt-2 flex items-center gap-3">
+                    {item.can_claim && (
+                      <button type="button" onClick={() => onClaim(item)} className="flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-800">
+                        <Save className="h-3 w-3" /> Lưu vào tài khoản
+                      </button>
+                    )}
                     {!active && (
                       <button type="button" onClick={() => onArchive(item.conversation_id)} className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-700"
                         aria-label={`Lưu trữ ${item.title || 'campaign'}`}>

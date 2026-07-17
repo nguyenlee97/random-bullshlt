@@ -1,8 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useChat } from '@/hooks/useChat'
+import { useIdentity } from '@/hooks/useIdentity'
 import TopBar from '@/components/TopBar'
 import ConversationHistory from '@/components/ConversationHistory'
 import DeleteConversationDialog from '@/components/DeleteConversationDialog'
+import AuthDialog from '@/components/AuthDialog'
+import ClaimConversationDialog from '@/components/ClaimConversationDialog'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
 import ExperienceSelector from '@/components/ExperienceSelector'
@@ -115,6 +118,7 @@ function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew, experienc
 }
 
 export default function App() {
+  const account = useIdentity()
   const [experienceMode, setExperienceMode] = useState(null)
   const [modeSelectionBusy, setModeSelectionBusy] = useState(false)
   const [modeSelectionError, setModeSelectionError] = useState('')
@@ -130,6 +134,11 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [authDialogOpen, setAuthDialogOpen] = useState(false)
+  const [claimTarget, setClaimTarget] = useState(null)
+  const [claimBusy, setClaimBusy] = useState(false)
+  const [claimError, setClaimError] = useState('')
+  const [claimNotice, setClaimNotice] = useState('')
   const [currentStep, setCurrentStep] = useState(0)
   const [stepStatuses, setStepStatuses] = useState(STEPS.map(() => 'pending'))
   const [formState, setFormState] = useState(initialState)
@@ -513,6 +522,7 @@ export default function App() {
     ;(async () => {
       try {
         await AgentAPI.initializeIdentity({ restoreCurrent: false })
+        await account.refresh()
         setHistoryLoading(true)
         setConversationHistory(await AgentAPI.listConversations())
       } catch (error) {
@@ -522,7 +532,7 @@ export default function App() {
         setIdentityReady(true)
       }
     })()
-  }, [])
+  }, [account.refresh])
 
   // Watch for new assistant messages while chat is compact (workspace expanded on mobile).
   // Uses ID comparison instead of messages.length — stopThinking() REPLACES the thinking
@@ -908,6 +918,11 @@ export default function App() {
     // created workspace still carries the legacy `guided` default until its
     // first preference write, so it must not override the conversation here.
     const mode = context.experience_mode || context.workspace?.experience_mode || null
+    if (mode === 'guided') {
+      const restoredStatuses = deriveStepStatuses(STEPS.map(() => 'pending'), context.workspace)
+      const firstIncomplete = restoredStatuses.findIndex(status => status !== 'done')
+      setCurrentStep(firstIncomplete < 0 ? STEPS.length - 1 : firstIncomplete)
+    }
     setExperienceMode(mode)
     setActiveTab(mode === 'autopilot' ? 'autopilot' : mode === 'guided' ? 'workspace' : 'chat')
     setHasUserStarted(Boolean(mode))
@@ -943,10 +958,75 @@ export default function App() {
     bootedRef.current = false
     setModeSelectionError('')
     setHistoryOpen(false)
+    setClaimTarget(null)
+    setClaimError('')
+    setClaimNotice('')
     setConversationHistory(prev => [...prev].sort((a, b) => (
       new Date(b.last_message_at || b.updated_at || 0) - new Date(a.last_message_at || a.updated_at || 0)
     )))
   }, [hydrateMessages, resetLocalCampaign])
+
+  const openAuthDialog = useCallback(() => {
+    account.clearError()
+    setAuthDialogOpen(true)
+  }, [account.clearError])
+
+  const closeAuthDialog = useCallback(() => {
+    if (account.busy) return
+    account.clearError()
+    setAuthDialogOpen(false)
+  }, [account.busy, account.clearError])
+
+  const submitAuth = useCallback(async ({ mode, email, password, displayName }) => {
+    try {
+      if (mode === 'register') {
+        await account.register({ email, password, displayName })
+      } else {
+        await account.login({ email, password })
+      }
+      setAuthDialogOpen(false)
+      setConversationHistory(await AgentAPI.listConversations())
+    } catch {
+      // useIdentity owns the rendered error and preserves the current workspace.
+    }
+  }, [account.login, account.register])
+
+  const logoutAccount = useCallback(async () => {
+    const current = conversationHistory.find(item => item.conversation_id === currentConversationId)
+    try {
+      await account.logout()
+      const remaining = await AgentAPI.listConversations()
+      setConversationHistory(remaining)
+      if (current?.ownership === 'account') handleNewChat()
+    } catch (error) {
+      setHistoryError(error.message)
+    }
+  }, [account.logout, conversationHistory, currentConversationId, handleNewChat])
+
+  const requestClaimConversation = useCallback(conversation => {
+    setClaimError('')
+    setClaimTarget(conversation)
+  }, [])
+
+  const confirmClaimConversation = useCallback(async () => {
+    if (!claimTarget || claimBusy) return
+    setClaimBusy(true)
+    setClaimError('')
+    try {
+      const claimed = await AgentAPI.claimConversation(claimTarget.conversation_id)
+      setConversationHistory(items => items.map(item => (
+        item.conversation_id === claimed.conversation_id
+          ? { ...item, ownership: 'account', can_claim: false }
+          : item
+      )))
+      setClaimTarget(null)
+      setClaimNotice('Campaign đã được lưu vào tài khoản. Toàn bộ chat, workspace và tiến độ được giữ nguyên.')
+    } catch (error) {
+      setClaimError(error.message)
+    } finally {
+      setClaimBusy(false)
+    }
+  }, [claimBusy, claimTarget])
 
   const startCampaign = useCallback(async (mode) => {
     setModeSelectionBusy(true)
@@ -1393,6 +1473,13 @@ export default function App() {
   // Read at render-time. Tailwind md: breakpoints handle the class-based
   // layout switching automatically on resize.
 
+  const currentConversation = conversationHistory.find(
+    item => item.conversation_id === currentConversationId
+  )
+  const claimOffer = account.authenticated && currentConversation?.can_claim
+    ? currentConversation
+    : null
+
   if (!identityReady) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">
@@ -1427,9 +1514,20 @@ export default function App() {
           onArchive={archiveConversation}
           onDelete={requestDeleteConversation}
           onDeleteAll={requestDeleteAllConversations}
+          onClaim={requestClaimConversation}
+          identity={account.identity}
+          identityBusy={account.busy}
+          onLogin={openAuthDialog}
+          onLogout={logoutAccount}
+          onLoadSessions={account.listSessions}
+          onRevokeSession={account.revokeSession}
         />
         <DeleteConversationDialog target={deleteTarget} busy={deleteBusy} error={deleteError}
           onCancel={closeDeleteDialog} onConfirm={confirmDeleteConversations} />
+        <AuthDialog open={authDialogOpen} busy={account.busy} error={account.error}
+          onClose={closeAuthDialog} onSubmit={submitAuth} />
+        <ClaimConversationDialog conversation={claimTarget} busy={claimBusy} error={claimError}
+          onCancel={() => !claimBusy && setClaimTarget(null)} onConfirm={confirmClaimConversation} />
       </>
     )
   }
@@ -1450,6 +1548,12 @@ export default function App() {
         onNewChat={handleNewChat}
         onOpenHistory={openConversationHistory}
         showDemo={!hasUserStarted}
+        identity={account.identity}
+        identityBusy={account.busy}
+        onLogin={openAuthDialog}
+        onLogout={logoutAccount}
+        onLoadSessions={account.listSessions}
+        onRevokeSession={account.revokeSession}
       />
 
       <ConversationHistory
@@ -1464,10 +1568,29 @@ export default function App() {
         onArchive={archiveConversation}
         onDelete={requestDeleteConversation}
         onDeleteAll={requestDeleteAllConversations}
+        onClaim={requestClaimConversation}
       />
 
       <DeleteConversationDialog target={deleteTarget} busy={deleteBusy} error={deleteError}
         onCancel={closeDeleteDialog} onConfirm={confirmDeleteConversations} />
+
+      <AuthDialog open={authDialogOpen} busy={account.busy} error={account.error}
+        onClose={closeAuthDialog} onSubmit={submitAuth} />
+      <ClaimConversationDialog conversation={claimTarget} busy={claimBusy} error={claimError}
+        onCancel={() => !claimBusy && setClaimTarget(null)} onConfirm={confirmClaimConversation} />
+
+      {(claimOffer || claimNotice) && (
+        <div className="flex items-center justify-between gap-3 border-b border-brand-200 bg-brand-50 px-4 py-2 text-sm text-brand-900">
+          <span>{claimNotice || 'Campaign này đang được lưu trên thiết bị. Lưu vào tài khoản để tiếp tục trên thiết bị khác.'}</span>
+          {claimOffer ? (
+            <button type="button" onClick={() => requestClaimConversation(claimOffer)} className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-700">
+              Lưu vào tài khoản
+            </button>
+          ) : (
+            <button type="button" onClick={() => setClaimNotice('')} className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-brand-700 hover:bg-brand-100">Đóng</button>
+          )}
+        </div>
+      )}
 
       {workspaceConflict && (
         <div className="flex items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">

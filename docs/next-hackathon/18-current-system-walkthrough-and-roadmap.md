@@ -1,6 +1,6 @@
 # Advertising Agent — Current System Walkthrough and Next Roadmap
 
-Date: 2026-07-16
+Date: 2026-07-17
 Purpose: handoff for the next hackathon revamp. This document describes what exists now, how to test it, and what remains. It does not claim unverified production readiness.
 
 ## 1. Current product shape
@@ -26,6 +26,7 @@ MongoDB is the canonical workspace. The browser renders it; it is not a second s
 | Autopilot | Durable runs/tasks/events, fixed capability allowlist, leases + heartbeat, bounded retries, pause/resume/cancel/replan |
 | Side effects | Order guard, stable idempotency key, explicit launch approval, post-create verification |
 | UX | Vietnamese homepage, Campaign Copilot and Autopilot canvases with plan, evidence and review cards; completed Autopilot runs add Result, Setup report and clearly labelled synthetic Performance report tabs |
+| Identity | Anonymous-first device history plus Argon2id local accounts, opaque hashed revocable HttpOnly sessions, CSRF, explicit conversation claim and cross-device account resume |
 
 ## 3. Creative-source contract
 
@@ -146,7 +147,7 @@ it does not make the current unedited 041–080 files correct by declaration.
 ### P1 — final enhancement product work
 
 - **Implemented, pending live journey sign-off:** two-pass placement planning, exact-format deduplication, a three-asset cost cap, bounded AI generation, revision-aware idempotency, final creative-compatible placement ranking, and completed-run Result/Setup/Performance report parity.
-- **Anonymous foundation complete:** add local login, explicit anonymous-conversation claim and cross-device account resume next; Google/Zalo identities follow behind the same internal user model.
+- **FE-2B complete:** anonymous device history, local login, explicit anonymous-conversation claim, secure account sessions/CSRF and cross-device account resume are verified; Google/Zalo identities follow behind the same internal user model.
 - Add Zalo OA as a channel adapter for Autopilot, simplified Guided flow, campaign status/modification and live notifications.
 - Keep Qwen reranking disabled and defer the post-launch analytics/report agent.
 
@@ -161,6 +162,6 @@ it does not make the current unedited 041–080 files correct by declaration.
 1. Apply the accepted golden-label changes and pass focused safety validation.
 2. Perform one upload and one real multi-format AI-generation full journey for FE-1 sign-off.
 3. Fix any provider/catalog/UI defects found in those two journeys.
-4. Execute FE-2B local accounts, explicit conversation claim and cross-device resume; then add Google/Zalo identities.
+4. Use the completed FE-2B local-account foundation for the later Google/Zalo identity slices.
 5. Add the Zalo OA channel foundation, campaign operations and notifications.
 6. Execute the complete release suite after the changed journeys stabilize.

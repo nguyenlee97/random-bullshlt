@@ -1,17 +1,20 @@
-"""Anonymous device identities and owned campaign conversations.
+"""Server-resolved anonymous/account actors and owned campaign conversations.
 
-The browser keeps one high-entropy token in localStorage.  Only its SHA-256
-digest is stored server-side, so a database read does not expose credentials.
-Conversations own opaque session IDs; clients never choose a session when they
-create or resume a campaign.
+Both browser credentials are opaque cookies. Only SHA-256 digests are stored
+server-side, and clients never choose conversation owners or campaign session
+IDs. Existing ``identity_id`` conversation documents remain readable while new
+documents also carry the normalized additive ownership fields.
 """
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import secrets
 import uuid
+
+from pymongo import ReturnDocument
 
 from config import config
 
@@ -19,6 +22,7 @@ from config import config
 _mem_identities: dict[str, dict] = {}
 _mem_identity_by_hash: dict[str, str] = {}
 _mem_conversations: dict[str, dict] = {}
+_claim_lock = asyncio.Lock()
 
 
 class ConversationRunActive(Exception):
@@ -71,6 +75,28 @@ async def _collections():
 
     db = session_store._client[config.MONGODB_DB]
     return db["anonymous_identities"], db["agent_conversations"]
+
+
+async def ensure_identity_indexes() -> None:
+    """Create additive identity/conversation indexes without rewriting data."""
+    identities, conversations = await _collections()
+    if identities is None:
+        return
+    await identities.create_index(
+        "token_hash", unique=True, name="anonymous_token_hash_unique"
+    )
+    await conversations.create_index(
+        "session_id", unique=True, sparse=True, name="conversation_session_unique"
+    )
+    await conversations.create_index(
+        [("owner_user_id", 1), ("updated_at", -1)], name="conversation_account_owner"
+    )
+    await conversations.create_index(
+        [("anonymous_id", 1), ("updated_at", -1)], name="conversation_anonymous_owner"
+    )
+    await conversations.create_index(
+        [("identity_id", 1), ("updated_at", -1)], name="conversation_legacy_owner"
+    )
 
 
 async def bootstrap_anonymous(token: str | None = None) -> dict:
@@ -131,12 +157,101 @@ async def require_identity(token: str | None) -> dict:
     return _public(identity)
 
 
-async def require_session_access(token: str | None, session_id: str) -> dict | None:
+async def resolve_actor(
+    account_token: str | None,
+    anonymous_token: str | None,
+    *,
+    require_any: bool = True,
+) -> dict:
+    """Resolve both cookies server-side, preferring the account for ownership."""
+    account = None
+    anonymous = None
+    if (account_token or "").strip():
+        from accounts import require_account_session
+        try:
+            account = await require_account_session(account_token)
+        except PermissionError:
+            account = None
+    if (anonymous_token or "").strip():
+        try:
+            anonymous = await require_identity(anonymous_token)
+        except PermissionError:
+            anonymous = None
+    actor = {
+        "user_id": (account or {}).get("user", {}).get("user_id"),
+        "anonymous_id": (anonymous or {}).get("identity_id"),
+        "account_session_id": (account or {}).get("session", {}).get("session_id"),
+        "user": (account or {}).get("user"),
+    }
+    if require_any and not actor["user_id"] and not actor["anonymous_id"]:
+        raise PermissionError("a valid account or anonymous identity is required")
+    return actor
+
+
+def _as_actor(actor: dict | str) -> dict:
+    # String support is an internal migration convenience for older tests and
+    # service callers. HTTP routes always pass resolve_actor() output.
+    if isinstance(actor, str):
+        return {"user_id": None, "anonymous_id": actor, "account_session_id": None}
+    return actor
+
+
+def _anonymous_owner(doc: dict) -> str | None:
+    return doc.get("anonymous_id") or doc.get("identity_id")
+
+
+def _actor_query(actor: dict | str) -> dict:
+    actor = _as_actor(actor)
+    owners: list[dict] = []
+    if actor.get("user_id"):
+        owners.append({"owner_user_id": actor["user_id"]})
+    if actor.get("anonymous_id"):
+        owners.append({
+            "owner_user_id": None,
+            "$or": [
+                {"anonymous_id": actor["anonymous_id"]},
+                {"identity_id": actor["anonymous_id"]},
+            ],
+        })
+    if not owners:
+        return {"_id": {"$exists": False}}
+    return owners[0] if len(owners) == 1 else {"$or": owners}
+
+
+def _actor_owns(doc: dict, actor: dict | str) -> bool:
+    actor = _as_actor(actor)
+    if doc.get("owner_user_id"):
+        return doc.get("owner_user_id") == actor.get("user_id")
+    return bool(
+        actor.get("anonymous_id")
+        and _anonymous_owner(doc) == actor.get("anonymous_id")
+    )
+
+
+def _public_conversation(doc: dict, actor: dict | str) -> dict:
+    actor = _as_actor(actor)
+    result = _public(doc)
+    account_owned = bool(
+        doc.get("owner_user_id")
+        and doc.get("owner_user_id") == actor.get("user_id")
+    )
+    result["ownership"] = "account" if account_owned else "device"
+    result["can_claim"] = bool(
+        not account_owned and actor.get("user_id") and actor.get("anonymous_id")
+    )
+    result.pop("identity_id", None)
+    result.pop("anonymous_id", None)
+    result.pop("owner_user_id", None)
+    result.pop("claimed_from_anonymous_id", None)
+    return result
+
+
+async def require_session_access(actor: dict | str | None, session_id: str) -> dict | None:
     """Authorize an owned session while preserving legacy evaluator sessions.
 
     Sessions that predate the conversation model have no owner record and keep
     working during migration. Once a session belongs to a conversation, its
-    anonymous identity cookie is mandatory for reads and mutations.
+    resolved account/anonymous actor is mandatory for reads and mutations.
     """
     _, conversations = await _collections()
     if conversations is not None:
@@ -149,14 +264,13 @@ async def require_session_access(token: str | None, session_id: str) -> dict | N
         )
     if not conversation:
         return None
-    identity = await require_identity(token)
-    if conversation.get("identity_id") != identity.get("identity_id"):
-        raise PermissionError("session is not owned by this identity")
-    return _public(conversation)
+    if not actor or not _actor_owns(conversation, actor):
+        raise PermissionError("session is not owned by this actor")
+    return _public_conversation(conversation, actor)
 
 
 async def create_conversation(
-    identity_id: str, *, title: str = "", experience_mode: str | None = None
+    actor: dict | str, *, title: str = "", experience_mode: str | None = None
 ) -> dict:
     if experience_mode not in {None, "guided", "autopilot"}:
         raise ValueError("experience_mode must be guided or autopilot")
@@ -164,10 +278,17 @@ async def create_conversation(
     conversation_id = f"conv_{uuid.uuid4().hex}"
     now = _now()
     clean_title = " ".join((title or "").split())[:120]
+    actor = _as_actor(actor)
+    if not actor.get("user_id") and not actor.get("anonymous_id"):
+        raise PermissionError("conversation owner is required")
     doc = {
         "_id": conversation_id,
         "conversation_id": conversation_id,
-        "identity_id": identity_id,
+        "owner_user_id": actor.get("user_id"),
+        "anonymous_id": None if actor.get("user_id") else actor.get("anonymous_id"),
+        # Retain the old field on anonymous documents until all deployed builds
+        # understand anonymous_id. Claimed/account documents clear it.
+        "identity_id": None if actor.get("user_id") else actor.get("anonymous_id"),
         "session_id": _new_session_id(),
         "title": clean_title or "Chiến dịch mới",
         "title_source": "user" if clean_title else "default",
@@ -181,22 +302,20 @@ async def create_conversation(
         await conversations.insert_one(doc)
     else:
         _mem_conversations[conversation_id] = doc
-    return _public(doc)
+    return _public_conversation(doc, actor)
 
 
-async def _owned_conversation(identity_id: str, conversation_id: str) -> dict | None:
+async def _owned_conversation(actor: dict | str, conversation_id: str) -> dict | None:
     _, conversations = await _collections()
     if conversations is not None:
-        return await conversations.find_one({
-            "_id": conversation_id, "identity_id": identity_id,
-        })
+        return await conversations.find_one({"_id": conversation_id, **_actor_query(actor)})
     doc = _mem_conversations.get(conversation_id)
-    return doc if doc and doc.get("identity_id") == identity_id else None
+    return doc if doc and _actor_owns(doc, actor) else None
 
 
-async def list_conversations(identity_id: str, *, include_archived: bool = False) -> list[dict]:
+async def list_conversations(actor: dict | str, *, include_archived: bool = False) -> list[dict]:
     _, conversations = await _collections()
-    query = {"identity_id": identity_id}
+    query = _actor_query(actor)
     if not include_archived:
         query["archived_at"] = None
     if conversations is not None:
@@ -204,15 +323,15 @@ async def list_conversations(identity_id: str, *, include_archived: bool = False
     else:
         docs = [
             item for item in _mem_conversations.values()
-            if item.get("identity_id") == identity_id
+            if _actor_owns(item, actor)
             and (include_archived or item.get("archived_at") is None)
         ]
         docs.sort(key=lambda item: item.get("updated_at") or item["created_at"], reverse=True)
-    return [_public(item) for item in docs]
+    return [_public_conversation(item, actor) for item in docs]
 
 
-async def get_conversation(identity_id: str, conversation_id: str) -> dict:
-    doc = await _owned_conversation(identity_id, conversation_id)
+async def get_conversation(actor: dict | str, conversation_id: str) -> dict:
+    doc = await _owned_conversation(actor, conversation_id)
     if not doc:
         raise KeyError("conversation not found")
 
@@ -230,7 +349,7 @@ async def get_conversation(identity_id: str, conversation_id: str) -> dict:
         await set_conversation_mode_for_session(session_id, workspace_mode)
         doc["experience_mode"] = workspace_mode
     return {
-        **_public(doc),
+        **_public_conversation(doc, actor),
         "messages": await get_display_history(session_id),
         "workspace": workspace,
         "pending_proposals": await list_pending_proposals(session_id),
@@ -238,15 +357,15 @@ async def get_conversation(identity_id: str, conversation_id: str) -> dict:
     }
 
 
-async def archive_conversation(identity_id: str, conversation_id: str) -> dict:
-    doc = await _owned_conversation(identity_id, conversation_id)
+async def archive_conversation(actor: dict | str, conversation_id: str) -> dict:
+    doc = await _owned_conversation(actor, conversation_id)
     if not doc:
         raise KeyError("conversation not found")
     now = _now()
     _, conversations = await _collections()
     if conversations is not None:
         await conversations.update_one(
-            {"_id": conversation_id, "identity_id": identity_id},
+            {"_id": conversation_id, **_actor_query(actor)},
             {"$set": {"archived_at": now, "updated_at": now}},
         )
     else:
@@ -273,12 +392,12 @@ async def _assert_conversations_deletable(docs: list[dict]) -> None:
         raise ConversationRunActive(active)
 
 
-async def delete_conversation(identity_id: str, conversation_id: str) -> dict:
+async def delete_conversation(actor: dict | str, conversation_id: str) -> dict:
     """Permanently delete one owned conversation and its agent artifacts.
 
     Campaign orders live in the Node backend and remain as business records.
     """
-    doc = await _owned_conversation(identity_id, conversation_id)
+    doc = await _owned_conversation(actor, conversation_id)
     if not doc:
         raise KeyError("conversation not found")
     await _assert_conversations_deletable([doc])
@@ -289,7 +408,7 @@ async def delete_conversation(identity_id: str, conversation_id: str) -> dict:
     _, conversations = await _collections()
     if conversations is not None:
         result = await conversations.delete_one({
-            "_id": conversation_id, "identity_id": identity_id,
+            "_id": conversation_id, **_actor_query(actor),
         })
         if result.deleted_count != 1:
             raise KeyError("conversation not found")
@@ -305,15 +424,15 @@ async def delete_conversation(identity_id: str, conversation_id: str) -> dict:
     }
 
 
-async def delete_all_conversations(identity_id: str) -> dict:
+async def delete_all_conversations(actor: dict | str) -> dict:
     """Permanently delete every active or archived conversation for an owner."""
     _, conversations = await _collections()
     if conversations is not None:
-        docs = await conversations.find({"identity_id": identity_id}).to_list(length=None)
+        docs = await conversations.find(_actor_query(actor)).to_list(length=None)
     else:
         docs = [
             item for item in _mem_conversations.values()
-            if item.get("identity_id") == identity_id
+            if _actor_owns(item, actor)
         ]
     await _assert_conversations_deletable(docs)
 
@@ -328,7 +447,7 @@ async def delete_all_conversations(identity_id: str) -> dict:
     ids = [doc.get("conversation_id") or doc.get("_id") for doc in docs]
     if conversations is not None:
         result = await conversations.delete_many({
-            "identity_id": identity_id, "_id": {"$in": ids},
+            "_id": {"$in": ids}, **_actor_query(actor),
         })
         deleted_count = result.deleted_count
     else:
@@ -342,6 +461,97 @@ async def delete_all_conversations(identity_id: str) -> dict:
         "deleted_artifacts": artifact_counts,
         "orders_retained": True,
     }
+
+
+async def has_claimable_conversations(actor: dict) -> bool:
+    actor = _as_actor(actor)
+    if not actor.get("user_id") or not actor.get("anonymous_id"):
+        return False
+    query = {
+        "owner_user_id": None,
+        "$or": [
+            {"anonymous_id": actor["anonymous_id"]},
+            {"identity_id": actor["anonymous_id"]},
+        ],
+    }
+    _, conversations = await _collections()
+    if conversations is not None:
+        return bool(await conversations.count_documents(query, limit=1))
+    return any(
+        not doc.get("owner_user_id")
+        and _anonymous_owner(doc) == actor["anonymous_id"]
+        for doc in _mem_conversations.values()
+    )
+
+
+async def claim_conversation(actor: dict, conversation_id: str) -> dict:
+    """Atomically transfer one unclaimed device conversation to an account."""
+    actor = _as_actor(actor)
+    user_id = actor.get("user_id")
+    anonymous_id = actor.get("anonymous_id")
+    if not user_id or not anonymous_id:
+        raise PermissionError("claim requires account and anonymous credentials")
+    _, conversations = await _collections()
+    now = _now()
+    if conversations is not None:
+        already = await conversations.find_one({
+            "_id": conversation_id, "owner_user_id": user_id,
+        })
+        if already:
+            return _public_conversation(already, actor)
+        doc = await conversations.find_one_and_update(
+            {
+                "_id": conversation_id,
+                "owner_user_id": None,
+                "$or": [
+                    {"anonymous_id": anonymous_id},
+                    {"identity_id": anonymous_id},
+                ],
+            },
+            {"$set": {
+                "owner_user_id": user_id,
+                "anonymous_id": None,
+                "identity_id": None,
+                "claimed_from_anonymous_id": anonymous_id,
+                "claimed_at": now,
+                "updated_at": now,
+            }},
+            return_document=ReturnDocument.AFTER,
+        )
+        if not doc:
+            raise KeyError("conversation not found")
+        identities, _ = await _collections()
+        await identities.update_one(
+            {"identity_id": anonymous_id},
+            {"$set": {"claimed_by_user_id": user_id, "claimed_at": now}},
+        )
+    else:
+        async with _claim_lock:
+            doc = _mem_conversations.get(conversation_id)
+            if doc and doc.get("owner_user_id") == user_id:
+                return _public_conversation(doc, actor)
+            if not doc or doc.get("owner_user_id") or _anonymous_owner(doc) != anonymous_id:
+                raise KeyError("conversation not found")
+            doc.update({
+                "owner_user_id": user_id,
+                "anonymous_id": None,
+                "identity_id": None,
+                "claimed_from_anonymous_id": anonymous_id,
+                "claimed_at": now,
+                "updated_at": now,
+            })
+            identity = _mem_identities.get(anonymous_id)
+            if identity:
+                identity["claimed_by_user_id"] = user_id
+                identity["claimed_at"] = now
+    from accounts import _audit
+    await _audit(
+        "conversation_claimed",
+        user_id=user_id,
+        conversation_id=conversation_id,
+        anonymous_id=anonymous_id,
+    )
+    return _public_conversation(doc, actor)
 
 
 async def touch_conversation_for_session(

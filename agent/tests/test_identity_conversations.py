@@ -168,18 +168,21 @@ async def test_owned_session_rejects_missing_and_foreign_identity_tokens():
         bootstrap_anonymous,
         create_conversation,
         require_session_access,
+        resolve_actor,
     )
 
     owner = await bootstrap_anonymous()
     stranger = await bootstrap_anonymous()
     conversation = await create_conversation(owner["identity_id"])
 
-    allowed = await require_session_access(owner["token"], conversation["session_id"])
+    owner_actor = await resolve_actor(None, owner["token"])
+    stranger_actor = await resolve_actor(None, stranger["token"])
+    allowed = await require_session_access(owner_actor, conversation["session_id"])
     assert allowed["conversation_id"] == conversation["conversation_id"]
     with pytest.raises(PermissionError):
         await require_session_access(None, conversation["session_id"])
     with pytest.raises(PermissionError):
-        await require_session_access(stranger["token"], conversation["session_id"])
+        await require_session_access(stranger_actor, conversation["session_id"])
     assert await require_session_access(None, "legacy-evaluator-session") is None
 
 

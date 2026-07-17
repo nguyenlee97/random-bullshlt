@@ -32,18 +32,27 @@ def _anonymous_token(request: Request) -> str | None:
     )
 
 
-async def _request_identity(request: Request) -> dict:
-    from identity import require_identity
+def _account_token(request: Request) -> str | None:
+    return request.cookies.get("aa_account")
+
+
+async def _request_actor(request: Request, *, require_any: bool = True) -> dict:
+    from identity import resolve_actor
     try:
-        return await require_identity(_anonymous_token(request))
+        return await resolve_actor(
+            _account_token(request),
+            _anonymous_token(request),
+            require_any=require_any,
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 async def _assert_session_access(request: Request, session_id: str) -> None:
     from identity import require_session_access
+    actor = await _request_actor(request, require_any=False)
     try:
-        await require_session_access(_anonymous_token(request), session_id)
+        await require_session_access(actor, session_id)
     except PermissionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
@@ -76,6 +85,54 @@ class _ConversationDeleteAllRequest(BaseModel):
     confirmation: str
 
 
+class _RegisterRequest(BaseModel):
+    email: str
+    password: str
+    display_name: str
+
+
+class _LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+def _set_account_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        "aa_account",
+        token,
+        max_age=_cfg.ACCOUNT_SESSION_MAX_AGE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=_cfg.ACCOUNT_COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _set_csrf_cookie(request: Request, response: Response) -> str:
+    from middleware.csrf import new_csrf_token, valid_csrf_token
+    token = request.cookies.get("aa_csrf")
+    if not valid_csrf_token(token):
+        token = new_csrf_token()
+        response.set_cookie(
+            "aa_csrf",
+            token,
+            max_age=max(
+                _cfg.ANONYMOUS_COOKIE_MAX_AGE_DAYS,
+                _cfg.ACCOUNT_SESSION_MAX_AGE_DAYS,
+            ) * 24 * 60 * 60,
+            httponly=False,
+            secure=_cfg.ACCOUNT_COOKIE_SECURE,
+            samesite="lax",
+            path="/",
+        )
+    return token
+
+
+def _auth_client_ip(request: Request) -> str:
+    proxy_ip = request.headers.get("x-real-ip", "").strip()
+    return proxy_ip or (request.client.host if request.client else "unknown")
+
+
 @agent_router.post("/auth/anonymous")
 async def anonymous_bootstrap(request: Request, response: Response):
     from identity import bootstrap_anonymous
@@ -91,16 +148,151 @@ async def anonymous_bootstrap(request: Request, response: Response):
             samesite="lax",
             path="/",
         )
+    _set_csrf_cookie(request, response)
     return result
+
+
+@agent_router.post("/auth/register", status_code=201)
+@limiter.limit("5/minute")
+async def account_register(request: Request, response: Response, body: _RegisterRequest):
+    from accounts import (
+        AccountConflict,
+        AuthRateLimited,
+        ValidationError,
+        check_auth_rate_limit,
+        create_account_session,
+        create_local_account,
+    )
+    from identity import has_claimable_conversations, resolve_actor
+    try:
+        await check_auth_rate_limit(
+            "register", client_ip=_auth_client_ip(request), email=body.email
+        )
+        user = await create_local_account(body.email, body.password, body.display_name)
+        session = await create_account_session(
+            user["user_id"], user_agent_label=request.headers.get("user-agent", "")
+        )
+    except AccountConflict as exc:
+        raise HTTPException(status_code=409, detail="local account already exists") from exc
+    except AuthRateLimited as exc:
+        raise HTTPException(status_code=429, detail="too many authentication attempts") from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _set_account_cookie(response, session.pop("token"))
+    _set_csrf_cookie(request, response)
+    actor = await resolve_actor(None, _anonymous_token(request), require_any=False)
+    actor.update({
+        "user_id": user["user_id"],
+        "user": user,
+        "account_session_id": session["session_id"],
+    })
+    return {
+        "user": user,
+        "session": session,
+        "has_claimable_conversations": await has_claimable_conversations(actor),
+    }
+
+
+@agent_router.post("/auth/login")
+@limiter.limit("20/minute")
+async def account_login(request: Request, response: Response, body: _LoginRequest):
+    from accounts import (
+        AccountDisabled,
+        AuthRateLimited,
+        InvalidCredentials,
+        ValidationError,
+        authenticate_local_account,
+        check_auth_rate_limit,
+        create_account_session,
+    )
+    from identity import has_claimable_conversations, resolve_actor
+    prior_actor = await _request_actor(request, require_any=False)
+    try:
+        await check_auth_rate_limit(
+            "login", client_ip=_auth_client_ip(request), email=body.email
+        )
+        user = await authenticate_local_account(body.email, body.password)
+        session = await create_account_session(
+            user["user_id"], user_agent_label=request.headers.get("user-agent", "")
+        )
+        if prior_actor.get("user_id") and prior_actor.get("account_session_id"):
+            from accounts import revoke_account_session
+            await revoke_account_session(
+                prior_actor["user_id"], prior_actor["account_session_id"]
+            )
+    except AuthRateLimited as exc:
+        raise HTTPException(status_code=429, detail="too many authentication attempts") from exc
+    except (AccountDisabled, InvalidCredentials, ValidationError) as exc:
+        raise HTTPException(status_code=401, detail="invalid email or password") from exc
+    _set_account_cookie(response, session.pop("token"))
+    _set_csrf_cookie(request, response)
+    actor = await resolve_actor(None, _anonymous_token(request), require_any=False)
+    actor.update({
+        "user_id": user["user_id"],
+        "user": user,
+        "account_session_id": session["session_id"],
+    })
+    return {
+        "user": user,
+        "session": session,
+        "has_claimable_conversations": await has_claimable_conversations(actor),
+    }
+
+
+@agent_router.post("/auth/logout")
+async def account_logout(request: Request, response: Response):
+    from accounts import revoke_account_session
+    actor = await _request_actor(request, require_any=False)
+    if actor.get("user_id") and actor.get("account_session_id"):
+        await revoke_account_session(actor["user_id"], actor["account_session_id"])
+    response.delete_cookie("aa_account", path="/", samesite="lax")
+    return {"ok": True}
+
+
+@agent_router.get("/auth/me")
+async def account_me(request: Request, response: Response):
+    actor = await _request_actor(request, require_any=False)
+    _set_csrf_cookie(request, response)
+    return {
+        "authenticated": bool(actor.get("user_id")),
+        "user": actor.get("user") if actor.get("user_id") else None,
+        "anonymous_identity_present": bool(actor.get("anonymous_id")),
+    }
+
+
+@agent_router.get("/auth/sessions")
+async def account_sessions_list(request: Request):
+    from accounts import list_account_sessions
+    actor = await _request_actor(request)
+    if not actor.get("user_id"):
+        raise HTTPException(status_code=401, detail="account session is required")
+    return {"sessions": await list_account_sessions(
+        actor["user_id"], current_session_id=actor["account_session_id"]
+    )}
+
+
+@agent_router.delete("/auth/sessions/{account_session_id}")
+async def account_session_revoke(
+    account_session_id: str, request: Request, response: Response,
+):
+    from accounts import revoke_account_session
+    actor = await _request_actor(request)
+    if not actor.get("user_id"):
+        raise HTTPException(status_code=401, detail="account session is required")
+    if not await revoke_account_session(actor["user_id"], account_session_id):
+        raise HTTPException(status_code=404, detail="account session not found")
+    if account_session_id == actor.get("account_session_id"):
+        response.delete_cookie("aa_account", path="/", samesite="lax")
+    return {"ok": True, "session_id": account_session_id}
 
 
 @agent_router.get("/conversations")
 async def conversations_list(request: Request, include_archived: bool = False):
     from identity import list_conversations
-    identity = await _request_identity(request)
+    actor = await _request_actor(request)
     return {
         "conversations": await list_conversations(
-            identity["identity_id"], include_archived=include_archived
+            actor, include_archived=include_archived
         )
     }
 
@@ -108,9 +300,9 @@ async def conversations_list(request: Request, include_archived: bool = False):
 @agent_router.post("/conversations", status_code=201)
 async def conversations_create(request: Request, body: _ConversationCreateRequest):
     from identity import create_conversation
-    identity = await _request_identity(request)
+    actor = await _request_actor(request)
     return await create_conversation(
-        identity["identity_id"], title=body.title,
+        actor, title=body.title,
         experience_mode=body.experience_mode,
     )
 
@@ -118,9 +310,9 @@ async def conversations_create(request: Request, body: _ConversationCreateReques
 @agent_router.get("/conversations/{conversation_id}")
 async def conversations_get(conversation_id: str, request: Request):
     from identity import get_conversation
-    identity = await _request_identity(request)
+    actor = await _request_actor(request)
     try:
-        return await get_conversation(identity["identity_id"], conversation_id)
+        return await get_conversation(actor, conversation_id)
     except KeyError as exc:
         # Do not reveal whether another identity owns this ID.
         raise HTTPException(status_code=404, detail="conversation not found") from exc
@@ -129,9 +321,9 @@ async def conversations_get(conversation_id: str, request: Request):
 @agent_router.post("/conversations/{conversation_id}/archive")
 async def conversations_archive(conversation_id: str, request: Request):
     from identity import archive_conversation
-    identity = await _request_identity(request)
+    actor = await _request_actor(request)
     try:
-        return await archive_conversation(identity["identity_id"], conversation_id)
+        return await archive_conversation(actor, conversation_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="conversation not found") from exc
 
@@ -139,9 +331,9 @@ async def conversations_archive(conversation_id: str, request: Request):
 @agent_router.delete("/conversations/{conversation_id}")
 async def conversations_delete(conversation_id: str, request: Request):
     from identity import ConversationRunActive, delete_conversation
-    identity = await _request_identity(request)
+    actor = await _request_actor(request)
     try:
-        return await delete_conversation(identity["identity_id"], conversation_id)
+        return await delete_conversation(actor, conversation_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="conversation not found") from exc
     except ConversationRunActive as exc:
@@ -158,14 +350,26 @@ async def conversations_delete_all(
     from identity import ConversationRunActive, delete_all_conversations
     if body.confirmation != "DELETE_ALL":
         raise HTTPException(status_code=422, detail="invalid delete-all confirmation")
-    identity = await _request_identity(request)
+    actor = await _request_actor(request)
     try:
-        return await delete_all_conversations(identity["identity_id"])
+        return await delete_all_conversations(actor)
     except ConversationRunActive as exc:
         raise HTTPException(
             status_code=409,
             detail={"message": str(exc), "active_conversations": exc.conversations},
         ) from exc
+
+
+@agent_router.post("/conversations/{conversation_id}/claim")
+async def conversations_claim(conversation_id: str, request: Request):
+    from identity import claim_conversation
+    actor = await _request_actor(request)
+    if not actor.get("user_id") or not actor.get("anonymous_id"):
+        raise HTTPException(status_code=401, detail="claim requires account and device identity")
+    try:
+        return await claim_conversation(actor, conversation_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="conversation not found") from exc
 
 
 @agent_router.get("/logs/{session_id}")

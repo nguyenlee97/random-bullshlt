@@ -71,6 +71,18 @@ def reset_session_col(monkeypatch):
         monkeypatch.setattr(identity, "_mem_identities", {}, raising=False)
         monkeypatch.setattr(identity, "_mem_identity_by_hash", {}, raising=False)
         monkeypatch.setattr(identity, "_mem_conversations", {}, raising=False)
+        monkeypatch.setattr(identity, "_claim_lock", __import__("asyncio").Lock(),
+                            raising=False)
+    except ImportError:
+        pass
+    try:
+        import accounts
+        monkeypatch.setattr(accounts, "_mem_users", {}, raising=False)
+        monkeypatch.setattr(accounts, "_mem_auth_identities", {}, raising=False)
+        monkeypatch.setattr(accounts, "_mem_account_sessions", {}, raising=False)
+        monkeypatch.setattr(accounts, "_mem_account_session_by_hash", {}, raising=False)
+        monkeypatch.setattr(accounts, "_mem_auth_rate_limits", {}, raising=False)
+        monkeypatch.setattr(accounts, "_mem_auth_audit_events", [], raising=False)
     except ImportError:
         pass
     yield

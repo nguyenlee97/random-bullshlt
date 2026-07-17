@@ -1,7 +1,8 @@
 import {
   Archive, ArrowRight, Bot, Check, Clock3, History, Loader2,
-  Route, ShieldCheck, Sparkles, Trash2, Zap,
+  Route, Save, Sparkles, Trash2, Zap,
 } from 'lucide-react'
+import AccountMenu from '@/components/AccountMenu'
 
 const modes = [
   {
@@ -36,19 +37,24 @@ const formatTime = value => {
 
 export default function ExperienceSelector({
   onSelect, busy, error, conversations = [], historyLoading = false,
-  historyError = '', onResume, onArchive, onDelete, onDeleteAll,
+  historyError = '', onResume, onArchive, onDelete, onDeleteAll, onClaim,
+  identity, identityBusy, onLogin, onLogout, onLoadSessions, onRevokeSession,
 }) {
   return (
     <main className="h-screen h-[100dvh] overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top_left,_#dcebff_0,_#f4f7fb_38%,_#eef4fb_100%)] px-5 py-8 sm:px-8 sm:py-12">
       <div className="mx-auto max-w-5xl">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-500 shadow-[0_12px_30px_rgba(0,104,255,0.28)]">
-            <Bot className="h-6 w-6 text-white" strokeWidth={2.3} />
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-500 shadow-[0_12px_30px_rgba(0,104,255,0.28)]">
+              <Bot className="h-6 w-6 text-white" strokeWidth={2.3} />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600">Advertising Agent</p>
+              <p className="text-sm text-slate-600">Từ brief đến campaign đang hoạt động</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600">Advertising Agent</p>
-            <p className="text-sm text-slate-600">Từ brief đến campaign đang hoạt động</p>
-          </div>
+          <AccountMenu identity={identity} busy={identityBusy} onLogin={onLogin} onLogout={onLogout}
+            onLoadSessions={onLoadSessions} onRevokeSession={onRevokeSession} />
         </div>
 
         <section className="pt-12 sm:pt-16" aria-labelledby="home-title">
@@ -142,10 +148,18 @@ export default function ExperienceSelector({
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
                       <span className="rounded-full bg-brand-50 px-2 py-0.5 font-bold text-brand-700">{modeLabel(item.experience_mode)}</span>
+                      <span className={`rounded-full px-2 py-0.5 font-bold ${item.ownership === 'account' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {item.ownership === 'account' ? 'Tài khoản' : 'Trên thiết bị'}
+                      </span>
                       <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatTime(item.last_message_at || item.updated_at)}</span>
                     </div>
                   </button>
                   <div className="mt-3 flex items-center gap-3">
+                    {item.can_claim && (
+                      <button type="button" onClick={() => onClaim(item)} className="flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-800">
+                        <Save className="h-3 w-3" /> Lưu vào tài khoản
+                      </button>
+                    )}
                     <button type="button" onClick={() => onArchive(item.conversation_id)} className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-700"
                       aria-label={`Lưu trữ ${item.title || 'campaign'}`}>
                       <Archive className="h-3 w-3" /> Lưu trữ

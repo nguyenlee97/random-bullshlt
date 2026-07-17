@@ -1,8 +1,12 @@
 import { Bot, RotateCcw, Home, Play, FileText, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDemo } from '@/demo/DemoEngine'
+import AccountMenu from '@/components/AccountMenu'
 
-export default function TopBar({ onReset, onNewChat, onOpenHistory, showDemo }) {
+export default function TopBar({
+  onReset, onNewChat, onOpenHistory, showDemo,
+  identity, identityBusy, onLogin, onLogout, onLoadSessions, onRevokeSession,
+}) {
   const demo = useDemo()
 
   return (
@@ -19,6 +23,9 @@ export default function TopBar({ onReset, onNewChat, onOpenHistory, showDemo }) 
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+
+        <AccountMenu identity={identity} busy={identityBusy} onLogin={onLogin} onLogout={onLogout}
+          onLoadSessions={onLoadSessions} onRevokeSession={onRevokeSession} compact />
 
         <Button
           variant="outline"

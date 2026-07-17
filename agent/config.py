@@ -81,6 +81,26 @@ class Config:
     ANONYMOUS_COOKIE_MAX_AGE_DAYS: int = int(
         os.getenv("ANONYMOUS_COOKIE_MAX_AGE_DAYS", "90")
     )
+    ACCOUNT_COOKIE_SECURE: bool = (
+        os.getenv(
+            "ACCOUNT_COOKIE_SECURE",
+            os.getenv("ANONYMOUS_COOKIE_SECURE", "false"),
+        ).lower() == "true"
+    )
+    ACCOUNT_SESSION_MAX_AGE_DAYS: int = int(
+        os.getenv("ACCOUNT_SESSION_MAX_AGE_DAYS", "30")
+    )
+    AUTH_RATE_LIMIT_WINDOW_SECONDS: int = int(
+        os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "300")
+    )
+    AUTH_REGISTER_IP_LIMIT: int = int(os.getenv("AUTH_REGISTER_IP_LIMIT", "5"))
+    AUTH_REGISTER_ACCOUNT_LIMIT: int = int(
+        os.getenv("AUTH_REGISTER_ACCOUNT_LIMIT", "3")
+    )
+    AUTH_LOGIN_IP_LIMIT: int = int(os.getenv("AUTH_LOGIN_IP_LIMIT", "20"))
+    AUTH_LOGIN_ACCOUNT_LIMIT: int = int(
+        os.getenv("AUTH_LOGIN_ACCOUNT_LIMIT", "10")
+    )
 
     # ── Phase 1: LangGraph (production-plan/02) ───────────────────────────────
     # Strangler flag: false = original freeform.py path (default, safe);

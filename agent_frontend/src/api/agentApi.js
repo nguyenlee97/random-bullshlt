@@ -28,15 +28,39 @@ let LEGACY_ANONYMOUS_TOKEN = typeof window !== 'undefined' ? storageGet('anonymo
 let CURRENT_CONVERSATION_ID = typeof window !== 'undefined' ? storageGet('conversation-id') : ''
 const STORED_SESSION_ID = typeof window !== 'undefined' ? storageGet('session-id') : ''
 
-const agentFetch = (url, opts = {}) =>
-  fetch(url, {
+const cookieGet = name => {
+  if (typeof document === 'undefined') return ''
+  const prefix = `${encodeURIComponent(name)}=`
+  const item = document.cookie.split(';').map(value => value.trim())
+    .find(value => value.startsWith(prefix))
+  if (!item) return ''
+  try { return decodeURIComponent(item.slice(prefix.length)) } catch { return '' }
+}
+
+const agentFetch = (url, opts = {}) => {
+  const method = String(opts.method || 'GET').toUpperCase()
+  const csrf = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
+    ? cookieGet('aa_csrf')
+    : ''
+  return fetch(url, {
     ...opts,
     credentials: 'include',
     headers: {
       ...(LEGACY_ANONYMOUS_TOKEN ? { 'X-Anonymous-Token': LEGACY_ANONYMOUS_TOKEN } : {}),
+      ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
       ...(opts.headers || {}),
     },
   })
+}
+
+async function responseError(response, fallback) {
+  const data = await response.json().catch(() => ({}))
+  const detail = data?.detail
+  const error = new Error(detail?.message || detail || fallback)
+  error.status = response.status
+  error.data = data
+  return error
+}
 
 const withRequestId = (data, response) => ({
   ...data,
@@ -1110,6 +1134,62 @@ export const AgentAPI = {
     return context
   },
 
+  async getAuthMe() {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/auth/me`, {
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể tải thông tin tài khoản.')
+    return response.json()
+  },
+
+  async registerAccount({ email, password, displayName }) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, display_name: displayName }),
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể tạo tài khoản.')
+    return response.json()
+  },
+
+  async loginAccount({ email, password }) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!response.ok) throw await responseError(response, 'Email hoặc mật khẩu không đúng.')
+    return response.json()
+  },
+
+  async logoutAccount() {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/auth/logout`, {
+      method: 'POST', signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể đăng xuất.')
+    return response.json()
+  },
+
+  async listAccountSessions() {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/auth/sessions`, {
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể tải các phiên đăng nhập.')
+    const data = await response.json()
+    return Array.isArray(data.sessions) ? data.sessions : []
+  },
+
+  async revokeAccountSession(accountSessionId) {
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/auth/sessions/${encodeURIComponent(accountSessionId)}`,
+      { method: 'DELETE', signal: AbortSignal.timeout(5000) },
+    )
+    if (!response.ok) throw await responseError(response, 'Không thể thu hồi phiên đăng nhập.')
+    return response.json()
+  },
+
   async listConversations(includeArchived = false) {
     try {
       await bootstrapIdentity()
@@ -1130,6 +1210,15 @@ export const AgentAPI = {
     const context = await fetchConversation(conversationId)
     if (!context) throw new Error('Không tìm thấy chiến dịch hoặc thiết bị này không có quyền truy cập.')
     return context
+  },
+
+  async claimConversation(conversationId) {
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/conversations/${encodeURIComponent(conversationId)}/claim`,
+      { method: 'POST', signal: AbortSignal.timeout(10000) },
+    )
+    if (!response.ok) throw await responseError(response, 'Không thể lưu campaign vào tài khoản.')
+    return response.json()
   },
 
   async createConversation(options = {}) {

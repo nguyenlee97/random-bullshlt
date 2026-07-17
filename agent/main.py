@@ -12,6 +12,10 @@ from config import config
 
 @asynccontextmanager
 async def _lifespan(_app):
+    from accounts import ensure_account_indexes
+    from identity import ensure_identity_indexes
+    await ensure_account_indexes()
+    await ensure_identity_indexes()
     if config.USE_RAG_AUDIENCE:
         from rag.runtime import start_prewarm
         await start_prewarm()
@@ -65,6 +69,11 @@ app = FastAPI(
 # executes in reverse registration order) and 401s still carry CORS headers.
 from middleware.auth import ApiKeyMiddleware  # noqa: E402
 app.add_middleware(ApiKeyMiddleware)
+
+# Cookie-authenticated browser mutations use one centralized double-submit
+# check. API/evaluator calls without browser cookies retain migration behavior.
+from middleware.csrf import CSRFMiddleware  # noqa: E402
+app.add_middleware(CSRFMiddleware)
 
 # Reject oversized bodies before Pydantic parsing or model/tool execution.
 from middleware.request_limits import RequestSizeLimitMiddleware  # noqa: E402
