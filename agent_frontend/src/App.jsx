@@ -14,6 +14,7 @@ import { ArrowLeft, MessageSquare, LayoutDashboard, Sparkles } from 'lucide-reac
 import { DemoProvider } from '@/demo/DemoEngine'
 import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { canApproveWorkflowStep } from '@/lib/workflowValidation'
+import { normalizeAudienceSelection } from '@/lib/audience'
 import {
   deriveStepStatuses,
   firstRecomputeStep,
@@ -1213,12 +1214,13 @@ export default function App() {
 
   const openAutopilotAudienceEditor = useCallback((audience) => {
     if (audience?.attrs) {
+      const normalizedAudience = normalizeAudienceSelection(audience)
+      setAudienceRecommendation(normalizedAudience.attrs)
       setFormStateWithEvents(prev => ({
         ...prev,
         segment: {
           ...prev.segment,
-          attrs: audience.attrs,
-          size: audience.size || prev.segment.size || 0,
+          ...normalizedAudience,
           targeting: audience.targeting || prev.segment.targeting || {},
         },
       }))

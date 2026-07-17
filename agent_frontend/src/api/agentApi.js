@@ -1,5 +1,8 @@
 import { fmt, generateId } from '@/lib/utils'
 import log from '@/lib/logger'
+import { normalizeDmpAttr } from '@/lib/audience'
+
+export { calcAudienceSize, normalizeDmpAttr } from '@/lib/audience'
 
 // ─── Real Agent API client ────────────────────────────────────────────────────
 const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8080'
@@ -163,18 +166,8 @@ const DMP_FALLBACK = [
 // ─── Calc audience size (union model: OR logic, selecting more = larger reach) ─
 // Sorts known sizes desc, applies 30% overlap discount per additional segment.
 // Segments with null/0 est_size are counted as "no constraint" (ignored in math).
-export function calcAudienceSize(attrs) {
-  if (!attrs.length) return 0
-  const knownSizes = attrs.map(a => a.est_size || 0).filter(s => s > 0)
-  if (!knownSizes.length) return 0
-  knownSizes.sort((a, b) => b - a) // largest first
-  let total = 0
-  for (let i = 0; i < knownSizes.length; i++) {
-    // Each additional segment contributes less (30% overlap assumed)
-    total += knownSizes[i] * Math.pow(0.7, i)
-  }
-  return Math.round(total)
-}
+// Implemented in lib/audience.js and re-exported above so Guided and
+// Autopilot flows share one normalization and sizing contract.
 
 // ─── Generate mock campaigns from brief ──────────────────────────────────────
 function generateMockCampaigns(brief) {
@@ -506,7 +499,7 @@ Tóm tắt:
 }
 
 // ─── Real DMP fetch (paginated, cached, correct field mapping) ───────────────
-const DMP_BASE_URL = 'https://api.pawgrammers.io.vn/api/dmp/attributes'
+const DMP_BASE_URL = `${BACKEND_URL}/api/dmp/attributes`
 let _dmpCache = null
 let _dmpFetchPromise = null
 
@@ -514,25 +507,6 @@ let _dmpFetchPromise = null
  * Normalize a raw DMP attribute from the real API.
  * Real API shape: { segmentId, type, category, name, fullLabel, sizeMin, sizeMax, sizeRaw }
  */
-export function normalizeDmpAttr(raw) {
-  const code = raw.segmentId || raw.code || raw.segment_code || String(raw._id || '')
-  const name = raw.fullLabel || raw.name || '(unknown)'
-  const sizeMin = Number(raw.sizeMin ?? 0)
-  const sizeMax = Number(raw.sizeMax ?? 0)
-  const estSize = sizeMin && sizeMax ? Math.round((sizeMin + sizeMax) / 2) : (raw.est_size || 0)
-  return {
-    _uid: code,
-    code,
-    name,
-    type: (raw.type || raw.segment_type || '').toLowerCase(),
-    category: raw.category || raw.segment_category || '',
-    est_size: estSize,
-    sizeMin,
-    sizeMax,
-    sizeRaw: raw.sizeRaw || null,
-  }
-}
-
 /**
  * Fetch ALL DMP attributes with pagination.
  * Uses module-level cache so multiple components don't trigger duplicate requests.
@@ -542,7 +516,9 @@ export async function fetchDmpAttributes() {
   if (_dmpFetchPromise) return _dmpFetchPromise
 
   _dmpFetchPromise = (async () => {
-    const PAGE_SIZE = 100
+    // The campaign backend returns a bounded list and does not implement
+    // `page`; request its full supported range in one call.
+    const PAGE_SIZE = 1000
     let allItems = []
     const seenIds = new Set()
     let page = 1

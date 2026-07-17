@@ -4,7 +4,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn, fmt } from '@/lib/utils'
-import { fetchDmpAttributes, calcAudienceSize } from '@/api/agentApi'
+import { fetchDmpAttributes } from '@/api/agentApi'
+import { calcAudienceSize, enrichAudienceSelection, normalizeDmpAttr } from '@/lib/audience'
 import { Users, Check, Search, Loader2, Sparkles, ChevronDown, ChevronUp, BrainCircuit } from 'lucide-react'
 import TargetingPanel from '@/components/TargetingPanel'
 
@@ -32,7 +33,9 @@ function AttrCard({ attr, selected, onToggle, reason, isReco }) {
         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
           {attr.code && <Badge variant="muted" className="text-[10px] h-4 px-1.5">{attr.code}</Badge>}
           {attr.category && <Badge variant="muted" className="text-[10px] h-4 px-1.5">{attr.category}</Badge>}
-          <span className="text-[10px] text-muted-foreground">{fmt(attr.est_size)}</span>
+          <span className="text-[10px] text-muted-foreground">
+            {Number(attr.est_size) > 0 ? fmt(attr.est_size) : 'Chưa có size'}
+          </span>
         </div>
       </div>
     </button>
@@ -49,6 +52,7 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
   const [expanded, setExpanded] = useState(false)
 
   const objective = brief?.objective || 'awareness'
+  const hasAudienceEstimate = Number(data.size || 0) > 0
 
   // Load all DMP segments (cached)
   useEffect(() => {
@@ -58,17 +62,34 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
     })
   }, [])
 
+  // Older Autopilot artifacts contain the selected IDs and reasons but not
+  // always the catalog size fields. Join them back to the current catalog so
+  // the cards remain selected and the estimate is meaningful.
+  useEffect(() => {
+    if (!allAttrs.length || !data.attrs.length) return
+    const enriched = enrichAudienceSelection(data, allAttrs)
+    const changed = enriched.size !== data.size || enriched.attrs.some(
+      (attr, index) => attr.est_size !== Number(data.attrs[index]?.est_size || 0),
+    )
+    if (changed) onChange(enriched)
+  }, [allAttrs, data, onChange])
+
   // Use audience-entry recommendation from chat — no fallback to dmp-recommend.
   // Per design: audience-entry is the single source of truth for recommendations.
   // If recoFromChat is null (still loading), show spinner until it arrives.
   useEffect(() => {
     if (recoFromChat && recoFromChat.length > 0) {
-      setRecoAttrs(recoFromChat)
+      setRecoAttrs(recoFromChat.map(normalizeDmpAttr))
+      setRecoLoading(false)
+    } else if (data.attrs.length > 0) {
+      // Editing an existing Autopilot artifact does not trigger audience-entry.
+      // Reuse the current selection instead of leaving this card loading forever.
+      setRecoAttrs(data.attrs.map(normalizeDmpAttr))
       setRecoLoading(false)
     }
     // If recoFromChat is null/empty, keep recoLoading=true (spinner shown)
     // It will arrive shortly via audience-entry API
-  }, [recoFromChat])
+  }, [data.attrs, recoFromChat])
 
   const recoUids = useMemo(() => new Set(recoAttrs.map(a => a._uid)), [recoAttrs])
 
@@ -104,7 +125,9 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
                 <Check className="w-3 h-3 text-white" />
               </div>
               <h4 className="text-sm font-semibold text-brand-700">Audience đã xác nhận</h4>
-              <Badge variant="green" className="ml-auto">{fmt(data.size)} người dùng</Badge>
+              <Badge variant="green" className="ml-auto">
+                {hasAudienceEstimate ? `${fmt(data.size)} người dùng` : 'Chưa có size'}
+              </Badge>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {data.attrs.map(a => <Badge key={getUid(a)} variant="muted">{a.name}</Badge>)}
@@ -128,10 +151,14 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
           </div>
           <div className="flex-1">
             <p className={cn('text-2xl font-black', data.attrs.length > 0 ? 'text-brand-700' : 'text-muted-foreground')}>
-              {data.attrs.length > 0 ? fmt(data.size) : '—'}
+              {data.attrs.length > 0 && hasAudienceEstimate ? fmt(data.size) : '—'}
             </p>
             <p className="text-xs text-muted-foreground">
-              {data.attrs.length > 0 ? `Audience size ước lượng · ${data.attrs.length} segments` : 'Chọn ít nhất 1 segment để tính size'}
+              {data.attrs.length > 0
+                ? (hasAudienceEstimate
+                    ? `Audience size ước lượng · ${data.attrs.length} segments`
+                    : `${data.attrs.length} segments · catalog chưa cung cấp size`)
+                : 'Chọn ít nhất 1 segment để tính size'}
             </p>
           </div>
           {data.attrs.length > 0 && <Badge variant="green">{data.attrs.length} đã chọn</Badge>}
