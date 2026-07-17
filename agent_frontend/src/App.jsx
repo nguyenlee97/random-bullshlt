@@ -15,6 +15,7 @@ import { DemoProvider } from '@/demo/DemoEngine'
 import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { canApproveWorkflowStep } from '@/lib/workflowValidation'
 import { normalizeAudienceSelection } from '@/lib/audience'
+import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
 import {
   deriveStepStatuses,
   firstRecomputeStep,
@@ -131,6 +132,7 @@ export default function App() {
   const [workspaceConflict, setWorkspaceConflict] = useState(null)
   const [canonicalWorkspace, setCanonicalWorkspace] = useState(null)
   const [recomputePlan, setRecomputePlan] = useState(null)
+  const [autopilotEditorArtifact, setAutopilotEditorArtifact] = useState(null)
   const workspaceRef = useRef(null)
   const mainRef = useRef(null)
   const bootedRef = useRef(false)
@@ -217,7 +219,12 @@ export default function App() {
           targeting: artifacts.targeting?.value || prev.segment?.targeting || {},
         },
       } : {}),
-      ...(artifacts.creative?.value ? { creative: artifacts.creative.value } : {}),
+      ...(artifacts.creative?.value ? {
+        creative: mergeCreativeVerdicts(
+          artifacts.creative.value,
+          artifacts.creative_verdict?.value,
+        ),
+      } : {}),
       ...((artifacts.placements?.value || artifacts.assignments?.value) ? {
         setup: {
           ...prev.setup,
@@ -754,6 +761,28 @@ export default function App() {
       recoZones: formState.setup.recoZones,
       campaigns: formState.setup.campaigns || [],
     }
+    // Audience and targeting are separate canonical artifacts. Saving a
+    // targeting review must not rewrite the already accepted audience.
+    if (editingStep === 1 && ['audience', 'targeting'].includes(autopilotEditorArtifact)) {
+      const field = autopilotEditorArtifact === 'targeting' ? 'targeting' : 'segment'
+      const value = field === 'targeting'
+        ? data.targeting
+        : { attrs: data.attrs, size: data.size }
+      const mutation = await AgentAPI.commitWorkspace(field, value)
+      const result = {
+        shouldAdvance: Boolean(mutation?.ok),
+        response: mutation?.ok ? null : {
+          content: mutation?.conflict
+            ? 'Workspace vừa thay đổi ở nơi khác. Hãy tải lại rồi thử lại.'
+            : `Không thể lưu ${field === 'targeting' ? 'targeting' : 'audience'}. Hãy kiểm tra kết nối rồi thử lại.`,
+        },
+      }
+      if (result.shouldAdvance) {
+        setAutopilotEditorArtifact(null)
+        setActiveTab('autopilot')
+      }
+      return result
+    }
     // This is an Autopilot data repair, not a Guided-step confirmation. Keep
     // validation and canonical persistence, but do not inject a Guided chat
     // message or advance the Guided step machine.
@@ -761,9 +790,12 @@ export default function App() {
       silent: true,
       markApproved: false,
     })
-    if (result?.shouldAdvance) setActiveTab('autopilot')
+    if (result?.shouldAdvance) {
+      setAutopilotEditorArtifact(null)
+      setActiveTab('autopilot')
+    }
     return result
-  }, [approveStep, currentStep, formState])
+  }, [approveStep, autopilotEditorArtifact, currentStep, formState])
 
   const handleStepJump = useCallback((i) => {
     if (busy) return
@@ -1234,13 +1266,14 @@ export default function App() {
     }
   }, [recomputePlan, busy])
 
-  const openAutopilotEditor = useCallback((step) => {
+  const openAutopilotEditor = useCallback((step, artifact = null) => {
+    setAutopilotEditorArtifact(artifact)
     handlePartialReset(step)
     setActiveTab('workspace')
     requestAnimationFrame(() => workspaceRef.current?.flash?.())
   }, [handlePartialReset])
 
-  const openAutopilotAudienceEditor = useCallback((audience) => {
+  const openAutopilotAudienceEditor = useCallback((audience, taskKey = 'retrieve_audience') => {
     if (audience?.attrs) {
       const normalizedAudience = normalizeAudienceSelection(audience)
       setAudienceRecommendation(normalizedAudience.attrs)
@@ -1253,7 +1286,7 @@ export default function App() {
         },
       }))
     }
-    openAutopilotEditor(1)
+    openAutopilotEditor(1, taskKey === 'derive_targeting' ? 'targeting' : 'audience')
   }, [openAutopilotEditor, setFormStateWithEvents])
 
   // ── isMobile helper (used for conditional inline styles) ──────────────────
@@ -1425,9 +1458,9 @@ export default function App() {
             initialRun={restoredAutopilotRun}
             onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
             onOpenChat={() => setActiveTab('chat')}
-            onOpenBrief={() => openAutopilotEditor(0)}
+            onOpenBrief={() => openAutopilotEditor(0, 'brief')}
             onOpenAudience={openAutopilotAudienceEditor}
-            onOpenCreative={() => openAutopilotEditor(2)}
+            onOpenCreative={() => openAutopilotEditor(2, 'creative')}
             onStatusChange={setAutopilotSummary}
             reportState={formState.report}
             onReportChange={updateAutopilotReport}

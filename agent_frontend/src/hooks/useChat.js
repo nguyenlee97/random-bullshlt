@@ -355,10 +355,18 @@ export function useChat({
               suggestions: [],
             }
           } else {
-            const compactFiles = prepared.map(({ dataUrl, ...file }) => file)
-            response = await AgentAPI.approveCreative({ files: compactFiles })
-            if (!response) throw new Error('Agent không lưu được creative đã phân tích')
-            shouldAdvance = responseAllowsAdvance(response)
+            // The authoritative file set was committed before analysis.
+            // Recommitting it now would invalidate the fresh verdict artifact.
+            response = {
+              id: generateId(),
+              role: 'assistant',
+              content: `✅ ${prepared.length} creative đã được phân tích và lưu an toàn.`,
+              blocks: [],
+              timestamp: new Date().toISOString(),
+              metadata: { tool: 'creative_approved', model: 'none', step: 2 },
+              suggestions: [],
+            }
+            shouldAdvance = true
           }
         } catch (error) {
           shouldAdvance = false

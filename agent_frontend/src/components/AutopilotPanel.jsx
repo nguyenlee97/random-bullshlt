@@ -7,6 +7,7 @@ import { AgentAPI } from '@/api/agentApi'
 import AutopilotReview from '@/components/AutopilotReview'
 import StrategySimulator from '@/components/StrategySimulator'
 import AutopilotOutcome from '@/components/AutopilotOutcome'
+import { defaultPlacementSelection } from '@/lib/creativeIntel'
 
 const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
 
@@ -389,13 +390,13 @@ export default function AutopilotPanel({
     ? { label: 'Sửa Brief', action: onOpenBrief }
     : ['retrieve_audience', 'derive_targeting'].includes(waiting?.key)
       ? {
-          label: 'Chỉnh Audience & targeting',
+          label: waiting.key === 'derive_targeting' ? 'Chỉnh targeting' : 'Chỉnh audience',
           action: () => onOpenAudience?.({
             ...audienceResult,
             targeting: waiting.key === 'derive_targeting'
               ? (waiting.pending_artifact?.value || waiting.result || {})
               : (workspaceSnapshot?.artifacts?.targeting?.value || {}),
-          }),
+          }, waiting.key),
         }
       : ['prepare_creatives', 'analyze_creatives', 'rank_placements', 'assign_creatives'].includes(waiting?.key)
         ? { label: waiting?.result?.reason === 'missing_creative' ? 'Tải creative lên' : 'Chỉnh hoặc thay creative', action: onOpenCreative }
@@ -406,11 +407,10 @@ export default function AutopilotPanel({
       setPlacementSelection([])
       return
     }
-    setPlacementSelection(
-      waiting.pending_artifact?.value?.candidate_zone_ids
-      || waiting.result?.candidate_zone_ids
-      || [],
-    )
+    setPlacementSelection(defaultPlacementSelection(
+      waiting.pending_artifact?.value || waiting.result || {},
+      6,
+    ))
   }, [waiting?.task_id, placementCandidateKey])
 
   useEffect(() => {

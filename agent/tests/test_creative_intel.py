@@ -97,9 +97,9 @@ async def test_job_is_persisted_processed_and_override_is_audited(monkeypatch):
     from workspace.service import get_workspace
     workspace = await get_workspace("sess-test")
     assert workspace["artifacts"]["creative_verdict"]["status"] == "approved"
-    assert workspace["artifacts"]["creative_verdict"]["value"]["files"][0][
-        "analysis_id"
-    ] == verdict["analysis_id"]
+    canonical_verdict = workspace["artifacts"]["creative_verdict"]["value"]["files"][0]
+    assert canonical_verdict["analysis_id"] == verdict["analysis_id"]
+    assert canonical_verdict["effective_status"] == "needs_review"
 
     approved = await service.approve_override(
         "sess-test", verdict["analysis_id"], "Đã kiểm tra nội dung thủ công", "reviewer-1"
@@ -107,6 +107,9 @@ async def test_job_is_persisted_processed_and_override_is_audited(monkeypatch):
     assert approved["effective_status"] == "approved_override"
     assert approved["override"]["actor"] == "reviewer-1"
     assert approved["override"]["original_reasons"] == ["low confidence"]
+    workspace = await get_workspace("sess-test")
+    canonical = workspace["artifacts"]["creative_verdict"]["value"]["files"][0]
+    assert canonical["effective_status"] == "approved_override"
 
 
 @pytest.mark.asyncio

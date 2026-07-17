@@ -72,9 +72,9 @@ function FileCard({ file, onRemove, onPreview, onOverride, onFormat }) {
     <div className="group relative rounded-xl border border-border bg-white overflow-hidden hover:border-brand-300 hover:shadow-sm transition-all">
       <div className="h-28 bg-muted/40 flex items-center justify-center overflow-hidden relative">
         {isImage ? (
-          <img src={file.dataUrl} alt={file.name} className="w-full h-full object-cover" />
+          <img src={file.dataUrl || file.url} alt={file.name} className="w-full h-full object-cover" />
         ) : isVideo ? (
-          <video src={file.dataUrl} className="w-full h-full object-cover" muted />
+          <video src={file.dataUrl || file.url} className="w-full h-full object-cover" muted />
         ) : (
           <FileText className="w-10 h-10 text-muted-foreground" />
         )}
@@ -225,7 +225,11 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
   const [lightboxFile, setLightboxFile] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [tab, setTab] = useState('upload')
+  const [bulkOverrideReason, setBulkOverrideReason] = useState('')
+  const [bulkOverrideError, setBulkOverrideError] = useState('')
+  const [bulkOverriding, setBulkOverriding] = useState(false)
   const files = data.files || []
+  const reviewFiles = files.filter(file => file.analysisStatus === 'needs_review')
 
   const processFiles = async (rawFiles) => {
     const toRead = Array.from(rawFiles).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'))
@@ -272,6 +276,45 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
       reviewReasons: verdict.review_reasons || file.reviewReasons || [],
     } : file),
   }))
+
+  const approveAllForManualReview = async () => {
+    const reason = bulkOverrideReason.trim()
+    if (reason.length < 5) {
+      setBulkOverrideError('Vui lòng nhập lý do ít nhất 5 ký tự.')
+      return
+    }
+    if (reviewFiles.some(file => !file.analysisId)) {
+      setBulkOverrideError('Có creative chưa có mã phân tích. Hãy chạy phân tích lại.')
+      return
+    }
+    setBulkOverriding(true)
+    setBulkOverrideError('')
+    try {
+      const verdicts = new Map()
+      // Keep canonical verdict revisions ordered; concurrent overrides can
+      // otherwise race each other on the revisioned workspace.
+      for (const file of reviewFiles) {
+        verdicts.set(file.id, await overrideCreative(file.analysisId, reason))
+      }
+      onChange(prev => ({
+        ...prev,
+        files: (prev.files || []).map(file => {
+          const verdict = verdicts.get(file.id)
+          return verdict ? {
+            ...file,
+            analysisStatus: verdict.effective_status,
+            override: verdict.override || {},
+            reviewReasons: verdict.review_reasons || file.reviewReasons || [],
+          } : file
+        }),
+      }))
+      setBulkOverrideReason('')
+    } catch (error) {
+      setBulkOverrideError(error.message)
+    } finally {
+      setBulkOverriding(false)
+    }
+  }
 
   const handleFormat = (id, intendedFormat) => onChange(prev => ({
     ...prev,
@@ -380,6 +423,37 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
                   <X className="w-3 h-3" /> Xoá tất cả
                 </button>
               </div>
+              {reviewFiles.length > 0 && (
+                <Card className="mb-3 border-amber-300 bg-amber-50">
+                  <CardContent className="space-y-2 py-3">
+                    <div>
+                      <p className="text-xs font-bold text-amber-900">
+                        {reviewFiles.length} creative cần người vận hành duyệt
+                      </p>
+                      <p className="mt-1 text-[10px] leading-4 text-amber-800">
+                        Xem lý do trên từng file. Nếu bạn đã kiểm tra nội dung và chấp nhận rủi ro, nhập một lý do để duyệt tất cả; hệ thống vẫn lưu đầy đủ audit trail.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        value={bulkOverrideReason}
+                        onChange={event => setBulkOverrideReason(event.target.value)}
+                        placeholder="Ví dụ: Đã kiểm tra thủ công nội dung và thương hiệu"
+                        className="min-w-0 flex-1 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={approveAllForManualReview}
+                        disabled={bulkOverriding}
+                        className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-60"
+                      >
+                        {bulkOverriding ? 'Đang lưu phê duyệt…' : `Phê duyệt ${reviewFiles.length} creative có lý do`}
+                      </button>
+                    </div>
+                    {bulkOverrideError && <p className="text-[10px] font-semibold text-red-600">{bulkOverrideError}</p>}
+                  </CardContent>
+                </Card>
+              )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {files.map(file => (
                   <FileCard key={file.id} file={file} onRemove={removeFile} onPreview={setLightboxFile} onOverride={handleOverride} onFormat={handleFormat} />

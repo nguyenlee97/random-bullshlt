@@ -927,6 +927,17 @@ export async function prepareCreativeFiles(files, onProgress = () => {}) {
     onProgress([...prepared, ...(files || []).slice(index + 1)])
   }
 
+  // Re-entering after analysis/manual review must reuse the persisted server
+  // verdicts. Creating a new batch here would erase the visible review state
+  // and send the operator back to "Đang chờ phân tích".
+  prepared = mergeCreativeIntel(prepared, await getCreativeIntel())
+  if (prepared.length && prepared.every(file =>
+    ['auto_approved', 'needs_review', 'approved_override'].includes(file.analysisStatus)
+  )) {
+    onProgress(prepared)
+    return prepared
+  }
+
   // Establish the authoritative creative input revision before workers start.
   // Their verdicts are accepted only if this exact file set is still current.
   const creativeDraft = {

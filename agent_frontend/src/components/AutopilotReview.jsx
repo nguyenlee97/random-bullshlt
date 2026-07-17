@@ -126,12 +126,12 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
         {final
           ? 'Các placement dưới đây đã qua kiểm tra inventory, conflict và độ tương thích với creative.'
           : editable
-            ? 'Chọn hoặc bỏ placement trực tiếp bên dưới. Ít nhất một placement phải được giữ lại; Autopilot sẽ tiếp tục từ bước này sau khi duyệt.'
+            ? 'Agent chọn sẵn 6 placement xếp hạng cao nhất trong shortlist 12 vị trí. Bạn có thể chọn thêm hoặc bỏ bớt trực tiếp bên dưới; cần giữ lại ít nhất một placement.'
             : 'Đây là shortlist inventory trước khi có creative. Kích thước creative sẽ được dùng để lọc lại ở bước Xếp hạng placements.'}
       </p>
       {editable && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2">
-          <p className="text-[11px] font-bold text-brand-800">Đã chọn {activeIds.size}/{zones.length} placement</p>
+          <p className="text-[11px] font-bold text-brand-800">Đã chọn {activeIds.size}/{zones.length} placement · mặc định top 6</p>
           <p className="text-[10px] text-brand-700">Thay đổi chỉ được lưu khi bấm “Duyệt & tiếp tục”.</p>
         </div>
       )}

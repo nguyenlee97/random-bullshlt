@@ -59,6 +59,18 @@ def _public(doc: dict) -> dict:
     return out
 
 
+def _canonical_verdict(doc: dict) -> dict:
+    """Serialize the safety decision without transient commit bookkeeping."""
+    out = _public(doc)
+    override = doc.get("override") or {}
+    out["effective_status"] = (
+        "approved_override"
+        if doc.get("status") == "needs_review" and override.get("approved")
+        else doc.get("status", "queued")
+    )
+    return out
+
+
 async def _col():
     from session import _ensure_mongo
 
@@ -201,7 +213,7 @@ async def _commit_batch_if_complete(session_id: str, batch_id: str) -> bool:
 
     verdict = {
         "batch_id": batch_id,
-        "files": [_public(doc) for doc in docs],
+        "files": [_canonical_verdict(doc) for doc in docs],
     }
     try:
         result = await commit_artifact_result(
@@ -263,6 +275,54 @@ async def approve_override(
     }
     doc["updated_at"] = _now()
     await _save(doc)
+    # Manual approval changes the effective creative verdict, so promote a
+    # fresh canonical verdict snapshot as well. Without this, workspace
+    # hydration restores the older needs_review state and the UI appears to
+    # flash back to "queued"/"needs review".
+    batch_id = doc.get("batch_id")
+    if batch_id:
+        from workspace.service import (
+            StaleTaskResult,
+            WorkspaceConflict,
+            commit_artifact_result,
+            get_task_context,
+        )
+
+        for attempt in range(2):
+            context = await get_task_context(session_id, "creative_verdict")
+            docs = await _batch_docs(session_id, batch_id)
+            verdict = {
+                "batch_id": batch_id,
+                "files": [_canonical_verdict(item) for item in docs],
+            }
+            task_suffix = hashlib.sha256(
+                f"{analysis_id}:{doc['override']['timestamp'].isoformat()}:{attempt}".encode()
+            ).hexdigest()[:16]
+            try:
+                result = await commit_artifact_result(
+                    session_id,
+                    "creative_verdict",
+                    verdict,
+                    task_id=f"creative-override:{task_suffix}",
+                    input_revisions=context["input_revisions"],
+                    base_artifact_revision=context["artifact_revision"],
+                    actor=doc["override"]["actor"],
+                    reason="manual creative review approved",
+                )
+                for item in docs:
+                    item.update(
+                        workspace_status="committed",
+                        workspace_revision=result["workspace_revision"],
+                        updated_at=_now(),
+                    )
+                    await _save(item)
+                break
+            except (StaleTaskResult, WorkspaceConflict) as exc:
+                if attempt == 1:
+                    await alog(session_id, "creative_override_workspace_sync_failed", {
+                        "analysis_id": analysis_id,
+                        "error": str(exc),
+                    })
     await alog(session_id, "creative_override", {
         "analysis_id": analysis_id,
         "actor": doc["override"]["actor"],
