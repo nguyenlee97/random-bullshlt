@@ -88,6 +88,22 @@ Browser A/B acceptance used two independent host-scoped cookie jars (`localhost`
 6. Browser B switched to a second local account. The claimed campaign was absent; focused ownership tests also verified foreign read, mutation and claim return not-found behavior.
 7. Browser B logged out and successfully started a fresh anonymous Campaign Copilot workspace.
 
+## Production VPS deployment evidence
+
+FE-2B application commit `275c0e42151b662658b564735545a0d03037d709` was deployed to the playground VPS on 2026-07-17 under release ID `fe2b-275c0e4-20260717T155848Z`.
+
+- The frontend was rebuilt with `VITE_AGENT_URL=/agent`. Nginx now proxies `/agent/` to the Agent API on `127.0.0.1:8000`, so the browser-facing account, anonymous and CSRF cookies remain host-scoped to the HTTPS frontend.
+- Production sets `ANONYMOUS_COOKIE_SECURE=true` and `ACCOUNT_COOKIE_SECURE=true`. The deployed bundle contains no direct `agent-api.pawgrammers.io.vn` endpoint.
+- Before reset, both PM2 writers were stopped. Compressed `mongodump` archives for `camp_ads` and `adspilot` passed `gzip -t` and `mongorestore --dryRun`; SHA-256 sums are stored with the release.
+- Per the playground reset request, only collections inside `camp_ads` and `adspilot` were cleared. MongoDB `admin`, `config`, `local`, and the unrelated `kfc` database were not modified.
+- The current seed recreated 1 zone catalog, 310 audience segments, 3 seed campaigns and 156 analytics records.
+- Startup created the additive FE-2B collections and indexes. Live inspection confirmed Argon2id password hashes in `auth_identities`, hash-only opaque account sessions, no plaintext password/token fields, session/rate-limit TTL indexes, and account/anonymous/legacy conversation-owner indexes.
+- HTTPS acceptance with independent device cookie jars verified registration, login without automatic claim, centralized CSRF rejection, explicit claim with unchanged conversation/session IDs, denial to the old anonymous identity after logout, account history on a second device, cross-device resume and individual session revocation.
+- Visible browser acceptance verified homepage registration, account controls, account-owned Guided workspace, history labels, session management, logout returning to zero anonymous campaigns, login restoring the account campaign and workspace resume.
+- PM2, public Node health, direct Agent health and same-origin proxied Agent health were healthy after the swap. Nginx configuration validation passed before reload.
+
+The complete rollback set is retained at `/var/backups/advertising-agent/fe2b-275c0e4-20260717T155848Z`, including the two database archives, prior live application trees, Nginx/PM2 configuration copies, pre-reset counts, checksums and the release manifest.
+
 ## Migration and rollback
 
 The release is additive. Existing anonymous cookies, legacy `identity_id` conversation records and evaluator sessions without a conversation record continue to work. Old documents gain normalized ownership fields only when touched by the new flow. Account/session TTL cleanup affects only expired authentication records.
