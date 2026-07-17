@@ -223,12 +223,13 @@ async def test_review_policy_interrupts_and_resume_queues_dependency():
 
     second = await service.claim_next_task("worker")
     run = await service.complete_task(second["task_id"], result={"valid": True})
-    assert run["status"] == "waiting_review"
-    reviewed = await service.review_task(
-        run["run_id"], second["task_id"], approved=True, reason="valid brief"
-    )
-    assert reviewed["status"] == "queued"
-    assert next(t for t in reviewed["tasks"] if t["key"] == "generate_strategy")["status"] == "queued"
+    assert run["status"] == "queued"
+    assert next(t for t in run["tasks"] if t["key"] == "generate_strategy")["status"] == "queued"
+
+
+def test_valid_brief_is_not_a_redundant_strict_review_checkpoint():
+    validate_spec = next(item for item in service.STANDARD_PLAN if item["key"] == "validate_brief")
+    assert not service._needs_review(validate_spec, "review_every_stage")
 
 
 @pytest.mark.asyncio
@@ -462,6 +463,27 @@ async def test_upload_creative_source_reuses_canonical_files():
 
 
 @pytest.mark.asyncio
+async def test_upload_creative_source_pauses_for_partial_format_coverage():
+    workspace = {"artifacts": {
+        "creative": {"value": {"files": [{
+            "url": "https://cdn.example/square.png", "width": 300, "height": 250,
+        }]}},
+        "creative_format_plan": {"value": {"formats": [
+            {"format_id": "box", "width": 300, "height": 250, "zone_ids": ["a"]},
+            {"format_id": "wide", "width": 1200, "height": 300, "zone_ids": ["b"]},
+        ]}},
+    }}
+    result = await _prepare_creatives(
+        {"run_id": "run-upload", "creative_source": "upload"}, workspace
+    )
+    assert result.force_review is True
+    assert result.externally_committed is True
+    assert result.value["reason"] == "creative_format_coverage_gap"
+    assert result.value["formatCoverage"]["covered"] == 1
+    assert result.value["formatCoverage"]["missing"][0]["format_id"] == "wide"
+
+
+@pytest.mark.asyncio
 async def test_ai_creative_source_generates_without_manual_upload(monkeypatch):
     import autopilot.creative_generation as creative_generation
 
@@ -545,7 +567,6 @@ async def test_reviewed_artifact_is_not_committed_before_approval(monkeypatch):
     await worker._process(first)
     validate = await service.claim_next_task("worker")
     await worker._process(validate)
-    await service.review_task(run["run_id"], validate["task_id"], approved=True)
     strategy = await service.claim_next_task("worker")
     await worker._process(strategy)
 
@@ -632,6 +653,68 @@ async def test_creative_edit_replans_only_creative_dependent_branch():
     assert by_key["analyze_creatives"]["status"] == "queued"
     assert by_key["assign_creatives"]["status"] == "pending"
     assert by_key["forecast"]["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_operator_audience_edit_supersedes_pending_review_and_resumes_run():
+    await _seed("review-edit-audience")
+    run = await service.create_run(
+        "review-edit-audience", approval_policy="review_every_stage",
+        idempotency_key="review-edit-audience",
+    )
+    _mark_tasks(run["run_id"], {
+        "normalize_brief": "succeeded", "validate_brief": "succeeded",
+        "generate_strategy": "succeeded", "retrieve_audience": "waiting_review",
+        "derive_targeting": "pending",
+    })
+    workspace = await get_workspace("review-edit-audience")
+    manual = {"attrs": [{"_id": "manual", "fullLabel": "Manual segment"}], "size": 42}
+    await apply_mutation(
+        "review-edit-audience", "segment", manual,
+        base_revision=workspace["revision"], actor="campaign_operator",
+        idempotency_key="manual-audience",
+    )
+
+    result = await service.reconcile_workspace_changes(run["run_id"])
+    by_key = {task["key"]: task for task in result["run"]["tasks"]}
+    assert result["changed"] is True
+    assert result["run"]["status"] == "queued"
+    assert by_key["retrieve_audience"]["status"] == "succeeded"
+    assert by_key["retrieve_audience"]["result"] == manual
+    assert by_key["retrieve_audience"]["pending_artifact"] is None
+    assert by_key["retrieve_audience"]["review_decision"]["source"] == "workspace_override"
+    assert by_key["derive_targeting"]["status"] == "queued"
+
+
+@pytest.mark.asyncio
+async def test_creative_upload_supersedes_missing_input_review_and_resumes_analysis():
+    await _seed("review-edit-creative")
+    run = await service.create_run(
+        "review-edit-creative", approval_policy="review_every_stage",
+        idempotency_key="review-edit-creative",
+    )
+    _mark_tasks(run["run_id"], {
+        "normalize_brief": "succeeded", "validate_brief": "succeeded",
+        "generate_strategy": "succeeded", "retrieve_audience": "succeeded",
+        "derive_targeting": "succeeded", "plan_placement_intent": "succeeded",
+        "plan_creative_formats": "succeeded", "prepare_creatives": "waiting_review",
+        "analyze_creatives": "pending",
+    })
+    workspace = await get_workspace("review-edit-creative")
+    creative = {"files": [{"url": "https://x/upload.png", "width": 300, "height": 250}]}
+    await apply_mutation(
+        "review-edit-creative", "creative", creative,
+        base_revision=workspace["revision"], actor="campaign_operator",
+        idempotency_key="manual-creative",
+    )
+
+    result = await service.reconcile_workspace_changes(run["run_id"])
+    by_key = {task["key"]: task for task in result["run"]["tasks"]}
+    assert result["run"]["status"] == "queued"
+    assert by_key["prepare_creatives"]["status"] == "queued"
+    assert by_key["prepare_creatives"]["result"] is None
+    assert by_key["analyze_creatives"]["status"] == "pending"
+    assert result["run"]["last_replan"]["rechecked_input_tasks"] == ["prepare_creatives"]
 
 
 @pytest.mark.asyncio

@@ -59,6 +59,15 @@ def _rank_merged(merged: dict[str, dict]) -> list[dict]:
     return ordered
 
 
+def _catalog_segment_count(candidates: list[dict]) -> int:
+    """Return full indexed corpus size, never the query-specific candidate count."""
+    return next((
+        int((candidate.get("_rag_index") or {}).get("segment_count") or 0)
+        for candidate in candidates
+        if (candidate.get("_rag_index") or {}).get("segment_count")
+    ), len(candidates))
+
+
 def _fold_text(value: object) -> str:
     """Normalize Vietnamese/English text for conservative phrase matching."""
     text = str(value or "").casefold().replace("đ", "d")
@@ -209,6 +218,7 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
         raise RagUnavailable(f"retrieval failed: {str(e)[:120]}") from e
     if not candidates:
         raise RagUnavailable("retrieval returned 0 candidates")
+    catalog_segments = _catalog_segment_count(candidates)
 
     # 3. rerank (graceful skip → keep RRF order)
     brief_text = " | ".join(str(brief.get(k) or "") for k in ("brand", "objective", "kpi", "notes"))
@@ -282,8 +292,9 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
                      "retrieve": int(retrieval_s * 1000),
                      "rerank": int(rerank_s * 1000),
                      "generate": int(generation_s * 1000)}})
-    return {"recommendations": enriched, "total_segments": len(candidates),
+    return {"recommendations": enriched, "total_segments": catalog_segments,
             "rag": {"queries": queries, "candidates": len(candidates),
+                    "catalog_segments": catalog_segments,
                     "rewrite_enabled": config.RAG_QUERY_REWRITE,
                     "rerank_enabled": config.RAG_USE_RERANK,
                     "selector": selector,

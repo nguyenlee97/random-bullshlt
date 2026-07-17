@@ -236,7 +236,15 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
         int(((item.get("sizeMin") or 0) + (item.get("sizeMax") or 0)) / 2)
         for item in attrs
     )
-    diagnostics = recommendation.get("rag") or recommendation.get("retrieval") or {}
+    diagnostics = dict(
+        recommendation.get("rag") or recommendation.get("retrieval") or {}
+    )
+    diagnostics.setdefault(
+        "catalog_segments", recommendation.get("total_segments", len(attrs))
+    )
+    diagnostics.setdefault(
+        "candidates", recommendation.get("total_segments", len(attrs))
+    )
     return CapabilityResult(
         value={"attrs": attrs, "size": size, "retrieval": diagnostics},
         evidence=[{
@@ -394,10 +402,58 @@ async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
 
     if source == "upload":
         if files:
+            format_plan = _artifact(workspace, "creative_format_plan", {})
+            required = list(format_plan.get("formats") or []) \
+                if isinstance(format_plan, dict) else []
+            missing = [
+                item for item in required
+                if not any(
+                    (
+                        int(file.get("width") or 0) == int(item.get("width") or 0)
+                        and int(file.get("height") or 0) == int(item.get("height") or 0)
+                    ) or (
+                        file.get("formatId")
+                        and file.get("formatId") == item.get("format_id")
+                    )
+                    for file in files
+                )
+            ]
+            coverage = {
+                "required": len(required), "covered": len(required) - len(missing),
+                "missing": [{
+                    "format_id": item.get("format_id"),
+                    "width": item.get("width"), "height": item.get("height"),
+                    "zone_ids": item.get("zone_ids") or [],
+                } for item in missing],
+            }
+            if missing:
+                missing_labels = ", ".join(
+                    f"{item.get('width')}×{item.get('height')}" for item in missing
+                )
+                return CapabilityResult(
+                    value={
+                        **creative, "source": "upload", "formatCoverage": coverage,
+                        "reason": "creative_format_coverage_gap",
+                        "message": (
+                            "Creative chưa phủ mọi format đã lập kế hoạch: "
+                            f"{missing_labels}. Tải thêm hoặc duyệt để chỉ dùng placement tương thích."
+                        ),
+                    },
+                    evidence=[
+                        {"type": "creative_source", "source": "upload",
+                         "count": len(files), "reused": True},
+                        {"type": "creative_format_coverage", **coverage},
+                    ],
+                    externally_committed=True,
+                    force_review=True,
+                )
             return CapabilityResult(
                 value=creative,
-                evidence=[{"type": "creative_source", "source": "upload",
-                           "count": len(files), "reused": True}],
+                evidence=[
+                    {"type": "creative_source", "source": "upload",
+                     "count": len(files), "reused": True},
+                    {"type": "creative_format_coverage", **coverage},
+                ],
                 externally_committed=True,
             )
         return CapabilityResult(

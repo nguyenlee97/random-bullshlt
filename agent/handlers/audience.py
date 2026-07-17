@@ -120,6 +120,11 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
 
     # ── Store in session ──────────────────────────────────────────────────────
     await update_form_state(session_id, "segment", {"attrs": attrs, "size": total_size})
+    if segment.targeting:
+        # Targeting is a separate canonical artifact. Persist it independently
+        # so an Autopilot edit replans from derive_targeting instead of hiding
+        # the values inside the audience object.
+        await update_form_state(session_id, "targeting", segment.targeting)
 
     # ── Get brief context ─────────────────────────────────────────────────────
     session = await get_or_create_session(session_id)

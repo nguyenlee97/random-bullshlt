@@ -33,7 +33,7 @@ const STEP_DESCS = [
 ]
 
 const WorkspacePane = forwardRef(function WorkspacePane(
-  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, onOpenRecompute, autopilotMode = false },
+  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false },
   ref
 ) {
   const bodyRef = useRef(null)
@@ -73,7 +73,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
     switch (currentStep) {
       case 0: return <BriefStep data={formState.brief} onChange={v => updateFormSlice('brief', v)} isDone={isDone} />
       case 1: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isDone} brief={formState.brief} recoFromChat={recoFromChat} />
-      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isDone} brief={formState.brief} segment={formState.segment} />
+      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isDone} brief={formState.brief} segment={formState.segment} formatPlan={creativeFormatPlan} />
       case 3: return (
         <SetupStep
           data={formState.setup}

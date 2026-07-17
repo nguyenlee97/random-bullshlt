@@ -172,7 +172,7 @@ test('Autopilot exposes a placement-aware bounded creative format plan', async (
   assert.doesNotMatch(docs, /Multi-format generation và creative variants vẫn là roadmap/)
 })
 
-test('Autopilot presents ordered stages, generated assets, and locks live strategy changes', async () => {
+test('Autopilot presents ordered stages, generated assets, and only unlocks strategy at review', async () => {
   const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
   const simulator = await source('agent_frontend/src/components/StrategySimulator.jsx')
 
@@ -181,8 +181,9 @@ test('Autopilot presents ordered stages, generated assets, and locks live strate
   assert.match(panel, /Xem toàn bộ \{orderedTasks\.length\} bước theo thứ tự/)
   assert.match(panel, /Creative đã tạo/)
   assert.match(panel, /<img src=\{file\.url\}/)
-  assert.match(panel, /Muốn thay đổi, hãy từ chối điểm review hiện tại/)
-  assert.match(panel, /const strategyCanChange = false/)
+  assert.match(panel, /const strategyCanChange = Boolean\(waiting\)/)
+  assert.match(panel, /Phương án chỉ có thể thay đổi khi Autopilot đang dừng tại một điểm review/)
+  assert.doesNotMatch(panel, /rejectAndEdit/)
   assert.match(panel, /Order đang chờ kích hoạt nên test site chưa hiển thị quảng cáo/)
   assert.match(panel, /https:\/\/adspilot\.pawgrammers\.io\.vn/)
   assert.match(simulator, /selectionHint/)
@@ -196,6 +197,23 @@ test('Autopilot presents artifacts without Guided workflow controls', async () =
   assert.match(workspace, /Điều hướng campaign artifacts/)
   assert.match(workspace, /!autopilotMode && <WorkFoot/)
   assert.doesNotMatch(topbar, /Minimax-M2\.5/)
+})
+
+test('strict Autopilot reviews expose artifacts and edit without rejecting the run', async () => {
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  const review = await source('agent_frontend/src/components/AutopilotReview.jsx')
+  const app = await source('agent_frontend/src/App.jsx')
+
+  assert.match(panel, /<AutopilotReview/)
+  assert.match(panel, /Chỉnh Audience & targeting/)
+  assert.match(panel, /Tải creative lên/)
+  assert.match(panel, /Hủy run/)
+  assert.doesNotMatch(panel, /Từ chối & tải Creative/)
+  assert.match(review, /Nội dung cần review/)
+  assert.match(review, /Catalog không bị cắt/)
+  assert.match(review, /Format Autopilot|Format yêu cầu/)
+  assert.match(app, /openAutopilotAudienceEditor/)
+  assert.match(app, /result\?\.shouldAdvance/)
 })
 
 test('campaign mode is fixed at homepage while Autopilot may open its data editor', async () => {

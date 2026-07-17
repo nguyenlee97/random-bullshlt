@@ -304,7 +304,7 @@ export function useChat({
   const STEP_LABELS = ['Brief', 'Audience', 'Creative', 'Setup', 'Result', 'Report', 'Email']
 
   const approveStep = useCallback(async (stepIndex, stepData) => {
-    if (busy) return
+    if (busy) return { response: null, shouldAdvance: false }
     setBusy(true)
     startThinking()
 
@@ -328,6 +328,7 @@ export function useChat({
         response = await AgentAPI.approveAudience({
           attrs: stepData.attrs || [],
           size: stepData.size || 0,
+          targeting: stepData.targeting || {},
         })
         shouldAdvance = responseAllowsAdvance(response)
         break
@@ -431,6 +432,7 @@ export function useChat({
     })
     setBusy(false)
     if (shouldAdvance && onStepApproved) onStepApproved(stepIndex)
+    return { response, shouldAdvance }
   }, [busy, startThinking, stopThinking, onStepApproved, onCreativePrepared])
 
   return {

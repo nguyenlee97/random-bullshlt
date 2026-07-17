@@ -4,6 +4,7 @@ import threading
 import pytest
 
 from rag.index import _catalog_fingerprint
+from rag.recommend import _catalog_segment_count
 from rag.recommend import _guard_reason, _hybrid_search, _rank_merged, _raw_query
 from handlers.audience import _normalize_targeting
 from tools.audience_provenance import catalog_source
@@ -49,6 +50,15 @@ def test_catalog_fingerprint_changes_when_searchable_content_changes():
     changed[0]["fullLabel"] = "Digital advertising"
 
     assert _catalog_fingerprint(original) != _catalog_fingerprint(changed)
+
+
+def test_catalog_count_comes_from_index_metadata_not_retrieval_pool():
+    candidates = [
+        {"_id": "one", "_rag_index": {"segment_count": 310}},
+        {"_id": "two", "_rag_index": {"segment_count": 310}},
+    ]
+    assert _catalog_segment_count(candidates) == 310
+    assert _catalog_segment_count([{"_id": "legacy"}]) == 1
 
 
 def test_raw_query_preserves_user_audience_notes():

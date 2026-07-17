@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: in progress; FE-1 implementation, Autopilot outcome parity and the shared analytical report module are code-complete, live journey sign-off remains
+Status: in progress; FE-1 implementation, strict-review edit/resume, Autopilot outcome parity and the shared analytical report module are code-complete, upload/provider journey sign-off remains
 
 Scope: finish the current campaign agent, add placement-aware creative generation, then add identity, conversation history, and Zalo OA as a first-class channel.
 
@@ -207,6 +207,26 @@ After `create_setup_report` succeeds, Autopilot exposes three operator-facing ta
 Report generation is idempotent. A generation lease prevents duplicate provider work and duplicate analytics records, retry clears terminal error rows, and a stale lease can be reclaimed after a backend restart. The synthetic data is a hackathon demonstration contract, not live delivery truth; a future provider-backed analytics pipeline can replace the data source without creating a second UI/report conversation model.
 
 The shared adapter converts Autopilot's numeric creative indices into stable creative IDs and unwraps verified order artifacts. When an order artifact exists, `order.status` is authoritative for live delivery; campaign dates alone must never turn a pending order into a live result. An Autopilot order is created as `active` only after the explicit final launch approval and successful order verification.
+
+### 6.8 Strict-review edit and resume contract
+
+`review_every_stage` now reviews decisions and artifacts, not mechanical duplicate confirmations. A valid brief is checked automatically because it was already explicitly approved before Autopilot starts; invalid or expired briefs still stop with a repair action.
+
+Every review boundary renders its actual pending output in a dedicated **Nội dung cần review** panel:
+
+- strategy options are selectable only while the run is stopped at a review;
+- audience shows full catalog size, query-specific RAG candidate count, selected segments and reasons;
+- targeting shows every catalog-validated dimension and value;
+- placement intent shows the preliminary zone shortlist before creative filtering;
+- format planning shows exact dimensions, covered placements and unsupported/cost-capped zones;
+- creative upload shows required formats and exact-pixel coverage before analysis;
+- final placements, assignments, forecast, guard and launch expose their decision inputs.
+
+Opening an editor no longer submits a rejection. The run stays `waiting_review`. When the operator saves Audience, Targeting or Creative, the canonical mutation supersedes the pending proposal for that same artifact, marks the reviewed producer task succeeded with a `workspace_override` decision, and replans only downstream consumers. A separate confirmed **Hủy run** action is the only destructive exit from the review card.
+
+The upload editor receives the approved `creative_format_plan`, displays every required size, uploads durable files, runs deterministic/VLM analysis, commits the creative artifact and returns to the same Autopilot run after a successful save. The input gate rechecks coverage after every upload. Full coverage continues; partial coverage pauses with the missing sizes and lets the operator upload more or explicitly accept a smaller compatible placement subset. Final placement remains fail-closed: only exact-size or explicitly approved skin matches can reach launch.
+
+Verification on 2026-07-17: 219 backend tests, 35 frontend tests, production frontend build, healthy local Compose services, and an in-app browser check proving that **Tải creative lên** opens the Creative workspace with all three required formats while the existing run remains in `waiting_review`.
 
 ## 7. FE-2 — Accounts, anonymous use and conversation history
 

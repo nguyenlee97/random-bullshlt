@@ -4,6 +4,7 @@ import {
   ExternalLink, ImageIcon, ListChecks, ShieldCheck, Sparkles, Square, Upload, X,
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
+import AutopilotReview from '@/components/AutopilotReview'
 import StrategySimulator from '@/components/StrategySimulator'
 import AutopilotOutcome from '@/components/AutopilotOutcome'
 
@@ -100,6 +101,7 @@ const evidenceText = evidence => {
   if (evidence.type === 'strategy_simulation') return `Simulator ${evidence.option_ids?.length || 0} phương án · đề xuất ${evidence.selected}`
   if (evidence.type === 'forecast_inputs') return `${evidence.method || 'forecast'} · ${evidence.zone_count || 0} placement · CPM ${formatNumber(evidence.average_cpm)} ₫ · tần suất ${evidence.frequency || '—'}`
   if (evidence.type === 'creative_source') return `Creative ${evidence.source === 'ai_generate' ? 'AI tự tạo' : 'do người dùng tải lên'} · ${evidence.count || 0} file${evidence.reused ? ' · tái sử dụng' : ''}`
+  if (evidence.type === 'creative_format_coverage') return `Creative phủ ${evidence.covered || 0}/${evidence.required || 0} format · còn thiếu ${(evidence.missing || []).map(item => `${item.width}×${item.height}`).join(', ') || 'không'}`
   if (evidence.type === 'placement_intent') return `${evidence.candidate_count || 0} placement sơ bộ · ${evidence.conflict_count || 0} conflict · chưa lọc theo creative`
   if (evidence.type === 'creative_format_plan') return `${evidence.format_count || 0} format: ${(evidence.format_ids || []).join(', ')} · tối đa ${evidence.max_assets || 0} asset · ${evidence.estimated_provider_calls || 0} provider call`
   if (evidence.type === 'creative_generation') return `AI tạo ${evidence.count || 0} creative: ${(evidence.format_ids || []).join(', ')}${(evidence.failed_formats || []).length ? ` · lỗi ${(evidence.failed_formats || []).join(', ')}` : ''}`
@@ -131,7 +133,7 @@ const validateBrief = brief => {
 
 export default function AutopilotPanel({
   brief, canonicalWorkspace, initialRun = null, onWorkspaceRefresh,
-  onOpenChat, onOpenBrief, onOpenCreative, onStatusChange,
+  onOpenChat, onOpenBrief, onOpenAudience, onOpenCreative, onStatusChange,
   reportState, onReportChange, onSendReportQuestion,
   onReportActivate, onReportExit,
 }) {
@@ -274,9 +276,14 @@ export default function AutopilotPanel({
     }
   }
 
-  const rejectAndEdit = async (task, editor) => {
-    const next = await review(task, false)
-    if (next) editor?.()
+  const openEditor = editor => {
+    setError('')
+    editor?.()
+  }
+
+  const cancelRunWithConfirmation = async () => {
+    if (!globalThis.confirm?.('Hủy run hiện tại? Các artifact đã duyệt vẫn được giữ lại, nhưng Autopilot sẽ không tiếp tục run này.')) return
+    await act('cancel')
   }
 
   const chooseStrategy = async optionId => {
@@ -321,13 +328,17 @@ export default function AutopilotPanel({
     || []
   const placementResult = taskByKey.rank_placements?.result || taskByKey.rank_placements?.pending_artifact?.value || {}
   const audienceResult = taskByKey.retrieve_audience?.result || taskByKey.retrieve_audience?.pending_artifact?.value || {}
+  const audienceCatalogCount = audienceResult.retrieval?.catalog_segments || audienceResult.retrieval?.total_segments || 0
   const forecastResult = taskByKey.forecast?.result || taskByKey.forecast?.pending_artifact?.value || {}
   const orderResult = taskByKey.verify_order?.result?.order || taskByKey.create_order?.result?.order || null
   const orderCreated = taskByKey.create_order?.status === 'succeeded'
-  const strategyCanChange = false
+  const strategyCanChange = Boolean(waiting) && !orderCreated && !runTerminal
+    && ['waiting_review', 'succeeded'].includes(strategyTask?.status)
   const strategySelectionHint = orderCreated || runTerminal
     ? 'Phương án này là một phần của campaign đã hoàn tất.'
-    : 'Autopilot đang sở hữu kế hoạch. Muốn thay đổi, hãy từ chối điểm review hiện tại, chỉnh dữ liệu rồi chạy lại.'
+    : strategyCanChange
+      ? 'Bạn có thể chọn phương án khác tại điểm review này. Autopilot sẽ giữ run hiện tại và chỉ tính lại các bước phụ thuộc.'
+      : 'Phương án chỉ có thể thay đổi khi Autopilot đang dừng tại một điểm review.'
   const executionStages = AUTOPILOT_STAGES.map(stage => {
     const tasks = stage.keys.map(key => taskByKey[key]).filter(Boolean)
     const done = tasks.filter(task => ['succeeded', 'skipped'].includes(task.status)).length
@@ -359,6 +370,23 @@ export default function AutopilotPanel({
     || (waiting?.key === 'launch_approval'
       ? 'Kiểm tra bản order cuối cùng trước khi tạo chiến dịch.'
       : 'Kiểm tra bằng chứng và xác nhận để tiếp tục.')
+  const waitingEdit = waiting?.key === 'validate_brief'
+    ? { label: 'Sửa Brief', action: onOpenBrief }
+    : ['retrieve_audience', 'derive_targeting'].includes(waiting?.key)
+      ? {
+          label: 'Chỉnh Audience & targeting',
+          action: () => onOpenAudience?.({
+            ...audienceResult,
+            targeting: waiting.key === 'derive_targeting'
+              ? (waiting.pending_artifact?.value || waiting.result || {})
+              : (workspaceSnapshot?.artifacts?.targeting?.value || {}),
+          }),
+        }
+      : ['prepare_creatives', 'analyze_creatives', 'rank_placements', 'assign_creatives'].includes(waiting?.key)
+        ? { label: waiting?.result?.reason === 'missing_creative' ? 'Tải creative lên' : 'Chỉnh hoặc thay creative', action: onOpenCreative }
+        : waiting?.key === 'plan_placement_intent'
+          ? { label: 'Sửa Brief đầu vào', action: onOpenBrief }
+          : null
 
   useEffect(() => {
     onStatusChange?.(run ? {
@@ -647,7 +675,9 @@ export default function AutopilotPanel({
               <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Audience</p>
                 <p className="mt-1 text-lg font-black text-slate-900">{audienceResult.attrs?.length || 0} segment</p>
-                <p className="mt-1 text-[10px] leading-4 text-slate-500">{audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || audienceResult.retrieval?.retrieval_candidates || 0} ứng viên RAG · {audienceResult.retrieval?.reranked ? 'đã rerank' : 'selector an toàn'}</p>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                  {audienceCatalogCount ? `${audienceCatalogCount} catalog` : 'Catalog hiện hành'} → {audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || audienceResult.retrieval?.retrieval_candidates || 0} ứng viên RAG · {audienceResult.retrieval?.reranked ? 'đã rerank' : 'selector an toàn'}
+                </p>
               </article>
               <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Placement</p>
@@ -674,7 +704,7 @@ export default function AutopilotPanel({
                       Audience đã chọn · {audienceResult.attrs.length} segment
                     </summary>
                     <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                      Chọn từ {audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || 0} ứng viên catalog bằng RAG và selector an toàn.
+                      {audienceCatalogCount ? `Catalog có ${audienceCatalogCount} segment.` : 'Run cũ chưa lưu tổng số catalog.'} RAG truy xuất {audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || 0} ứng viên liên quan trước khi selector an toàn chọn kết quả cuối.
                     </p>
                     <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                       {audienceResult.attrs.map((item, index) => (
@@ -753,11 +783,21 @@ export default function AutopilotPanel({
           </section>}
 
           {waiting && (
+            <AutopilotReview
+              task={waiting}
+              label={TASK_LABELS[waiting.key] || waiting.key}
+              brief={displayBrief}
+              formatPlan={formatPlan}
+            />
+          )}
+
+          {waiting && (
             <div className="sticky bottom-2 z-10 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50/95 p-3 shadow-[0_12px_36px_rgba(120,80,0,0.18)] backdrop-blur-md sm:flex-row sm:items-center">
               <ShieldCheck className="h-5 w-5 shrink-0 text-amber-700" />
               <div className="flex-1">
                 <p className="text-xs font-bold text-amber-900">Cần bạn review: {TASK_LABELS[waiting.key]}</p>
                 <p className="mt-0.5 text-xs text-amber-800">{waitingMessage}</p>
+                <a href="#autopilot-review-artifact" className="mt-1 inline-block text-[11px] font-bold text-amber-900 underline underline-offset-2">Xem nội dung cần review ngay phía trên</a>
                 {briefRetry && !retryReady && (
                   <p className="mt-1 text-[11px] font-semibold text-amber-900">
                     {pendingBrief ? 'Duyệt hoặc hủy đề xuất Brief trong Chat trước.' : `Sửa Brief trước khi kiểm tra lại: ${briefErrors.join(', ')}.`}
@@ -766,9 +806,8 @@ export default function AutopilotPanel({
               </div>
               <div className="flex flex-wrap gap-2">
                 {briefRetry && pendingBrief && <button onClick={onOpenChat} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Chat để duyệt</button>}
-                {briefRetry && !pendingBrief && !retryReady && <button onClick={() => rejectAndEdit(waiting, onOpenBrief)} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Từ chối & sửa Brief</button>}
-                {waiting.result?.reason === 'missing_creative' && <button onClick={() => rejectAndEdit(waiting, onOpenCreative)} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Từ chối & tải Creative</button>}
-                <button onClick={() => review(waiting, false)} disabled={loading} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">Từ chối</button>
+                {waitingEdit?.action && <button onClick={() => openEditor(waitingEdit.action)} disabled={loading} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">{waitingEdit.label}</button>}
+                <button onClick={cancelRunWithConfirmation} disabled={loading} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700">Hủy run</button>
                 <button onClick={() => review(waiting, true)} disabled={loading || (retryAction && !retryReady)} className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}>
                   {retryAction ? 'Kiểm tra lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}
                 </button>

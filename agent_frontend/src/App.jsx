@@ -723,18 +723,23 @@ export default function App() {
     }
   }, [formState.setup.submitted])
 
-  const handleApprove = useCallback(() => {
+  const handleApprove = useCallback(async () => {
+    const approvedStep = currentStep
     const data = {
       brief: formState.brief,
       creative: formState.creative,
       attrs: formState.segment.attrs,
       size: formState.segment.size,
+      targeting: formState.segment.targeting || {},
       selectedZoneIds: formState.setup.selectedZoneIds,
       recoZones: formState.setup.recoZones,
       campaigns: formState.setup.campaigns || [],
     }
-    approveStep(currentStep, data)
-  }, [currentStep, formState, approveStep])
+    const result = await approveStep(approvedStep, data)
+    if (experienceMode === 'autopilot' && result?.shouldAdvance && approvedStep <= 2) {
+      setActiveTab('autopilot')
+    }
+  }, [currentStep, formState, approveStep, experienceMode])
 
   const handleStepJump = useCallback((i) => {
     if (busy) return
@@ -1201,10 +1206,25 @@ export default function App() {
   }, [recomputePlan, busy])
 
   const openAutopilotEditor = useCallback((step) => {
-    setCurrentStep(step)
+    handlePartialReset(step)
     setActiveTab('workspace')
     requestAnimationFrame(() => workspaceRef.current?.flash?.())
-  }, [])
+  }, [handlePartialReset])
+
+  const openAutopilotAudienceEditor = useCallback((audience) => {
+    if (audience?.attrs) {
+      setFormStateWithEvents(prev => ({
+        ...prev,
+        segment: {
+          ...prev.segment,
+          attrs: audience.attrs,
+          size: audience.size || prev.segment.size || 0,
+          targeting: audience.targeting || prev.segment.targeting || {},
+        },
+      }))
+    }
+    openAutopilotEditor(1)
+  }, [openAutopilotEditor, setFormStateWithEvents])
 
   // ── isMobile helper (used for conditional inline styles) ──────────────────
   // Read at render-time. Tailwind md: breakpoints handle the class-based
@@ -1353,6 +1373,7 @@ export default function App() {
             onSendChat={sendMessage}
             recomputePlan={recomputePlan}
             workspaceRevision={canonicalWorkspace?.revision}
+            creativeFormatPlan={canonicalWorkspace?.artifacts?.creative_format_plan?.value}
             onOpenRecompute={openFirstRecomputeStep}
             autopilotMode={false}
           />
@@ -1373,6 +1394,7 @@ export default function App() {
             onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
             onOpenChat={() => setActiveTab('chat')}
             onOpenBrief={() => openAutopilotEditor(0)}
+            onOpenAudience={openAutopilotAudienceEditor}
             onOpenCreative={() => openAutopilotEditor(2)}
             onStatusChange={setAutopilotSummary}
             reportState={formState.report}

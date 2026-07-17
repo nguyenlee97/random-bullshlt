@@ -227,7 +227,7 @@ function TabBar({ tab, setTab }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function CreativeStep({ data, onChange, isDone, brief, segment }) {
+export default function CreativeStep({ data, onChange, isDone, brief, segment, formatPlan }) {
   const fileInputRef = useRef(null)
   const [lightboxFile, setLightboxFile] = useState(null)
   const [dragging, setDragging] = useState(false)
@@ -318,6 +318,29 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment })
 
   return (
     <div className="space-y-4">
+      {formatPlan?.formats?.length > 0 && (
+        <Card className="border-brand-200 bg-brand-50/70">
+          <CardContent className="py-3">
+            <div className="flex items-start gap-2">
+              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-brand-800">Format Autopilot đang cần</p>
+                <p className="mt-1 text-[10px] leading-4 text-brand-700">Tải đúng pixel để placement được giữ lại khi xếp hạng. Nếu thiếu format, Autopilot sẽ loại placement không có creative tương thích thay vì launch sai.</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {formatPlan.formats.map(item => {
+                    const matched = files.some(file => Number(file.width) === Number(item.width) && Number(file.height) === Number(item.height))
+                    return (
+                      <span key={item.format_id} className={cn('rounded-full border px-2 py-1 text-[10px] font-bold', matched ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-white text-amber-800')}>
+                        {item.width}×{item.height} · {matched ? 'đã có' : 'còn thiếu'}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <TabBar tab={tab} setTab={setTab} />
 
       {/* ── Upload tab ── */}

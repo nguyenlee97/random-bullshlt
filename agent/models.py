@@ -58,6 +58,7 @@ class SegmentAttr(BaseModel):
 class SegmentData(BaseModel):
     attrs: list[dict] = Field(default_factory=list, max_length=100)
     size: int = Field(default=0, ge=0)
+    targeting: dict[str, list] = Field(default_factory=dict)
 
 
 class SetupData(BaseModel):

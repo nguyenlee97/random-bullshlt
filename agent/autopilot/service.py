@@ -51,7 +51,7 @@ STANDARD_PLAN: tuple[dict[str, Any], ...] = (
     {"key": "normalize_brief", "capability": "normalize_brief", "deps": [],
      "artifact": None, "review": "none"},
     {"key": "validate_brief", "capability": "validate_brief",
-     "deps": ["normalize_brief"], "artifact": None, "review": "stage"},
+     "deps": ["normalize_brief"], "artifact": None, "review": "none"},
     {"key": "generate_strategy", "capability": "generate_strategy_options",
      "deps": ["validate_brief"], "artifact": "strategy", "review": "stage"},
     {"key": "retrieve_audience", "capability": "retrieve_and_rank_audience",
@@ -473,7 +473,31 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
         for root in ARTIFACT_REPLAN_ROOT.get(artifact, ())
     }
     affected_keys = _task_descendants(root_keys)
-    affected = [task for task in run["tasks"] if task["key"] in affected_keys]
+    # When the operator edits the exact artifact currently waiting for review,
+    # their canonical mutation supersedes the pending Autopilot proposal. The
+    # producer is accepted as an operator override; only its consumers replan.
+    # Input-gate tasks such as prepare_creatives are requeued instead so they
+    # can validate the newly uploaded file set before downstream work starts.
+    recheck = [
+        task for task in run["tasks"]
+        if task.get("status") == "waiting_review"
+        and task.get("artifact") in changed_artifacts
+        and task.get("key") == "prepare_creatives"
+    ]
+    recheck_ids = {task["task_id"] for task in recheck}
+    superseded = [
+        task for task in run["tasks"]
+        if task.get("status") == "waiting_review"
+        and task.get("artifact") in changed_artifacts
+        and task["task_id"] not in recheck_ids
+        and workspace.get("artifacts", {}).get(task.get("artifact"), {}).get("status") == "approved"
+    ]
+    superseded_ids = {task["task_id"] for task in superseded}
+    affected = [
+        task for task in run["tasks"]
+        if (task["key"] in affected_keys or task["task_id"] in recheck_ids)
+        and task["task_id"] not in superseded_ids
+    ]
     running = [task["task_id"] for task in affected if task["status"] == "running"]
     if running:
         await _set_run(run_id, {"replan_pending": {
@@ -500,8 +524,24 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
                 "run": await get_run(run_id)}
 
     statuses = {task["task_id"]: task["status"] for task in run["tasks"]}
+    statuses.update({task_id: "succeeded" for task_id in superseded_ids})
     affected_ids = {task["task_id"] for task in affected}
     now = _now()
+    superseded_docs: list[tuple[str, dict]] = []
+    for task in superseded:
+        artifact_value = deepcopy(
+            workspace.get("artifacts", {}).get(task["artifact"], {}).get("value")
+        )
+        superseded_docs.append((task["task_id"], {
+            "status": "succeeded", "result": artifact_value,
+            "pending_artifact": None, "error": None,
+            "review_decision": {
+                "approved": True, "actor": "campaign_operator",
+                "reason": "canonical artifact edited during review",
+                "created_at": now, "source": "workspace_override",
+            },
+            "completed_at": now, "updated_at": now,
+        }))
     reset_docs: list[tuple[str, dict]] = []
     for task in affected:
         external_dependencies_ready = all(
@@ -519,12 +559,16 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
 
     _, tasks, _ = await _collections()
     if tasks is not None:
+        for task_id, updates in superseded_docs:
+            await tasks.update_one({"_id": task_id}, {"$set": updates})
         for task_id, updates in reset_docs:
             await tasks.update_one(
                 {"_id": task_id},
                 {"$set": updates, "$unset": {"completed_at": "", "started_at": ""}},
             )
     else:
+        for task_id, updates in superseded_docs:
+            _mem_tasks[task_id].update(updates)
         for task_id, updates in reset_docs:
             _mem_tasks[task_id].update(updates)
             _mem_tasks[task_id].pop("completed_at", None)
@@ -532,7 +576,9 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
 
     plan_revision = int(run.get("plan_revision", 1)) + 1
     unaffected_review = any(
-        task["status"] == "waiting_review" and task["task_id"] not in affected_ids
+        task["status"] == "waiting_review"
+        and task["task_id"] not in affected_ids
+        and task["task_id"] not in superseded_ids
         for task in run["tasks"]
     )
     next_status = (
@@ -548,6 +594,8 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
             "to_workspace_revision": workspace["revision"],
             "changed_artifacts": changed_artifacts,
             "affected_tasks": [task["key"] for task in affected],
+            "superseded_review_tasks": [task["key"] for task in superseded],
+            "rechecked_input_tasks": [task["key"] for task in recheck],
             "created_at": now,
         },
     })
@@ -557,6 +605,8 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
         "to_workspace_revision": workspace["revision"],
         "changed_artifacts": changed_artifacts,
         "affected_tasks": [task["key"] for task in affected],
+        "superseded_review_tasks": [task["key"] for task in superseded],
+        "rechecked_input_tasks": [task["key"] for task in recheck],
     })
     return {"changed": True, "reason": "workspace_changed", "run": await get_run(run_id)}
 
