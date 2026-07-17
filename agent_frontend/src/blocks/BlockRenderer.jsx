@@ -7,7 +7,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
 import { fmt } from '@/lib/utils'
-import { Users, TrendingUp, TrendingDown, Minus, Mail, CheckCircle2, RefreshCw, Pencil, X, AlertTriangle } from 'lucide-react'
+import { Users, TrendingUp, TrendingDown, Minus, Mail, CheckCircle2, RefreshCw, Pencil, X, AlertTriangle, BarChart } from 'lucide-react'
 import ChartBlock from './ChartBlock'
 
 // ─── Table Block ─────────────────────────────────────────────────────────────

@@ -342,6 +342,13 @@ test('frontend rebuilds cannot turn missing chunks into a blank page', async () 
   assert.doesNotMatch(blocks, /lazy\(/)
 })
 
+test('report analysis answers import the icon used by their rich block', async () => {
+  const blocks = await source('agent_frontend/src/blocks/BlockRenderer.jsx')
+  assert.match(blocks, /import \{[^}]*BarChart[^}]*\} from 'lucide-react'/s)
+  assert.match(blocks, /case 'report_analysis':\s+return <ReportAnalysisBlock block=\{block\} \/>/)
+  assert.match(blocks, /<BarChart className=/)
+})
+
 test('demo fallback is labeled and cannot mutate workspace', async () => {
   const api = await source('agent_frontend/src/api/agentApi.js')
   const chat = await source('agent_frontend/src/hooks/useChat.js')
