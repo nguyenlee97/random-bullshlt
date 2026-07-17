@@ -1,6 +1,32 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildCampaignOutcome, buildSyntheticPerformance, campaignDeliveryState } from '../src/lib/campaignOutcome.js'
+import {
+  buildCampaignOutcome, buildSyntheticPerformance, campaignDeliveryState,
+  campaignWarningText, creativePlacementCoverage, placementIdsFromValue,
+} from '../src/lib/campaignOutcome.js'
+
+test('reads placement IDs from review-stage artifact shapes', () => {
+  assert.deepEqual(placementIdsFromValue({ summary: { placements: ['zone-1', 'zone-2'] } }), ['zone-1', 'zone-2'])
+  assert.deepEqual(placementIdsFromValue({ payload: { placements: ['zone-3'] } }), ['zone-3'])
+  assert.deepEqual(placementIdsFromValue({ selectedZoneIds: ['zone-4'] }), ['zone-4'])
+})
+
+test('renders structured assignment warnings as text', () => {
+  assert.equal(
+    campaignWarningText({ zoneId: 'ZingNews_Masthead', message: 'Tỷ lệ hơi lệch (11%)' }),
+    'ZingNews_Masthead: Tỷ lệ hơi lệch (11%)',
+  )
+})
+
+test('derives uploaded creative coverage from the final assignment artifact', () => {
+  assert.deepEqual(
+    creativePlacementCoverage(
+      [{ id: 'file-a' }, { id: 'file-b', intendedZoneIds: ['zone-existing'] }],
+      { assignments: { 'zone-1': 0, 'zone-2': 1 } },
+    ),
+    [['zone-1'], ['zone-existing', 'zone-2']],
+  )
+})
 
 test('normalizes Autopilot artifacts for the shared Result surface', () => {
   const outcome = buildCampaignOutcome({

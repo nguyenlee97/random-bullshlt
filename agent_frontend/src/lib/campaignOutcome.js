@@ -9,6 +9,41 @@ const taskValue = (taskByKey, key) => {
 
 const firstValue = (...values) => values.find(value => value !== undefined && value !== null)
 
+export function placementIdsFromValue(value) {
+  const candidate = asObject(value)
+  const sources = [
+    candidate.selectedZoneIds,
+    candidate.zoneIds,
+    candidate.placements,
+    candidate.summary?.placements,
+    candidate.payload?.placements,
+    candidate.order?.placements,
+    candidate.order?.order?.placements,
+  ]
+  const list = sources.find(Array.isArray)
+  if (list) return list.filter(Boolean)
+  const mapping = sources.find(item => item && typeof item === 'object')
+  return mapping ? Object.keys(mapping) : []
+}
+
+export function campaignWarningText(warning) {
+  if (typeof warning === 'string') return warning
+  if (!warning || typeof warning !== 'object') return String(warning || '')
+  const message = String(warning.message || warning.reason || warning.code || 'Cảnh báo campaign')
+  const zoneId = warning.zoneId || warning.zone_id || warning.placementId
+  return zoneId ? `${zoneId}: ${message}` : message
+}
+
+export function creativePlacementCoverage(files = [], assignmentValue = {}) {
+  const assignments = asObject(assignmentValue.assignments || assignmentValue)
+  return files.map((file, index) => {
+    const assigned = Object.entries(assignments)
+      .filter(([, fileRef]) => Number(fileRef) === index || String(fileRef) === String(file?.id || ''))
+      .map(([zoneId]) => zoneId)
+    return [...new Set([...(file?.intendedZoneIds || []), ...assigned])]
+  })
+}
+
 const creativeId = (file, index) => String(file?.id || file?._id || `autopilot-creative-${index}`)
 
 const normalizeCreative = (file, index) => ({

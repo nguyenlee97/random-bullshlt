@@ -7,6 +7,7 @@ import { AgentAPI } from '@/api/agentApi'
 import AutopilotReview from '@/components/AutopilotReview'
 import StrategySimulator from '@/components/StrategySimulator'
 import AutopilotOutcome from '@/components/AutopilotOutcome'
+import { creativePlacementCoverage } from '@/lib/campaignOutcome'
 import { defaultPlacementSelection } from '@/lib/creativeIntel'
 
 const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
@@ -342,6 +343,11 @@ export default function AutopilotPanel({
     || creativeTask?.pending_artifact?.value?.files
     || workspaceSnapshot?.artifacts?.creative?.value?.files
     || []
+  const assignmentResult = taskByKey.assign_creatives?.result
+    || taskByKey.assign_creatives?.pending_artifact?.value
+    || workspaceSnapshot?.artifacts?.assignments?.value
+    || {}
+  const creativeCoverage = creativePlacementCoverage(creativeFiles, assignmentResult)
   const placementResult = taskByKey.rank_placements?.result || taskByKey.rank_placements?.pending_artifact?.value || {}
   const audienceResult = taskByKey.retrieve_audience?.result || taskByKey.retrieve_audience?.pending_artifact?.value || {}
   const audienceCatalogCount = audienceResult.retrieval?.catalog_segments || audienceResult.retrieval?.total_segments || 0
@@ -662,7 +668,7 @@ export default function AutopilotPanel({
                             </div>
                             <span className="rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-bold text-green-700">{taskByKey.analyze_creatives?.status === 'succeeded' ? 'Đã phân tích' : 'Đã tạo'}</span>
                           </div>
-                          <p className="mt-2 text-[10px] text-slate-500">Phủ {file.intendedZoneIds?.length || 0} placement · {file.generation?.model || 'file tải lên'}</p>
+                          <p className="mt-2 text-[10px] text-slate-500">Phủ {creativeCoverage[index]?.length || 0} placement · {file.generation?.model || 'file tải lên'}</p>
                           {file.url && <a href={file.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-brand-700 hover:underline">Mở ảnh gốc <ExternalLink className="h-3 w-3" /></a>}
                         </div>
                       </article>

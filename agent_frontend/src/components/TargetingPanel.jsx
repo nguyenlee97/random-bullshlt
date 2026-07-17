@@ -142,10 +142,17 @@ function countSelected(targeting) {
 }
 
 // ─── Main TargetingForm ───────────────────────────────────────────────────────
-export default function TargetingForm({ targeting = {}, onChange }) {
-  const [expanded, setExpanded] = useState(false)
+export default function TargetingForm({ targeting = {}, onChange, autoExpand = false }) {
+  const [expanded, setExpanded] = useState(autoExpand)
   const [opts, setOpts] = useState(null)
   const [advExpanded, setAdvExpanded] = useState(false)
+
+  // Autopilot opens AudienceStep for both audience and targeting repairs.
+  // When the user explicitly chose "Chỉnh targeting", reveal the controls
+  // immediately so they do not have to discover the collapsed panel first.
+  useEffect(() => {
+    if (autoExpand) setExpanded(true)
+  }, [autoExpand])
 
   // Load options once
   useEffect(() => {

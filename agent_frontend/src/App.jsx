@@ -1439,6 +1439,7 @@ export default function App() {
             creativeFormatPlan={canonicalWorkspace?.artifacts?.creative_format_plan?.value}
             onOpenRecompute={openFirstRecomputeStep}
             autopilotMode={experienceMode === 'autopilot'}
+            autopilotEditorArtifact={autopilotEditorArtifact}
             onAutopilotSave={handleAutopilotEditorSave}
             onReturnToAutopilot={() => setActiveTab('autopilot')}
           />

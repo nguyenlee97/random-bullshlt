@@ -33,7 +33,7 @@ const STEP_DESCS = [
 ]
 
 const WorkspacePane = forwardRef(function WorkspacePane(
-  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false, onAutopilotSave, onReturnToAutopilot },
+  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false, autopilotEditorArtifact = null, onAutopilotSave, onReturnToAutopilot },
   ref
 ) {
   const bodyRef = useRef(null)
@@ -74,7 +74,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
   const renderStep = () => {
     switch (currentStep) {
       case 0: return <BriefStep data={formState.brief} onChange={v => updateFormSlice('brief', v)} isDone={isReadOnly} />
-      case 1: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isReadOnly} brief={formState.brief} recoFromChat={recoFromChat} />
+      case 1: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isReadOnly} brief={formState.brief} recoFromChat={recoFromChat} expandTargeting={autopilotMode && autopilotEditorArtifact === 'targeting'} />
       case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isReadOnly} brief={formState.brief} segment={formState.segment} formatPlan={creativeFormatPlan} autopilotMode={autopilotMode} />
       case 3: return (
         <SetupStep

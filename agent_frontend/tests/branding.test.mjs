@@ -284,6 +284,17 @@ test('placement review edits the shortlist instead of redirecting to Brief', asy
   assert.match(api, /placement-intent/)
 })
 
+test('Autopilot targeting repair opens the targeting controls immediately', async () => {
+  const app = await source('agent_frontend/src/App.jsx')
+  const workspace = await source('agent_frontend/src/components/WorkspacePane/index.jsx')
+  const audience = await source('agent_frontend/src/steps/AudienceStep.jsx')
+  const targeting = await source('agent_frontend/src/components/TargetingPanel.jsx')
+  assert.match(app, /autopilotEditorArtifact=\{autopilotEditorArtifact\}/)
+  assert.match(workspace, /expandTargeting=\{autopilotMode && autopilotEditorArtifact === 'targeting'\}/)
+  assert.match(audience, /autoExpand=\{expandTargeting\}/)
+  assert.match(targeting, /if \(autoExpand\) setExpanded\(true\)/)
+})
+
 test('Autopilot hides stale review actions after a terminal run', async () => {
   const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
   assert.match(panel, /const runTerminal = \['completed', 'cancelled', 'failed'\]\.includes\(run\?\.status\)/)

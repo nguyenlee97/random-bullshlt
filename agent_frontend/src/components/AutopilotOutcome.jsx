@@ -4,7 +4,7 @@ import {
   LayoutDashboard, MapPin, ShieldCheck, Target, Users,
 } from 'lucide-react'
 import SuccessStep from '@/steps/SuccessStep'
-import { buildCampaignOutcome, campaignDeliveryState } from '@/lib/campaignOutcome'
+import { buildCampaignOutcome, campaignDeliveryState, campaignWarningText } from '@/lib/campaignOutcome'
 
 const ReportStep = lazy(() => import('@/steps/ReportStep'))
 
@@ -173,7 +173,10 @@ function SetupReport({ outcome }) {
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
           <p className="font-black">Cảnh báo cần theo dõi</p>
           <ul className="mt-2 list-disc space-y-1 pl-4">
-            {[...(outcome.order.warnings || []), ...(outcome.assignments.warnings || [])].map((warning, index) => <li key={`${warning}:${index}`}>{warning}</li>)}
+            {[...(outcome.order.warnings || []), ...(outcome.assignments.warnings || [])].map((warning, index) => {
+              const text = campaignWarningText(warning)
+              return <li key={`${text}:${index}`}>{text}</li>
+            })}
           </ul>
         </div>
       )}

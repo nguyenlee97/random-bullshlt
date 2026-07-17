@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, FileImage, MapPin, Target, Users } from 'lucide-react'
 import { matchPlannedFormat } from '@/lib/creativeCompatibility'
+import { placementIdsFromValue } from '@/lib/campaignOutcome'
 
 const number = value => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(Number(value || 0))
 const audienceName = item => item?.fullLabel || item?.label || item?.name || item?.code || item?._id || 'Segment'
@@ -252,8 +253,8 @@ function GenericReview({ task, value }) {
     ))}</ul> : <Empty>{value.message || 'Creative chưa có verdict để review.'}</Empty>
   }
   if (task.key === 'launch_approval' || task.key === 'build_order_draft') {
-    const placements = value.selectedZoneIds || value.zoneIds || value.placements || []
-    return <Empty>Bản setup cuối gồm {Array.isArray(placements) ? placements.length : Object.keys(placements || {}).length} placement. Kiểm tra audience, targeting, creative, forecast và guard ở các thẻ phía trên trước khi duyệt launch.</Empty>
+    const placements = placementIdsFromValue(value)
+    return <Empty>Bản setup cuối gồm {placements.length} placement. Kiểm tra audience, targeting, creative, forecast và guard ở các thẻ phía trên trước khi duyệt launch.</Empty>
   }
   return <Empty>{value.message || 'Đầu ra của bước này đã sẵn sàng để duyệt.'}</Empty>
 }

@@ -42,7 +42,7 @@ function AttrCard({ attr, selected, onToggle, reason, isReco }) {
   )
 }
 
-export default function AudienceStep({ data, onChange, isDone, brief, recoFromChat }) {
+export default function AudienceStep({ data, onChange, isDone, brief, recoFromChat, expandTargeting = false }) {
 
   const [allAttrs, setAllAttrs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -169,6 +169,7 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
       <TargetingPanel
         targeting={data.targeting || {}}
         onChange={tp => onChange({ ...data, targeting: tp })}
+        autoExpand={expandTargeting}
       />
 
       {/* AI Recommended — fetched from backend LLM based on real DMP + brief */}
