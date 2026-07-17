@@ -125,6 +125,7 @@ async def start_user_oauth(actor: dict, *, intent: str, return_to: str = "/") ->
         "app_id": config.ZALO_APP_ID,
         "redirect_uri": config.ZALO_LOGIN_REDIRECT_URI,
         "code_challenge": challenge,
+        "code_challenge_method": "S256",
         "state": state,
     })
     return {

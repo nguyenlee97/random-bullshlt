@@ -64,6 +64,7 @@ async def test_zalo_login_uses_one_time_pkce_and_existing_account_session(monkey
     assert query["app_id"] == ["app-test-1"]
     assert query["redirect_uri"] == ["https://example.test/callback"]
     assert len(query["code_challenge"][0]) >= 43
+    assert query["code_challenge_method"] == ["S256"]
     state = query["state"][0]
     attempts = await zalo_auth.get_zalo_auth_storage_for_test()
     assert len(attempts) == 1
