@@ -783,6 +783,10 @@ class _AutopilotStrategyRequest(_AutopilotActionRequest):
     option_id: str
 
 
+class _AutopilotPlacementRequest(_AutopilotActionRequest):
+    zone_ids: list[str]
+
+
 def _autopilot_error(exc: Exception) -> HTTPException:
     from autopilot.service import RunConflict
     if isinstance(exc, KeyError):
@@ -878,6 +882,20 @@ async def autopilot_select_strategy(
         await _assert_run_access(raw_request, run_id)
         return await select_strategy(
             run_id, request.option_id, actor=request.actor, reason=request.reason,
+        )
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.post("/autopilot/runs/{run_id}/placement-intent")
+async def autopilot_select_placement_intent(
+    run_id: str, raw_request: Request, request: _AutopilotPlacementRequest
+):
+    from autopilot.service import RunConflict, select_placement_intent
+    try:
+        await _assert_run_access(raw_request, run_id)
+        return await select_placement_intent(
+            run_id, request.zone_ids, actor=request.actor, reason=request.reason,
         )
     except (KeyError, ValueError, RunConflict) as exc:
         raise _autopilot_error(exc) from exc

@@ -309,6 +309,7 @@ async def _plan_placement_intent(run: dict, workspace: dict) -> CapabilityResult
     if selected == "reach_first":
         available.sort(
             key=lambda zone: (
+                -float(zone.get("reach") or 0),
                 float(zone.get("cpm") or 10**12),
                 -float(zone.get("score") or 0),
             )

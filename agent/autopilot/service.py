@@ -841,6 +841,89 @@ async def review_task(
     return await get_run(run_id)
 
 
+async def select_placement_intent(
+    run_id: str,
+    zone_ids: list[str],
+    *,
+    actor: str = "campaign_operator",
+    reason: str = "",
+) -> dict:
+    """Update the shortlist inside its review gate without restarting the run."""
+    run = await get_run(run_id)
+    if run["status"] in RUN_TERMINAL:
+        raise RunConflict("placement selection cannot change after the run is terminal")
+    if any(
+        task["key"] == "create_order" and task["status"] == "succeeded"
+        for task in run["tasks"]
+    ):
+        raise RunConflict("placement selection cannot change after order creation")
+
+    task = next(
+        (item for item in run["tasks"] if item["key"] == "plan_placement_intent"),
+        None,
+    )
+    if not task or task["status"] != "waiting_review":
+        raise RunConflict("placement shortlist is not waiting for review")
+    pending = deepcopy(task.get("pending_artifact") or {})
+    if pending.get("artifact") != "placement_intent":
+        raise RunConflict("placement review has no pending artifact")
+
+    value = deepcopy(pending.get("value") or {})
+    candidates = value.get("candidates") or []
+    by_id = {
+        str(item.get("id")): item
+        for item in candidates
+        if isinstance(item, dict) and item.get("id")
+    }
+    selected_ids = list(dict.fromkeys(str(item).strip() for item in zone_ids if str(item).strip()))
+    if not selected_ids:
+        raise ValueError("select at least one placement")
+    if len(selected_ids) > 12:
+        raise ValueError("select at most 12 placements")
+    unknown = [zone_id for zone_id in selected_ids if zone_id not in by_id]
+    if unknown:
+        raise ValueError("placement is not in the reviewed shortlist: " + ", ".join(unknown))
+
+    selection_reason = reason.strip() or "Operator adjusted the reviewed shortlist"
+    value.update({
+        "candidate_zone_ids": selected_ids,
+        "candidates": [deepcopy(by_id[zone_id]) for zone_id in selected_ids],
+        "selection": {
+            "source": "operator",
+            "actor": actor,
+            "reason": selection_reason,
+            "selected_at": _now(),
+            "selected_count": len(selected_ids),
+        },
+    })
+    pending["value"] = value
+    evidence = deepcopy(task.get("evidence") or [])
+    evidence.append({
+        "type": "placement_selection_updated",
+        "actor": actor,
+        "selected_count": len(selected_ids),
+        "candidate_zone_ids": selected_ids,
+        "reason": selection_reason,
+    })
+    updates = {
+        "result": value,
+        "pending_artifact": pending,
+        "evidence": evidence,
+        "updated_at": _now(),
+    }
+    _, tasks, _ = await _collections()
+    if tasks is not None:
+        await tasks.update_one({"_id": task["task_id"]}, {"$set": updates})
+    else:
+        _mem_tasks[task["task_id"]].update(updates)
+    await _emit(run_id, "placement_selection_updated", {
+        "task_id": task["task_id"],
+        "actor": actor,
+        "selected_count": len(selected_ids),
+    })
+    return await get_run(run_id)
+
+
 async def select_strategy(
     run_id: str,
     option_id: str,

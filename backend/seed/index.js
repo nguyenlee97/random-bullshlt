@@ -14,6 +14,7 @@
  *   node seed/index.js              — skip collections that already have data
  *   node seed/index.js --force      — wipe + re-seed everything
  *   node seed/index.js --zones-only — seed only zones+campaigns (skip analytics)
+ *   node seed/index.js --catalog-only — seed only the zone catalog
  */
 require('dotenv').config();
 const path     = require('path');
@@ -123,6 +124,50 @@ const CHANNEL_SITE_URLS = {
   'zingmp3-site':     'https://zingmp3-stg.pawgrammers.io.vn/',
 };
 
+// Demo inventory does not have a live pricing feed. Keep its synthetic metrics
+// internally consistent instead of copying unrelated hackathon workbook values.
+// Reach is capped by the channel audience and CPM follows page/slot prominence:
+// homepage masthead > homepage inline/skin > large middle unit > side/box unit.
+const CHANNEL_CPM_MULTIPLIER = {
+  'znews-site': 1.15,
+  'znews-kinh-doanh': 1.18,
+  'znews-cong-nghe': 1.12,
+  'znews-the-thao': 1.08,
+  'znews-giai-tri': 1.05,
+  'znews-suc-khoe': 1.04,
+  'znews-doi-song': 1.00,
+  'baomoi-site': 0.95,
+  'zingmp3-site': 1.08,
+};
+
+function inventoryProfile(id = '') {
+  if (id.includes('Masthead_Inline')) return { tier: 'homepage-inline', reachRatio: 0.58, cpm: 52000, vi: 74, ctr: 0.46 };
+  if (id.includes('Masthead')) return { tier: 'homepage-masthead', reachRatio: 0.80, cpm: 68000, vi: 82, ctr: 0.58 };
+  if (id.includes('Background')) return { tier: 'background-skin', reachRatio: 0.67, cpm: 50000, vi: 78, ctr: 0.38 };
+  if (id.includes('StickyLeft')) return { tier: 'homepage-side-left', reachRatio: 0.52, cpm: 36000, vi: 68, ctr: 0.42 };
+  if (id.includes('StickyRight')) return { tier: 'homepage-side-right', reachRatio: 0.48, cpm: 33000, vi: 65, ctr: 0.39 };
+  if (id.includes('SideLeft')) return { tier: 'category-side-left', reachRatio: 0.50, cpm: 32000, vi: 64, ctr: 0.34 };
+  if (id.includes('SideRight')) return { tier: 'category-side-right', reachRatio: 0.46, cpm: 29000, vi: 61, ctr: 0.31 };
+  if (id.includes('PrBox')) return { tier: 'content-pr-box', reachRatio: 0.38, cpm: 34000, vi: 66, ctr: 0.43 };
+  if (id.includes('Halfpage') || id.includes('Box2')) {
+    return { tier: 'large-middle-unit', reachRatio: 0.44, cpm: 38000, vi: 70, ctr: 0.40 };
+  }
+  return { tier: 'standard-box', reachRatio: 0.34, cpm: 25000, vi: 62, ctr: 0.45 };
+}
+
+function deriveInventoryMetrics(placement, channelReach) {
+  const profile = inventoryProfile(placement.id);
+  const channelMultiplier = CHANNEL_CPM_MULTIPLIER[placement.channel] || 1;
+  return {
+    reach: Math.round((Number(channelReach || 0) * profile.reachRatio) / 5000) * 5000,
+    cpm: Math.round((profile.cpm * channelMultiplier) / 1000) * 1000,
+    vi: profile.vi,
+    ctr: profile.ctr,
+    metricSource: 'synthetic_inventory_v2',
+    inventoryTier: profile.tier,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 function buildZonesCatalog(mockRows) {
   const groups = [
@@ -155,7 +200,7 @@ function buildZonesCatalog(mockRows) {
       console.warn(`  ⚠️  No forced mapping for mock zone: ${row.mockId} — skipping`);
       return null;
     }
-    return {
+    const placement = {
       id:       override.id,
       mockId:   row.mockId,          // original mock zone ID for reference
       channel:  override.channel,
@@ -171,14 +216,17 @@ function buildZonesCatalog(mockRows) {
       testSiteZone: override.id,
       siteUrl:  CHANNEL_SITE_URLS[override.channel] || null,
     };
+    return {
+      ...placement,
+      ...deriveInventoryMetrics(placement, channels[override.channel]?.reach),
+    };
   }).filter(Boolean);
 
   // ── 12 unmapped real zone slots (category side strips, no mock counterpart) ─
   const CATE_SIDE_STRIPS = [
     'CongNghe','TheThao','GiaiTri','DoiSong','SucKhoe','KinhDoanh',
   ].flatMap((cat) => {
-    const channelId = `znews-${cat.toLowerCase().replace('congnghe','cong-nghe').replace('theThao','the-thao').replace('giaitri','giai-tri').replace('doisong','doi-song').replace('suckhoe','suc-khoe').replace('kinhdoanh','kinh-doanh')}`;
-    // map category name to channel id properly
+    // Map category name to channel id properly.
     const chanMap = {
       CongNghe:  'znews-cong-nghe',
       TheThao:   'znews-the-thao',
@@ -188,10 +236,23 @@ function buildZonesCatalog(mockRows) {
       KinhDoanh: 'znews-kinh-doanh',
     };
     const ch = chanMap[cat];
-    return [
-      { id: `Znews_${cat}_SideLeft`,  channel: ch, format: 'skin', size: 'skin', subFormat: 'side-left',  reach: 200000, vi: 45, ctr: 0.25, cpm: 10000, obj: 'awareness', siteId: 'znews', testSiteZone: `Znews_${cat}_SideLeft`,  siteUrl: CHANNEL_SITE_URLS[ch] || null },
-      { id: `Znews_${cat}_SideRight`, channel: ch, format: 'skin', size: 'skin', subFormat: 'side-right', reach: 200000, vi: 45, ctr: 0.25, cpm: 10000, obj: 'awareness', siteId: 'znews', testSiteZone: `Znews_${cat}_SideRight`, siteUrl: CHANNEL_SITE_URLS[ch] || null },
-    ];
+    return ['Left', 'Right'].map((side) => {
+      const placement = {
+        id: `Znews_${cat}_Side${side}`,
+        channel: ch,
+        format: 'skin',
+        size: 'skin',
+        subFormat: `side-${side.toLowerCase()}`,
+        obj: 'awareness',
+        siteId: 'znews',
+        testSiteZone: `Znews_${cat}_Side${side}`,
+        siteUrl: CHANNEL_SITE_URLS[ch] || null,
+      };
+      return {
+        ...placement,
+        ...deriveInventoryMetrics(placement, channels[ch]?.reach),
+      };
+    });
   });
 
   const placements = [...mappedPlacements, ...CATE_SIDE_STRIPS];
@@ -290,17 +351,18 @@ function generateAnalytics(campaigns, placements) {
 async function runSeed(opts = {}) {
   const force     = opts.force     || process.argv.includes('--force');
   const zonesOnly = opts.zonesOnly || process.argv.includes('--zones-only');
+  const catalogOnly = opts.catalogOnly || process.argv.includes('--catalog-only');
 
   // ── Read Excel files ───────────────────────────────────────────────────────
   console.log('  📂  Reading Excel files...');
   const mockRows    = await readZonesFromExcel();
-  const audRows     = await readAudienceFromExcel();
+  const audRows     = catalogOnly ? [] : await readAudienceFromExcel();
   const zonesCatalog = buildZonesCatalog(mockRows);
   const { placements } = zonesCatalog;
   console.log(`       Mock zones read: ${mockRows.length}`);
   console.log(`       Mapped placements: ${placements.filter(p => p.mockId).length} (+ ${placements.filter(p => !p.mockId).length} real-only)`);
   console.log(`       Total placements: ${placements.length}`);
-  console.log(`       Audience segments: ${audRows.length}`);
+  if (!catalogOnly) console.log(`       Audience segments: ${audRows.length}`);
 
   // ── Zones ──────────────────────────────────────────────────────────────────
   const zoneCount = await ZoneCatalog.countDocuments();
@@ -310,6 +372,11 @@ async function runSeed(opts = {}) {
     await ZoneCatalog.deleteMany({});
     await ZoneCatalog.create(zonesCatalog);
     console.log(`  ✅  Zones seeded: ${zonesCatalog.groups.length} groups, ${Object.keys(zonesCatalog.channels).length} channels, ${placements.length} placements`);
+  }
+
+  if (catalogOnly) {
+    console.log('  ⏭  Audience, campaigns and analytics skipped (--catalog-only mode)');
+    return;
   }
 
   // ── Audience Library ───────────────────────────────────────────────────────
@@ -357,7 +424,7 @@ if (require.main === module) {
   console.log(`\n🌱  AdsPilot Seed Script v3 (E1 Zone Refinement)`);
   console.log(`    DB  : ${URI}`);
   console.log(`    Mode: ${process.argv.includes('--force') ? 'FORCE (wipe + re-seed)' : 'safe (skip existing)'}`);
-  console.log(`    Zones: ${process.argv.includes('--zones-only') ? 'zones+campaigns only' : 'full seed'}\n`);
+  console.log(`    Zones: ${process.argv.includes('--catalog-only') ? 'catalog only' : process.argv.includes('--zones-only') ? 'zones+campaigns only' : 'full seed'}\n`);
 
   mongoose.connect(URI)
     .then(async () => {
@@ -371,4 +438,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { runSeed };
+module.exports = { runSeed, buildZonesCatalog, deriveInventoryMetrics, inventoryProfile };

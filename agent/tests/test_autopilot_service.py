@@ -6,7 +6,7 @@ from autopilot import service
 from autopilot.capabilities import (
     CapabilityResult, _analyze_creatives, _build_creatives, _build_order_draft,
     _create_order, _create_setup_report, _forecast, _generate_strategy,
-    _prepare_creatives, _rank_placements, _retrieve_audience,
+    _plan_placement_intent, _prepare_creatives, _rank_placements, _retrieve_audience,
 )
 from autopilot import worker
 from workspace.service import (
@@ -364,6 +364,77 @@ async def test_operator_can_select_pending_strategy_before_review():
     await service.review_task(run["run_id"], task_id, approved=True, reason="selected")
     committed = await get_workspace("strategy-review")
     assert committed["artifacts"]["strategy"]["value"]["selected"] == "quality_first"
+
+
+@pytest.mark.asyncio
+async def test_reach_first_placement_intent_prioritizes_reach(monkeypatch):
+    async def fake_rank_zones(**_kwargs):
+        return [
+            {"id": "cheap-small", "reach": 100_000, "cpm": 10_000, "score": 90},
+            {"id": "premium-large", "reach": 800_000, "cpm": 70_000, "score": 80},
+            {"id": "mid", "reach": 400_000, "cpm": 35_000, "score": 85},
+        ]
+
+    async def fake_conflicts(_start, _end):
+        return {}
+
+    monkeypatch.setattr("tools.zone_ranker.rank_zones", fake_rank_zones)
+    monkeypatch.setattr("tools.order_api.fetch_zone_conflicts", fake_conflicts)
+    workspace = {"artifacts": {
+        "brief": {"value": BRIEF},
+        "strategy": {"value": {"selected": "reach_first"}},
+    }}
+    result = await _plan_placement_intent({"session_id": "reach-first"}, workspace)
+    assert result.value["candidate_zone_ids"] == ["premium-large", "mid", "cheap-small"]
+
+
+@pytest.mark.asyncio
+async def test_operator_can_edit_pending_placement_shortlist_before_review():
+    await _seed("placement-review")
+    run = await service.create_run(
+        "placement-review", approval_policy="review_every_stage",
+        idempotency_key="placement-review",
+    )
+    context = await get_task_context("placement-review", "placement_intent")
+    task_id = f"{run['run_id']}:plan_placement_intent"
+    value = {
+        "kind": "placement_intent",
+        "candidate_zone_ids": ["zone-a", "zone-b", "zone-c"],
+        "candidates": [
+            {"id": "zone-a", "reach": 500_000, "cpm": 60_000},
+            {"id": "zone-b", "reach": 300_000, "cpm": 35_000},
+            {"id": "zone-c", "reach": 200_000, "cpm": 25_000},
+        ],
+    }
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result=value,
+        pending_artifact={
+            "session_id": "placement-review", "artifact": "placement_intent",
+            "value": value,
+            "input_revisions": context["input_revisions"],
+            "base_artifact_revision": context["artifact_revision"],
+        },
+    )
+
+    selected = await service.select_placement_intent(
+        run["run_id"], ["zone-b", "zone-a"], reason="Prefer these slots"
+    )
+    selected_task = next(
+        task for task in selected["tasks"] if task["key"] == "plan_placement_intent"
+    )
+    assert selected_task["pending_artifact"]["value"]["candidate_zone_ids"] == [
+        "zone-b", "zone-a",
+    ]
+    assert selected_task["pending_artifact"]["value"]["selection"]["source"] == "operator"
+    with pytest.raises(ValueError, match="not in the reviewed shortlist"):
+        await service.select_placement_intent(run["run_id"], ["unknown-zone"])
+
+    await service.review_task(run["run_id"], task_id, approved=True)
+    committed = await get_workspace("placement-review")
+    assert committed["artifacts"]["placement_intent"]["value"]["candidate_zone_ids"] == [
+        "zone-b", "zone-a",
+    ]
 
 
 @pytest.mark.asyncio

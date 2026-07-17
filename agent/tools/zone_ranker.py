@@ -14,34 +14,18 @@ OBJECTIVE_WEIGHTS = {
     "retention":     {"reach": 0.20, "vi": 0.50, "ctr": 0.20, "efficiency": 0.10},
 }
 
-# Per-zone reason templates (zone id → Vietnamese reason)
-ZONE_REASONS: dict[str, str] = {
-    "ZingNews_Masthead":        "Vị trí đầu trang ZingNews, phủ rộng 2.4M — premium awareness.",
-    "ZingNews_Masthead_Inline_1": "Inline masthead ZingNews, VI 66% — tốt cho consideration.",
-    "ZingNews_Halfpage":        "Halfpage 300×600 ZingNews, VI 61% — hiển thị lâu.",
-    "ZingNews_PrBox_2":         "PR Box ZingNews, CTR 0.55% + conversion fit.",
-    "BaoMoi_Masthead":          "BaoMoi Masthead, reach 38M — phủ rộng nhất toàn catalog.",
-    "BaoMoi_Background":        "BaoMoi Skin Background, VI 70% + CTR 1.25% — consideration.",
-    "BaoMoi_StickyLeft":        "BaoMoi Sticky Left, CTR 1.6% cao — conversion tốt.",
-    "BaoMoi_StickyRight":       "BaoMoi Sticky Right, VI 93% — brand recall cao.",
-    "BaoMoi_Box1":              "BaoMoi Box1 300×250, CPM 15K — tiết kiệm ngân sách.",
-    "BaoMoi_Box2":              "BaoMoi Box2 300×600, CPM 13K rẻ nhất — phủ rộng budget thấp.",
-    "ZingMP3_Masthead":         "ZingMP3 Masthead, VI 97% + CTR 1.4% — cao nhất catalog.",
-    "Znews_CongNghe_Background": "Skin Tech ZingNews, VI 92% — brand recall premium.",
-    "Znews_TheThao_Background":  "Skin Sports, reach 2.2M — phủ audience thể thao.",
-    "Znews_GiaiTri_Background":  "Skin Giải Trí, reach 2M — lifestyle brands.",
-    "Znews_DoiSong_Background":  "Skin Đời Sống, reach 1.85M — FMCG/lifestyle.",
-    "Znews_SucKhoe_Background":  "Skin Sức Khoẻ, reach 1.75M — healthcare brands.",
-    "Znews_KinhDoanh_Background":"Skin Kinh Doanh, VI 100% — B2B/finance premium.",
-    "Znews_CongNghe_SidebarBox": "Sidebar Tech 300×250, CTR 0.9% — conversion Tech.",
-    "Znews_TheThao_SidebarBox":  "Sidebar Sports, VI 95% — awareness sports.",
-    "Znews_GiaiTri_SidebarBox":  "Sidebar Giải Trí, CTR 1.05% — consideration entertainment.",
-    "Znews_SucKhoe_SidebarBox":  "Sidebar Sức Khoẻ, reach 20M — healthcare.",
-    "Znews_DoiSong_SidebarBox":  "Sidebar Đời Sống, CPM 16K — tối ưu ngân sách.",
-    "Znews_KinhDoanh_SidebarBox":"Sidebar Kinh Doanh, CPM 14K — B2B cost-efficient.",
+TIER_LABELS = {
+    "homepage-masthead": "masthead trang chủ premium",
+    "homepage-inline": "banner inline trang chủ",
+    "background-skin": "background skin",
+    "large-middle-unit": "banner cỡ lớn trong nội dung",
+    "content-pr-box": "PR box trong nội dung",
+    "homepage-side-left": "side skin trang chủ",
+    "homepage-side-right": "side skin trang chủ",
+    "category-side-left": "side skin trang chuyên mục",
+    "category-side-right": "side skin trang chuyên mục",
+    "standard-box": "box tiêu chuẩn",
 }
-
-_MAX_REACH = 38_000_000  # BaoMoi_Masthead — used for normalization
 
 
 def _parse_dims(size_str: str) -> tuple[int, int] | None:
@@ -49,9 +33,9 @@ def _parse_dims(size_str: str) -> tuple[int, int] | None:
     return (int(m.group(1)), int(m.group(2))) if m else None
 
 
-def _score_zone(zone: dict, objective: str) -> float:
+def _score_zone(zone: dict, objective: str, max_reach: float) -> float:
     w = OBJECTIVE_WEIGHTS.get(objective, OBJECTIVE_WEIGHTS["awareness"])
-    reach_norm = min(zone.get("reach", 0) / (_MAX_REACH / 100), 100)
+    reach_norm = min(zone.get("reach", 0) / (max(max_reach, 1) / 100), 100)
     efficiency = (100000 / zone["cpm"]) if zone.get("cpm", 0) > 0 else 0
     return (
         reach_norm * w["reach"]
@@ -61,13 +45,13 @@ def _score_zone(zone: dict, objective: str) -> float:
     )
 
 
-def _kpi_bonus(zone: dict, kpi: str) -> float:
+def _kpi_bonus(zone: dict, kpi: str, max_reach: float) -> float:
     kpi_lower = (kpi or "").lower()
     bonus = 0.0
     if ("vtr" in kpi_lower or "video" in kpi_lower) and zone.get("format") == "video":
         bonus += 0.15
     if "reach" in kpi_lower or "impress" in kpi_lower:
-        bonus += 0.10 * min(zone.get("reach", 0) / _MAX_REACH, 1)
+        bonus += 0.10 * min(zone.get("reach", 0) / max(max_reach, 1), 1)
     if "ctr" in kpi_lower:
         bonus += 0.05 * zone.get("ctr", 0)
     return bonus
@@ -131,10 +115,11 @@ async def rank_zones(
     zones = await get_all_zones()
     scored = []
     n = min(limit, len(zones))
+    max_reach = max((float(zone.get("reach") or 0) for zone in zones), default=1)
 
     for zone in zones:
-        base = _score_zone(zone, objective)
-        bonus = _kpi_bonus(zone, kpi)
+        base = _score_zone(zone, objective, max_reach)
+        bonus = _kpi_bonus(zone, kpi, max_reach)
         size_bonus, match_mode = _size_compat(zone, creative_files or [])
         total = base + bonus + size_bonus
 
@@ -146,7 +131,10 @@ async def rank_zones(
         scored.append({
             **zone,
             "score": round(total, 4),
-            "reason": ZONE_REASONS.get(zone["id"], f"Phù hợp mục tiêu {objective}."),
+            "reason": (
+                f"{TIER_LABELS.get(zone.get('inventoryTier'), 'Inventory')} phù hợp "
+                f"mục tiêu {objective}; reach và CPM lấy từ catalog demo có phân tầng."
+            ),
             "est_impressions": est_imp,
             "match_mode": match_mode,
         })

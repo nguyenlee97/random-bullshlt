@@ -12,6 +12,8 @@ const placementSchema = new mongoose.Schema(
     ctr:     { type: Number, default: 0 },       // CTR %
     cpm:     { type: Number, default: 0 },       // CPM in VND per 1000 imp
     obj:     { type: String, default: '' },      // best-fit objective
+    metricSource:  { type: String, default: null }, // provenance for synthetic/demo metrics
+    inventoryTier: { type: String, default: null }, // comparable placement-value tier
     // Extra validation metadata (added for zone-validation warnings)
     testSiteZone: { type: String, default: null }, // if this maps to a real test site zone id
     siteId:       { type: String, default: null }, // 'znews' | 'baomoi' | 'zingmp3'

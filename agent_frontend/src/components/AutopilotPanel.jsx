@@ -145,6 +145,7 @@ export default function AutopilotPanel({
   const [workspaceSnapshot, setWorkspaceSnapshot] = useState(canonicalWorkspace)
   const [pendingProposals, setPendingProposals] = useState([])
   const [prerequisitesLoading, setPrerequisitesLoading] = useState(true)
+  const [placementSelection, setPlacementSelection] = useState([])
   const workspaceRefreshRef = useRef(onWorkspaceRefresh)
 
   useEffect(() => {
@@ -264,7 +265,18 @@ export default function AutopilotPanel({
     setLoading(true)
     setError('')
     try {
-      const next = await AgentAPI.reviewAutopilotTask(run.run_id, task.task_id, approved)
+      let reviewedTask = task
+      if (approved && task.key === 'plan_placement_intent') {
+        if (!placementSelection.length) throw new Error('Hãy giữ lại ít nhất một placement.')
+        const selected = await AgentAPI.selectAutopilotPlacements(
+          run.run_id,
+          placementSelection,
+          'Operator adjusted placement shortlist in review',
+        )
+        if (!selected?.run_id) throw new Error(selected?.detail || 'Không thể lưu shortlist placement.')
+        reviewedTask = selected.tasks?.find(item => item.task_id === task.task_id) || task
+      }
+      const next = await AgentAPI.reviewAutopilotTask(run.run_id, reviewedTask.task_id, approved)
       if (!next?.run_id) throw new Error(next?.detail || 'Không thể ghi nhận review.')
       setRun(next)
       return next
@@ -316,6 +328,9 @@ export default function AutopilotPanel({
 
   const runTerminal = ['completed', 'cancelled', 'failed'].includes(run?.status)
   const waiting = runTerminal ? null : orderedTasks.find(task => task.status === 'waiting_review')
+  const placementCandidateKey = waiting?.key === 'plan_placement_intent'
+    ? (waiting.pending_artifact?.value?.candidate_zone_ids || waiting.result?.candidate_zone_ids || []).join('|')
+    : ''
   const strategyTask = taskByKey.generate_strategy
   const formatPlanTask = taskByKey.plan_creative_formats
   const formatPlan = formatPlanTask?.result?.formats
@@ -384,9 +399,19 @@ export default function AutopilotPanel({
         }
       : ['prepare_creatives', 'analyze_creatives', 'rank_placements', 'assign_creatives'].includes(waiting?.key)
         ? { label: waiting?.result?.reason === 'missing_creative' ? 'Tải creative lên' : 'Chỉnh hoặc thay creative', action: onOpenCreative }
-        : waiting?.key === 'plan_placement_intent'
-          ? { label: 'Sửa Brief đầu vào', action: onOpenBrief }
-          : null
+        : null
+
+  useEffect(() => {
+    if (waiting?.key !== 'plan_placement_intent') {
+      setPlacementSelection([])
+      return
+    }
+    setPlacementSelection(
+      waiting.pending_artifact?.value?.candidate_zone_ids
+      || waiting.result?.candidate_zone_ids
+      || [],
+    )
+  }, [waiting?.task_id, placementCandidateKey])
 
   useEffect(() => {
     onStatusChange?.(run ? {
@@ -788,6 +813,8 @@ export default function AutopilotPanel({
               label={TASK_LABELS[waiting.key] || waiting.key}
               brief={displayBrief}
               formatPlan={formatPlan}
+              selectedPlacementIds={placementSelection}
+              onPlacementSelectionChange={waiting.key === 'plan_placement_intent' ? setPlacementSelection : undefined}
             />
           )}
 
@@ -808,7 +835,7 @@ export default function AutopilotPanel({
                 {briefRetry && pendingBrief && <button onClick={onOpenChat} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Chat để duyệt</button>}
                 {waitingEdit?.action && <button onClick={() => openEditor(waitingEdit.action)} disabled={loading} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">{waitingEdit.label}</button>}
                 <button onClick={cancelRunWithConfirmation} disabled={loading} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700">Hủy run</button>
-                <button onClick={() => review(waiting, true)} disabled={loading || (retryAction && !retryReady)} className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}>
+                <button onClick={() => review(waiting, true)} disabled={loading || (retryAction && !retryReady) || (waiting.key === 'plan_placement_intent' && !placementSelection.length)} className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}>
                   {retryAction ? 'Kiểm tra lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}
                 </button>
               </div>

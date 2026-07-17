@@ -108,24 +108,62 @@ function TargetingReview({ value }) {
   ) : <Empty>Chưa có targeting catalog để review.</Empty>
 }
 
-function PlacementReview({ value, final = false }) {
+function PlacementReview({ value, final = false, selectedIds, onSelectionChange }) {
   const zones = value.candidates || value.zones || []
+  const editable = !final && typeof onSelectionChange === 'function'
+  const activeIds = new Set(selectedIds || value.candidate_zone_ids || zones.map(zone => zone.id))
+  const toggle = zoneId => {
+    if (!editable || !zoneId) return
+    const next = activeIds.has(zoneId)
+      ? [...activeIds].filter(id => id !== zoneId)
+      : [...activeIds, zoneId]
+    if (next.length) onSelectionChange(next)
+  }
   return zones.length ? (
     <div className="space-y-3">
       <p className="text-[11px] leading-5 text-slate-500">
         {final
           ? 'Các placement dưới đây đã qua kiểm tra inventory, conflict và độ tương thích với creative.'
-          : 'Đây là shortlist inventory trước khi có creative. Kích thước creative sẽ được dùng để lọc lại ở bước Xếp hạng placements.'}
+          : editable
+            ? 'Chọn hoặc bỏ placement trực tiếp bên dưới. Ít nhất một placement phải được giữ lại; Autopilot sẽ tiếp tục từ bước này sau khi duyệt.'
+            : 'Đây là shortlist inventory trước khi có creative. Kích thước creative sẽ được dùng để lọc lại ở bước Xếp hạng placements.'}
       </p>
+      {editable && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2">
+          <p className="text-[11px] font-bold text-brand-800">Đã chọn {activeIds.size}/{zones.length} placement</p>
+          <p className="text-[10px] text-brand-700">Thay đổi chỉ được lưu khi bấm “Duyệt & tiếp tục”.</p>
+        </div>
+      )}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {zones.map((zone, index) => (
-          <article key={zone.id || index} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-            <p className="text-xs font-bold text-slate-900">{zoneName(zone)}</p>
-            <p className="mt-1 text-[10px] text-slate-500">{zone.id || '—'} · {zone.channel || zone.siteId || zone.format || zone.size || 'inventory'}</p>
-            <p className="mt-1 text-[10px] font-semibold text-brand-700">CPM {number(zone.cpm)} ₫ · reach {number(zone.reach)}</p>
-          </article>
+          <button
+            type="button"
+            key={zone.id || index}
+            disabled={!editable}
+            aria-pressed={activeIds.has(zone.id)}
+            onClick={() => toggle(zone.id)}
+            className={`rounded-xl border px-3 py-2.5 text-left transition ${activeIds.has(zone.id)
+              ? 'border-brand-300 bg-brand-50/60 ring-1 ring-brand-100'
+              : 'border-slate-200 bg-white opacity-55'} ${editable ? 'cursor-pointer hover:border-brand-400' : 'cursor-default disabled:opacity-100'}`}
+          >
+            <div className="flex items-start gap-2">
+              {editable && (
+                <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-black ${activeIds.has(zone.id) ? 'border-brand-500 bg-brand-500 text-white' : 'border-slate-300 bg-white text-transparent'}`}>✓</span>
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-900">{zoneName(zone)}</p>
+                <p className="mt-1 text-[10px] text-slate-500">{zone.id || '—'} · {zone.channel || zone.siteId || zone.format || zone.size || 'inventory'}</p>
+                <p className="mt-1 text-[10px] font-semibold text-brand-700">CPM {number(zone.cpm)} ₫ · reach {number(zone.reach)}</p>
+              </div>
+            </div>
+          </button>
         ))}
       </div>
+      {zones.some(zone => zone.metricSource === 'synthetic_inventory_v2') && (
+        <p className="rounded-xl bg-slate-50 px-3 py-2 text-[10px] leading-4 text-slate-500">
+          CPM và reach là dữ liệu mô phỏng có phân tầng theo lượng truy cập channel, loại trang và độ nổi bật của vị trí; không phải số delivery thực tế.
+        </p>
+      )}
     </div>
   ) : <Empty>Chưa có placement để review.</Empty>
 }
@@ -220,7 +258,7 @@ function GenericReview({ task, value }) {
   return <Empty>{value.message || 'Đầu ra của bước này đã sẵn sàng để duyệt.'}</Empty>
 }
 
-export default function AutopilotReview({ task, label, brief, formatPlan }) {
+export default function AutopilotReview({ task, label, brief, formatPlan, selectedPlacementIds, onPlacementSelectionChange }) {
   if (!task) return null
   const value = taskValue(task)
   let content
@@ -230,7 +268,10 @@ export default function AutopilotReview({ task, label, brief, formatPlan }) {
   else if (task.key === 'generate_strategy') content = <StrategyReview value={value} />
   else if (task.key === 'retrieve_audience') { content = <AudienceReview value={value} />; icon = <Users className="h-4 w-4" /> }
   else if (task.key === 'derive_targeting') content = <TargetingReview value={value} />
-  else if (task.key === 'plan_placement_intent') { content = <PlacementReview value={value} />; icon = <MapPin className="h-4 w-4" /> }
+  else if (task.key === 'plan_placement_intent') {
+    content = <PlacementReview value={value} selectedIds={selectedPlacementIds} onSelectionChange={onPlacementSelectionChange} />
+    icon = <MapPin className="h-4 w-4" />
+  }
   else if (task.key === 'plan_creative_formats') { content = <FormatReview value={value} />; icon = <FileImage className="h-4 w-4" /> }
   else if (task.key === 'prepare_creatives') { content = <CreativeReview value={value} formatPlan={formatPlan} />; icon = <FileImage className="h-4 w-4" /> }
   else if (task.key === 'rank_placements') { content = <PlacementReview value={value} final />; icon = <MapPin className="h-4 w-4" /> }

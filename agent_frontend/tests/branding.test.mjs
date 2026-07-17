@@ -257,8 +257,19 @@ test('Autopilot never persists an unapproved chat brief or retries it unchanged'
   assert.match(panel, /getPendingWorkspaceProposals/)
   assert.match(panel, /Brief đang chờ duyệt/)
   assert.match(panel, /Mở Chat để duyệt/)
-  assert.match(panel, /disabled=\{loading \|\| \(retryAction && !retryReady\)\}/)
+  assert.match(panel, /disabled=\{loading \|\| \(retryAction && !retryReady\) \|\| \(waiting\.key === 'plan_placement_intent' && !placementSelection\.length\)\}/)
   assert.match(api, /workspace\/proposals\?session_id=/)
+})
+
+test('placement review edits the shortlist instead of redirecting to Brief', async () => {
+  const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
+  const review = await source('agent_frontend/src/components/AutopilotReview.jsx')
+  const api = await source('agent_frontend/src/api/agentApi.js')
+  assert.match(panel, /selectAutopilotPlacements/)
+  assert.doesNotMatch(panel, /Sửa Brief đầu vào/)
+  assert.match(review, /Chọn hoặc bỏ placement trực tiếp bên dưới/)
+  assert.match(review, /synthetic_inventory_v2/)
+  assert.match(api, /placement-intent/)
 })
 
 test('Autopilot hides stale review actions after a terminal run', async () => {
