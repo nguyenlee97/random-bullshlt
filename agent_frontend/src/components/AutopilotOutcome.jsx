@@ -1,12 +1,11 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   BarChart3, CheckCircle2, FileText, ImageIcon,
   LayoutDashboard, MapPin, ShieldCheck, Target, Users,
 } from 'lucide-react'
 import SuccessStep from '@/steps/SuccessStep'
+import ReportStep from '@/steps/ReportStep'
 import { buildCampaignOutcome, campaignDeliveryState, campaignWarningText } from '@/lib/campaignOutcome'
-
-const ReportStep = lazy(() => import('@/steps/ReportStep'))
 
 const fmt = value => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(Number(value || 0))
 
@@ -252,15 +251,13 @@ export default function AutopilotOutcome({
             {reportInitError && (
               <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{reportInitError}</p>
             )}
-            <Suspense fallback={<div className="py-12 text-center text-sm text-slate-500">Đang tải module báo cáo…</div>}>
-              <ReportStep
-                data={reportData}
-                onChange={onReportChange}
-                formState={reportFormState}
-                onSendChat={onSendReportQuestion}
-                onRetry={() => onReportActivate?.(outcome.orderId, { force: true })}
-              />
-            </Suspense>
+            <ReportStep
+              data={reportData}
+              onChange={onReportChange}
+              formState={reportFormState}
+              onSendChat={onSendReportQuestion}
+              onRetry={() => onReportActivate?.(outcome.orderId, { force: true })}
+            />
           </div>
         )}
       </div>

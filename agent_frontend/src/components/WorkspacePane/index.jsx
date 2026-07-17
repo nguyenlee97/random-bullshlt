@@ -1,4 +1,4 @@
-import { forwardRef, lazy, Suspense, useImperativeHandle, useRef, useCallback, useState } from 'react'
+import { forwardRef, useImperativeHandle, useRef, useCallback, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -9,18 +9,9 @@ import CreativeStep from '@/steps/CreativeStep'
 import AudienceStep from '@/steps/AudienceStep'
 import SetupStep from '@/steps/SetupStep'
 import SuccessStep from '@/steps/SuccessStep'
+import ReportStep from '@/steps/ReportStep'
+import EmailStep from '@/steps/EmailStep'
 import { AlertTriangle, LayoutDashboard } from 'lucide-react'
-
-const ReportStep = lazy(() => import('@/steps/ReportStep'))
-const EmailStep = lazy(() => import('@/steps/EmailStep'))
-
-function StepLoading() {
-  return (
-    <div className="min-h-40 grid place-items-center text-sm text-muted-foreground" role="status">
-      Đang tải công cụ bước này…
-    </div>
-  )
-}
 
 const STEP_DESCS = [
   'Điền brief khách hàng — agent chuẩn hóa về JSON schema và đề xuất KPI.',
@@ -102,24 +93,18 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           }}
         />
       )
-      case 5: return (
-        <Suspense fallback={<StepLoading />}>
-          <ReportStep data={formState.report} onChange={v => updateFormSlice('report', v)} isDone={isDone} formState={formState} onSendChat={onSendChat} />
-        </Suspense>
-      )
+      case 5: return <ReportStep data={formState.report} onChange={v => updateFormSlice('report', v)} isDone={isDone} formState={formState} onSendChat={onSendChat} />
       case 6: return (
-        <Suspense fallback={<StepLoading />}>
-          <EmailStep
-            brief={formState.brief}
-            zones={formState.setup?.recoZones || []}
-            selectedZoneIds={formState.setup?.selectedZoneIds || []}
-            audiences={formState.segment}
-            data={formState.email || {}}
-            onChange={v => updateFormSlice('email', v)}
-            isDone={isDone}
-            formState={formState}
-          />
-        </Suspense>
+        <EmailStep
+          brief={formState.brief}
+          zones={formState.setup?.recoZones || []}
+          selectedZoneIds={formState.setup?.selectedZoneIds || []}
+          audiences={formState.segment}
+          data={formState.email || {}}
+          onChange={v => updateFormSlice('email', v)}
+          isDone={isDone}
+          formState={formState}
+        />
       )
       default: return null
     }

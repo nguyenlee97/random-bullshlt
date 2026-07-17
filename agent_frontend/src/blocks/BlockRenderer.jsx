@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,8 +8,7 @@ import {
 } from '@/components/ui/table'
 import { fmt } from '@/lib/utils'
 import { Users, TrendingUp, TrendingDown, Minus, Mail, CheckCircle2, RefreshCw, Pencil, X, AlertTriangle } from 'lucide-react'
-
-const ChartBlock = lazy(() => import('./ChartBlock'))
+import ChartBlock from './ChartBlock'
 
 // ─── Table Block ─────────────────────────────────────────────────────────────
 function TableBlock({ block }) {
@@ -496,7 +495,7 @@ function ReportAnalysisBlock({ block }) {
 export default function BlockRenderer({ block }) {
   switch (block.type) {
     case 'table':              return <TableBlock block={block} />
-    case 'chart':              return <Suspense fallback={<div className="mt-2 h-44 rounded-xl bg-muted animate-pulse" role="status" aria-label="Đang tải biểu đồ" />}><ChartBlock block={block} /></Suspense>
+    case 'chart':              return <ChartBlock block={block} />
     case 'audience_size':      return <AudienceSizeBlock block={block} />
     case 'campaign_list':      return <CampaignListBlock block={block} />
     case 'verdict':            return <VerdictBlock block={block} />

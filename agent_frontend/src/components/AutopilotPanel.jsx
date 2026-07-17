@@ -412,15 +412,15 @@ export default function AutopilotPanel({
         }]
       : waiting?.key === 'assign_creatives'
         ? [
-            { label: 'Tải creative mới', action: onOpenCreative },
             {
-              label: 'Tự gán creative',
+              label: 'Chỉnh phân bổ creative',
               action: () => onOpenAssignments?.({
                 placements: placementResult,
                 creativeFiles,
                 assignmentValue: waiting.result || assignmentResult,
               }),
             },
+            { label: 'Tải creative mới', action: onOpenCreative },
           ]
         : ['prepare_creatives', 'analyze_creatives', 'rank_placements'].includes(waiting?.key)
           ? [{ label: waiting?.result?.reason === 'missing_creative' ? 'Tải creative lên' : 'Chỉnh hoặc thay creative', action: onOpenCreative }]
