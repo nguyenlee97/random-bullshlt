@@ -27,6 +27,7 @@ class AgentState(TypedDict, total=False):
     workspace_events: list[str]
     confirmed_steps: list[int]
     pending_proposal: dict | None
+    auto_approve_brief: bool
     workspace_intent_checked: bool
     canonical_brief_missing: bool
 

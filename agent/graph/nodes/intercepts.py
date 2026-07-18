@@ -239,7 +239,11 @@ async def intercepts_node(state: AgentState) -> dict:
                 # Recovery path for old/model-only recommendations. Let the typed
                 # Brief collector reconstruct a safe proposal from history instead
                 # of claiming the conversation has been forgotten.
-                return {"pending_proposal": None, "used_tool": ""}
+                return {
+                    "pending_proposal": None,
+                    "auto_approve_brief": True,
+                    "used_tool": "",
+                }
         text = (
             "Hiện không có đề xuất nào đang chờ duyệt. "
             "Anh/chị hãy yêu cầu thay đổi cụ thể trước nhé."

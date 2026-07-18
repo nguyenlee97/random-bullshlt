@@ -472,6 +472,47 @@ async def handle_freeform(
     # ── Check if this message confirms a pending proposal ─────────────────────
     # NOTE: pending must be loaded BEFORE the step-1 auto-confirm block below
     pending = await get_pending_proposal(session_id)
+
+    # The legacy path used to let an initial Brief recommendation exist only as
+    # prose. Route every uncommitted step-0 turn through the same typed collector
+    # used by LangGraph. If this turn is an explicit approval, the collector can
+    # safely reconstruct and approve the validated proposal in one operation.
+    if step == 0 and not pending:
+        from workspace.service import get_workspace
+
+        canonical = await get_workspace(session_id)
+        if not canonical.get("artifacts", {}).get("brief", {}).get("value"):
+            from graph.nodes.brief_collector import brief_collector_node
+
+            history = await get_history(session_id)
+            typed = await brief_collector_node({
+                "session_id": session_id,
+                "step": step,
+                "user_message": message,
+                "messages": [
+                    *history,
+                    {"role": "user", "content": message},
+                ],
+                "tokens_spent": 0,
+                "auto_approve_brief": is_confirm_trigger,
+            })
+            # The graph's respond node normally persists explanatory/clarifying
+            # replies. This direct legacy adapter must do that itself.
+            if typed.get("used_tool") == "freeform_chat" and typed.get("response_text"):
+                await add_message(session_id, "user", message)
+                await add_message(session_id, "assistant", typed["response_text"])
+            return AgentResponse(
+                text=typed.get("response_text", ""),
+                blocks=typed.get("response_blocks", []),
+                meta=ResponseMeta(
+                    tool=typed.get("used_tool") or "freeform_chat",
+                    model="minimax",
+                    step=step,
+                ),
+                workspace_update=typed.get("workspace_update"),
+                suggestions=typed.get("suggestions", []),
+            )
+
     if is_confirm_trigger:
         await alog(session_id, "confirm", {"has_pending": bool(pending), "trigger_word": msg_lower[:20]})
         if pending:

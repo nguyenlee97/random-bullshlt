@@ -20,9 +20,9 @@ from autopilot.capabilities import validate_brief_value
 from graph.state import AgentState
 from graph.structured import StructuredOutputError, structured
 from handlers.freeform import _WORKSPACE_SUGGESTIONS, _build_update_summary
-from session import add_message, set_pending_proposal
+from session import add_message, clear_pending_proposal, set_pending_proposal
 from time_context import campaign_now, campaign_today
-from workspace.service import create_proposal, get_workspace
+from workspace.service import approve_proposal, create_proposal, get_workspace
 
 
 class BriefDraft(BaseModel):
@@ -250,6 +250,40 @@ async def brief_collector_node(state: AgentState) -> dict:
         "base_revision": proposal["base_revision"],
         "affected_artifacts": proposal["affected_artifacts"],
     }
+
+    # A plain approval can arrive after an older/model-only recommendation that
+    # never created a durable proposal. The typed collector reconstructs the
+    # exact validated draft from history; approve that newly-created proposal
+    # in the same turn so the user does not have to approve twice.
+    if state.get("auto_approve_brief"):
+        mutation = await approve_proposal(
+            proposal["proposal_id"], actor="campaign_operator"
+        )
+        await clear_pending_proposal(session_id)
+        reply = "✅ Brief đã được xác nhận và lưu vào workspace."
+        await add_message(session_id, "user", state["user_message"])
+        await add_message(session_id, "assistant", reply)
+        await alog(session_id, "confirm", {
+            "event": "brief_proposal_recovered_and_approved",
+            "proposal_id": proposal["proposal_id"],
+            "workspace_revision": mutation["workspace_revision"],
+        })
+        return {
+            "response_text": reply,
+            "response_blocks": [{
+                "type": "info",
+                "text": "Workspace đã cập nhật Brief và sẵn sàng cho bước tiếp theo.",
+            }],
+            "workspace_update": {
+                "field": "brief",
+                "value": value,
+                "proposal_id": proposal["proposal_id"],
+                "workspace_revision": mutation["workspace_revision"],
+            },
+            "used_tool": "workspace_confirmed",
+            "tokens_spent": state.get("tokens_spent", 0) + tokens,
+        }
+
     await set_pending_proposal(session_id, changes)
     reply = _build_update_summary("brief", value, reason)
     await add_message(session_id, "user", state["user_message"])

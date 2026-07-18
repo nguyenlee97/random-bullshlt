@@ -118,6 +118,7 @@ async def handle_freeform_graph(
         "plan": None,
         "critique": None,
         "pending_proposal": None,
+        "auto_approve_brief": False,
         "response_text": "",
         "response_blocks": [],
         "response_meta": {},
