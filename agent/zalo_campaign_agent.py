@@ -33,6 +33,22 @@ _CONFIRM = {
 }
 _REJECT = {"khong dong y", "tu choi", "huy", "huy bo", "khong"}
 
+_GREETING_OR_HELP = {
+    "alo", "ban lam duoc gi", "chao", "chao ban", "hello", "help", "hey",
+    "hi", "menu", "tro giup", "xin chao", "xin chao ban",
+}
+
+_CAMPAIGN_OPERATION_TERMS = (
+    "anh quang cao", "audience", "awareness", "bao cao", "budget",
+    "cap nhat", "cau hinh", "chien dich nay", "chi tiet", "click",
+    "consideration", "conversion", "creative", "ctr", "daily",
+    "dang sao", "executive", "impression", "kich hoat lai", "live",
+    "ngan sach", "pause", "placement", "reach", "report", "resume",
+    "retention", "screenshot", "setup", "status", "sua", "tam dung",
+    "target", "targeting", "the nao", "thay doi", "tiep tuc lai",
+    "trang thai", "xem quang cao",
+)
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -45,6 +61,21 @@ def _fold(value: str) -> str:
         .replace("đ", "d")
         .split()
     )
+
+
+def _help_text() -> str:
+    return (
+        "Chào bạn! Tôi có thể giúp bạn:\n"
+        "• Xem danh sách, trạng thái hoặc cấu hình chiến dịch.\n"
+        "• Hỏi báo cáo Daily Ops, Awareness, Consideration, Conversion, Retention hoặc Executive.\n"
+        "• Xem live view, tạm dừng hoặc tiếp tục chiến dịch (luôn yêu cầu xác nhận).\n"
+        "• Tạo chiến dịch mới bằng Campaign Autopilot.\n"
+        "Hãy gửi yêu cầu hoặc tên/mã chiến dịch khi cần."
+    )
+
+
+def _has_campaign_operation_intent(folded: str) -> bool:
+    return any(term in folded for term in _CAMPAIGN_OPERATION_TERMS)
 
 
 def _public(doc: dict) -> dict:
@@ -208,6 +239,7 @@ async def owned_campaigns(thread: dict) -> list[dict]:
 
 def resolve_campaign(
     message: str, campaigns: list[dict], active_campaign_id: str | None = None,
+    *, allow_context_fallback: bool = True,
 ) -> tuple[dict | None, list[dict]]:
     """Resolve only among already ownership-proven campaigns; never guess."""
     if not campaigns:
@@ -243,12 +275,14 @@ def resolve_campaign(
         return token_matches[0], []
     if len(token_matches) > 1:
         return None, token_matches
-    active_key = str(active_campaign_id or "").lower()
-    if active_key and active_key in by_id:
-        return by_id[active_key], []
-    if len(campaigns) == 1:
-        return campaigns[0], []
-    return None, campaigns
+    if allow_context_fallback:
+        active_key = str(active_campaign_id or "").lower()
+        if active_key and active_key in by_id:
+            return by_id[active_key], []
+        if len(campaigns) == 1:
+            return campaigns[0], []
+        return None, campaigns
+    return None, []
 
 
 def _campaign_choices(campaigns: list[dict]) -> str:
@@ -673,7 +707,9 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
             pass
 
     folded = _fold(message)
-    if any(phrase in folded for phrase in ("tao chien dich", "chien dich moi", "new campaign", "chay autopilot")):
+    if folded in _GREETING_OR_HELP:
+        text = _help_text()
+    elif any(phrase in folded for phrase in ("tao chien dich", "chien dich moi", "new campaign", "chay autopilot")):
         thread = await _update_thread(thread, {"pending_action": {
             "kind": "choose_autopilot_mode",
             "expires_at": _now() + timedelta(minutes=15),
@@ -692,8 +728,10 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
                 "expires_at": _now() + timedelta(minutes=10),
             }})
     else:
+        has_campaign_intent = _has_campaign_operation_intent(folded)
         campaign, ambiguous = resolve_campaign(
             message, campaigns, thread.get("active_campaign_id"),
+            allow_context_fallback=has_campaign_intent,
         )
         if not campaign:
             if ambiguous:
@@ -703,10 +741,12 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
                     "expires_at": _now() + timedelta(minutes=10),
                 }})
                 text = _campaign_choices(ambiguous)
-            else:
+            elif has_campaign_intent:
                 text = (
                     "Tôi chưa xác định được chiến dịch. Hãy gửi tên/mã chiến dịch hoặc hỏi “Danh sách chiến dịch”."
                 )
+            else:
+                text = _help_text()
         else:
             thread = await _select_campaign(thread, campaign)
             if any(word in folded for word in ("tam dung", "pause")):

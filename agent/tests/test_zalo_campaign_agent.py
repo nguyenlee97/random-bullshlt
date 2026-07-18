@@ -41,6 +41,39 @@ def test_campaign_resolver_exact_partial_active_and_ambiguous():
     assert selected is None
     assert {item["campaign_id"] for item in ambiguous} == {"ORD-2026-101", "ORD-2026-102"}
 
+    selected, ambiguous = resolve_campaign(
+        "chào", [summer], allow_context_fallback=False,
+    )
+    assert selected is None
+    assert ambiguous == []
+
+
+@pytest.mark.asyncio
+async def test_greeting_does_not_implicitly_select_only_campaign(monkeypatch):
+    import zalo_campaign_agent as agent
+
+    campaign = _campaign("ORD-GREET", "Doraemon")
+    monkeypatch.setattr(agent, "owned_campaigns", AsyncMock(return_value=[campaign]))
+
+    greeting = await agent.handle_channel_event({
+        "event_name": "user_send_text",
+        "external_uid": "oa-user-greeting",
+        "text": "chào",
+    })
+    assert "Tôi có thể giúp" in greeting[0]
+    assert "ORD-GREET" not in greeting[0]
+    assert "Ngân sách" not in greeting[0]
+
+    thread = await agent.get_or_create_thread("oa-user-greeting")
+    assert thread["active_campaign_id"] is None
+
+    status = await agent.handle_channel_event({
+        "event_name": "user_send_text",
+        "external_uid": "oa-user-greeting",
+        "text": "trạng thái chiến dịch",
+    })
+    assert "ORD-GREET" in status[0]
+
 
 @pytest.mark.asyncio
 async def test_owned_campaigns_fetches_only_order_ids_from_owned_conversations(monkeypatch):
