@@ -26,8 +26,13 @@ export default function ChatThread({ messages, canRetry, onRetry, onSend }) {
 
   if (messages.length === 0) return <EmptyState />
 
-  // Find ID of the last assistant message (not thinking) for retry icon placement
+  // Only the latest assistant reply should expose actions. Keeping suggestions
+  // on every historical report makes a resumed conversation unnecessarily noisy
+  // and leaves stale actions looking active.
   const lastAssistantId = [...messages].reverse().find(
+    m => m.role === 'assistant'
+  )?.id ?? null
+  const lastRetryableAssistantId = [...messages].reverse().find(
     m => m.role === 'assistant' && m.metadata?.tool
   )?.id ?? null
 
@@ -38,7 +43,8 @@ export default function ChatThread({ messages, canRetry, onRetry, onSend }) {
           <MessageBubble
             key={msg.id}
             message={msg}
-            showRetry={canRetry && msg.id === lastAssistantId}
+            showSuggestions={msg.id === lastAssistantId}
+            showRetry={canRetry && msg.id === lastRetryableAssistantId}
             onRetry={onRetry}
             onSend={onSend}
           />
@@ -48,4 +54,3 @@ export default function ChatThread({ messages, canRetry, onRetry, onSend }) {
     </ScrollArea>
   )
 }
-

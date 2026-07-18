@@ -383,80 +383,93 @@ function WorkspaceProposalBlock({ block }) {
 function ReportAnalysisBlock({ block }) {
   const sections = block.sections || []
   return (
-    <Card className="mt-2 border-violet-200 bg-gradient-to-br from-violet-50/50 to-indigo-50/50">
+    <Card className="border-violet-200 bg-gradient-to-br from-violet-50/50 to-indigo-50/50 overflow-hidden">
       {block.title && (
-        <CardHeader className="pb-2 pt-3 flex-row items-center gap-2">
-          <BarChart className="w-4 h-4 text-violet-500" />
-          <CardTitle className="text-xs text-violet-700 font-bold">{block.title}</CardTitle>
+        <CardHeader className="px-3.5 pb-2.5 pt-3.5 flex-row items-start gap-2 border-b border-violet-100/80">
+          <BarChart className="w-4 h-4 mt-0.5 text-violet-500 flex-shrink-0" />
+          <CardTitle className="text-[13px] leading-snug text-violet-800 font-bold break-words">{block.title}</CardTitle>
         </CardHeader>
       )}
-      <CardContent className={`${block.title ? 'pt-0' : 'pt-3'} pb-3 space-y-2.5`}>
+      <CardContent className="pt-3 px-3.5 pb-3.5 space-y-3">
         {sections.map((section, i) => {
           switch (section.type) {
             case 'summary':
             case 'paragraph':
               return (
-                <p key={i} className="text-xs text-foreground leading-relaxed">
-                  {section.text}
-                </p>
+                <div key={i} className="markdown-content text-xs text-foreground leading-relaxed [&_p]:my-0 [&_ul]:my-1 [&_ol]:my-1">
+                  <ReactMarkdown>{section.text || ''}</ReactMarkdown>
+                </div>
               )
             case 'heading':
               return (
-                <p key={i} className="text-xs font-bold text-foreground mt-1">
+                <p key={i} className="text-xs font-bold text-foreground pt-0.5">
                   {section.text}
                 </p>
               )
-            case 'metrics':
+            case 'metrics': {
+              const items = section.items || []
+              const useSingleColumn = items.some(m =>
+                String(m.label || '').length > 24 || String(m.value || '').length > 18
+              )
               return (
-                <div key={i} className="grid grid-cols-2 gap-1.5">
-                  {(section.items || []).map((m, j) => (
-                    <div key={j} className="flex items-center gap-2 p-2 rounded-lg bg-white border border-border">
+                <div key={i} className={`grid gap-2 ${useSingleColumn ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                  {items.map((m, j) => {
+                    const delta = String(m.delta || '').trim()
+                    const showTrend = Boolean(
+                      m.trend &&
+                      delta &&
+                      !/^(?:0(?:[.,]0+)?%?|n\/?a|—|-)$/i.test(delta)
+                    )
+                    return (
+                    <div key={j} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/90 border border-violet-100 shadow-sm min-w-0">
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] text-muted-foreground font-medium truncate">{m.label}</p>
-                        <p className="text-sm font-black text-foreground">{m.value}</p>
+                        <p className="text-[10px] leading-snug text-muted-foreground font-semibold break-words">{m.label}</p>
+                        <p className="mt-0.5 text-sm leading-snug font-bold text-foreground break-words">{m.value}</p>
                       </div>
-                      {m.trend && (
-                        <div className={`flex items-center gap-0.5 text-[10px] font-semibold ${
+                      {showTrend && (
+                        <div className={`flex items-center gap-0.5 pt-0.5 text-[10px] font-semibold flex-shrink-0 ${
                           m.trend === 'up' ? 'text-green-600' : m.trend === 'down' ? 'text-red-600' : 'text-gray-500'
                         }`}>
                           {m.trend === 'up' ? <TrendingUp className="w-3 h-3" /> :
                            m.trend === 'down' ? <TrendingDown className="w-3 h-3" /> :
                            <Minus className="w-3 h-3" />}
-                          {m.delta || ''}
+                          {delta}
                         </div>
                       )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )
+            }
             case 'insight':
               return (
-                <div key={i} className={`p-2 rounded-lg border text-xs font-medium ${
+                <div key={i} className={`flex items-start gap-1.5 p-2.5 rounded-lg border text-xs leading-relaxed font-medium ${
                   section.level === 'good' ? 'bg-green-50 border-green-200 text-green-800' :
                   section.level === 'bad' || section.level === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
                   'bg-blue-50 border-blue-200 text-blue-800'
                 }`}>
-                  {section.level === 'good' ? '✅ ' : section.level === 'bad' ? '⚠️ ' : '💡 '}
-                  {section.text}
+                  <span className="flex-shrink-0">{section.level === 'good' ? '✅' : section.level === 'bad' || section.level === 'warning' ? '⚠️' : '💡'}</span>
+                  <div className="markdown-content min-w-0 [&_p]:my-0"><ReactMarkdown>{section.text || ''}</ReactMarkdown></div>
                 </div>
               )
             case 'comparison':
               return (
-                <div key={i} className="overflow-x-auto">
-                  {section.title && <p className="text-[10px] font-semibold text-muted-foreground mb-1">{section.title}</p>}
-                  <table className="w-full text-[11px]">
+                <div key={i} className="overflow-x-auto rounded-lg border border-violet-100 bg-white/80">
+                  {section.title && <p className="text-[10px] font-semibold text-muted-foreground px-2.5 pt-2">{section.title}</p>}
+                  <table className="w-full min-w-[420px] text-[11px]">
                     <thead>
-                      <tr className="border-b border-border">
+                      <tr className="border-b border-violet-100 bg-violet-50/60">
                         {(section.headers || []).map((h, hi) => (
-                          <th key={hi} className="text-left py-1 px-1.5 font-semibold text-muted-foreground">{h}</th>
+                          <th key={hi} className="text-left py-2 px-2.5 font-semibold text-violet-800 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {(section.rows || []).map((row, ri) => (
-                        <tr key={ri} className="border-b border-border/50">
+                        <tr key={ri} className="border-b border-border/50 last:border-0 even:bg-slate-50/60">
                           {(Array.isArray(row) ? row : []).map((cell, ci) => (
-                            <td key={ci} className="py-1 px-1.5">{cell}</td>
+                            <td key={ci} className="py-2 px-2.5 align-top leading-snug">{cell}</td>
                           ))}
                         </tr>
                       ))}
@@ -468,7 +481,7 @@ function ReportAnalysisBlock({ block }) {
               return (
                 <div key={i} className="space-y-1">
                   {(section.items || []).map((r, ri) => (
-                    <div key={ri} className={`flex items-start gap-2 p-2 rounded-lg border ${
+                    <div key={ri} className={`flex items-start gap-2 p-2.5 rounded-lg border ${
                       r.priority === 'high' ? 'bg-red-50 border-red-200' :
                       r.priority === 'medium' ? 'bg-amber-50 border-amber-200' :
                       'bg-blue-50 border-blue-200'
@@ -477,13 +490,19 @@ function ReportAnalysisBlock({ block }) {
                              className="text-[8px] px-1.5 py-0 flex-shrink-0 mt-0.5">
                         {r.priority === 'high' ? '🔴 Cao' : r.priority === 'medium' ? '🟡 TB' : '🟢 Thấp'}
                       </Badge>
-                      <p className="text-[11px] text-foreground">{r.text}</p>
+                      <div className="markdown-content text-[11px] leading-relaxed text-foreground [&_p]:my-0 [&_ul]:my-1">
+                        <ReactMarkdown>{r.text || ''}</ReactMarkdown>
+                      </div>
                     </div>
                   ))}
                 </div>
               )
             default:
-              return section.text ? <p key={i} className="text-xs text-muted-foreground">{section.text}</p> : null
+              return section.text ? (
+                <div key={i} className="markdown-content text-xs leading-relaxed text-muted-foreground [&_p]:my-0">
+                  <ReactMarkdown>{section.text}</ReactMarkdown>
+                </div>
+              ) : null
           }
         })}
       </CardContent>

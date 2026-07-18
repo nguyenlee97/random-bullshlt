@@ -1108,11 +1108,13 @@ export async function createCampaignOrder(selectedZoneIds, assignments, fileUrls
 }
 
 function safeDemoFallback(response) {
+  const content = response?.content?.trim()
   return {
     ...response,
-    content: `⚠️ **Chế độ demo dự phòng** — Agent service đang tạm thời không khả dụng. Nội dung dưới đây là hướng dẫn đã lưu sẵn và không thay đổi workspace.\n\n${response?.content || ''}`,
+    content: content || 'Em chưa thể trả lời câu hỏi này ngay lúc này. Anh/chị vui lòng thử lại sau ít phút.',
     blocks: [],
     workspace_update: null,
+    timestamp: response?.timestamp || new Date().toISOString(),
     metadata: { ...(response?.metadata || {}), tool: 'demo_fallback', model: 'deterministic-cache', fallback_mode: true },
   }
 }

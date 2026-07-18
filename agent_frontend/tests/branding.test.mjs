@@ -352,12 +352,13 @@ test('report analysis answers import the icon used by their rich block', async (
   assert.match(blocks, /<BarChart className=/)
 })
 
-test('demo fallback is labeled and cannot mutate workspace', async () => {
+test('demo fallback remains internal, timestamped, and cannot mutate workspace', async () => {
   const api = await source('agent_frontend/src/api/agentApi.js')
   const chat = await source('agent_frontend/src/hooks/useChat.js')
   const app = await source('agent_frontend/src/App.jsx')
-  assert.match(api, /Chế độ demo dự phòng/)
+  assert.doesNotMatch(api, /Chế độ demo dự phòng/)
   assert.match(api, /workspace_update: null/)
+  assert.match(api, /timestamp: response\?\.timestamp \|\| new Date\(\)\.toISOString\(\)/)
   assert.match(api, /fallback_mode: true/)
   assert.match(api, /brief chưa được lưu/)
   assert.match(api, /audience chưa được lưu/)
@@ -367,4 +368,24 @@ test('demo fallback is labeled and cannot mutate workspace', async () => {
   assert.match(chat, /Không thể tạo chiến dịch mới/)
   assert.match(chat, /return context/)
   assert.match(app, /if \(!context\) return/)
+})
+
+test('chat hides internal tool and model metadata while preserving retry', async () => {
+  const bubble = await source('agent_frontend/src/components/ChatPane/MessageBubble.jsx')
+  assert.doesNotMatch(bubble, /function ModelBadge/)
+  assert.doesNotMatch(bubble, /tool=\{message\.metadata\.tool\}/)
+  assert.doesNotMatch(bubble, /model=\{message\.metadata\.model\}/)
+  assert.match(bubble, /function RetryAction/)
+  assert.match(bubble, /hasReportAnalysis/)
+  assert.match(bubble, /!hasReportAnalysis && message\.content/)
+})
+
+test('report answers use adaptive metrics and suppress meaningless trend deltas', async () => {
+  const blocks = await source('agent_frontend/src/blocks/BlockRenderer.jsx')
+  const thread = await source('agent_frontend/src/components/ChatPane/ChatThread.jsx')
+  assert.match(blocks, /useSingleColumn/)
+  assert.match(blocks, /break-words/)
+  assert.match(blocks, /showTrend/)
+  assert.match(blocks, /min-w-\[420px\]/)
+  assert.match(thread, /showSuggestions=\{msg\.id === lastAssistantId\}/)
 })

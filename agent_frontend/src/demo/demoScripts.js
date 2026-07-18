@@ -243,7 +243,7 @@ export const STAGE1_STEPS = [
     target: '[data-demo="chat-thread"]',
     position: 'right',
     title: '🤖 Chat Bubble',
-    text: 'Agent sẽ trả lời ở đây — bao gồm text, bảng dữ liệu, và các nút hành động. Mỗi tin nhắn hiển thị tool đã dùng và model AI.',
+    text: 'Agent sẽ trả lời ở đây — bao gồm nội dung tư vấn, bảng dữ liệu và các nút hành động phù hợp.',
   },
   {
     type: 'TOOLTIP',
