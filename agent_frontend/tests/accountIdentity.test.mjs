@@ -38,6 +38,10 @@ test('Zalo is the primary login while local auth remains an explicit test fallba
   assert.match(accountMenu, /Liên kết chat Zalo OA/)
   assert.match(zaloLink, /LINK \$\{attempt\.link_code\}/)
   assert.match(zaloLink, /getZaloChannelLink/)
+  assert.match(zaloLink, /zalo-follow-only-button/)
+  assert.match(zaloLink, /data-oaid/)
+  assert.match(zaloLink, /ZaloSocialSDK\?\.reload/)
+  assert.match(zaloLink, /IOT Generation/)
 })
 
 test('account and device histories are labeled and only device campaigns can claim', () => {

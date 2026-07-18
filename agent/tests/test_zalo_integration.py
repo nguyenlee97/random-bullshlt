@@ -1,6 +1,7 @@
 import hashlib
 import json
 import time
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -23,21 +24,27 @@ def _enable_oa(monkeypatch):
     monkeypatch.setattr(config, "ZALO_OA_ENABLED", True)
     monkeypatch.setattr(config, "ZALO_APP_ID", "app-test-1")
     monkeypatch.setattr(config, "ZALO_OA_ID", "oa-test-1")
+    monkeypatch.setattr(config, "ZALO_OA_NAME", "IOT Generation Test")
     monkeypatch.setattr(config, "ZALO_OA_SECRET", "oa-secret-test-1")
     monkeypatch.setattr(config, "ZALO_WEBHOOK_MAX_SKEW_SECONDS", 600)
 
 
-def _signed_event(*, text="hello", message_id="msg-1", uid="oa-user-1"):
+def _signed_event(
+    *, text="hello", message_id="msg-1", uid="oa-user-1",
+    event_name="user_send_text", user_id_by_app=None,
+):
     from config import config
 
     body = {
         "app_id": config.ZALO_APP_ID,
-        "event_name": "user_send_text",
+        "event_name": event_name,
         "sender": {"id": uid},
         "recipient": {"id": config.ZALO_OA_ID},
         "message": {"text": text, "msg_id": message_id},
         "timestamp": str(int(time.time() * 1000)),
     }
+    if user_id_by_app:
+        body["user_id_by_app"] = user_id_by_app
     raw = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     mac = hashlib.sha256(
         config.ZALO_APP_ID.encode()
@@ -46,6 +53,15 @@ def _signed_event(*, text="hello", message_id="msg-1", uid="oa-user-1"):
         + config.ZALO_OA_SECRET.encode()
     ).hexdigest()
     return body, raw, f"mac={mac}"
+
+
+def test_channel_link_expiry_accepts_legacy_naive_mongo_datetimes():
+    import zalo_channel
+
+    assert zalo_channel._is_expired(datetime.utcnow() - timedelta(seconds=1)) is True
+    assert zalo_channel._is_expired(
+        datetime.now(timezone.utc) + timedelta(seconds=30)
+    ) is False
 
 
 @pytest.mark.asyncio
@@ -161,6 +177,47 @@ async def test_signed_oa_link_message_links_once_and_replay_is_idempotent(monkey
     assert len(storage["events"]) == 1
     assert len(storage["identities"]) == 1
     assert attempt["link_code"] not in repr(storage["links"])
+
+
+@pytest.mark.asyncio
+async def test_signed_follow_links_only_matching_zalo_login_with_pending_attempt(monkeypatch):
+    _enable_oa(monkeypatch)
+    from accounts import authenticate_zalo_account
+    import zalo_channel
+
+    user = await authenticate_zalo_account("app-follow-user-1", "Follow User")
+    attempt = await zalo_channel.start_channel_link(user["user_id"])
+    assert attempt["oa_name"] == "IOT Generation Test"
+
+    wrong_body, wrong_raw, wrong_signature = _signed_event(
+        event_name="follow",
+        message_id="follow-wrong-1",
+        uid="oa-follow-user-1",
+        user_id_by_app="untrusted-browser-value",
+    )
+    zalo_channel.verify_webhook(wrong_raw, wrong_body, wrong_signature)
+    wrong = await zalo_channel.record_event(
+        zalo_channel.normalize_event(wrong_body, wrong_raw)
+    )
+    assert wrong["link"] is None
+    assert (await zalo_channel.get_channel_link(
+        user["user_id"], attempt["attempt_id"]
+    ))["status"] == "pending"
+
+    body, raw, signature = _signed_event(
+        event_name="follow",
+        message_id="follow-valid-1",
+        uid="oa-follow-user-1",
+        user_id_by_app="app-follow-user-1",
+    )
+    zalo_channel.verify_webhook(raw, body, signature)
+    result = await zalo_channel.record_event(zalo_channel.normalize_event(body, raw))
+    assert result["link"] == {"status": "linked", "user_id": user["user_id"]}
+    status = await zalo_channel.get_channel_link(user["user_id"], attempt["attempt_id"])
+    assert status["status"] == "linked"
+    assert status["link_method"] == "signed_follow"
+    linked = await zalo_channel.get_linked_channel_for_user(user["user_id"])
+    assert linked["status"] == "linked"
 
 
 @pytest.mark.asyncio

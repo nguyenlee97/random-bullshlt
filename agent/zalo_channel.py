@@ -50,6 +50,15 @@ def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _is_expired(value: datetime | None) -> bool:
+    """Accept both legacy naive Mongo datetimes and timezone-aware values."""
+    if value is None:
+        return True
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value <= _now()
+
+
 def _public(doc: dict | None) -> dict | None:
     if doc is None:
         return None
@@ -169,8 +178,8 @@ def normalize_event(body: dict, raw_body: bytes) -> dict:
         "event_name": event_name,
         "external_event_id": external_event_id,
         "external_uid": external_uid,
-        # Some payload families expose this separately.  It is retained for
-        # diagnostics, never used as implicit account-link proof.
+        # This signed app-scoped identifier may match a Zalo Login identity,
+        # but only while that account has an explicit pending link attempt.
         "app_scoped_uid": str(body.get("user_id_by_app") or "").strip()[:200] or None,
         "text": text,
         "provider_timestamp": str(body.get("timestamp") or ""),
@@ -228,6 +237,7 @@ async def start_channel_link(user_id: str) -> dict:
     await _audit("channel_link_started", user_id=user_id, channel="zalo_oa", oa_id=config.ZALO_OA_ID)
     return {
         **_public(doc),
+        "oa_name": config.ZALO_OA_NAME,
         "link_code": code,
         "instruction": f"Send LINK {code} to the Zalo OA within 10 minutes.",
     }
@@ -245,7 +255,7 @@ async def get_channel_link(user_id: str, attempt_id: str) -> dict:
             doc = None
     if not doc:
         raise KeyError("channel link not found")
-    if doc.get("status") == "pending" and doc.get("expires_at") <= _now():
+    if doc.get("status") == "pending" and _is_expired(doc.get("expires_at")):
         doc["status"] = "expired"
     return _public(doc)
 
@@ -286,15 +296,49 @@ async def _consume_link_code(code: str, external_uid: str) -> dict | None:
     return attempt
 
 
-async def confirm_link_from_event(event: dict) -> dict | None:
-    if event.get("event_name") != "user_send_text" or not event.get("external_uid"):
-        return None
-    match = _LINK_RE.fullmatch(event.get("text") or "")
-    if not match:
-        return None
-    attempt = await _consume_link_code(match.group(1), event["external_uid"])
-    if not attempt:
-        return {"status": "invalid_or_expired"}
+async def _consume_pending_link_for_user(user_id: str, external_uid: str) -> dict | None:
+    """Atomically consume the newest explicit attempt for a signed follow event."""
+    now = _now()
+    collections = await _collections()
+    if collections is not None:
+        return await collections["links"].find_one_and_update(
+            {
+                "user_id": user_id,
+                "channel": "zalo_oa",
+                "oa_id": config.ZALO_OA_ID,
+                "status": "pending",
+                "expires_at": {"$gt": now},
+            },
+            {"$set": {
+                "status": "linking",
+                "external_uid": external_uid,
+                "linked_at": now,
+                "link_method": "signed_follow",
+            }},
+            sort=[("created_at", -1)],
+            return_document=ReturnDocument.AFTER,
+        )
+    async with _mem_lock:
+        candidates = [
+            item for item in _mem_links.values()
+            if item.get("user_id") == user_id
+            and item.get("channel") == "zalo_oa"
+            and item.get("oa_id") == config.ZALO_OA_ID
+            and item.get("status") == "pending"
+            and item.get("expires_at") > now
+        ]
+        attempt = max(candidates, key=lambda item: item["created_at"], default=None)
+        if attempt:
+            attempt.update({
+                "status": "linking",
+                "external_uid": external_uid,
+                "linked_at": now,
+                "link_method": "signed_follow",
+            })
+        return attempt
+
+
+async def _complete_link_attempt(attempt: dict, event: dict) -> dict:
     key = ("zalo_oa", config.ZALO_OA_ID, event["external_uid"])
     now = _now()
     identity_doc = {
@@ -352,8 +396,37 @@ async def confirm_link_from_event(event: dict) -> dict | None:
         user_id=attempt["user_id"],
         channel="zalo_oa",
         oa_id=config.ZALO_OA_ID,
+        link_method=attempt.get("link_method", "link_code"),
     )
     return {"status": "linked", "user_id": attempt["user_id"]}
+
+
+async def confirm_link_from_event(event: dict) -> dict | None:
+    """Complete only an explicit link attempt using signed provider evidence."""
+    external_uid = event.get("external_uid")
+    if not external_uid:
+        return None
+    attempt = None
+    if event.get("event_name") == "user_send_text":
+        match = _LINK_RE.fullmatch(event.get("text") or "")
+        if not match:
+            return None
+        attempt = await _consume_link_code(match.group(1), external_uid)
+        if not attempt:
+            return {"status": "invalid_or_expired"}
+        attempt["link_method"] = "link_code"
+    elif event.get("event_name") == "follow" and event.get("app_scoped_uid"):
+        from accounts import _find_provider_identity
+
+        identity = await _find_provider_identity("zalo", event["app_scoped_uid"])
+        if not identity or not identity.get("user_id"):
+            return None
+        attempt = await _consume_pending_link_for_user(identity["user_id"], external_uid)
+        if not attempt:
+            return None
+    else:
+        return None
+    return await _complete_link_attempt(attempt, event)
 
 
 async def unlink_channel(user_id: str) -> bool:

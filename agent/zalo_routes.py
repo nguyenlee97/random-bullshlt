@@ -120,6 +120,7 @@ async def zalo_webhook_health():
         "service": "advertising-agent-zalo-webhook",
         "configured": channel_ready(),
         "oa_id": config.ZALO_OA_ID or None,
+        "oa_name": config.ZALO_OA_NAME or None,
     }
 
 

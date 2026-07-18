@@ -272,7 +272,7 @@ channel_identities
   status(pending|linked|revoked), linked_at
 ```
 
-A Zalo Login identity and a Zalo OA-scoped UID are separate external identities. Link them to the same internal user through a short-lived, one-time linking transaction; do not assume the identifiers are interchangeable.
+A Zalo Login identity and a Zalo OA-scoped UID are separate external identities. Link them to the same internal user through a short-lived, one-time linking transaction; do not assume the identifiers are interchangeable. The preferred UX is an OA follow widget, but its browser callback is not identity proof: only a signed `follow` webhook whose `user_id_by_app` matches the authenticated Zalo Login identity may consume that account's explicit pending link attempt. A signed one-time `LINK` message remains the fallback for users who already follow the OA.
 
 ### 7.3 Authentication sequence
 
@@ -329,7 +329,7 @@ Every workspace, run, proposal and order operation must resolve the actor server
 
 ## 8. FE-3 — Zalo OA channel foundation
 
-Implementation status (2026-07-18): the first transport/identity foundation is locally code-complete. The Agent API now exposes a fail-closed raw-body signature-verified webhook, validates the configured App/OA and timestamp, deduplicates durable `channel_events`, and links a Zalo OA-scoped sender to an authenticated account only after that sender transmits a short-lived one-time `LINK` code. Login and OA IDs are never assumed interchangeable. The frontend can initiate and poll this explicit link and can unlink the OA without deleting web history. The durable agent-turn worker, OA rotating token manager, outbound delivery/receipt retry, Guided/Autopilot channel renderer and real-OA activation remain FE-3 work.
+Implementation status (2026-07-18): the transport/identity foundation is deployed against the `IOT Generation` OA. The Agent API exposes a fail-closed raw-body signature-verified webhook, validates the configured App/OA and timestamp, and deduplicates durable `channel_events`. An authenticated user explicitly starts a short-lived link attempt, then either follows the named OA through the embedded official widget or sends the one-time `LINK` fallback. The widget callback changes UI state only. Account linking occurs only from the signed `follow` event matched through `user_id_by_app`, or from the signed OA message carrying the one-time code. Login and OA IDs are never assumed interchangeable. The durable agent-turn worker, OA rotating token manager, outbound delivery/receipt retry and Guided/Autopilot channel renderer remain FE-3 work.
 
 ### 8.1 Reuse from `them-ga-ran`
 

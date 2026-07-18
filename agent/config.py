@@ -132,6 +132,7 @@ class Config:
     # fails closed when this switch is enabled and the OA secret is missing.
     ZALO_OA_ENABLED: bool = os.getenv("ZALO_OA_ENABLED", "false").lower() == "true"
     ZALO_OA_ID: str = os.getenv("ZALO_OA_ID", "")
+    ZALO_OA_NAME: str = os.getenv("ZALO_OA_NAME", "IOT Generation")
     ZALO_OA_SECRET: str = os.getenv("ZALO_OA_SECRET", "")
     ZALO_WEBHOOK_MAX_SKEW_SECONDS: int = int(
         os.getenv("ZALO_WEBHOOK_MAX_SKEW_SECONDS", "600")
