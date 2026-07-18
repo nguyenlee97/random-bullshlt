@@ -787,6 +787,82 @@ async def _render_openai_tool_result(
 
 
 async def handle_channel_event(event: dict) -> list[str | dict]:
+    """Process a Zalo turn with bounded context and model-selected tools."""
+    if not config.ZALO_OPENAI_ENABLED:
+        return await _handle_channel_event_legacy(event)
+    external_uid = event.get("external_uid")
+    if not external_uid or event.get("event_name") not in {"user_send_text", "user_send_image"}:
+        return []
+    message = str(event.get("text") or "").strip()
+    if not message and event.get("images"):
+        return [
+            "\u0110\u00e3 nh\u1eadn \u1ea3nh. Upload creative tr\u1ef1c ti\u1ebfp qua Zalo s\u1ebd \u0111\u01b0\u1ee3c n\u1ed1i v\u00e0o Autopilot \u1edf b\u1ea3n k\u1ebf ti\u1ebfp; "
+            f"hi\u1ec7n t\u1ea1i vui l\u00f2ng m\u1edf workspace: {config.ZALO_WEB_WORKSPACE_URL}"
+        ]
+    if not message:
+        return []
+
+    from session import add_message
+    from zalo_sessions import append_chat_message, build_context, get_or_roll_chat_session
+
+    thread = await get_or_create_thread(external_uid)
+    chat_session, rolled, _previous = await get_or_roll_chat_session(thread)
+    if rolled and thread.get("pending_action"):
+        # A confirmation cannot be carried into a different time-bounded chat.
+        thread = await _update_thread(thread, {"pending_action": None})
+    await add_message(thread["session_id"], "user", message)
+    chat_session = await append_chat_message(chat_session["chat_session_id"], "user", message)
+
+    # Only deterministic confirmation/rejection gates run ahead of the model.
+    # Language understanding and normal workflow progression stay in the tool loop.
+    pending_kind = (thread.get("pending_action") or {}).get("kind")
+    explicit_decision = _fold(message) in _CONFIRM.union(_REJECT)
+    if (pending_kind in {"campaign_lifecycle", "confirm_autopilot_brief"} and explicit_decision) or pending_kind == "campaign_selection":
+        campaigns = await owned_campaigns(thread)
+        pending_text, thread = await _handle_pending(thread, message, campaigns)
+        if pending_text:
+            await add_message(thread["session_id"], "assistant", pending_text)
+            await append_chat_message(chat_session["chat_session_id"], "assistant", pending_text)
+            return [pending_text]
+
+    # Existing Autopilot review remains a server-side confirmation boundary.
+    # It is only entered for an explicit confirmation/rejection phrase.
+    active_session = thread.get("active_campaign_session_id")
+    if active_session and _fold(message) in _CONFIRM.union(_REJECT):
+        try:
+            from autopilot.service import get_latest_run
+            run = await get_latest_run(active_session)
+            if run and run.get("status") == "waiting_review":
+                from autopilot.chat import route_autopilot_chat
+                response = await route_autopilot_chat(message, active_session, 0)
+                if response is not None:
+                    await add_message(thread["session_id"], "assistant", response.text)
+                    await append_chat_message(chat_session["chat_session_id"], "assistant", response.text)
+                    return [response.text]
+        except Exception:
+            pass
+
+    context_messages, bridge_summary = await build_context(thread["thread_id"], chat_session)
+    try:
+        from zalo_openai import run_zalo_tool_turn
+        result = await run_zalo_tool_turn(
+            thread=thread, message=message, messages=context_messages,
+            bridge_summary=bridge_summary,
+        )
+        text = result.text
+        response_parts: list[str | dict] = [text, *result.media_parts]
+    except Exception:
+        text = (
+            "Tr\u1ee3 l\u00fd h\u1ed9i tho\u1ea1i \u0111ang t\u1ea1m th\u1eddi kh\u00f4ng k\u1ebft n\u1ed1i \u0111\u01b0\u1ee3c v\u1edbi OpenAI. "
+            "Kh\u00f4ng c\u00f3 thao t\u00e1c hay thay \u0111\u1ed5i chi\u1ebfn d\u1ecbch n\u00e0o \u0111\u01b0\u1ee3c th\u1ef1c hi\u1ec7n; vui l\u00f2ng th\u1eed l\u1ea1i sau \u00edt ph\u00fat."
+        )
+        response_parts = [text]
+    await add_message(thread["session_id"], "assistant", text)
+    await append_chat_message(chat_session["chat_session_id"], "assistant", text)
+    return response_parts
+
+
+async def _handle_channel_event_legacy(event: dict) -> list[str | dict]:
     """Process one durable normalized inbound event into concise text parts."""
     external_uid = event.get("external_uid")
     if not external_uid:
@@ -1007,3 +1083,8 @@ def reset_channel_agent_for_test() -> None:
     _mem_threads.clear()
     _mem_subscriptions.clear()
     _mem_media.clear()
+    try:
+        from zalo_sessions import reset_zalo_sessions_for_test
+        reset_zalo_sessions_for_test()
+    except ImportError:
+        pass

@@ -307,8 +307,10 @@ async def process_available_once() -> dict:
     """Deterministic single-cycle entrypoint used by tests and readiness drills."""
     inbound = await _process_event_once()
     progress = await _process_progress_once()
+    from zalo_sessions import process_summary_once
+    summary = await process_summary_once()
     outbound = await _send_outbound_once()
-    return {"inbound": inbound, "progress": progress, "outbound": outbound}
+    return {"inbound": inbound, "progress": progress, "summary": summary, "outbound": outbound}
 
 
 async def _loop() -> None:

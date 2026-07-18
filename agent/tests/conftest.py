@@ -127,4 +127,12 @@ def reset_session_col(monkeypatch):
         zalo_openai.reset_zalo_openai_for_test()
     except ImportError:
         pass
+    try:
+        import zalo_sessions
+        zalo_sessions.reset_zalo_sessions_for_test()
+        monkeypatch.setattr(
+            zalo_sessions, "_mem_lock", __import__("asyncio").Lock(), raising=False
+        )
+    except ImportError:
+        pass
     yield

@@ -180,6 +180,41 @@ class Config:
     ZALO_CHAT_MAX_RETRIES: int = int(
         os.getenv("ZALO_CHAT_MAX_RETRIES", "1")
     )
+    # Channel-native conversational context. The permanent OA thread is split
+    # into bounded chat sessions without changing the canonical conversation.
+    ZALO_CHAT_SESSION_MAX_MINUTES: int = int(
+        os.getenv("ZALO_CHAT_SESSION_MAX_MINUTES", "60")
+    )
+    ZALO_CHAT_SESSION_IDLE_MINUTES: int = int(
+        os.getenv("ZALO_CHAT_SESSION_IDLE_MINUTES", "20")
+    )
+    ZALO_CONTEXT_MAX_MESSAGES: int = int(
+        os.getenv("ZALO_CONTEXT_MAX_MESSAGES", "30")
+    )
+    ZALO_CONTEXT_MAX_INPUT_TOKENS: int = int(
+        os.getenv("ZALO_CONTEXT_MAX_INPUT_TOKENS", "24000")
+    )
+    ZALO_CONTEXT_MAX_MESSAGE_TOKENS: int = int(
+        os.getenv("ZALO_CONTEXT_MAX_MESSAGE_TOKENS", "6000")
+    )
+    ZALO_CONTEXT_MAX_TOOL_TOKENS: int = int(
+        os.getenv("ZALO_CONTEXT_MAX_TOOL_TOKENS", "8000")
+    )
+    ZALO_CONTEXT_MAX_SUMMARY_TOKENS: int = int(
+        os.getenv("ZALO_CONTEXT_MAX_SUMMARY_TOKENS", "1200")
+    )
+    ZALO_CHAT_MAX_TOOL_ROUNDS: int = int(
+        os.getenv("ZALO_CHAT_MAX_TOOL_ROUNDS", "5")
+    )
+    ZALO_CHAT_MAX_TOOL_CALLS: int = int(
+        os.getenv("ZALO_CHAT_MAX_TOOL_CALLS", "8")
+    )
+    ZALO_SUMMARY_MESSAGE_INTERVAL: int = int(
+        os.getenv("ZALO_SUMMARY_MESSAGE_INTERVAL", "8")
+    )
+    ZALO_SUMMARY_TOKEN_INTERVAL: int = int(
+        os.getenv("ZALO_SUMMARY_TOKEN_INTERVAL", "4000")
+    )
     ZALO_WORKER_POLL_SECONDS: float = float(
         os.getenv("ZALO_WORKER_POLL_SECONDS", "1.0")
     )

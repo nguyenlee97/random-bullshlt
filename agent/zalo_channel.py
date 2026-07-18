@@ -84,6 +84,7 @@ async def _collections() -> dict[str, object] | None:
         "outbound": db["channel_outbound_messages"],
         "subscriptions": db["channel_run_subscriptions"],
         "media": db["channel_media"],
+        "chat_sessions": db["channel_chat_sessions"],
     }
 
 
@@ -146,6 +147,23 @@ async def ensure_zalo_channel_indexes() -> None:
     )
     await collections["media"].create_index(
         "expires_at", expireAfterSeconds=0, name="channel_media_expiry_ttl"
+    )
+    await collections["chat_sessions"].create_index(
+        [("thread_id", 1), ("sequence", 1)], unique=True,
+        name="channel_chat_session_sequence_unique",
+    )
+    await collections["chat_sessions"].create_index(
+        [("thread_id", 1), ("status", 1)], unique=True,
+        partialFilterExpression={"status": "open"},
+        name="channel_chat_session_one_open",
+    )
+    await collections["chat_sessions"].create_index(
+        [("thread_id", 1), ("started_at", -1)],
+        name="channel_chat_session_thread_time",
+    )
+    await collections["chat_sessions"].create_index(
+        [("summary_status", 1), ("summary_lease_expires_at", 1), ("last_activity_at", 1)],
+        name="channel_chat_summary_queue",
     )
 
 

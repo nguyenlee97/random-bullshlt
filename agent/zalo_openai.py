@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from typing import Literal
 
 from openai import AsyncOpenAI
@@ -54,6 +55,26 @@ class ZaloBriefDraft(BaseModel):
     notes: str = ""
 
 
+class ZaloSessionSummary(BaseModel):
+    summary: str = ""
+    user_goals: list[str] = Field(default_factory=list)
+    campaigns_discussed: list[str] = Field(default_factory=list)
+    resolved_questions: list[str] = Field(default_factory=list)
+    unresolved_questions: list[str] = Field(default_factory=list)
+    decisions: list[str] = Field(default_factory=list)
+    user_preferences: list[str] = Field(default_factory=list)
+    last_topic: str = ""
+    last_campaign_reference: str = ""
+
+
+@dataclass
+class ZaloToolTurnResult:
+    text: str
+    thread: dict
+    media_parts: list[dict]
+    tool_calls: list[str]
+
+
 _client: AsyncOpenAI | None = None
 
 
@@ -96,6 +117,159 @@ def _bounded_history(history: list[dict]) -> list[dict]:
         for item in history[-12:]
         if item.get("content")
     ]
+
+
+_TOOL_AGENT_INSTRUCTIONS = """
+You are the Advertising Agent inside a Zalo OA chat. Reply in natural, concise
+Vietnamese. Understand Vietnamese with or without accents, typos, pronouns and
+follow-up references.
+
+Do not dump campaign data when the user only greets, thanks you, or makes small
+talk. Call tools only when facts or workflow actions are needed. You may call
+multiple tools in sequence. If a campaign is ambiguous, use list_campaigns or
+the candidates returned by a tool and ask one focused clarification question.
+Never guess.
+
+The model never decides ownership. Tool output is the only source of truth for
+campaign status, setup, and reports. A memory summary is conversational context,
+not current campaign state. Report data comes from the existing synthetic/demo
+report module; clearly say so when answering report-data questions.
+
+Existing campaigns are read-only except pause and resume. Do not change budget,
+dates, audience, placement, or creative; direct those edits to the web workspace.
+Pause/resume tools only prepare a proposal. Show their confirmation_prompt and
+never say the mutation happened. New campaigns must use Campaign Autopilot.
+Its only modes are fully_automatic and semi_automatic, and both stop for an
+explicit confirmation before launch.
+
+Never invent a tool result, campaign ID, or metric. Do not use Markdown tables.
+Lead with the answer, include only useful detail, and suggest a next step only
+when it genuinely helps.
+""".strip()
+
+
+def _dump_item(item) -> dict:
+    if hasattr(item, "model_dump"):
+        return item.model_dump(exclude_none=True)
+    if isinstance(item, dict):
+        return dict(item)
+    return {
+        key: getattr(item, key) for key in
+        ("type", "id", "call_id", "name", "arguments", "content", "status")
+        if getattr(item, key, None) is not None
+    }
+
+
+def _item_value(item, key: str, default=None):
+    return item.get(key, default) if isinstance(item, dict) else getattr(item, key, default)
+
+
+async def run_zalo_tool_turn(
+    *, thread: dict, message: str, messages: list[dict], bridge_summary: dict | None,
+) -> ZaloToolTurnResult:
+    """Run a bounded Responses API function-calling loop for one OA turn."""
+    from zalo_tools import ToolExecutionContext, ZALO_TOOLS, execute_zalo_tool, tool_output_json
+
+    input_items: list[dict] = []
+    if bridge_summary:
+        input_items.append({
+            "role": "user",
+            "content": "Memory summary from the previous Zalo chat session (not current campaign state):\n"
+                       + json.dumps(bridge_summary, ensure_ascii=False),
+        })
+    pending = thread.get("pending_action") or {}
+    if pending:
+        input_items.append({
+            "role": "user",
+            "content": "SERVER_WORKFLOW_STATE (server-authoritative): " + json.dumps({
+                "pending_kind": pending.get("kind"),
+                "autopilot_mode": pending.get("mode"),
+                "active_campaign_id": thread.get("active_campaign_id"),
+            }, ensure_ascii=False),
+        })
+    input_items.extend({"role": item["role"], "content": item["content"]} for item in messages)
+    if not input_items or input_items[-1].get("role") != "user":
+        input_items.append({"role": "user", "content": message})
+
+    execution = ToolExecutionContext(thread=thread, current_message=message, history=messages)
+    call_names: list[str] = []
+    total_calls = 0
+    client = _get_client()
+    for _round in range(max(1, config.ZALO_CHAT_MAX_TOOL_ROUNDS)):
+        response = await client.responses.create(
+            model=config.ZALO_CHAT_MODEL,
+            instructions=_TOOL_AGENT_INSTRUCTIONS,
+            input=input_items,
+            tools=ZALO_TOOLS,
+            tool_choice="auto",
+            parallel_tool_calls=False,
+            max_tool_calls=max(1, config.ZALO_CHAT_MAX_TOOL_CALLS - total_calls),
+            reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
+            max_output_tokens=config.ZALO_CHAT_MAX_OUTPUT_TOKENS,
+            store=False,
+            safety_identifier=_safety_identifier(thread["thread_id"]),
+        )
+        outputs = list(getattr(response, "output", None) or [])
+        calls = [item for item in outputs if _item_value(item, "type") == "function_call"]
+        if not calls:
+            text = str(getattr(response, "output_text", "") or "").strip()
+            if not text:
+                raise RuntimeError("OpenAI returned neither text nor a function call")
+            return ZaloToolTurnResult(
+                text=text[:2000], thread=execution.thread,
+                media_parts=execution.media_parts, tool_calls=call_names,
+            )
+        input_items.extend(_dump_item(item) for item in outputs)
+        for call in calls:
+            total_calls += 1
+            name = str(_item_value(call, "name") or "")
+            call_names.append(name)
+            call_id = str(_item_value(call, "call_id") or "")
+            if total_calls > config.ZALO_CHAT_MAX_TOOL_CALLS:
+                result = {"ok": False, "error": "tool_call_limit_reached"}
+            else:
+                try:
+                    raw_arguments = _item_value(call, "arguments", "{}")
+                    arguments = json.loads(raw_arguments) if isinstance(raw_arguments, str) else dict(raw_arguments or {})
+                    result = await execute_zalo_tool(execution, name, arguments)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    result = {"ok": False, "error": "invalid_tool_arguments"}
+                except Exception:
+                    result = {"ok": False, "error": "tool_execution_failed"}
+            input_items.append({
+                "type": "function_call_output", "call_id": call_id,
+                "output": tool_output_json(result),
+            })
+    raise RuntimeError("Zalo tool loop reached its maximum number of rounds")
+
+
+_SUMMARY_INSTRUCTIONS = """
+Summarize this Zalo conversation as memory for a later session. Preserve user
+goals, campaigns discussed, resolved and unresolved questions, decisions,
+preferences, the last topic, and the last campaign reference. Merge the prior
+summary when supplied. Never invent facts, treat campaign status as current,
+or include secrets and tokens. Keep text in the language used by the user.
+""".strip()
+
+
+async def summarize_zalo_session(
+    *, previous_summary: dict | None, messages: list[dict], thread_id: str,
+) -> dict:
+    payload = {
+        "previous_summary": previous_summary,
+        "messages": [{"role": item.get("role"), "content": str(item.get("content") or "")[:6000]}
+                     for item in messages[-30:]],
+    }
+    response = await _get_client().responses.parse(
+        model=config.ZALO_CHAT_MODEL, instructions=_SUMMARY_INSTRUCTIONS,
+        input=json.dumps(payload, ensure_ascii=False), text_format=ZaloSessionSummary,
+        reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
+        max_output_tokens=min(config.ZALO_CHAT_MAX_OUTPUT_TOKENS, 1200),
+        store=False, safety_identifier=_safety_identifier(thread_id),
+    )
+    if response.output_parsed is None:
+        raise RuntimeError("OpenAI returned no Zalo session summary")
+    return response.output_parsed.model_dump()
 
 
 _PLAN_INSTRUCTIONS = """

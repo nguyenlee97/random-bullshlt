@@ -76,10 +76,10 @@ async def test_greeting_does_not_implicitly_select_only_campaign(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_openai_planner_understands_active_campaign_list_request(monkeypatch):
+async def test_openai_tool_agent_understands_active_campaign_list_request(monkeypatch):
     import zalo_campaign_agent as agent
     from config import config
-    from zalo_openai import ZaloTurnPlan
+    from zalo_openai import ZaloToolTurnResult
 
     campaigns = [
         _campaign("ORD-RUNNING", "Doraemon", "active"),
@@ -87,13 +87,11 @@ async def test_openai_planner_understands_active_campaign_list_request(monkeypat
     ]
     monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
     monkeypatch.setattr(agent, "owned_campaigns", AsyncMock(return_value=campaigns))
-    monkeypatch.setattr(agent, "_plan_openai_turn", AsyncMock(return_value=ZaloTurnPlan(
-        intent="list_campaigns", campaign_status_filter="active",
-    )))
-    monkeypatch.setattr(
-        agent, "_render_openai_tool_result",
-        AsyncMock(side_effect=lambda **kwargs: kwargs["tool_result"]),
-    )
+    tool_agent = AsyncMock(return_value=ZaloToolTurnResult(
+        text="Doraemon — active — ORD-RUNNING", thread={},
+        media_parts=[], tool_calls=["list_campaigns"],
+    ))
+    monkeypatch.setattr("zalo_openai.run_zalo_tool_turn", tool_agent)
 
     response = await agent.handle_channel_event({
         "event_name": "user_send_text",
@@ -105,6 +103,7 @@ async def test_openai_planner_understands_active_campaign_list_request(monkeypat
     assert "ORD-RUNNING" in response[0]
     assert "Summer" not in response[0]
     assert "Tôi có thể giúp" not in response[0]
+    tool_agent.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -152,7 +151,8 @@ async def test_openai_planner_failure_fails_closed_without_campaign_mutation(mon
     monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
     monkeypatch.setattr(agent, "owned_campaigns", AsyncMock(return_value=[campaign]))
     monkeypatch.setattr(
-        agent, "_plan_openai_turn", AsyncMock(side_effect=RuntimeError("provider down")),
+        "zalo_openai.run_zalo_tool_turn",
+        AsyncMock(side_effect=RuntimeError("provider down")),
     )
     monkeypatch.setattr("tools.order_api.set_order_delivery_state", mutation)
 
