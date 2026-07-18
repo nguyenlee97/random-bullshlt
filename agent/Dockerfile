@@ -8,6 +8,7 @@ RUN apt-get update \
 
 COPY requirements.txt requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.lock
+RUN python -m playwright install --with-deps chromium
 
 COPY . .
 

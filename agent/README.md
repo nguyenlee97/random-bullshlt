@@ -195,7 +195,9 @@ The container reads from `.env` at startup. See `.env.example` for all variables
 # 1. Clone and install deps
 git clone https://github.com/your-org/camp-ads-agent
 cd camp-ads-agent
-pip install -r requirements.txt
+pip install -r requirements.lock
+# Required by the live-ad screenshot feature. Re-run after Playwright upgrades.
+python -m playwright install chromium
 
 # 2. Configure environment
 cp .env.example .env
