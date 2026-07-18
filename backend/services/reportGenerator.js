@@ -73,6 +73,22 @@ const QUESTIONS_MAP = {
 };
 
 // ─── OpenAI call helper ──────────────────────────────────────────────────────
+function buildOpenAIRequestBody(model, messages, temperature, maxCompletionTokens) {
+  const body = {
+    model,
+    messages,
+    max_completion_tokens: maxCompletionTokens,
+    response_format: { type: 'json_object' },
+  };
+  // GPT-5-family chat models reject non-default sampling parameters. Older
+  // compatible models may still use the configured report temperature.
+  if (!String(model).toLowerCase().startsWith('gpt-5')) {
+    body.temperature = temperature;
+  }
+  return body;
+}
+
+
 async function callOpenAI(messages, { temperature = 0.7, max_completion_tokens = 8000 } = {}) {
   if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set');
   console.log(`[openai] → model=${OPENAI_MODEL} max_completion_tokens=${max_completion_tokens} prompt_len=${JSON.stringify(messages).length}`);
@@ -82,13 +98,9 @@ async function callOpenAI(messages, { temperature = 0.7, max_completion_tokens =
       'Content-Type': 'application/json',
       Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages,
-      temperature,
-      max_completion_tokens,
-      response_format: { type: 'json_object' },
-    }),
+    body: JSON.stringify(buildOpenAIRequestBody(
+      OPENAI_MODEL, messages, temperature, max_completion_tokens,
+    )),
   });
   const raw = await res.text();
   if (!res.ok) {
@@ -354,4 +366,7 @@ async function getReportStatus(campaignId) {
   return { campaignId, total: REPORT_TYPES.length, ready, errors, types: status };
 }
 
-module.exports = { generateReports, getReportStatus, REPORT_TYPES, QUESTIONS_MAP };
+module.exports = {
+  generateReports, getReportStatus, REPORT_TYPES, QUESTIONS_MAP,
+  buildOpenAIRequestBody,
+};

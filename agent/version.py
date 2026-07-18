@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-18.15"
+BUILD_VERSION = "2026-07-19.1"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -134,4 +134,8 @@ BUILD_FEATURES = [
     "zalo-time-bounded-chat-sessions",   # one-hour hard / twenty-minute idle context boundaries
     "zalo-rolling-conversation-memory",  # asynchronous structured summaries bridge later OA sessions
     "zalo-30-message-token-context",     # recent-session context with a server-side total token budget
+    "zalo-native-report-images",         # six existing synthetic reports rendered as OA-safe images
+    "zalo-ordered-live-captures",        # per-site heading, zone crops, then annotated full page
+    "zalo-one-mb-image-guard",           # provider-safe compression + expiring full-resolution fallback
+    "post-launch-report-generation",     # order commit starts the existing idempotent report pipeline
 ]

@@ -3,6 +3,7 @@ const router = express.Router();
 const Campaign = require('../models/Campaign');
 const ZoneCatalog = require('../models/Zone');
 const { validatePlacements } = require('../middleware/zoneValidator');
+const { launchReportGeneration } = require('../services/reportLauncher');
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function nextOrderId(seq) {
@@ -120,6 +121,25 @@ function formatOrder(doc) {
   };
 }
 
+
+async function ensureOrderReports(order) {
+  try {
+    await launchReportGeneration({
+      campaignId: order.orderId,
+      brand: order.brand,
+      objective: order.objective,
+      budget: order.budget,
+      startDate: order.startDate,
+      zones: order.placements || [],
+      audience: [],
+    });
+  } catch (reportError) {
+    // The order is already committed. Reporting can be retried idempotently
+    // from the Report tab or Zalo without falsifying launch success.
+    console.warn(`[orders] Report generation did not start for ${order.orderId}: ${reportError.message}`);
+  }
+}
+
 // ── GET /api/orders ───────────────────────────────────────────────────────────
 // Query params: ?status=active&brand=Nike
 router.get('/', async (req, res) => {
@@ -160,6 +180,7 @@ router.post('/', async (req, res) => {
         deletedAt: null,
       }).lean();
       if (existing) {
+        await ensureOrderReports(existing);
         return res.status(200).json({ ...formatOrder(existing), deduplicated: true });
       }
     }
@@ -211,6 +232,10 @@ router.post('/', async (req, res) => {
       warnings,
     });
 
+    // Acquire the idempotent report-generation lease at the campaign commit
+    // boundary. The Report tab remains a retry/polling client, not a dependency.
+    await ensureOrderReports(order);
+
     res.status(201).json(formatOrder(order.toObject()));
   } catch (err) {
     // Race on idempotencyKey unique index (two concurrent retries): treat the
@@ -219,7 +244,10 @@ router.post('/', async (req, res) => {
       const winner = await Campaign.findOne({
         idempotencyKey: req.body.idempotencyKey,
       }).lean();
-      if (winner) return res.status(200).json({ ...formatOrder(winner), deduplicated: true });
+      if (winner) {
+        await ensureOrderReports(winner);
+        return res.status(200).json({ ...formatOrder(winner), deduplicated: true });
+      }
     }
     if (err.name === 'ValidationError') return res.status(400).json({ error: err.message });
     res.status(500).json({ error: err.message });

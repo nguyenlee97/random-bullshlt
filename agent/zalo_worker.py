@@ -59,8 +59,10 @@ async def enqueue_text(
 
 async def enqueue_image(
     *, thread: dict, image_url: str, idempotency_key: str,
-    event_id: str | None = None,
+    event_id: str | None = None, byte_size: int | None = None,
 ) -> dict:
+    if byte_size is not None and (byte_size <= 0 or byte_size > 1_000_000):
+        raise ValueError("Zalo OA images must be between 1 byte and 1 MB")
     now = _now()
     doc = {
         "_id": f"zout_{uuid.uuid4().hex}",
@@ -68,6 +70,7 @@ async def enqueue_image(
         "channel": "zalo_oa", "oa_id": config.ZALO_OA_ID,
         "thread_id": thread["thread_id"], "external_uid": thread["external_uid"],
         "kind": "image", "image_url": image_url,
+        "byte_size": byte_size,
         "event_id": event_id, "category": "live_reply",
         "status": "queued", "attempts": 0, "next_attempt_at": now,
         "lease_owner": None, "lease_expires_at": None,
@@ -126,6 +129,7 @@ async def _process_event_once() -> bool:
                     thread=thread, image_url=part["image_url"],
                     idempotency_key=f"event:{event['event_key']}:{index}:image",
                     event_id=event.get("external_event_id"),
+                    byte_size=part.get("byte_size"),
                 )
             else:
                 await enqueue_text(

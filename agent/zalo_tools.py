@@ -33,18 +33,23 @@ ZALO_TOOLS = [
      "strict": True, "parameters": _schema({
          "campaign_reference": {"type": "string"},
      }, ["campaign_reference"])},
+    {"type": "function", "name": "list_report_types",
+     "description": "List and explain all six report views. Use this when the user asks for a report but does not name or clearly imply one; never silently choose Daily Ops.",
+     "strict": True, "parameters": _schema({}, [])},
     {"type": "function", "name": "get_campaign_report",
-     "description": "Answer questions from the existing synthetic report module for one campaign and one of its six report views.",
+     "description": "Show one exact synthetic report as a Zalo image, or answer a question from that report's generated analysis. The user must have named or clearly implied the view.",
      "strict": True, "parameters": _schema({
          "campaign_reference": {"type": "string"},
          "view": {"type": "string", "enum": REPORT_VIEWS},
-         "question": {"type": "string"},
-     }, ["campaign_reference", "view", "question"])},
+         "mode": {"type": "string", "enum": ["show", "question"]},
+         "question": {"type": ["string", "null"], "description": "The user's report question for mode=question; null for mode=show."},
+     }, ["campaign_reference", "view", "mode", "question"])},
     {"type": "function", "name": "get_campaign_live_view",
-     "description": "Fetch live-view links and attempt a current ad screenshot for one owned campaign.",
+     "description": "Capture native Zalo images for one owned campaign. Sends each requested site's ad-zone images followed by its annotated full-site image.",
      "strict": True, "parameters": _schema({
          "campaign_reference": {"type": "string"},
-     }, ["campaign_reference"])},
+         "site": {"type": "string", "enum": ["all", "baomoi", "znews", "zingmp3"]},
+     }, ["campaign_reference", "site"])},
     {"type": "function", "name": "get_autopilot_progress",
      "description": "Fetch progress for the current or referenced Campaign Autopilot run.",
      "strict": True, "parameters": _schema({
@@ -83,7 +88,7 @@ class ToolExecutionContext:
     thread: dict
     current_message: str
     history: list[dict]
-    media_parts: list[dict] = field(default_factory=list)
+    media_parts: list[str | dict] = field(default_factory=list)
 
 
 def _safe_campaign(item: dict, index: int | None = None) -> dict:
@@ -144,6 +149,13 @@ async def execute_zalo_tool(ctx: ToolExecutionContext, name: str, arguments: dic
         return {"ok": True, "matches": await search_memory(
             ctx.thread["thread_id"], str(arguments.get("query") or ""),
         )}
+
+    if name == "list_report_types":
+        from zalo_reports import report_catalog_for_model
+        return {
+            "ok": True, "reports": report_catalog_for_model(),
+            "instruction": "Ask the user to choose one report. Do not choose for them.",
+        }
 
     if name == "get_autopilot_progress":
         campaign = None
@@ -208,18 +220,39 @@ async def execute_zalo_tool(ctx: ToolExecutionContext, name: str, arguments: dic
         return {"ok": True, "campaign": _safe_campaign(campaign),
                 "canonical_setup": await _setup_text(campaign)}
     if name == "get_campaign_report":
-        view = arguments.get("view") if arguments.get("view") in REPORT_VIEWS else "daily_ops"
-        question = str(arguments.get("question") or ctx.current_message)
-        text = await _answer_report(f"{question} report_type={view}", campaign)
-        return {"ok": True, "data_class": "synthetic_demo", "view": view,
-                "campaign": _safe_campaign(campaign), "answer": text}
+        view = arguments.get("view")
+        if view not in REPORT_VIEWS:
+            return {"ok": False, "error": "report_type_required"}
+        mode = arguments.get("mode")
+        if mode not in {"show", "question"}:
+            return {"ok": False, "error": "report_mode_required"}
+        from zalo_reports import get_report_bundle
+        bundle = await get_report_bundle(
+            campaign=campaign, view=view, mode=mode,
+            question=str(arguments.get("question") or ctx.current_message),
+        )
+        image_bytes = bundle.pop("image_bytes", None)
+        image_type = bundle.pop("image_content_type", "image/jpeg")
+        if image_bytes:
+            from zalo_campaign_agent import _delivery_image_parts
+            ctx.media_parts.extend(await _delivery_image_parts(
+                image_bytes, image_type, label=f"báo cáo {view}",
+            ))
+            suggestions = bundle.get("suggested_questions") or []
+            if suggestions:
+                ctx.media_parts.append(
+                    "Bạn có thể hỏi tiếp:\n" + "\n".join(
+                        f"• {question}" for question in suggestions[:6]
+                    )
+                )
+        return {**bundle, "campaign": _safe_campaign(campaign)}
     if name == "get_campaign_live_view":
-        parts = await _live_response(campaign)
-        for part in parts[1:]:
-            if isinstance(part, dict):
-                ctx.media_parts.append(part)
+        requested_site = str(arguments.get("site") or "all")
+        parts = await _live_response(campaign, requested_site=requested_site)
+        ctx.media_parts.extend(parts)
         return {"ok": True, "campaign": _safe_campaign(campaign),
-                "live_view": str(parts[0])}
+                "requested_site": requested_site,
+                "delivery": "Ordered site heading, zone image(s), then full-site image have been queued. Do not repeat raw URLs."}
     if name in {"prepare_pause_campaign", "prepare_resume_campaign"}:
         action = "pause" if name == "prepare_pause_campaign" else "resume"
         prompt = await _lifecycle_request(ctx.thread, campaign, action)

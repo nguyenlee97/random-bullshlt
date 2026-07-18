@@ -1,64 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const { generateReports, getReportStatus, REPORT_TYPES } = require('../services/reportGenerator');
+const { getReportStatus } = require('../services/reportGenerator');
 const ReportAnalysis = require('../models/ReportAnalysis');
 const AnalyticsRecord = require('../models/AnalyticsRecord');
-const { hasActiveReportGeneration } = require('../lib/reportGenerationLease');
+const { launchReportGeneration } = require('../services/reportLauncher');
 
 // ── POST /api/reports/generate ───────────────────────────────────────────────
 // Trigger report generation for a campaign. Idempotent — skips if already generating/ready.
 // Body: { campaignId, brand, objective, budget, startDate, zones, audience }
 router.post('/generate', async (req, res) => {
   try {
-    const { campaignId, brand, objective, budget, startDate, zones, audience } = req.body;
-    if (!campaignId) return res.status(400).json({ error: 'campaignId required' });
-
-    // Check the complete six-report state. Looking at one arbitrary row can
-    // incorrectly report "ready" while another type is still failed.
-    const current = await getReportStatus(campaignId);
-    if (current.ready >= current.total) {
-      return res.json({ status: 'already_ready', campaignId });
-    }
-    if (Object.values(current.types).includes('generating')) {
-      const generatingDocs = await ReportAnalysis.find(
-        { campaignId, status: 'generating' },
-        { status: 1, updatedAt: 1 }
-      ).lean();
-      if (hasActiveReportGeneration(generatingDocs)) {
-        return res.json({ status: 'already_generating', campaignId });
-      }
-      console.warn(`[reports/generate] Reclaiming stale generation lease for ${campaignId}`);
-    }
-
-    // Acquire the generation lease before responding. This clears stale error
-    // rows for retry and prevents a fast second request from starting another
-    // background job while record generation is still in progress.
-    await Promise.all(REPORT_TYPES.map(reportType => ReportAnalysis.findOneAndUpdate(
-      { campaignId, reportType },
-      { $set: { status: 'generating', error: '' } },
-      { upsert: true }
-    )));
-
-    // Return immediately, generate in background
-    res.json({ status: 'generating', campaignId });
-
-    // Fire and forget — generate in background
-    setImmediate(async () => {
-      try {
-        await generateReports({
-          campaignId,
-          brand: brand || 'Unknown Brand',
-          objective: objective || 'awareness',
-          budget: budget || 100000000,
-          startDate: startDate || new Date().toISOString().slice(0, 10),
-          zones: zones || [],
-          audience: audience || [],
-        });
-      } catch (err) {
-        console.error('[reports/generate] Background generation failed:', err.message);
-      }
-    });
+    res.json(await launchReportGeneration(req.body || {}));
   } catch (err) {
+    if (err.message === 'campaignId required') return res.status(400).json({ error: err.message });
     res.status(500).json({ error: err.message });
   }
 });

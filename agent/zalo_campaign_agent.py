@@ -65,12 +65,9 @@ def _fold(value: str) -> str:
 
 def _help_text() -> str:
     return (
-        "Chào bạn! Tôi có thể giúp bạn:\n"
-        "• Xem danh sách, trạng thái hoặc cấu hình chiến dịch.\n"
-        "• Hỏi báo cáo Daily Ops, Awareness, Consideration, Conversion, Retention hoặc Executive.\n"
-        "• Xem live view, tạm dừng hoặc tiếp tục chiến dịch (luôn yêu cầu xác nhận).\n"
-        "• Tạo chiến dịch mới bằng Campaign Autopilot.\n"
-        "Hãy gửi yêu cầu hoặc tên/mã chiến dịch khi cần."
+        "Chào bạn 👋 Mình là trợ lý đồng hành cùng chiến dịch quảng cáo của bạn. "
+        "Mình có thể giúp xem báo cáo, kiểm tra ảnh live, cấu hình hoặc tiến độ campaign.\n\n"
+        "Hôm nay bạn muốn mình xem điều gì trước?"
     )
 
 
@@ -454,6 +451,31 @@ async def _store_channel_media(image_bytes: bytes, content_type: str = "image/pn
     return f"{config.ZALO_PUBLIC_API_URL}/zalo/media/{token}"
 
 
+async def _delivery_image_parts(
+    image_bytes: bytes,
+    content_type: str,
+    *,
+    label: str = "ảnh",
+) -> list[str | dict]:
+    """Store a <=1 MB OA image plus an expiring original-resolution fallback."""
+    from zalo_media import prepare_zalo_image
+
+    prepared = prepare_zalo_image(image_bytes, content_type)
+    image_url = await _store_channel_media(prepared.data, prepared.content_type)
+    parts: list[str | dict] = [{
+        "kind": "image", "image_url": image_url,
+        "byte_size": len(prepared.data),
+    }]
+    if prepared.changed:
+        original_url = await _store_channel_media(image_bytes, content_type)
+        ttl_minutes = max(1, config.ZALO_MEDIA_TTL_SECONDS // 60)
+        parts.append(
+            f"Ảnh {label} đã được tối ưu dưới 1 MB để gửi qua Zalo. "
+            f"Xem bản đầy đủ trong {ttl_minutes} phút: {original_url}"
+        )
+    return parts
+
+
 async def get_channel_media(token: str) -> tuple[bytes, str] | None:
     import hashlib
     digest = hashlib.sha256(str(token or "").encode()).hexdigest()
@@ -471,35 +493,70 @@ async def get_channel_media(token: str) -> tuple[bytes, str] | None:
     return bytes(doc["data"]), str(doc.get("content_type") or "image/png")
 
 
-async def _live_response(campaign: dict) -> list[str | dict]:
-    text = _live_text(campaign)
+async def _live_response(
+    campaign: dict,
+    requested_site: str = "all",
+) -> list[str | dict]:
+    """Capture site groups in the order: heading, zone image(s), full site."""
     order = campaign["order"]
     placements = [str(item) for item in order.get("placements") or []]
-    site = None
+    specs = {
+        "baomoi": ("BaoMoi", "https://baomoi-stg.pawgrammers.io.vn"),
+        "znews": ("Znews", "https://znews-stg.pawgrammers.io.vn"),
+        "zingmp3": ("ZingMP3", "https://zingmp3-stg.pawgrammers.io.vn"),
+    }
+    placement_groups: dict[str, list[str]] = {key: [] for key in specs}
     for zone in placements:
-        folded = _fold(zone)
-        if "zmp3" in folded or "zingmp3" in folded:
-            site = "https://zingmp3-stg.pawgrammers.io.vn"
-        elif "bm" in folded or "baomoi" in folded:
-            site = "https://baomoi-stg.pawgrammers.io.vn"
+        folded = _fold(zone).replace(" ", "")
+        if "zingmp3" in folded or "zmp3" in folded:
+            placement_groups["zingmp3"].append(zone)
+        elif "baomoi" in folded or folded.startswith("bm"):
+            placement_groups["baomoi"].append(zone)
         else:
-            site = "https://znews-stg.pawgrammers.io.vn"
-        break
-    if not site:
-        return [text]
-    try:
-        from handlers.screenshot import handle_screenshot
-        screenshot = await handle_screenshot(
-            url=site, session_id=campaign["session_id"], zone_ids=placements,
-        )
-        if screenshot.get("ok") and screenshot.get("full_b64"):
-            image_url = await _store_channel_media(
-                base64.b64decode(screenshot["full_b64"]), "image/png",
+            placement_groups["znews"].append(zone)
+
+    if requested_site not in {*specs, "all"}:
+        return ["Mình chưa hỗ trợ site live này."]
+    selected = (
+        [requested_site] if requested_site != "all"
+        else [key for key in specs if placement_groups[key]]
+    )
+    if not selected:
+        return ["Campaign này chưa có placement để chụp ảnh live."]
+    if requested_site != "all" and not placement_groups[requested_site]:
+        label = specs[requested_site][0]
+        return [f"Campaign này không có placement trên {label}, nên mình không thể chụp ảnh live của site đó."]
+
+    from handlers.screenshot import handle_screenshot
+    parts: list[str | dict] = []
+    for site_key in selected:
+        label, url = specs[site_key]
+        try:
+            screenshot = await handle_screenshot(
+                url=url, session_id=campaign["session_id"],
+                zone_ids=placement_groups[site_key],
             )
-            return [text, {"kind": "image", "image_url": image_url}]
-    except Exception:
-        pass
-    return [text + "\nChưa chụp được ảnh live; bạn vẫn có thể mở liên kết phía trên."]
+        except Exception:
+            screenshot = {"ok": False}
+        if not screenshot.get("ok"):
+            parts.append(f"Mình chưa chụp được ảnh live trên {label}. Bạn thử lại sau ít phút nhé.")
+            continue
+
+        parts.append(f"Đây là ảnh live quảng cáo trên {label}:")
+        for zone in screenshot.get("zones") or []:
+            crop_b64 = zone.get("crop_b64")
+            if not crop_b64:
+                continue
+            parts.extend(await _delivery_image_parts(
+                base64.b64decode(crop_b64), "image/png",
+                label=f"zone {zone.get('label') or zone.get('id') or label}",
+            ))
+        if screenshot.get("full_b64"):
+            parts.extend(await _delivery_image_parts(
+                base64.b64decode(screenshot["full_b64"]), "image/jpeg",
+                label=f"toàn trang {label}",
+            ))
+    return parts or ["Mình chưa chụp được ảnh live lúc này. Bạn thử lại sau ít phút nhé."]
 
 
 async def _lifecycle_request(thread: dict, campaign: dict, action: str) -> str:

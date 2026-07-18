@@ -6,7 +6,12 @@ from session import get_or_create_session, add_message, log_event
 from config import config
 
 
-async def handle_report_entry(session_id: str, campaign_data: dict = None) -> AgentResponse:
+async def handle_report_entry(
+    session_id: str,
+    campaign_data: dict = None,
+    *,
+    suppress_message: bool = False,
+) -> AgentResponse:
     """
     Called when user enters Report step (step 5).
     1. Fetches campaign info from session
@@ -242,7 +247,11 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
         "Gợi ý tối ưu chiến dịch",
     ]
 
-    await add_message(session_id, "assistant", intro_text)
+    # Successful launch now starts report generation before the user opens the
+    # Report tab. Keep that background trigger out of the visible chat history;
+    # entering the tab still records and displays the same introduction.
+    if not suppress_message:
+        await add_message(session_id, "assistant", intro_text)
 
     return AgentResponse(
         text=intro_text,

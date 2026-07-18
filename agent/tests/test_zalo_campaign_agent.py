@@ -60,7 +60,7 @@ async def test_greeting_does_not_implicitly_select_only_campaign(monkeypatch):
         "external_uid": "oa-user-greeting",
         "text": "chào",
     })
-    assert "Tôi có thể giúp" in greeting[0]
+    assert "trợ lý đồng hành" in greeting[0]
     assert "ORD-GREET" not in greeting[0]
     assert "Ngân sách" not in greeting[0]
 
@@ -311,19 +311,38 @@ def test_progress_messages_are_milestone_scoped_and_launch_is_explicit():
 @pytest.mark.asyncio
 async def test_live_screenshot_uses_short_lived_opaque_media_url(monkeypatch):
     import base64
+    import io
+    from PIL import Image
     import zalo_campaign_agent as agent
+
+    png_buffer = io.BytesIO()
+    Image.new("RGB", (80, 60), "red").save(png_buffer, format="PNG")
+    jpeg_buffer = io.BytesIO()
+    Image.new("RGB", (120, 90), "blue").save(jpeg_buffer, format="JPEG")
 
     monkeypatch.setattr(
         "handlers.screenshot.handle_screenshot",
         AsyncMock(return_value={
             "ok": True,
-            "full_b64": base64.b64encode(b"fake-png").decode(),
+            "zones": [{
+                "id": "BaoMoi_Masthead", "label": "Masthead",
+                "crop_b64": base64.b64encode(png_buffer.getvalue()).decode(),
+            }],
+            "full_b64": base64.b64encode(jpeg_buffer.getvalue()).decode(),
         }),
     )
-    response = await agent._live_response(_campaign("ORD-LIVE", "Live Demo"))
+    campaign = _campaign("ORD-LIVE", "Live Demo")
+    campaign["order"]["placements"] = ["BaoMoi_Masthead"]
+    response = await agent._live_response(campaign, requested_site="baomoi")
+    assert response[0] == "Đây là ảnh live quảng cáo trên BaoMoi:"
     assert response[1]["kind"] == "image"
     assert "/zalo/media/" in response[1]["image_url"]
     token = response[1]["image_url"].rsplit("/", 1)[-1]
     media = await agent.get_channel_media(token)
-    assert media == (b"fake-png", "image/png")
+    assert media == (png_buffer.getvalue(), "image/png")
+    assert response[2]["kind"] == "image"
+    full_token = response[2]["image_url"].rsplit("/", 1)[-1]
+    assert await agent.get_channel_media(full_token) == (
+        jpeg_buffer.getvalue(), "image/jpeg",
+    )
     assert token not in agent._mem_media
