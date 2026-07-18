@@ -92,11 +92,14 @@ test('agent credential stays behind the frontend proxy', async () => {
   const dockerfile = await source('agent_frontend/Dockerfile')
   const nginx = await source('agent_frontend/nginx.conf')
   const compose = await source('docker-compose.yml')
+  const productionEnv = await source('agent_frontend/.env.production')
 
   assert.doesNotMatch(api, /VITE_AGENT_API_KEY|X-API-Key/)
   assert.doesNotMatch(dockerfile, /VITE_AGENT_API_KEY/)
   assert.match(nginx, /proxy_set_header X-API-Key "\$\{AGENT_API_KEY\}"/)
   assert.match(compose, /VITE_AGENT_URL: \/agent/)
+  assert.match(productionEnv, /^VITE_AGENT_URL=\/agent$/m)
+  assert.doesNotMatch(productionEnv, /^VITE_AGENT_URL=https?:\/\//m)
   assert.match(compose, /127\.0\.0\.1:27017:27017/)
 })
 
