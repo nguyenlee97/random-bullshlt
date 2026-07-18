@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-18.1"
+BUILD_VERSION = "2026-07-18.2"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -112,5 +112,6 @@ BUILD_FEATURES = [
     "zalo-login-pkce",                  # Social OAuth v4 mapped to the FE-2B account session
     "zalo-explicit-identity-link",       # existing local users prove both sessions before linking
     "zalo-oa-signed-webhook",            # fail-closed raw-body signature verification + dedupe
+    "zalo-webhook-provider-ack",          # provider-required 200 without accepting invalid events
     "zalo-oa-one-time-channel-link",     # signed OA message joins separate channel/account identities
 ]

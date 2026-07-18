@@ -183,7 +183,7 @@ async def test_oa_signature_fails_closed_and_unlinked_events_remain_durable(monk
         zalo_channel.verify_webhook(raw, body, signature)
 
 
-def test_webhook_http_rejects_invalid_signature_without_creating_event(monkeypatch):
+def test_webhook_http_acknowledges_invalid_signature_without_creating_event(monkeypatch):
     _enable_oa(monkeypatch)
     from config import config
     from main import app
@@ -196,7 +196,11 @@ def test_webhook_http_rejects_invalid_signature_without_creating_event(monkeypat
     }
     client = TestClient(app)
     response = client.post("/api/agent/zalo/webhook", content=raw, headers=headers)
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "accepted": False, "duplicate": False}
+
+    import zalo_channel
+    assert zalo_channel._mem_events == {}
 
 
 def test_zalo_http_callback_sets_only_existing_opaque_account_cookie(monkeypatch):

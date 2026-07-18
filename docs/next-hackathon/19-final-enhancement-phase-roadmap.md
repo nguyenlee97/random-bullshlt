@@ -394,7 +394,7 @@ Official references: [Zalo for Developers](https://developers.zalo.me/), [Zalo O
 
 ### 8.6 FE-3 acceptance tests
 
-- Invalid signature receives 403 and creates no conversation/task.
+- Invalid or unsigned delivery receives the provider-required HTTP 200 acknowledgement but is marked `accepted: false` and creates no event, conversation or task.
 - Replayed webhook event produces one agent turn and one outbound send.
 - Webhook acknowledges quickly while a slow model runs in the worker.
 - Restart after acknowledgement resumes the queued turn.
@@ -404,7 +404,7 @@ Official references: [Zalo for Developers](https://developers.zalo.me/), [Zalo O
 - Repeated final approval creates one order.
 - Text/image outputs render correctly; unsupported UI blocks become concise text plus a deep link.
 
-Locally verified in the foundation slice: invalid signatures create no event; valid events are normalized and stored once; replay is idempotent; link codes are stored hashed, expire, and can be consumed once; a verified OA sender links to exactly one internal user; unlink preserves the account and web history. Worker/send assertions above remain pending and must not be marked complete from these foundation tests.
+Locally verified in the foundation slice: invalid signatures create no event even though the transport is acknowledged with HTTP 200 for Zalo registration/retry compatibility; valid events are normalized and stored once; replay is idempotent; link codes are stored hashed, expire, and can be consumed once; a verified OA sender links to exactly one internal user; unlink preserves the account and web history. Worker/send assertions above remain pending and must not be marked complete from these foundation tests.
 
 ## 9. FE-4 — Zalo campaign operations and notifications
 

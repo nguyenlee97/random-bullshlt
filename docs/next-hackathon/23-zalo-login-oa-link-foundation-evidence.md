@@ -27,7 +27,7 @@ Anonymous web use remains available. Zalo login creates the same opaque, hashed,
 - A Zalo access token exists only in callback request memory while fetching the profile. It is not stored in Mongo, cookies, responses, browser storage, logs or traces.
 - Existing local users may select `Kết nối đăng nhập Zalo`. The callback attaches the new provider identity only when the same account session that started the attempt is still valid.
 - Provider identities are uniquely keyed by `(provider, provider_subject)`. A Zalo identity already attached to a different account is never merged by name or email.
-- OA webhook verification fails closed when OA configuration or the secret is missing. There is no production “skip signature” mode.
+- OA webhook event processing fails closed when OA configuration or the secret is missing. Invalid or unsigned POSTs receive Zalo's provider-required HTTP 200 transport acknowledgement but are explicitly `accepted: false` and are never normalized, persisted or processed. There is no production “skip signature” mode.
 - Verification uses the exact raw request body, configured App ID, provider timestamp and OA secret; App/OA mismatches and stale timestamps are rejected.
 - Durable event deduplication uses a one-way event key derived from channel, OA and provider event/message ID. Replays do not consume a second link code or create a second identity.
 - OA link codes expire, are superseded when a new code is created, are stored hashed and are single-use.
@@ -98,7 +98,7 @@ Results:
 - Backend: `248 passed` after adding six focused Zalo tests.
 - Frontend: `59 passed`.
 - Vite production build: passed, 2,580 modules transformed.
-- Focused Zalo coverage includes PKCE/state storage, state replay, browser binding, explicit provider attachment, cross-account conflict, no provider-token persistence, CSRF on OAuth start, opaque HttpOnly callback session, fail-closed webhook signature, durable unlinked event, one-time OA link and replay deduplication.
+- Focused Zalo coverage includes PKCE/state storage, state replay, browser binding, explicit provider attachment, cross-account conflict, no provider-token persistence, CSRF on OAuth start, opaque HttpOnly callback session, provider-compatible acknowledgement with fail-closed webhook processing, durable unlinked event, one-time OA link and replay deduplication.
 
 ## Local runtime and browser evidence
 

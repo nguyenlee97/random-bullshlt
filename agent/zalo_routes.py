@@ -144,8 +144,17 @@ async def zalo_webhook(request: Request):
         verify_webhook(raw_body, body, request.headers.get("X-ZEvent-Signature"))
         event = normalize_event(body, raw_body)
         outcome = await record_event(event)
-    except ZaloSignatureError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ZaloSignatureError:
+        # Zalo validates a newly configured webhook with a POST that must receive
+        # HTTP 200 before signed event delivery is enabled.  Acknowledge the
+        # transport without accepting, normalizing or persisting the payload.
+        # Returning the same HTTP status also avoids exposing a signature oracle
+        # or triggering provider retry storms for unauthenticated traffic.
+        return JSONResponse({
+            "ok": True,
+            "accepted": False,
+            "duplicate": False,
+        })
     except ZaloChannelError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return JSONResponse({
