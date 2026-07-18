@@ -409,7 +409,9 @@ function ReportAnalysisBlock({ block }) {
             case 'metrics': {
               const items = section.items || []
               const useSingleColumn = items.some(m =>
-                String(m.label || '').length > 24 || String(m.value || '').length > 18
+                String(m.label || '').length > 24 ||
+                String(m.value || '').length > 18 ||
+                String(m.delta || '').length > 22
               )
               return (
                 <div key={i} className={`grid gap-2 ${useSingleColumn ? 'grid-cols-1' : 'grid-cols-2'}`}>
@@ -421,21 +423,20 @@ function ReportAnalysisBlock({ block }) {
                       !/^(?:0(?:[.,]0+)?%?|n\/?a|—|-)$/i.test(delta)
                     )
                     return (
-                    <div key={j} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/90 border border-violet-100 shadow-sm min-w-0">
-                      <div className="flex-1 min-w-0">
+                    <div key={j} className="p-2.5 rounded-lg bg-white/90 border border-violet-100 shadow-sm min-w-0">
+                      <div className="w-full min-w-0">
                         <p className="text-[10px] leading-snug text-muted-foreground font-semibold break-words">{m.label}</p>
                         <p className="mt-0.5 text-sm leading-snug font-bold text-foreground break-words">{m.value}</p>
+                        {showTrend && (
+                          <div className={`mt-1 flex items-start gap-1 text-[10px] leading-snug font-semibold min-w-0 ${
+                            m.trend === 'up' ? 'text-green-600' : m.trend === 'down' ? 'text-red-600' : 'text-muted-foreground'
+                          }`}>
+                            {m.trend === 'up' ? <TrendingUp className="w-3 h-3 mt-px flex-shrink-0" /> :
+                             m.trend === 'down' ? <TrendingDown className="w-3 h-3 mt-px flex-shrink-0" /> : null}
+                            <span className="min-w-0 break-words">{delta}</span>
+                          </div>
+                        )}
                       </div>
-                      {showTrend && (
-                        <div className={`flex items-center gap-0.5 pt-0.5 text-[10px] font-semibold flex-shrink-0 ${
-                          m.trend === 'up' ? 'text-green-600' : m.trend === 'down' ? 'text-red-600' : 'text-gray-500'
-                        }`}>
-                          {m.trend === 'up' ? <TrendingUp className="w-3 h-3" /> :
-                           m.trend === 'down' ? <TrendingDown className="w-3 h-3" /> :
-                           <Minus className="w-3 h-3" />}
-                          {delta}
-                        </div>
-                      )}
                     </div>
                     )
                   })}
