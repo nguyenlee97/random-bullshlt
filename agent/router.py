@@ -1012,10 +1012,25 @@ def _autopilot_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=422, detail=str(exc))
 
 
+def _require_autopilot_worker() -> None:
+    """Fail closed instead of creating a durable run nobody can execute."""
+    from autopilot.worker import worker_running
+
+    if not _cfg.USE_CAMPAIGN_AUTOPILOT or not worker_running():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Campaign Autopilot worker is unavailable. "
+                "Please try again after the service is ready."
+            ),
+        )
+
+
 @agent_router.post("/autopilot/runs", status_code=201)
 async def autopilot_start(raw_request: Request, request: _AutopilotStartRequest):
     from autopilot.service import RunConflict, create_run
     await _assert_session_access(raw_request, request.session_id)
+    _require_autopilot_worker()
     try:
         return await create_run(
             request.session_id,

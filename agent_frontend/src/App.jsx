@@ -595,6 +595,7 @@ export default function App() {
   const [audienceRecommendation, setAudienceRecommendation] = useState(null)
   useEffect(() => {
     if (
+      experienceMode === 'guided' &&
       currentStep === 1 &&
       stepStatuses[0] === 'done' &&
       !audienceEntryFiredRef.current &&
@@ -642,12 +643,13 @@ export default function App() {
     // Doing so causes a double-fire: stepStatuses[0] change fires the effect with currentStep=0
     // (resets flag), then currentStep=1 fires again and re-triggers the call.
     // Flag is reset only by handlePartialReset when the user explicitly resets the flow.
-  }, [currentStep, stepStatuses[0], handleWorkspaceUpdate])
+  }, [currentStep, stepStatuses[0], experienceMode, handleWorkspaceUpdate])
 
   // Setup-entry: when user reaches step 3 with creative done → proactive zone recommendation in chat
   const setupEntryFiredRef = useRef(false)
   useEffect(() => {
     if (
+      experienceMode === 'guided' &&
       currentStep === 3 &&
       stepStatuses[2] === 'done' &&
       !setupEntryFiredRef.current &&
@@ -683,7 +685,7 @@ export default function App() {
         }
       })()
     }
-  }, [currentStep, stepStatuses[2], handleWorkspaceUpdate])
+  }, [currentStep, stepStatuses[2], experienceMode, handleWorkspaceUpdate])
 
   // Report-entry: when user reaches step 5 with step 4 done → trigger report generation
   const reportEntryFiredRef = useRef(false)
