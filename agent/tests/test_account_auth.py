@@ -259,12 +259,15 @@ def test_http_auth_cookies_csrf_logout_and_generic_login_errors():
 
     blocked = client.post(
         "/api/agent/auth/register",
-        headers=api_headers,
+        headers={**api_headers, "X-CSRF-Token": "stale-browser-token"},
         json={"email": EMAIL, "password": PASSWORD, "display_name": "Owner"},
     )
     assert blocked.status_code == 403
+    refreshed_csrf = client.cookies.get("aa_csrf")
+    assert refreshed_csrf and refreshed_csrf != csrf
+    assert "aa_csrf=" in blocked.headers.get("set-cookie", "")
 
-    headers = {**api_headers, "X-CSRF-Token": csrf}
+    headers = {**api_headers, "X-CSRF-Token": refreshed_csrf}
     registered = client.post(
         "/api/agent/auth/register",
         headers=headers,

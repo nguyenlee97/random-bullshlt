@@ -2,7 +2,7 @@
 
 Date: 2026-07-18
 
-Status: in progress; FE-1 implementation and FE-2B are complete; Zalo Login plus explicit OA account linking are locally code-complete, while real Zalo consent, shared-OA activation and the FE-3 agent worker remain pending
+Status: in progress; FE-1 implementation, FE-2B, Zalo Login/OA linking, the FE-3 durable channel worker and the FE-4 narrow campaign-operation slice are deployed. Final campaign-bearing Zalo acceptance, FE-0 closeout and FE-5 release-candidate rehearsal remain open.
 
 Scope: finish the current campaign agent, add placement-aware creative generation, then add identity, conversation history, and Zalo OA as a first-class channel.
 
@@ -12,9 +12,9 @@ The final enhancement phase turns Advertising Agent from a strong local campaign
 
 - **Guided Workflow:** the operator moves through the campaign workspace with a chat Copilot. The flow remains easy to inspect and correct.
 - **Campaign Autopilot:** the operator provides a brief, selects an approval policy and creative source, then the agent builds an order-ready campaign while pausing at required review boundaries.
-- **Zalo OA channel:** the same Guided and Autopilot capabilities are available through a text/image adapter. Zalo does not get a separate prompt-only agent or a second campaign state machine.
+- **Zalo OA channel:** new campaigns use the existing Campaign Autopilot graph through a text/image adapter. Existing campaigns support owned list/select/status/setup/report/live view plus confirmed pause/resume. Zalo does not get a Guided state machine, a prompt-only campaign agent or a second campaign database.
 
-The web application remains the richest workspace. Zalo is a conversational control surface for starting work, approving proposals, checking status, modifying campaigns, and receiving safe notifications or preview links.
+The web application remains the richest workspace. Zalo is a conversational control surface for starting Autopilot work, approving existing run reviews, checking status/setup/report/live view, confirming pause/resume, and receiving eligible progress updates. All other campaign edits deep-link to the web workspace.
 
 ## 2. Decisions made for this phase
 
@@ -236,7 +236,7 @@ Permanent deletion is intentionally distinct from archive. A user may delete one
 
 Local verification after FE-2B: 242 backend tests, 58 frontend tests, production frontend build, live additive-index inspection and two independent cookie-jar browser journeys covering anonymous creation, explicit claim, old-device denial, cross-device account resume, foreign-account isolation and anonymous use after logout.
 
-Zalo Login and explicit Zalo identity attachment were implemented locally on 2026-07-18. The flow uses Social OAuth v4 PKCE, one-time Mongo TTL attempts bound to the current browser/account session, provider identity `(zalo, profile.id)`, and the same opaque FE-2B account cookie. Zalo access tokens are request-local only. Login never claims anonymous conversations. Local auth remains visible only as a testing fallback; Google login is no longer planned. Live Zalo consent is pending callback registration and credentials. Evidence is in `23-zalo-login-oa-link-foundation-evidence.md`.
+Zalo Login and explicit Zalo identity attachment were deployed on 2026-07-18. The flow uses Social OAuth v4 PKCE, one-time Mongo TTL attempts bound to the current browser/account session, provider identity `(zalo, profile.id)`, and the same opaque FE-2B account cookie. Zalo access tokens are request-local only. Login never claims anonymous conversations. Local auth remains visible only as a testing fallback; Google login is no longer planned. The verified production domain, callback and signed OA link flow are documented in `23-zalo-login-oa-link-foundation-evidence.md`.
 
 Completed execution slice (2026-07-17): **FE-2B local accounts, secure account sessions, explicit anonymous-conversation claim and cross-device resume**. The implementation contract and rollback boundary remain in `20-fe2b-local-accounts-handoff.md`; completion evidence is in `22-fe2b-local-accounts-evidence.md`.
 
@@ -329,7 +329,7 @@ Every workspace, run, proposal and order operation must resolve the actor server
 
 ## 8. FE-3 — Zalo OA channel foundation
 
-Implementation status (2026-07-18): the transport/identity foundation is deployed against the `IOT Generation` OA. The Agent API exposes a fail-closed raw-body signature-verified webhook, validates the configured App/OA and timestamp, and deduplicates durable `channel_events`. An authenticated user explicitly starts a short-lived link attempt, then either follows the named OA through the embedded official widget or sends the one-time `LINK` fallback. The widget callback changes UI state only. Account linking occurs only from the signed `follow` event matched through `user_id_by_app`, or from the signed OA message carrying the one-time code. Login and OA IDs are never assumed interchangeable. The durable agent-turn worker, OA rotating token manager, outbound delivery/receipt retry and Guided/Autopilot channel renderer remain FE-3 work.
+Implementation status (2026-07-18): deployed against the `IOT Generation` OA. The Agent API exposes a fail-closed raw-body signature-verified webhook, validates the configured App/OA and timestamp, and deduplicates durable `channel_events`. An authenticated user explicitly starts a short-lived link attempt, then either follows the named OA through the embedded official widget or sends the one-time `LINK` fallback. Account linking occurs only from signed provider evidence. The restart-safe inbound worker, rotating server-only OA token store, idempotent text/image outbox, bounded retry, run subscriptions and milestone renderer are now active. New-campaign routing uses the existing Autopilot graph only; no Guided channel state machine was added.
 
 ### 8.1 Reuse from `them-ga-ran`
 
@@ -363,16 +363,16 @@ Do not rely only on in-process `BackgroundTasks`; durable `agent_tasks`/Mongo le
 
 First release:
 
-- Natural-language or menu start chooses Guided or Autopilot.
+- New campaign creation uses Campaign Autopilot only; Zalo does not expose a second simplified Guided state machine.
 - Text brief intake with a compact structured confirmation summary.
-- Simplified Guided flow through one question at a time and explicit approvals.
-- Autopilot start, progress updates, review requests, pause/resume/cancel and final launch approval.
-- Image upload for user-supplied creative.
-- Campaign list/status and setup summary.
-- Proposal-based modification of a running campaign.
-- Deep link to the web workspace for complex review or unsupported controls.
+- Exactly two channel modes: fully automatic (`auto_build_draft`, stop only before launch) and semi automatic (`critical_only`, stop at important review gates). Both always require final launch approval.
+- Persisted, deduplicated progress updates at brief/start, audience/targeting, creative, setup/forecast/guard, review, launch and terminal milestones.
+- Campaign list/status/setup, live-view links/creative preview and remembered active-campaign context.
+- Existing synthetic report-module Q&A across Daily Ops, Awareness, Consideration, Conversion, Retention and Executive.
+- Pause/resume is the only mutation allowed for an already-created campaign and always requires an explicit, expiring confirmation.
+- Deep link to the web workspace for upload, complex review or unsupported controls. Zalo chat does not edit an in-progress run.
 
-Later: rich cards/buttons, full analytics reports, voice input and marketing automation.
+Later: native Zalo creative upload ingestion, rich cards/buttons, voice input and marketing automation.
 
 ### 8.4 Approval rendering
 
@@ -404,25 +404,27 @@ Official references: [Zalo for Developers](https://developers.zalo.me/), [Zalo O
 - Repeated final approval creates one order.
 - Text/image outputs render correctly; unsupported UI blocks become concise text plus a deep link.
 
-Locally verified in the foundation slice: invalid signatures create no event even though the transport is acknowledged with HTTP 200 for Zalo registration/retry compatibility; valid events are normalized and stored once; replay is idempotent; link codes are stored hashed, expire, and can be consumed once; a verified OA sender links to exactly one internal user; unlink preserves the account and web history. Worker/send assertions above remain pending and must not be marked complete from these foundation tests.
+Verified across the foundation and campaign-agent slices: invalid signatures create no event even though the transport is acknowledged with HTTP 200 for Zalo compatibility; valid events are normalized and stored once; replay is idempotent; link codes are hashed, expiring and one-time; a verified OA sender links to exactly one internal user; unlink preserves account/web history; durable inbound work produces one idempotent outbox delivery; and production successfully delivered a signed linked-user campaign-list response. The remaining manual gap is a production linked account with an owned campaign for report/live/pause/resume and complete Autopilot launch journeys.
 
 ## 9. FE-4 — Zalo campaign operations and notifications
 
-After FE-3 is stable, expose a narrow campaign-operations tool set:
+Implementation status (2026-07-18): the narrow operation set is deployed. The server-side resolver searches only actor-owned conversations/orders, remembers active campaign context, asks a numbered question when ambiguous and rechecks ownership before mutations. Report Q&A reuses the existing six-view synthetic report handler. Live view uses the existing screenshot service and a short-lived opaque, hashed, TTL-backed same-origin media URL. Pause/resume is explicit, expiring and idempotent. Progress delivery follows persisted Autopilot run events. Production acceptance has proved the signed linked-user worker/outbox path; campaign-bearing production journeys remain open because the linked test account currently owns no campaign.
+
+The deployed tool set is intentionally narrow:
 
 - list current campaigns owned by the linked account;
 - show status, objective, budget, dates, audience, placements and creative preview;
 - produce a live-site preview link or image when available;
-- propose pause/resume, date, budget, targeting or placement changes through existing validators;
-- explain invalid/high-impact modifications and request review;
+- pause/resume through an explicit confirmation and an ownership/status recheck;
+- reject date, budget, audience, targeting, placement and creative changes in chat and deep-link to the web workspace;
 - notify the connected Zalo identity when an approved campaign becomes live.
 
 Rules:
 
-- Running-campaign modifications are proposals with impact previews and idempotency keys.
+- Pause/resume is the only existing-campaign mutation and is idempotent.
 - Backend ownership and campaign status are rechecked at execution time.
-- A change that makes creative incompatible triggers recomputation instead of silently applying.
-- “Report” here means factual campaign setup/status only. The analytical report agent remains deferred.
+- Campaign resolution is server-side: exact ID/name, unique partial match, remembered active context or an explicit numbered choice. The model never guesses an ambiguous campaign.
+- “Report” means Q&A over the same synthetic six-view dataset already rendered by the report module. This does not create a new analytics or optimization agent.
 
 ## 10. FE-5 — Final hackathon release candidate
 
@@ -431,7 +433,7 @@ Required before calling the final enhancement complete:
 - Golden labels and audience safety gate green.
 - Placement-aware multi-format upload and AI-generation journeys green.
 - Anonymous, login, history and conversation-resume journeys green.
-- Zalo webhook, identity link, Autopilot, simplified Guided, status and modification journeys green.
+- Zalo webhook, identity link, two-mode Autopilot, status/setup/report/live and confirmed pause/resume journeys green; no Guided Zalo workflow or general existing-campaign modification is expected.
 - Full 128-scenario report produced with no P0 defects and no unexplained `not_run` in release-critical groups.
 - Desktop/mobile browser checks for opening mode, history, Guided, Autopilot and review states.
 - Five consecutive three-minute demo rehearsals.
@@ -443,9 +445,9 @@ Required before calling the final enhancement complete:
 2. FE-1 placement intent, format planner and multi-format generation.
 3. User manual upload and real AI-generation journeys; fix journey defects.
 4. FE-2 anonymous identity, conversation history and Zalo Login behind one user model.
-5. Complete FE-3 Zalo worker, rotating OA tokens, outbound delivery and channel rendering on top of the verified webhook/account-link foundation.
-6. FE-4 campaign operations and live notification.
-7. FE-5 full suite, browser evidence and demo rehearsal.
+5. Completed: FE-3 Zalo worker, rotating OA tokens, outbound delivery and channel rendering on top of the verified webhook/account-link foundation.
+6. Completed in code/deployment, pending campaign-bearing manual acceptance: FE-4 campaign operations and eligible live progress notification.
+7. Next: FE-0 remaining truth closeout and FE-5 full suite, campaign-bearing Zalo browser/OA evidence and demo rehearsal.
 
 Do not build a second auth authority or a second agent for Zalo. Keep temporary local auth and Zalo identities attached to the same internal user. Do not begin the analytics/report agent until campaign creation and channel journeys are stable.
 

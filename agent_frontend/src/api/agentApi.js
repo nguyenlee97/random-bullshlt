@@ -37,20 +37,31 @@ const cookieGet = name => {
   try { return decodeURIComponent(item.slice(prefix.length)) } catch { return '' }
 }
 
-const agentFetch = (url, opts = {}) => {
+const agentFetch = async (url, opts = {}) => {
   const method = String(opts.method || 'GET').toUpperCase()
-  const csrf = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
-    ? cookieGet('aa_csrf')
-    : ''
-  return fetch(url, {
-    ...opts,
-    credentials: 'include',
-    headers: {
-      ...(LEGACY_ANONYMOUS_TOKEN ? { 'X-Anonymous-Token': LEGACY_ANONYMOUS_TOKEN } : {}),
-      ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
-      ...(opts.headers || {}),
-    },
-  })
+  const unsafe = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
+  const send = () => {
+    const csrf = unsafe ? cookieGet('aa_csrf') : ''
+    return fetch(url, {
+      ...opts,
+      credentials: 'include',
+      headers: {
+        ...(LEGACY_ANONYMOUS_TOKEN ? { 'X-Anonymous-Token': LEGACY_ANONYMOUS_TOKEN } : {}),
+        ...(opts.headers || {}),
+        ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+      },
+    })
+  }
+
+  let response = await send()
+  if (!unsafe || response.status !== 403) return response
+  const failure = await response.clone().json().catch(() => ({}))
+  if (failure?.error !== 'csrf_failed') return response
+
+  // The 403 response rotates the readable double-submit cookie. Re-read it
+  // and retry once; the rejected first request never reached application code.
+  response = await send()
+  return response
 }
 
 async function responseError(response, fallback) {
@@ -1215,6 +1226,15 @@ export const AgentAPI = {
       { signal: AbortSignal.timeout(5000) },
     )
     if (!response.ok) throw await responseError(response, 'Không thể kiểm tra liên kết Zalo OA.')
+    return response.json()
+  },
+
+  async recoverExistingZaloFollower(attemptId) {
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/channel-links/zalo/${encodeURIComponent(attemptId)}/recover-existing-follower`,
+      { method: 'POST', signal: AbortSignal.timeout(60000) },
+    )
+    if (!response.ok) throw await responseError(response, 'Không thể kiểm tra trạng thái quan tâm Zalo OA.')
     return response.json()
   },
 

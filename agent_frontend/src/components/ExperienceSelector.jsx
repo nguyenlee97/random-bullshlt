@@ -8,18 +8,18 @@ const modes = [
   {
     id: 'guided',
     title: 'Campaign Copilot',
-    eyebrow: 'Bạn điều khiển · Agent hỗ trợ',
-    description: 'Bạn làm việc theo từng chặng và quyết định mọi thay đổi. Agent phân tích, gợi ý và cập nhật workspace sau khi được duyệt.',
+    eyebrow: 'Sức mạnh AI · Dấu ấn của bạn',
+    description: 'Cùng Agent biến tư duy chiến lược của bạn thành một campaign sắc nét. Bạn dẫn lối, AI mở rộng góc nhìn và đưa từng ý tưởng tiến gần hơn đến phiên bản tốt nhất.',
     icon: Route,
-    features: ['Brief → Audience → Creative → Setup', 'Kiểm tra và duyệt từng đầu ra', 'Có thể quay lại chỉnh dữ liệu bất kỳ lúc nào'],
+    features: ['Làm chủ chiến lược ở mọi chặng', 'Khơi mở audience và creative giàu tiềm năng', 'Tinh chỉnh linh hoạt cho đến khi thật sự ưng ý'],
   },
   {
     id: 'autopilot',
     title: 'Campaign Autopilot',
-    eyebrow: 'Agent thực thi · Bạn giám sát',
-    description: 'Giao brief và để Agent tự xây dựng campaign. Hệ thống chỉ dừng khi cần bạn xác nhận, xử lý rủi ro hoặc duyệt launch.',
+    eyebrow: 'Trao mục tiêu · Nhận campaign hoàn chỉnh',
+    description: 'Đưa cho Agent một brief. AI sẽ kết nối chiến lược, audience, creative và media thành một campaign liền mạch, sẵn sàng để bạn đưa ra quyết định cuối cùng.',
     icon: Sparkles,
-    features: ['Kế hoạch và tiến độ theo thời gian thực', 'Audience, creative, placement và forecast có nguồn', 'Luôn dừng trước hành động tạo order'],
+    features: ['Từ brief đến kế hoạch chỉ trong một mạch', 'Ra quyết định dựa trên dữ liệu và tín hiệu thực', 'Tăng tốc launch mà vẫn giữ quyền kiểm soát'],
   },
 ]
 
@@ -51,7 +51,7 @@ export default function ExperienceSelector({
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600">Advertising Agent</p>
-              <p className="text-sm text-slate-600">Từ brief đến campaign đang hoạt động</p>
+              <p className="text-sm text-slate-600">Từ ý tưởng lớn đến campaign bứt phá</p>
             </div>
           </div>
           <AccountMenu identity={identity} busy={identityBusy} onLogin={onLogin} onLogout={onLogout}
@@ -62,13 +62,13 @@ export default function ExperienceSelector({
         <section className="pt-12 sm:pt-16" aria-labelledby="home-title">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white/80 px-3 py-1 text-xs font-semibold text-brand-700 shadow-sm">
             <Zap className="h-3.5 w-3.5 text-orange-500" />
-            Lên camp tốc độ, tự động hoàn toàn
+            Một brief. Một AI. Trọn hành trình campaign.
           </span>
           <h1 id="home-title" className="mt-4 max-w-3xl text-3xl font-black tracking-tight text-slate-900 sm:text-5xl">
-            Bắt đầu campaign mới
+            Biến ý tưởng thành campaign tạo khác biệt
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-            Chọn cách cộng tác ngay từ đầu. Lựa chọn này được gắn với campaign để tiến độ, chat và lịch sử luôn nhất quán.
+            Camp Ads Agent đồng hành từ chiến lược, audience, creative đến vị trí hiển thị — để mỗi campaign được lên nhanh hơn, đúng người hơn và sẵn sàng tạo dấu ấn.
           </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2">
@@ -112,9 +112,9 @@ export default function ExperienceSelector({
         <section className="mt-14 border-t border-slate-200/80 pt-8 pb-8" aria-labelledby="campaign-history-title">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-brand-600"><History className="h-4 w-4" /> Lịch sử</p>
-              <h2 id="campaign-history-title" className="mt-2 text-2xl font-black text-slate-900">Tiếp tục campaign đã lưu</h2>
-              <p className="mt-1 text-sm text-slate-600">Mở lại đúng chat, workspace, chế độ và tiến độ trước đó.</p>
+              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-brand-600"><History className="h-4 w-4" /> Hành trình của bạn</p>
+              <h2 id="campaign-history-title" className="mt-2 text-2xl font-black text-slate-900">Tiếp nối những campaign đang viết dở</h2>
+              <p className="mt-1 text-sm text-slate-600">Mọi ý tưởng hay đều xứng đáng được đi đến cùng.</p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
               <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">{conversations.length} campaign</span>
@@ -136,7 +136,7 @@ export default function ExperienceSelector({
           {!historyLoading && historyError && <p className="mt-5 rounded-xl bg-red-50 p-3 text-sm text-red-700">{historyError}</p>}
           {!historyLoading && !historyError && conversations.length === 0 && (
             <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-white/60 px-5 py-10 text-center text-sm text-slate-500">
-              Chưa có campaign nào. Chọn một cách làm việc ở trên để bắt đầu.
+              Campaign đầu tiên đang chờ bạn tạo dấu ấn. Bắt đầu ngay ở phía trên.
             </div>
           )}
           {!historyLoading && !historyError && conversations.length > 0 && (

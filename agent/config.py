@@ -134,6 +134,52 @@ class Config:
     ZALO_OA_ID: str = os.getenv("ZALO_OA_ID", "")
     ZALO_OA_NAME: str = os.getenv("ZALO_OA_NAME", "IOT Generation")
     ZALO_OA_SECRET: str = os.getenv("ZALO_OA_SECRET", "")
+    # OA OpenAPI credentials are server-only. The initial pair seeds a
+    # root-readable token store; rotated refresh tokens are written there so a
+    # process restart never falls back to an already-consumed refresh token.
+    ZALO_OA_ACCESS_TOKEN: str = os.getenv("ZALO_OA_ACCESS_TOKEN", "")
+    ZALO_OA_REFRESH_TOKEN: str = os.getenv("ZALO_OA_REFRESH_TOKEN", "")
+    ZALO_OA_TOKEN_STORE_PATH: str = os.getenv("ZALO_OA_TOKEN_STORE_PATH", "")
+    ZALO_OA_TOKEN_URL: str = os.getenv(
+        "ZALO_OA_TOKEN_URL", "https://oauth.zaloapp.com/v4/oa/access_token"
+    )
+    ZALO_OA_API_BASE_URL: str = os.getenv(
+        "ZALO_OA_API_BASE_URL", "https://openapi.zalo.me/v3.0/oa"
+    ).rstrip("/")
+    ZALO_OA_RECOVERY_MAX_USERS: int = int(
+        os.getenv("ZALO_OA_RECOVERY_MAX_USERS", "500")
+    )
+    ZALO_OA_RECOVERY_CONCURRENCY: int = int(
+        os.getenv("ZALO_OA_RECOVERY_CONCURRENCY", "6")
+    )
+    # Durable inbound-turn and outbound-delivery workers. Keep these separate
+    # from webhook verification so operators can pause sends while the public
+    # endpoint continues acknowledging and queueing signed events.
+    ZALO_AGENT_WORKER_ENABLED: bool = (
+        os.getenv("ZALO_AGENT_WORKER_ENABLED", "false").lower() == "true"
+    )
+    ZALO_OUTBOUND_ENABLED: bool = (
+        os.getenv("ZALO_OUTBOUND_ENABLED", "false").lower() == "true"
+    )
+    ZALO_WORKER_POLL_SECONDS: float = float(
+        os.getenv("ZALO_WORKER_POLL_SECONDS", "1.0")
+    )
+    ZALO_WORKER_LEASE_SECONDS: int = int(
+        os.getenv("ZALO_WORKER_LEASE_SECONDS", "180")
+    )
+    ZALO_WORKER_MAX_ATTEMPTS: int = int(
+        os.getenv("ZALO_WORKER_MAX_ATTEMPTS", "5")
+    )
+    ZALO_WEB_WORKSPACE_URL: str = os.getenv(
+        "ZALO_WEB_WORKSPACE_URL", "https://agent.pawgrammers.io.vn"
+    ).rstrip("/")
+    ZALO_PUBLIC_API_URL: str = os.getenv(
+        "ZALO_PUBLIC_API_URL",
+        "https://agent.pawgrammers.io.vn/agent/api/agent",
+    ).rstrip("/")
+    ZALO_MEDIA_TTL_SECONDS: int = int(
+        os.getenv("ZALO_MEDIA_TTL_SECONDS", "900")
+    )
     ZALO_WEBHOOK_MAX_SKEW_SECONDS: int = int(
         os.getenv("ZALO_WEBHOOK_MAX_SKEW_SECONDS", "600")
     )

@@ -243,6 +243,23 @@ async def _find_provider_identity(provider: str, provider_subject: str) -> dict 
     return _mem_auth_identities.get((provider, provider_subject))
 
 
+async def _find_provider_identity_for_user(provider: str, user_id: str) -> dict | None:
+    """Return a provider identity already attached to one internal account."""
+    collections = await _collections()
+    if collections is not None:
+        return await collections["identities"].find_one({
+            "provider": provider, "user_id": user_id,
+        })
+    return next(
+        (
+            identity for identity in _mem_auth_identities.values()
+            if identity.get("provider") == provider
+            and identity.get("user_id") == user_id
+        ),
+        None,
+    )
+
+
 async def _find_user(user_id: str) -> dict | None:
     collections = await _collections()
     if collections is not None:

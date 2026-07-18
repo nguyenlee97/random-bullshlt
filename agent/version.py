@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-18.3"
+BUILD_VERSION = "2026-07-18.13"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -94,6 +94,8 @@ BUILD_FEATURES = [
     "autopilot-live-evidence",          # trace, retrieval, rerank, guard and idempotency evidence
     "autopilot-approved-brief-gate",    # never persist or run against an unapproved chat brief
     "autopilot-stable-run-trace",       # stable run-level trace instead of polling request IDs
+    "autopilot-worker-start-guard",     # reject runs when no worker can execute the durable plan
+    "autopilot-guided-entry-isolation", # Guided proactive messages never leak into Autopilot
     "typed-brief-collector",             # complete recommendations always become durable proposals
     "authoritative-campaign-clock",      # yearless dates grounded to Asia/Ho_Chi_Minh server time
     "nonblocking-llm-io",                # slow providers no longer freeze workspace polling
@@ -115,4 +117,17 @@ BUILD_FEATURES = [
     "zalo-webhook-provider-ack",          # provider-required 200 without accepting invalid events
     "zalo-oa-one-time-channel-link",     # signed OA message joins separate channel/account identities
     "zalo-oa-signed-follow-link",        # follow widget UX; signed follow event consumes explicit attempt
+    "zalo-oa-v3-existing-follower-link", # recover already-following users through OA V3 identity mapping
+    "zalo-oa-rotating-token-store",      # persist every single-use refresh-token rotation atomically
+    "zalo-brand-mark",                   # consistent official-style Zalo mark and exact brand blue
+    "zalo-oa-widget-first-auto-check",   # lead with a large OA widget and silently recover followers
+    "zalo-follow-webhook-schema",        # normalize follower.id and top-level oa_id from real follow events
+    "zalo-existing-follower-retry",      # retry OA burst limits without caching false follower misses
+    "csrf-self-healing-retry",           # rotate stale double-submit cookies and safely retry once
+    "legacy-brief-approval-recovery",    # reconstruct and atomically approve model-only Briefs
+    "zalo-durable-agent-worker",         # leased inbound turns, outbox sends and restart recovery
+    "zalo-owned-campaign-resolver",      # server-owned exact/active/ambiguous campaign selection
+    "zalo-synthetic-report-qa",          # reuse the existing six-view synthetic report module
+    "zalo-confirmed-campaign-lifecycle", # pause/resume only after expiring explicit confirmation
+    "zalo-two-mode-autopilot-progress",  # fully automatic or important-gate progress over OA
 ]

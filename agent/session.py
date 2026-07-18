@@ -55,7 +55,9 @@ async def _ensure_mongo() -> bool:
         _sessions_col = _db["agent_sessions"]
         _logs_col = _db["agent_logs"]
         _mongo_ok = True
-        print(f"[session] MongoDB OK: {config.MONGODB_URI}")
+        # Connection strings commonly contain database credentials. Never emit
+        # the URI into logs, traces, or deployment diagnostics.
+        print("[session] MongoDB OK")
     except Exception as e:
         _mongo_ok = False
         print(f"[session] MongoDB unavailable - using in-memory. ({e})")

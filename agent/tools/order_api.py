@@ -60,6 +60,36 @@ async def fetch_all_orders() -> list[dict]:
     return resp.json()
 
 
+async def set_order_delivery_state(order_id: str, action: str) -> dict:
+    """Pause/resume one already ownership-resolved order.
+
+    The caller must prove ownership before entering this wrapper. Current state
+    is fetched again here so duplicate confirmations are harmless and no other
+    campaign field can be changed through the Zalo lifecycle path.
+    """
+    if action not in {"pause", "resume"}:
+        raise ValueError("action must be pause or resume")
+    current = await fetch_order(order_id)
+    status = str(current.get("status") or "").lower()
+    target = "paused" if action == "pause" else "active"
+    if status == target:
+        return {
+            "ok": True, "id": order_id, "newStatus": target,
+            "already_in_state": True,
+        }
+    allowed = {"active", "pending"} if action == "pause" else {"paused"}
+    if status not in allowed:
+        raise ValueError(
+            f"campaign status {status or 'unknown'} cannot be changed with {action}"
+        )
+    response = await _client.post(
+        f"/api/orders/{order_id}/{action}", headers=_correlation_headers()
+    )
+    response.raise_for_status()
+    result = response.json()
+    return {**result, "already_in_state": False}
+
+
 async def fetch_zone_conflicts(start_date: str, end_date: str) -> dict[str, dict]:
     """
     Returns a dict { zone_id: { orderId, campaignName, startDate, endDate } }

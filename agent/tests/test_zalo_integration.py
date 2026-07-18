@@ -38,11 +38,20 @@ def _signed_event(
     body = {
         "app_id": config.ZALO_APP_ID,
         "event_name": event_name,
-        "sender": {"id": uid},
-        "recipient": {"id": config.ZALO_OA_ID},
-        "message": {"text": text, "msg_id": message_id},
         "timestamp": str(int(time.time() * 1000)),
     }
+    if event_name in {"follow", "unfollow"}:
+        body.update({
+            "oa_id": config.ZALO_OA_ID,
+            "source": "testing_webhook",
+            "follower": {"id": uid},
+        })
+    else:
+        body.update({
+            "sender": {"id": uid},
+            "recipient": {"id": config.ZALO_OA_ID},
+            "message": {"text": text, "msg_id": message_id},
+        })
     if user_id_by_app:
         body["user_id_by_app"] = user_id_by_app
     raw = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -199,7 +208,10 @@ async def test_signed_follow_links_only_matching_zalo_login_with_pending_attempt
     wrong = await zalo_channel.record_event(
         zalo_channel.normalize_event(wrong_body, wrong_raw)
     )
-    assert wrong["link"] is None
+    assert wrong["link"] == {
+        "status": "not_linked",
+        "reason": "zalo_login_identity_not_found",
+    }
     assert (await zalo_channel.get_channel_link(
         user["user_id"], attempt["attempt_id"]
     ))["status"] == "pending"
@@ -218,6 +230,205 @@ async def test_signed_follow_links_only_matching_zalo_login_with_pending_attempt
     assert status["link_method"] == "signed_follow"
     linked = await zalo_channel.get_linked_channel_for_user(user["user_id"])
     assert linked["status"] == "linked"
+
+
+def test_follow_payload_uses_follower_id_and_top_level_oa_id(monkeypatch):
+    _enable_oa(monkeypatch)
+    import zalo_channel
+
+    body, raw, _ = _signed_event(
+        event_name="follow",
+        message_id="unused-for-follow",
+        uid="oa-follower-schema-1",
+        user_id_by_app="app-follower-schema-1",
+    )
+    event = zalo_channel.normalize_event(body, raw)
+
+    assert "sender" not in body
+    assert "recipient" not in body
+    assert body["follower"] == {"id": "oa-follower-schema-1"}
+    assert event["external_uid"] == "oa-follower-schema-1"
+    assert event["app_scoped_uid"] == "app-follower-schema-1"
+    assert event["oa_id"] == "oa-test-1"
+
+    body["oa_id"] = "another-oa"
+    with pytest.raises(zalo_channel.ZaloSignatureError, match="OA does not match"):
+        zalo_channel.normalize_event(body, raw)
+
+
+@pytest.mark.asyncio
+async def test_follow_without_cross_app_identity_stays_unlinked_with_reason(monkeypatch):
+    _enable_oa(monkeypatch)
+    from accounts import authenticate_zalo_account
+    import zalo_channel
+
+    user = await authenticate_zalo_account("app-follow-missing-1", "Missing Cross ID")
+    attempt = await zalo_channel.start_channel_link(user["user_id"])
+    body, raw, signature = _signed_event(
+        event_name="follow",
+        message_id="follow-missing-cross-id-1",
+        uid="oa-follow-missing-1",
+    )
+    zalo_channel.verify_webhook(raw, body, signature)
+    result = await zalo_channel.record_event(zalo_channel.normalize_event(body, raw))
+
+    assert result["link"] == {
+        "status": "not_linked",
+        "reason": "missing_user_id_by_app",
+    }
+    assert (await zalo_channel.get_channel_link(
+        user["user_id"], attempt["attempt_id"]
+    ))["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_existing_follower_v3_mapping_links_pending_zalo_account(monkeypatch):
+    _enable_oa(monkeypatch)
+    from accounts import authenticate_zalo_account
+    import zalo_channel
+    import zalo_oa_api
+
+    user = await authenticate_zalo_account("app-existing-follower-1", "Existing Follower")
+    attempt = await zalo_channel.start_channel_link(user["user_id"])
+
+    async def fake_find_existing_follower(app_scoped_uid):
+        assert app_scoped_uid == "app-existing-follower-1"
+        return {
+            "external_uid": "oa-existing-follower-1",
+            "app_scoped_uid": app_scoped_uid,
+        }
+
+    monkeypatch.setattr(
+        zalo_oa_api, "find_existing_follower", fake_find_existing_follower
+    )
+    result = await zalo_channel.recover_existing_follower_link(
+        user["user_id"], attempt["attempt_id"]
+    )
+
+    assert result == {"status": "linked", "user_id": user["user_id"]}
+    status = await zalo_channel.get_channel_link(user["user_id"], attempt["attempt_id"])
+    assert status["status"] == "linked"
+    assert status["link_method"] == "oa_user_api"
+    storage = await zalo_channel.get_channel_storage_for_test()
+    assert storage["identities"][0]["external_uid"] == "oa-existing-follower-1"
+    assert storage["identities"][0]["app_scoped_uid"] == "app-existing-follower-1"
+
+
+@pytest.mark.asyncio
+async def test_v3_follower_scan_matches_user_id_by_app(monkeypatch, tmp_path):
+    _enable_oa(monkeypatch)
+    from config import config
+    import zalo_oa_api
+
+    monkeypatch.setattr(config, "ZALO_OA_ACCESS_TOKEN", "access-test")
+    monkeypatch.setattr(config, "ZALO_OA_REFRESH_TOKEN", "refresh-test")
+    monkeypatch.setattr(config, "ZALO_APP_SECRET", "app-secret-test")
+    monkeypatch.setattr(config, "ZALO_OA_TOKEN_STORE_PATH", str(tmp_path / "token.json"))
+    monkeypatch.setattr(config, "ZALO_OA_RECOVERY_MAX_USERS", 50)
+
+    async def fake_api_get(path, data, **_kwargs):
+        if path == "user/getlist":
+            return {
+                "total": 2,
+                "users": [{"user_id": "oa-other"}, {"user_id": "oa-match"}],
+            }
+        return {
+            "user_id": data["user_id"],
+            "user_id_by_app": (
+                "app-existing-follower-2" if data["user_id"] == "oa-match" else "other-app"
+            ),
+            "user_is_follower": True,
+        }
+
+    monkeypatch.setattr(zalo_oa_api, "_api_get", fake_api_get)
+    result = await zalo_oa_api.find_existing_follower("app-existing-follower-2")
+    assert result == {
+        "external_uid": "oa-match",
+        "app_scoped_uid": "app-existing-follower-2",
+    }
+
+
+@pytest.mark.asyncio
+async def test_v3_follower_scan_does_not_cache_transient_miss(monkeypatch, tmp_path):
+    _enable_oa(monkeypatch)
+    from config import config
+    import zalo_oa_api
+
+    monkeypatch.setattr(config, "ZALO_OA_ACCESS_TOKEN", "access-test")
+    monkeypatch.setattr(config, "ZALO_OA_REFRESH_TOKEN", "refresh-test")
+    monkeypatch.setattr(config, "ZALO_APP_SECRET", "app-secret-test")
+    monkeypatch.setattr(config, "ZALO_OA_TOKEN_STORE_PATH", str(tmp_path / "token.json"))
+    monkeypatch.setattr(config, "ZALO_OA_RECOVERY_MAX_USERS", 50)
+    scans = 0
+
+    async def fake_api_get(path, data, **_kwargs):
+        nonlocal scans
+        if path == "user/getlist":
+            scans += 1
+            return {"total": 1, "users": [{"user_id": "oa-match"}]}
+        return {
+            "user_id": data["user_id"],
+            "user_id_by_app": (
+                "app-retry-follower" if scans > 1 else "temporarily-unavailable"
+            ),
+            "user_is_follower": True,
+        }
+
+    monkeypatch.setattr(zalo_oa_api, "_api_get", fake_api_get)
+    assert await zalo_oa_api.find_existing_follower("app-retry-follower") is None
+    assert await zalo_oa_api.find_existing_follower("app-retry-follower") == {
+        "external_uid": "oa-match",
+        "app_scoped_uid": "app-retry-follower",
+    }
+    assert scans == 2
+
+
+@pytest.mark.asyncio
+async def test_oa_api_retries_provider_burst_limit(monkeypatch):
+    import zalo_oa_api
+
+    responses = [
+        {"error": -32, "message": "rate limited"},
+        {"error": 0, "message": "Success", "data": {"users": []}},
+    ]
+    sleeps = []
+
+    class FakeResponse:
+        status_code = 200
+
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    class FakeClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, *_args, **_kwargs):
+            return FakeResponse(responses.pop(0))
+
+    async def fake_access_token(**_kwargs):
+        return "access-test"
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(zalo_oa_api.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(zalo_oa_api, "_access_token", fake_access_token)
+    monkeypatch.setattr(zalo_oa_api.asyncio, "sleep", fake_sleep)
+
+    assert await zalo_oa_api._api_get("user/getlist", {"offset": 0}) == {
+        "users": [],
+    }
+    assert sleeps == [1.0]
 
 
 @pytest.mark.asyncio

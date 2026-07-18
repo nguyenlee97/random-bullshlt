@@ -6,7 +6,9 @@ import secrets
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
+
+from config import config
 
 
 CSRF_COOKIE = "aa_csrf"
@@ -22,6 +24,21 @@ def new_csrf_token() -> str:
 
 def valid_csrf_token(value: str | None) -> bool:
     return bool(value and 32 <= len(value) <= 256)
+
+
+def set_csrf_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        CSRF_COOKIE,
+        token,
+        max_age=max(
+            config.ANONYMOUS_COOKIE_MAX_AGE_DAYS,
+            config.ACCOUNT_SESSION_MAX_AGE_DAYS,
+        ) * 24 * 60 * 60,
+        httponly=False,
+        secure=config.ACCOUNT_COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
@@ -43,8 +60,13 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 or not valid_csrf_token(header_token)
                 or not hmac.compare_digest(cookie_token, header_token)
             ):
-                return JSONResponse(
+                response = JSONResponse(
                     status_code=403,
                     content={"error": "csrf_failed", "detail": "invalid CSRF token"},
                 )
+                # The mutation was rejected before reaching its route, so it is
+                # safe for the same-origin client to retry once with a freshly
+                # issued double-submit token.
+                set_csrf_cookie(response, new_csrf_token())
+                return response
         return await call_next(request)

@@ -103,4 +103,23 @@ def reset_session_col(monkeypatch):
         )
     except ImportError:
         pass
+    try:
+        import zalo_oa_api
+        zalo_oa_api.reset_oa_api_state_for_test()
+        monkeypatch.setattr(
+            zalo_oa_api, "_token_lock", __import__("asyncio").Lock(), raising=False
+        )
+        monkeypatch.setattr(
+            zalo_oa_api, "_scan_lock", __import__("asyncio").Lock(), raising=False
+        )
+    except ImportError:
+        pass
+    try:
+        import zalo_campaign_agent
+        zalo_campaign_agent.reset_channel_agent_for_test()
+        monkeypatch.setattr(
+            zalo_campaign_agent, "_mem_lock", __import__("asyncio").Lock(), raising=False
+        )
+    except ImportError:
+        pass
     yield

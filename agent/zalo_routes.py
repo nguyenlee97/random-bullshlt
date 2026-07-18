@@ -5,7 +5,7 @@ import json
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 
@@ -99,6 +99,23 @@ async def zalo_channel_link_status(attempt_id: str, request: Request):
         raise HTTPException(status_code=404, detail="channel link not found") from exc
 
 
+@zalo_router.post("/channel-links/zalo/{attempt_id}/recover-existing-follower")
+async def zalo_channel_recover_existing_follower(attempt_id: str, request: Request):
+    from router import _request_actor
+    from zalo_channel import recover_existing_follower_link
+
+    actor = await _request_actor(request)
+    if not actor.get("user_id"):
+        raise HTTPException(status_code=401, detail="account session is required")
+    result = await recover_existing_follower_link(actor["user_id"], attempt_id)
+    print(json.dumps({
+        "event": "zalo_existing_follower_recovery",
+        "status": result.get("status"),
+        "reason": result.get("reason"),
+    }, separators=(",", ":")), flush=True)
+    return result
+
+
 @zalo_router.delete("/channel-links/zalo")
 async def zalo_channel_unlink(request: Request):
     from router import _request_actor
@@ -114,6 +131,7 @@ async def zalo_channel_unlink(request: Request):
 async def zalo_webhook_health():
     from config import config
     from zalo_channel import channel_ready
+    from zalo_worker import worker_running
 
     return {
         "ok": True,
@@ -121,7 +139,24 @@ async def zalo_webhook_health():
         "configured": channel_ready(),
         "oa_id": config.ZALO_OA_ID or None,
         "oa_name": config.ZALO_OA_NAME or None,
+        "agent_worker_enabled": config.ZALO_AGENT_WORKER_ENABLED,
+        "agent_worker_running": worker_running(),
+        "outbound_enabled": config.ZALO_OUTBOUND_ENABLED,
     }
+
+
+@zalo_router.get("/zalo/media/{token}")
+async def zalo_channel_media(token: str):
+    """Serve one short-lived opaque live-view image for Zalo's media fetcher."""
+    from zalo_campaign_agent import get_channel_media
+    media = await get_channel_media(token)
+    if not media:
+        raise HTTPException(status_code=404, detail="media not found")
+    data, content_type = media
+    return Response(
+        content=data, media_type=content_type,
+        headers={"Cache-Control": "private, max-age=300, immutable"},
+    )
 
 
 @zalo_router.post("/zalo/webhook")
@@ -151,6 +186,11 @@ async def zalo_webhook(request: Request):
         # transport without accepting, normalizing or persisting the payload.
         # Returning the same HTTP status also avoids exposing a signature oracle
         # or triggering provider retry storms for unauthenticated traffic.
+        print(json.dumps({
+            "event": "zalo_webhook",
+            "accepted": False,
+            "reason": "invalid_signature",
+        }, separators=(",", ":")), flush=True)
         return JSONResponse({
             "ok": True,
             "accepted": False,
@@ -158,6 +198,17 @@ async def zalo_webhook(request: Request):
         })
     except ZaloChannelError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    link = outcome.get("link") or {}
+    print(json.dumps({
+        "event": "zalo_webhook",
+        "event_name": event.get("event_name"),
+        "accepted": outcome["accepted"],
+        "duplicate": outcome["duplicate"],
+        "has_external_uid": bool(event.get("external_uid")),
+        "has_user_id_by_app": bool(event.get("app_scoped_uid")),
+        "link_status": link.get("status"),
+        "link_reason": link.get("reason"),
+    }, separators=(",", ":")), flush=True)
     return JSONResponse({
         "ok": True,
         "accepted": outcome["accepted"],

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, Loader2, LockKeyhole, MessageCircle, X } from 'lucide-react'
+import { ChevronDown, Loader2, LockKeyhole, X } from 'lucide-react'
+import ZaloIcon from '@/components/ZaloIcon'
 
 export default function AuthDialog({
   open,
@@ -39,8 +40,8 @@ export default function AuthDialog({
         <button type="button" onClick={onClose} disabled={busy} className="absolute right-4 top-4 rounded-lg p-2 text-slate-400 hover:bg-slate-100" aria-label="Đóng">
           <X className="h-4 w-4" />
         </button>
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-          <MessageCircle className="h-5 w-5" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50">
+          <ZaloIcon className="h-9 w-9" />
         </div>
         <h2 id="auth-title" className="mt-4 text-2xl font-black text-slate-900">Đăng nhập Advertising Agent</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">Dùng Zalo để lưu campaign và tiếp tục trên thiết bị khác. Bạn vẫn có thể dùng ẩn danh.</p>
@@ -49,9 +50,9 @@ export default function AuthDialog({
           type="button"
           onClick={onZalo}
           disabled={busy || !zaloAvailable}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0068ff] px-4 py-3 text-sm font-bold text-white hover:bg-[#0057d9] disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-4 py-3 text-sm font-bold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+          {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ZaloIcon className="h-6 w-6" />}
           {zaloAvailable ? 'Tiếp tục với Zalo' : 'Zalo Login chưa được cấu hình'}
         </button>
 

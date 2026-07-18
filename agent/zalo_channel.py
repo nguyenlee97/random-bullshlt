@@ -80,6 +80,10 @@ async def _collections() -> dict[str, object] | None:
         "links": db["channel_link_attempts"],
         "identities": db["channel_identities"],
         "events": db["channel_events"],
+        "threads": db["channel_threads"],
+        "outbound": db["channel_outbound_messages"],
+        "subscriptions": db["channel_run_subscriptions"],
+        "media": db["channel_media"],
     }
 
 
@@ -110,6 +114,38 @@ async def ensure_zalo_channel_indexes() -> None:
     )
     await collections["events"].create_index(
         [("status", 1), ("received_at", 1)], name="channel_event_queue"
+    )
+    await collections["events"].create_index(
+        [("status", 1), ("next_attempt_at", 1), ("lease_expires_at", 1)],
+        name="channel_event_worker_queue",
+    )
+    await collections["threads"].create_index(
+        [("channel", 1), ("oa_id", 1), ("external_uid", 1)],
+        unique=True,
+        name="channel_thread_external_unique",
+    )
+    await collections["threads"].create_index(
+        [("user_id", 1), ("updated_at", -1)], name="channel_thread_account_time"
+    )
+    await collections["outbound"].create_index(
+        "idempotency_key", unique=True, name="channel_outbound_idempotency_unique"
+    )
+    await collections["outbound"].create_index(
+        [("status", 1), ("next_attempt_at", 1), ("lease_expires_at", 1)],
+        name="channel_outbound_worker_queue",
+    )
+    await collections["subscriptions"].create_index(
+        [("thread_id", 1), ("run_id", 1)], unique=True,
+        name="channel_run_subscription_unique",
+    )
+    await collections["subscriptions"].create_index(
+        [("status", 1), ("updated_at", 1)], name="channel_run_subscription_queue"
+    )
+    await collections["media"].create_index(
+        "token_hash", unique=True, name="channel_media_token_unique"
+    )
+    await collections["media"].create_index(
+        "expires_at", expireAfterSeconds=0, name="channel_media_expiry_ttl"
     )
 
 
@@ -158,10 +194,24 @@ def verify_webhook(raw_body: bytes, body: dict, signature_header: str | None) ->
 def normalize_event(body: dict, raw_body: bytes) -> dict:
     event_name = str(body.get("event_name") or "").strip()[:100]
     sender = body.get("sender") if isinstance(body.get("sender"), dict) else {}
+    follower = body.get("follower") if isinstance(body.get("follower"), dict) else {}
     recipient = body.get("recipient") if isinstance(body.get("recipient"), dict) else {}
     message = body.get("message") if isinstance(body.get("message"), dict) else {}
-    external_uid = str(sender.get("id") or "").strip()[:200]
-    received_oa_id = str(recipient.get("id") or config.ZALO_OA_ID).strip()[:200]
+    # Message webhooks identify the OA user as sender.id. Follow/unfollow
+    # webhooks use a different provider schema and identify that user as
+    # follower.id instead. Prefer the event-specific field but retain the
+    # sender fallback for older webhook variants.
+    external_uid = str(
+        (follower.get("id") if event_name in {"follow", "unfollow"} else None)
+        or sender.get("id")
+        or ""
+    ).strip()[:200]
+    # Follow webhooks carry oa_id at the top level instead of recipient.id.
+    # Validate either shape so an event for another OA cannot be normalized as
+    # belonging to the configured account.
+    received_oa_id = str(
+        body.get("oa_id") or recipient.get("id") or config.ZALO_OA_ID
+    ).strip()[:200]
     if received_oa_id and received_oa_id != config.ZALO_OA_ID:
         raise ZaloSignatureError("Zalo webhook OA does not match")
     message_id = str(
@@ -171,6 +221,15 @@ def normalize_event(body: dict, raw_body: bytes) -> dict:
     external_event_id = message_id or payload_hash
     event_key = _hash(f"zalo_oa:{config.ZALO_OA_ID}:{external_event_id}")
     text = str(message.get("text") or "")[:12000] if event_name == "user_send_text" else ""
+    attachments = message.get("attachments") if isinstance(message.get("attachments"), list) else []
+    images = []
+    for attachment in attachments[:6]:
+        if not isinstance(attachment, dict) or attachment.get("type") not in {"image", "photo"}:
+            continue
+        payload = attachment.get("payload") if isinstance(attachment.get("payload"), dict) else {}
+        url = str(payload.get("url") or payload.get("thumbnail") or "").strip()
+        if url.startswith("https://"):
+            images.append({"url": url[:2048], "attachment_id": str(payload.get("id") or "")[:300]})
     return {
         "event_key": event_key,
         "channel": "zalo_oa",
@@ -182,6 +241,7 @@ def normalize_event(body: dict, raw_body: bytes) -> dict:
         # but only while that account has an explicit pending link attempt.
         "app_scoped_uid": str(body.get("user_id_by_app") or "").strip()[:200] or None,
         "text": text,
+        "images": images,
         "provider_timestamp": str(body.get("timestamp") or ""),
         "payload_hash": payload_hash,
     }
@@ -235,9 +295,12 @@ async def start_channel_link(user_id: str) -> dict:
     from accounts import _audit
 
     await _audit("channel_link_started", user_id=user_id, channel="zalo_oa", oa_id=config.ZALO_OA_ID)
+    from zalo_oa_api import oa_recovery_configured
+
     return {
         **_public(doc),
         "oa_name": config.ZALO_OA_NAME,
+        "existing_follower_check_available": oa_recovery_configured(),
         "link_code": code,
         "instruction": f"Send LINK {code} to the Zalo OA within 10 minutes.",
     }
@@ -338,6 +401,49 @@ async def _consume_pending_link_for_user(user_id: str, external_uid: str) -> dic
         return attempt
 
 
+async def _consume_link_for_provider_recovery(
+    user_id: str, attempt_id: str, external_uid: str,
+) -> dict | None:
+    """Atomically claim the caller-owned pending attempt after an OA API match."""
+    now = _now()
+    collections = await _collections()
+    if collections is not None:
+        return await collections["links"].find_one_and_update(
+            {
+                "_id": attempt_id,
+                "user_id": user_id,
+                "channel": "zalo_oa",
+                "oa_id": config.ZALO_OA_ID,
+                "status": "pending",
+                "expires_at": {"$gt": now},
+            },
+            {"$set": {
+                "status": "linking",
+                "external_uid": external_uid,
+                "linked_at": now,
+                "link_method": "oa_user_api",
+            }},
+            return_document=ReturnDocument.AFTER,
+        )
+    async with _mem_lock:
+        attempt = _mem_links.get(attempt_id)
+        if not attempt or not (
+            attempt.get("user_id") == user_id
+            and attempt.get("channel") == "zalo_oa"
+            and attempt.get("oa_id") == config.ZALO_OA_ID
+            and attempt.get("status") == "pending"
+            and attempt.get("expires_at") > now
+        ):
+            return None
+        attempt.update({
+            "status": "linking",
+            "external_uid": external_uid,
+            "linked_at": now,
+            "link_method": "oa_user_api",
+        })
+        return attempt
+
+
 async def _complete_link_attempt(attempt: dict, event: dict) -> dict:
     key = ("zalo_oa", config.ZALO_OA_ID, event["external_uid"])
     now = _now()
@@ -389,6 +495,28 @@ async def _complete_link_attempt(attempt: dict, event: dict) -> dict:
         else:
             attempt["status"] = "conflict"
         raise
+    # If this OA sender chatted before linking, atomically transfer its stable
+    # channel-owned conversation(s) without changing any session or artifact ID.
+    collections = await _collections()
+    if collections is not None:
+        thread = await collections["threads"].find_one({
+            "channel": "zalo_oa", "oa_id": config.ZALO_OA_ID,
+            "external_uid": event["external_uid"],
+        })
+        anonymous_id = (thread or {}).get("anonymous_id")
+        if anonymous_id:
+            from identity import claim_channel_anonymous_conversations
+            await claim_channel_anonymous_conversations(
+                user_id=attempt["user_id"], anonymous_id=anonymous_id,
+            )
+            await collections["threads"].update_one(
+                {"_id": thread["_id"]},
+                {"$set": {
+                    "user_id": attempt["user_id"], "anonymous_id": None,
+                    "linked_at": now, "updated_at": now,
+                }},
+            )
+
     from accounts import _audit
 
     await _audit(
@@ -405,6 +533,8 @@ async def confirm_link_from_event(event: dict) -> dict | None:
     """Complete only an explicit link attempt using signed provider evidence."""
     external_uid = event.get("external_uid")
     if not external_uid:
+        if event.get("event_name") == "follow":
+            return {"status": "not_linked", "reason": "missing_follower_id"}
         return None
     attempt = None
     if event.get("event_name") == "user_send_text":
@@ -415,18 +545,61 @@ async def confirm_link_from_event(event: dict) -> dict | None:
         if not attempt:
             return {"status": "invalid_or_expired"}
         attempt["link_method"] = "link_code"
-    elif event.get("event_name") == "follow" and event.get("app_scoped_uid"):
+    elif event.get("event_name") == "follow":
+        if not event.get("app_scoped_uid"):
+            return {
+                "status": "not_linked",
+                "reason": "missing_user_id_by_app",
+            }
         from accounts import _find_provider_identity
 
         identity = await _find_provider_identity("zalo", event["app_scoped_uid"])
         if not identity or not identity.get("user_id"):
-            return None
+            return {
+                "status": "not_linked",
+                "reason": "zalo_login_identity_not_found",
+            }
         attempt = await _consume_pending_link_for_user(identity["user_id"], external_uid)
         if not attempt:
-            return None
+            return {
+                "status": "not_linked",
+                "reason": "no_pending_link_attempt",
+            }
     else:
         return None
     return await _complete_link_attempt(attempt, event)
+
+
+async def recover_existing_follower_link(user_id: str, attempt_id: str) -> dict:
+    """Link an already-following OA user using current V3 provider evidence."""
+    from accounts import _find_provider_identity_for_user
+    from zalo_oa_api import ZaloOAAPIError, find_existing_follower
+
+    identity = await _find_provider_identity_for_user("zalo", user_id)
+    if not identity or not identity.get("provider_subject"):
+        return {"status": "not_linked", "reason": "zalo_login_identity_not_found"}
+    try:
+        follower = await find_existing_follower(identity["provider_subject"])
+    except ZaloOAAPIError:
+        return {"status": "not_linked", "reason": "oa_user_api_unavailable"}
+    if not follower:
+        return {"status": "not_linked", "reason": "existing_follower_not_found"}
+    attempt = await _consume_link_for_provider_recovery(
+        user_id, attempt_id, follower["external_uid"]
+    )
+    if not attempt:
+        try:
+            current = await get_channel_link(user_id, attempt_id)
+        except KeyError:
+            current = None
+        if current and current.get("status") == "linked":
+            return {"status": "linked", "user_id": user_id}
+        return {"status": "not_linked", "reason": "link_attempt_not_pending"}
+    return await _complete_link_attempt(attempt, {
+        "external_uid": follower["external_uid"],
+        "app_scoped_uid": follower["app_scoped_uid"],
+        "event_name": "oa_user_api_recovery",
+    })
 
 
 async def unlink_channel(user_id: str) -> bool:
@@ -487,6 +660,24 @@ async def get_linked_channel_for_user(user_id: str) -> dict | None:
     }
 
 
+async def resolve_linked_user(external_uid: str) -> str | None:
+    """Resolve one signed OA-scoped sender to its internal account."""
+    clean_uid = str(external_uid or "").strip()
+    if not clean_uid:
+        return None
+    collections = await _collections()
+    if collections is not None:
+        doc = await collections["identities"].find_one({
+            "channel": "zalo_oa", "oa_id": config.ZALO_OA_ID,
+            "external_uid": clean_uid, "status": "linked",
+        })
+    else:
+        doc = _mem_channel_identities.get(("zalo_oa", config.ZALO_OA_ID, clean_uid))
+        if doc and doc.get("status") != "linked":
+            doc = None
+    return str(doc.get("user_id")) if doc and doc.get("user_id") else None
+
+
 async def record_event(event: dict) -> dict:
     """Insert once, optionally consume a link code, and leave durable work queued."""
     now = _now()
@@ -496,6 +687,9 @@ async def record_event(event: dict) -> dict:
         "status": "received",
         "received_at": now,
         "attempts": 0,
+        "next_attempt_at": now,
+        "lease_owner": None,
+        "lease_expires_at": None,
     }
     collections = await _collections()
     inserted = True

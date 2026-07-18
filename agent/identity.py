@@ -554,6 +554,49 @@ async def claim_conversation(actor: dict, conversation_id: str) -> dict:
     return _public_conversation(doc, actor)
 
 
+async def claim_channel_anonymous_conversations(
+    *, user_id: str, anonymous_id: str,
+) -> int:
+    """Transfer a verified channel actor's conversations to its linked account.
+
+    This is an internal trust-boundary helper. It is called only after a signed
+    OA identity has been attached to ``user_id``; no HTTP client can provide
+    either owner identifier. Session/conversation IDs and every referenced
+    campaign artifact remain unchanged.
+    """
+    if not user_id or not anonymous_id:
+        raise ValueError("channel claim requires both verified owners")
+    _, conversations = await _collections()
+    now = _now()
+    query = {
+        "owner_user_id": None,
+        "$or": [
+            {"anonymous_id": anonymous_id},
+            {"identity_id": anonymous_id},
+        ],
+    }
+    updates = {"$set": {
+        "owner_user_id": user_id,
+        "anonymous_id": None,
+        "identity_id": None,
+        "claimed_from_anonymous_id": anonymous_id,
+        "claimed_at": now,
+        "updated_at": now,
+        "claim_source": "verified_zalo_channel_link",
+    }}
+    if conversations is not None:
+        result = await conversations.update_many(query, updates)
+        return int(result.modified_count)
+    count = 0
+    async with _claim_lock:
+        for doc in _mem_conversations.values():
+            if doc.get("owner_user_id") or _anonymous_owner(doc) != anonymous_id:
+                continue
+            doc.update(updates["$set"])
+            count += 1
+    return count
+
+
 async def touch_conversation_for_session(
     session_id: str, *, role: str | None = None, content: str = ""
 ) -> None:

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ChevronDown, Laptop, Link2, Loader2, LogIn, LogOut, MessageCircle, ShieldCheck, Unlink, UserRound } from 'lucide-react'
+import { ChevronDown, Laptop, Loader2, LogIn, LogOut, ShieldCheck, Unlink, UserRound } from 'lucide-react'
+import ZaloIcon from '@/components/ZaloIcon'
 
 const formatTime = value => {
   if (!value) return ''
@@ -72,12 +73,12 @@ export default function AccountMenu({
 
           {!hasZaloLogin && identity.auth_methods?.zalo && (
             <button type="button" onClick={onLinkZalo} disabled={busy} className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-[#0068ff] hover:bg-blue-50">
-              <MessageCircle className="h-3.5 w-3.5" /> Kết nối đăng nhập Zalo
+              <ZaloIcon className="h-5 w-5" /> Kết nối đăng nhập Zalo
             </button>
           )}
           {hasZaloLogin && identity.auth_methods?.zalo_oa_link && !zaloOA && (
             <button type="button" onClick={onOpenZaloOA} disabled={busy} className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-[#0068ff] hover:bg-blue-50">
-              <Link2 className="h-3.5 w-3.5" /> Liên kết chat Zalo OA
+              <ZaloIcon className="h-5 w-5" /> Liên kết chat Zalo OA
             </button>
           )}
           {zaloOA && (

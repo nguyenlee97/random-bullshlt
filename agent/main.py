@@ -29,9 +29,15 @@ async def _lifespan(_app):
     if config.USE_CAMPAIGN_AUTOPILOT:
         from autopilot.worker import start_worker as start_autopilot_worker
         await start_autopilot_worker()
+    if config.ZALO_AGENT_WORKER_ENABLED:
+        from zalo_worker import start_worker as start_zalo_worker
+        await start_zalo_worker()
     try:
         yield
     finally:
+        if config.ZALO_AGENT_WORKER_ENABLED:
+            from zalo_worker import stop_worker as stop_zalo_worker
+            await stop_zalo_worker()
         if config.USE_RAG_AUDIENCE:
             from rag.runtime import stop_prewarm
             await stop_prewarm()
@@ -169,6 +175,9 @@ async def readiness():
     if config.USE_CAMPAIGN_AUTOPILOT:
         from autopilot.worker import worker_running as autopilot_worker_running
         checks["autopilot_worker"] = autopilot_worker_running()
+    if config.ZALO_AGENT_WORKER_ENABLED:
+        from zalo_worker import worker_running as zalo_worker_running
+        checks["zalo_worker"] = zalo_worker_running()
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             response = await client.get(f"{config.BACKEND_URL.rstrip('/')}/api/health")

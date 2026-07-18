@@ -154,6 +154,7 @@ export default function App() {
   const mainRef = useRef(null)
   const bootedRef = useRef(false)
   const identityInitRef = useRef(false)
+  const pendingConversationDeepLinkRef = useRef('')
 
   // ── Demo visibility: hide Demo button once user has interacted ──────────
   const [hasUserStarted, setHasUserStarted] = useState(false)
@@ -536,7 +537,17 @@ export default function App() {
           window.history.replaceState({}, '', `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`)
         }
         setHistoryLoading(true)
-        setConversationHistory(await AgentAPI.listConversations())
+        const history = await AgentAPI.listConversations()
+        setConversationHistory(history)
+        // Zalo OA deep links carry only the public conversation ID. Ownership
+        // is still resolved from HttpOnly/anonymous cookies by the Agent API.
+        const requestedConversation = authParams.get('conversation')
+        if (requestedConversation) {
+          pendingConversationDeepLinkRef.current = requestedConversation
+          authParams.delete('conversation')
+          const nextQuery = authParams.toString()
+          window.history.replaceState({}, '', `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`)
+        }
       } catch (error) {
         setIdentityError(error.message || 'Không thể khởi tạo Advertising Agent trên thiết bị này.')
       } finally {
@@ -942,6 +953,23 @@ export default function App() {
     setHasUserStarted(Boolean(mode))
     bootedRef.current = (context.ui_messages || []).length > 0
   }, [hydrateCanonicalWorkspace, hydrateMessages, resetLocalCampaign])
+
+  useEffect(() => {
+    const conversationId = pendingConversationDeepLinkRef.current
+    if (!identityReady || !conversationId) return
+    pendingConversationDeepLinkRef.current = ''
+    ;(async () => {
+      setHistoryLoading(true)
+      try {
+        const context = await AgentAPI.resumeConversation(conversationId)
+        applyConversationContext(context)
+      } catch (error) {
+        setModeSelectionError('Hãy đăng nhập đúng tài khoản Zalo để mở chiến dịch này.')
+      } finally {
+        setHistoryLoading(false)
+      }
+    })()
+  }, [applyConversationContext, identityReady])
 
   const handleReset = useCallback(async () => {
     const context = await newChat({ experienceMode })
