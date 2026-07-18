@@ -297,6 +297,28 @@ def _campaign_choices(campaigns: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _campaign_list_text(campaigns: list[dict], status_filter: str = "") -> str:
+    if not campaigns:
+        if status_filter == "active":
+            return "Hiện không có chiến dịch nào đang chạy trong tài khoản này."
+        if status_filter == "paused":
+            return "Hiện không có chiến dịch nào đang tạm dừng trong tài khoản này."
+        return "Bạn chưa có chiến dịch nào trong tài khoản này."
+    heading = "Các chiến dịch phù hợp:"
+    if status_filter == "active":
+        heading = "Các chiến dịch đang chạy:"
+    elif status_filter == "paused":
+        heading = "Các chiến dịch đang tạm dừng:"
+    lines = [heading]
+    for index, item in enumerate(campaigns[:8], 1):
+        order = item["order"]
+        lines.append(
+            f"{index}. {order.get('brand') or item['campaign_id']} — "
+            f"{order.get('status') or 'không rõ'} — {item['campaign_id']}"
+        )
+    return "\n".join(lines)
+
+
 async def _select_campaign(thread: dict, campaign: dict) -> dict:
     return await _update_thread(thread, {
         "active_campaign_id": campaign["campaign_id"],
@@ -519,17 +541,52 @@ async def _handle_pending(thread: dict, message: str, campaigns: list[dict]) -> 
         return "Yêu cầu trước đã hết hạn. Vui lòng gửi lại nếu bạn vẫn muốn thực hiện.", thread
     folded = _fold(message)
     if pending.get("kind") == "campaign_selection":
+        pending_ids = [
+            str(item) for item in (pending.get("campaign_ids") or []) if item
+        ]
+        eligible_campaigns = [
+            item for campaign_id in pending_ids
+            for item in campaigns
+            if item["campaign_id"] == campaign_id
+        ]
+        if not eligible_campaigns:
+            thread = await _update_thread(thread, {"pending_action": None})
+            return (
+                "Các chiến dịch trong lựa chọn trước không còn khả dụng hoặc bạn không còn quyền truy cập. "
+                "Không có thao tác nào được thực hiện.",
+                thread,
+            )
         selected = None
         if folded.isdigit():
             index = int(folded) - 1
-            ids = pending.get("campaign_ids") or []
-            selected = next((item for item in campaigns if index >= 0 and index < len(ids) and item["campaign_id"] == ids[index]), None)
+            if 0 <= index < len(eligible_campaigns):
+                selected = eligible_campaigns[index]
         if not selected:
-            selected, ambiguous = resolve_campaign(message, campaigns, None)
-            if ambiguous:
-                return _campaign_choices(ambiguous), thread
+            selected, _ = resolve_campaign(
+                message, eligible_campaigns, None,
+                allow_context_fallback=False,
+            )
+        if not selected and config.ZALO_OPENAI_ENABLED:
+            try:
+                from session import get_history
+                from zalo_openai import plan_zalo_turn
+                plan = await plan_zalo_turn(
+                    message=message,
+                    history=await get_history(thread["session_id"]),
+                    campaigns=eligible_campaigns,
+                    thread=thread,
+                )
+                if 1 <= plan.selected_campaign_index <= len(eligible_campaigns):
+                    selected = eligible_campaigns[plan.selected_campaign_index - 1]
+                elif plan.campaign_reference:
+                    selected, _ = resolve_campaign(
+                        plan.campaign_reference, eligible_campaigns, None,
+                        allow_context_fallback=False,
+                    )
+            except Exception:
+                pass
         if not selected:
-            return _campaign_choices(campaigns), thread
+            return _campaign_choices(eligible_campaigns), thread
         thread = await _select_campaign(thread, selected)
         return f"Đã chọn chiến dịch “{selected['order'].get('brand')}” ({selected['campaign_id']}).", thread
     if folded in _REJECT:
@@ -558,7 +615,22 @@ async def _handle_pending(thread: dict, message: str, campaigns: list[dict]) -> 
         elif any(word in folded for word in ("ban tu dong", "semi", "quan trong")):
             mode = "semi_automatic"
         else:
-            return "Chọn 1) Tự động hoàn toàn hoặc 2) Bán tự động.", thread
+            mode = ""
+            if config.ZALO_OPENAI_ENABLED:
+                try:
+                    from session import get_history
+                    from zalo_openai import plan_zalo_turn
+                    plan = await plan_zalo_turn(
+                        message=message,
+                        history=await get_history(thread["session_id"]),
+                        campaigns=[],
+                        thread=thread,
+                    )
+                    mode = plan.autopilot_mode
+                except Exception:
+                    pass
+            if mode not in {"fully_automatic", "semi_automatic"}:
+                return "Chọn 1) Tự động hoàn toàn hoặc 2) Bán tự động.", thread
         thread = await _update_thread(thread, {"pending_action": {
             "kind": "collect_autopilot_brief", "mode": mode,
             "expires_at": _now() + timedelta(minutes=30),
@@ -568,7 +640,12 @@ async def _handle_pending(thread: dict, message: str, campaigns: list[dict]) -> 
             "ngày bắt đầu/kết thúc và thông điệp hoặc ghi chú."
         ), thread
     if pending.get("kind") == "collect_autopilot_brief":
-        brief, errors = await _extract_brief(message)
+        from session import get_history
+        brief, errors = await _extract_brief(
+            message,
+            history=await get_history(thread["session_id"]),
+            thread_id=thread["thread_id"],
+        )
         if errors:
             return "Brief chưa đủ để chạy Autopilot:\n- " + "\n- ".join(errors), thread
         thread = await _update_thread(thread, {"pending_action": {
@@ -590,21 +667,34 @@ async def _handle_pending(thread: dict, message: str, campaigns: list[dict]) -> 
     return None, thread
 
 
-async def _extract_brief(message: str) -> tuple[dict | None, list[str]]:
+async def _extract_brief(
+    message: str, *, history: list[dict] | None = None, thread_id: str = "",
+) -> tuple[dict | None, list[str]]:
     from autopilot.capabilities import validate_brief_value
-    system = (
-        "Trích xuất brief quảng cáo từ tin nhắn tiếng Việt. Chỉ trả về một JSON object với "
-        "brand, advertiser, objective, kpi, budget, startDate, endDate, notes. "
-        "objective phải là awareness, consideration, conversion hoặc retention. "
-        "budget dùng đơn vị triệu VND. Ngày dùng YYYY-MM-DD. Không bịa trường còn thiếu; dùng chuỗi rỗng hoặc 0."
-    )
-    try:
-        from llm import simple_generate
-        raw = await asyncio.to_thread(simple_generate, system, message)
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        value = json.loads(match.group(0) if match else raw)
-    except Exception:
-        value = {}
+    if config.ZALO_OPENAI_ENABLED:
+        try:
+            from zalo_openai import extract_zalo_brief
+            value = await extract_zalo_brief(
+                message=message,
+                history=history or [],
+                thread_id=thread_id,
+            )
+        except Exception:
+            value = {}
+    else:
+        system = (
+            "Trích xuất brief quảng cáo từ tin nhắn tiếng Việt. Chỉ trả về một JSON object với "
+            "brand, advertiser, objective, kpi, budget, startDate, endDate, notes. "
+            "objective phải là awareness, consideration, conversion hoặc retention. "
+            "budget dùng đơn vị triệu VND. Ngày dùng YYYY-MM-DD. Không bịa trường còn thiếu; dùng chuỗi rỗng hoặc 0."
+        )
+        try:
+            from llm import simple_generate
+            raw = await asyncio.to_thread(simple_generate, system, message)
+            match = re.search(r"\{.*\}", raw, re.DOTALL)
+            value = json.loads(match.group(0) if match else raw)
+        except Exception:
+            value = {}
     brief, errors = validate_brief_value(value, today=date.today())
     return brief, errors
 
@@ -664,6 +754,38 @@ async def subscribe_run(thread: dict, run_id: str) -> None:
         _mem_subscriptions.setdefault((thread["thread_id"], run_id), doc)
 
 
+async def _plan_openai_turn(
+    *, message: str, history: list[dict], campaigns: list[dict], thread: dict,
+):
+    if not config.ZALO_OPENAI_ENABLED:
+        return None
+    from zalo_openai import plan_zalo_turn
+    return await plan_zalo_turn(
+        message=message, history=history, campaigns=campaigns, thread=thread,
+    )
+
+
+async def _render_openai_tool_result(
+    *, message: str, history: list[dict], intent: str, tool_result: str,
+    thread: dict,
+) -> str:
+    if not config.ZALO_OPENAI_ENABLED:
+        return tool_result
+    from zalo_openai import render_zalo_reply
+    try:
+        return await render_zalo_reply(
+            message=message,
+            history=history,
+            intent=intent,
+            tool_result=tool_result,
+            thread_id=thread["thread_id"],
+        )
+    except Exception:
+        # The server-grounded tool result is safe and more useful than losing a
+        # successful read because only the natural-language renderer failed.
+        return tool_result
+
+
 async def handle_channel_event(event: dict) -> list[str | dict]:
     """Process one durable normalized inbound event into concise text parts."""
     external_uid = event.get("external_uid")
@@ -682,7 +804,7 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
     if not message:
         return []
 
-    from session import add_message
+    from session import add_message, get_history
     await add_message(thread["session_id"], "user", message)
     campaigns = await owned_campaigns(thread)
     pending_text, thread = await _handle_pending(thread, message, campaigns)
@@ -706,10 +828,39 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
         except Exception:
             pass
 
+    history = await get_history(thread["session_id"])
+    try:
+        plan = await _plan_openai_turn(
+            message=message, history=history, campaigns=campaigns, thread=thread,
+        )
+    except Exception:
+        text = (
+            "Trợ lý hội thoại đang tạm thời không kết nối được với OpenAI. "
+            "Không có thao tác hay thay đổi chiến dịch nào được thực hiện; vui lòng thử lại sau ít phút."
+        )
+        await add_message(thread["session_id"], "assistant", text)
+        return [text]
+
     folded = _fold(message)
-    if folded in _GREETING_OR_HELP:
-        text = _help_text()
-    elif any(phrase in folded for phrase in ("tao chien dich", "chien dich moi", "new campaign", "chay autopilot")):
+    intent = plan.intent if plan else ""
+    if plan and (plan.needs_clarification or intent == "clarify"):
+        text = plan.clarification_question.strip() or (
+            "Bạn muốn thao tác với chiến dịch nào? Hãy gửi tên hoặc mã chiến dịch."
+        )
+    elif intent in {"greet", "help", "smalltalk"} or (
+        not plan and folded in _GREETING_OR_HELP
+    ):
+        text = (plan.conversational_reply.strip() if plan else "") or _help_text()
+    elif intent == "unsupported":
+        text = (plan.conversational_reply.strip() if plan else "") or (
+            "Zalo chỉ hỗ trợ xem thông tin, báo cáo, live view và xác nhận tạm dừng/tiếp tục. "
+            f"Các chỉnh sửa khác cần thực hiện trên workspace: {config.ZALO_WEB_WORKSPACE_URL}"
+        )
+    elif intent == "start_autopilot" or (
+        not plan and any(phrase in folded for phrase in (
+            "tao chien dich", "chien dich moi", "new campaign", "chay autopilot",
+        ))
+    ):
         thread = await _update_thread(thread, {"pending_action": {
             "kind": "choose_autopilot_mode",
             "expires_at": _now() + timedelta(minutes=15),
@@ -719,20 +870,53 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
             "1. Tự động hoàn toàn — chỉ dừng trước khi launch.\n"
             "2. Bán tự động — dừng ở các bước quan trọng và trước khi launch."
         )
-    elif any(phrase in folded for phrase in ("danh sach", "cac chien dich", "list campaign", "campaign list")):
-        text = _campaign_choices(campaigns) if campaigns else "Bạn chưa có chiến dịch nào trong tài khoản này."
-        if len(campaigns) > 1:
+    elif intent == "list_campaigns" or (
+        not plan and any(phrase in folded for phrase in (
+            "danh sach", "cac chien dich", "list campaign", "campaign list",
+        ))
+    ):
+        status_filter = plan.campaign_status_filter if plan else ""
+        listed = campaigns
+        if status_filter == "active":
+            listed = [item for item in campaigns if str(
+                (item.get("order") or {}).get("status") or ""
+            ).lower() in {"active", "running", "live"}]
+        elif status_filter == "paused":
+            listed = [item for item in campaigns if str(
+                (item.get("order") or {}).get("status") or ""
+            ).lower() == "paused"]
+        raw_text = _campaign_list_text(listed, status_filter)
+        text = await _render_openai_tool_result(
+            message=message, history=history, intent="list_campaigns",
+            tool_result=raw_text, thread=thread,
+        )
+        if len(listed) > 1:
             await _update_thread(thread, {"pending_action": {
                 "kind": "campaign_selection",
-                "campaign_ids": [item["campaign_id"] for item in campaigns[:8]],
+                "campaign_ids": [item["campaign_id"] for item in listed[:8]],
                 "expires_at": _now() + timedelta(minutes=10),
             }})
     else:
-        has_campaign_intent = _has_campaign_operation_intent(folded)
-        campaign, ambiguous = resolve_campaign(
-            message, campaigns, thread.get("active_campaign_id"),
-            allow_context_fallback=has_campaign_intent,
+        planned_campaign_intents = {
+            "select_campaign", "status", "setup", "report", "live_view",
+            "pause", "resume",
+        }
+        has_campaign_intent = (
+            intent in planned_campaign_intents
+            if plan else _has_campaign_operation_intent(folded)
         )
+        resolution_message = message
+        if plan and plan.campaign_reference:
+            resolution_message = f"{message} {plan.campaign_reference}"
+        campaign = None
+        ambiguous: list[dict] = []
+        if plan and 1 <= plan.selected_campaign_index <= len(campaigns):
+            campaign = campaigns[plan.selected_campaign_index - 1]
+        else:
+            campaign, ambiguous = resolve_campaign(
+                resolution_message, campaigns, thread.get("active_campaign_id"),
+                allow_context_fallback=has_campaign_intent,
+            )
         if not campaign:
             if ambiguous:
                 await _update_thread(thread, {"pending_action": {
@@ -742,33 +926,78 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
                 }})
                 text = _campaign_choices(ambiguous)
             elif has_campaign_intent:
-                text = (
+                text = (plan.clarification_question.strip() if plan else "") or (
                     "Tôi chưa xác định được chiến dịch. Hãy gửi tên/mã chiến dịch hoặc hỏi “Danh sách chiến dịch”."
                 )
             else:
-                text = _help_text()
+                text = (plan.conversational_reply.strip() if plan else "") or _help_text()
         else:
             thread = await _select_campaign(thread, campaign)
-            if any(word in folded for word in ("tam dung", "pause")):
+            if intent == "select_campaign":
+                text = (
+                    f"Đã chọn chiến dịch “{campaign['order'].get('brand')}” "
+                    f"({campaign['campaign_id']}). Bạn muốn xem trạng thái, cấu hình, báo cáo hay live view?"
+                )
+            elif intent == "pause" or (
+                not plan and any(word in folded for word in ("tam dung", "pause"))
+            ):
                 text = await _lifecycle_request(thread, campaign, "pause")
-            elif any(word in folded for word in ("tiep tuc lai", "resume", "kich hoat lai")):
+            elif intent == "resume" or (
+                not plan and any(word in folded for word in (
+                    "tiep tuc lai", "resume", "kich hoat lai",
+                ))
+            ):
                 text = await _lifecycle_request(thread, campaign, "resume")
-            elif any(word in folded for word in ("sua", "thay doi", "cap nhat")) and any(
+            elif not plan and any(word in folded for word in ("sua", "thay doi", "cap nhat")) and any(
                 word in folded for word in ("budget", "ngan sach", "ngay", "audience", "target", "placement", "creative")
             ):
                 text = (
                     "Zalo chỉ cho phép tạm dừng/tiếp tục chiến dịch đã tạo; không sửa budget, lịch, "
                     f"audience, placement hoặc creative. Mở workspace: {_workspace_link(campaign)}"
                 )
-            elif any(word in folded for word in ("bao cao", "report", "daily", "awareness", "consideration", "conversion", "retention", "executive", "ctr", "impression", "click", "reach")):
-                text = await _answer_report(message, campaign)
-            elif any(word in folded for word in ("live", "screenshot", "anh quang cao", "xem quang cao")):
+            elif intent == "report" or (
+                not plan and any(word in folded for word in (
+                    "bao cao", "report", "daily", "awareness", "consideration",
+                    "conversion", "retention", "executive", "ctr", "impression",
+                    "click", "reach",
+                ))
+            ):
+                report_message = message
+                if plan and plan.report_type:
+                    report_message = f"{message} report_type={plan.report_type}"
+                raw_text = await _answer_report(report_message, campaign)
+                text = await _render_openai_tool_result(
+                    message=message, history=history, intent="report",
+                    tool_result=raw_text, thread=thread,
+                )
+            elif intent == "live_view" or (
+                not plan and any(word in folded for word in (
+                    "live", "screenshot", "anh quang cao", "xem quang cao",
+                ))
+            ):
                 response_parts = await _live_response(campaign)
-                text = str(response_parts[0])
-            elif any(word in folded for word in ("cau hinh", "setup", "audience", "placement", "creative", "targeting", "ngan sach")):
-                text = await _setup_text(campaign)
+                text = await _render_openai_tool_result(
+                    message=message, history=history, intent="live_view",
+                    tool_result=str(response_parts[0]), thread=thread,
+                )
+                response_parts[0] = text
+            elif intent == "setup" or (
+                not plan and any(word in folded for word in (
+                    "cau hinh", "setup", "audience", "placement", "creative",
+                    "targeting", "ngan sach",
+                ))
+            ):
+                raw_text = await _setup_text(campaign)
+                text = await _render_openai_tool_result(
+                    message=message, history=history, intent="setup",
+                    tool_result=raw_text, thread=thread,
+                )
             else:
-                text = _status_text(campaign)
+                raw_text = _status_text(campaign)
+                text = await _render_openai_tool_result(
+                    message=message, history=history, intent="status",
+                    tool_result=raw_text, thread=thread,
+                )
 
     await add_message(thread["session_id"], "assistant", text)
     return response_parts if response_parts else [text]

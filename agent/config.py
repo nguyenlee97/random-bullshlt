@@ -161,6 +161,25 @@ class Config:
     ZALO_OUTBOUND_ENABLED: bool = (
         os.getenv("ZALO_OUTBOUND_ENABLED", "false").lower() == "true"
     )
+    # Zalo's conversational planner uses the official OpenAI Responses API.
+    # This is deliberately separate from the GreenNode model used elsewhere.
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    ZALO_OPENAI_ENABLED: bool = (
+        os.getenv("ZALO_OPENAI_ENABLED", "false").lower() == "true"
+    )
+    ZALO_CHAT_MODEL: str = os.getenv("ZALO_CHAT_MODEL", "gpt-5.4-mini")
+    ZALO_CHAT_REASONING_EFFORT: str = os.getenv(
+        "ZALO_CHAT_REASONING_EFFORT", "low"
+    )
+    ZALO_CHAT_MAX_OUTPUT_TOKENS: int = int(
+        os.getenv("ZALO_CHAT_MAX_OUTPUT_TOKENS", "1200")
+    )
+    ZALO_CHAT_TIMEOUT_SECONDS: float = float(
+        os.getenv("ZALO_CHAT_TIMEOUT_SECONDS", "45")
+    )
+    ZALO_CHAT_MAX_RETRIES: int = int(
+        os.getenv("ZALO_CHAT_MAX_RETRIES", "1")
+    )
     ZALO_WORKER_POLL_SECONDS: float = float(
         os.getenv("ZALO_WORKER_POLL_SECONDS", "1.0")
     )

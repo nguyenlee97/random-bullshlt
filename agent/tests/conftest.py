@@ -122,4 +122,9 @@ def reset_session_col(monkeypatch):
         )
     except ImportError:
         pass
+    try:
+        import zalo_openai
+        zalo_openai.reset_zalo_openai_for_test()
+    except ImportError:
+        pass
     yield

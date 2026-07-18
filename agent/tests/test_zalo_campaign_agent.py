@@ -76,6 +76,98 @@ async def test_greeting_does_not_implicitly_select_only_campaign(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_openai_planner_understands_active_campaign_list_request(monkeypatch):
+    import zalo_campaign_agent as agent
+    from config import config
+    from zalo_openai import ZaloTurnPlan
+
+    campaigns = [
+        _campaign("ORD-RUNNING", "Doraemon", "active"),
+        _campaign("ORD-PAUSED", "Summer", "paused"),
+    ]
+    monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
+    monkeypatch.setattr(agent, "owned_campaigns", AsyncMock(return_value=campaigns))
+    monkeypatch.setattr(agent, "_plan_openai_turn", AsyncMock(return_value=ZaloTurnPlan(
+        intent="list_campaigns", campaign_status_filter="active",
+    )))
+    monkeypatch.setattr(
+        agent, "_render_openai_tool_result",
+        AsyncMock(side_effect=lambda **kwargs: kwargs["tool_result"]),
+    )
+
+    response = await agent.handle_channel_event({
+        "event_name": "user_send_text",
+        "external_uid": "oa-user-natural-list",
+        "text": "đang có chiến dịch gì đang chạy",
+    })
+
+    assert "Doraemon" in response[0]
+    assert "ORD-RUNNING" in response[0]
+    assert "Summer" not in response[0]
+    assert "Tôi có thể giúp" not in response[0]
+
+
+@pytest.mark.asyncio
+async def test_openai_planner_resolves_natural_pending_selection_only_within_choices(monkeypatch):
+    import zalo_campaign_agent as agent
+    from config import config
+    from zalo_openai import ZaloTurnPlan
+
+    campaigns = [
+        _campaign("ORD-ONE", "First"),
+        _campaign("ORD-TWO", "Second"),
+        _campaign("ORD-OTHER", "Not Offered"),
+    ]
+    thread = await agent.get_or_create_thread("oa-user-natural-select")
+    thread = await agent._update_thread(thread, {"pending_action": {
+        "kind": "campaign_selection",
+        "campaign_ids": ["ORD-ONE", "ORD-TWO"],
+        "expires_at": agent._now() + timedelta(minutes=5),
+    }})
+    planner = AsyncMock(return_value=ZaloTurnPlan(
+        intent="select_campaign", selected_campaign_index=2,
+    ))
+    monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
+    monkeypatch.setattr("zalo_openai.plan_zalo_turn", planner)
+
+    text, updated = await agent._handle_pending(
+        thread, "chọn cái thứ hai", campaigns,
+    )
+
+    assert "ORD-TWO" in text
+    assert updated["active_campaign_id"] == "ORD-TWO"
+    planner.assert_awaited_once()
+    assert [
+        item["campaign_id"] for item in planner.await_args.kwargs["campaigns"]
+    ] == ["ORD-ONE", "ORD-TWO"]
+
+
+@pytest.mark.asyncio
+async def test_openai_planner_failure_fails_closed_without_campaign_mutation(monkeypatch):
+    import zalo_campaign_agent as agent
+    from config import config
+
+    campaign = _campaign("ORD-SAFE", "Safe Campaign")
+    mutation = AsyncMock()
+    monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
+    monkeypatch.setattr(agent, "owned_campaigns", AsyncMock(return_value=[campaign]))
+    monkeypatch.setattr(
+        agent, "_plan_openai_turn", AsyncMock(side_effect=RuntimeError("provider down")),
+    )
+    monkeypatch.setattr("tools.order_api.set_order_delivery_state", mutation)
+
+    response = await agent.handle_channel_event({
+        "event_name": "user_send_text",
+        "external_uid": "oa-user-provider-failure",
+        "text": "tạm dừng chiến dịch này",
+    })
+
+    assert "không kết nối được với OpenAI" in response[0]
+    assert "Không có thao tác" in response[0]
+    mutation.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_owned_campaigns_fetches_only_order_ids_from_owned_conversations(monkeypatch):
     from identity import bootstrap_anonymous, create_conversation
     from session import update_order_ids
@@ -165,6 +257,33 @@ async def test_zalo_autopilot_modes_map_to_existing_policies(monkeypatch):
     text, _ = await agent._handle_pending(updated, "Xác nhận", [])
     assert text == "started"
     agent._start_autopilot.assert_awaited_once_with(updated, {"brand": "Demo"}, "fully_automatic")
+
+
+@pytest.mark.asyncio
+async def test_openai_understands_natural_autopilot_mode_without_starting_run(monkeypatch):
+    import zalo_campaign_agent as agent
+    from config import config
+    from zalo_openai import ZaloTurnPlan
+
+    thread = await agent.get_or_create_thread("oa-user-natural-mode")
+    thread = await agent._update_thread(thread, {"pending_action": {
+        "kind": "choose_autopilot_mode",
+        "expires_at": agent._now() + timedelta(minutes=5),
+    }})
+    planner = AsyncMock(return_value=ZaloTurnPlan(
+        intent="start_autopilot", autopilot_mode="fully_automatic",
+    ))
+    monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
+    monkeypatch.setattr("zalo_openai.plan_zalo_turn", planner)
+
+    text, updated = await agent._handle_pending(
+        thread, "cứ tự làm hết, chỉ hỏi tôi lúc cuối", [],
+    )
+
+    assert "gửi brief" in text
+    assert updated["pending_action"]["kind"] == "collect_autopilot_brief"
+    assert updated["pending_action"]["mode"] == "fully_automatic"
+    planner.assert_awaited_once()
 
 
 def test_progress_messages_are_milestone_scoped_and_launch_is_explicit():

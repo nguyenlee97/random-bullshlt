@@ -3,7 +3,7 @@
 Date: 2026-07-18
 
 Status: implemented, regression-tested and deployed to
-`https://agent.pawgrammers.io.vn` as Agent build `2026-07-18.13`.
+`https://agent.pawgrammers.io.vn` as Agent build `2026-07-18.14`.
 
 ## 1. Delivered outcome
 
@@ -32,6 +32,16 @@ The channel supports:
 - persisted progress at meaningful run/review/launch/terminal milestones;
 - same-origin web workspace deep links for unsupported edits or richer review.
 
+Natural-language turn planning now uses the official OpenAI Responses API with
+`gpt-5.4-mini`. The planner receives a bounded recent transcript, summaries of
+campaigns already proven to be actor-owned, the active campaign and the type of
+pending action. Structured output selects an intent, campaign reference,
+report view or clarification question. The model never supplies an owner and
+never executes tools or mutations. Server code still resolves the campaign,
+fetches report/setup/live data and enforces every confirmation and ownership
+check. This follows the model's supported Responses API and Structured Outputs
+contract: <https://developers.openai.com/api/docs/models/gpt-5.4-mini>.
+
 New campaigns do not use Guided Workflow over Zalo. Existing campaigns cannot
 be edited in chat except for pause/resume.
 
@@ -56,6 +66,11 @@ then fetched from AdsPilot. Resolution is deterministic:
 Pause/resume stores campaign/session/conversation, requested target state,
 nonce and expiry. Confirmation re-runs ownership resolution and fetches the
 current order state before the idempotent backend mutation.
+
+The contextual planner cannot expand this candidate set. A campaign index or
+reference returned by the model is resolved again only inside the ordered list
+of account-owned candidates that the server supplied. Ambiguity produces a
+question; an OpenAI planner failure produces a no-mutation retry response.
 
 ## 3. Durable schemas and indexes
 
@@ -130,6 +145,11 @@ GET  /api/agent/zalo/media/{token}    # short-lived screenshot fetch
 GET  /ready                           # includes zalo_worker readiness
 ```
 
+When enabled, webhook health exposes only the planner enabled/configured state
+and model name. Readiness fails if the server-side OpenAI key is missing; the
+key is never returned. Requests use `store=false` and a one-way hashed safety
+identifier rather than the raw OA/thread identity.
+
 The webhook acknowledges after verification and idempotent persistence. It
 does not wait for agent execution or provider delivery. The inbound worker and
 outbox use expiring leases and bounded exponential retry. OA tokens remain in
@@ -157,33 +177,41 @@ Autopilot uses the existing `create_run` and review-chat services:
 
 ## 6. Automated verification
 
-Final commands executed after the media and credential-log fixes:
+Commands executed after the contextual OpenAI planner change:
 
-- focused Zalo ownership/worker/media tests: **21 passed**, 1 deprecation
-  warning;
-- complete Agent test suite: **268 passed**, 2 warnings;
-- frontend Node test suite: **60 passed**;
-- AdsPilot Node backend suite: **11 passed**;
-- frontend production build: **passed**, 2,581 modules transformed;
-- Python compilation of changed channel modules: passed;
-- additive local Mongo index initialization: passed.
+- focused OpenAI planner and Zalo campaign-agent tests: **14 passed**;
+- complete Agent test suite: **275 passed**, 2 warnings;
+- Agent container production image build: **passed**;
+- Python compilation of all changed runtime modules: **passed**;
+- provider-backed production structured-plan and grounded-render probes:
+  **passed**.
+
+The unchanged frontend, AdsPilot backend and additive-index evidence from build
+`.13` remains applicable because `.14` changes only the Agent conversational
+planner/router, configuration, health metadata and tests.
 
 Focused coverage includes campaign ambiguity and active context, foreign-owner
 denial, explicit lifecycle confirmation and recheck, both Autopilot mode
 mappings, milestone filtering, webhook replay, channel linking and opaque media
-retrieval.
+retrieval. The new tests also cover natural active-campaign list intent,
+pronoun/ordinal selection restricted to the offered owned list, bounded and
+privacy-minimized model input, grounded reply rendering and fail-closed model
+outage behavior.
 
 ## 7. Production and browser evidence
 
 Production configuration enables the Zalo agent worker and outbound delivery.
-After deployment:
+After the `2026-07-18.14` deployment:
 
-- `/agent/api/version` returned `2026-07-18.13` with the five Zalo campaign
-  feature flags;
+- `/agent/api/version` returned `2026-07-18.14` with
+  `zalo-openai-context-planner`;
 - `/agent/ready` returned Mongo, backend, creative worker, Autopilot worker and
-  Zalo worker all ready;
+  Zalo worker all ready, plus `zalo_openai: true`;
 - `/agent/api/agent/zalo/webhook` reported the OA configured and both worker and
-  outbound delivery running;
+  outbound delivery running, and the `gpt-5.4-mini` planner enabled/configured;
+- a provider-backed production diagnostic using the deployed planner classified
+  `đang có chiến dịch gì đang chạy` as `list_campaigns` with the `active`
+  filter, then rendered only the server-provided Doraemon result;
 - a controlled valid signed event for the linked test user was acknowledged,
   processed once and sent once; the actual OA reply was the account-owned
   campaign-list result;
@@ -215,7 +243,7 @@ disabled.
 Production rollback snapshot:
 
 ```text
-/var/backups/advertising-agent/20260718-zalo-agent-worker-13
+/var/backups/advertising-agent/20260718-zalo-openai-14
 ```
 
 For a transport-only rollback, first disable `ZALO_AGENT_WORKER_ENABLED` and
@@ -225,9 +253,12 @@ Agent/frontend snapshot. Do not drop the additive Mongo collections.
 
 ## 9. Known follow-ups
 
-- The production linked acceptance account currently owns no campaign. A real
-  campaign-bearing OA journey must still exercise report, live screenshot,
-  pause/resume and both complete Autopilot modes against production data.
+- The linked production account now owns a Doraemon campaign and exposed the
+  former keyword-router defect: a natural active-campaign question returned the
+  generic capability menu while an explicit report keyword happened to work.
+  Build `.14` fixes that routing path. A fresh human OA journey should now
+  exercise natural follow-ups, report/live, confirmed pause/resume and both
+  complete Autopilot modes against production data.
 - Native inbound Zalo creative-image ingestion is deferred. Current inbound
   images direct the user to the authenticated web upload workspace.
 - Rich cards/buttons, voice, ZBS proactive templates and broad notification

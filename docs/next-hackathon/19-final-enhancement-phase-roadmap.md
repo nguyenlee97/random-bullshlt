@@ -2,7 +2,7 @@
 
 Date: 2026-07-18
 
-Status: in progress; FE-1 implementation, FE-2B, Zalo Login/OA linking, the FE-3 durable channel worker and the FE-4 narrow campaign-operation slice are deployed. Final campaign-bearing Zalo acceptance, FE-0 closeout and FE-5 release-candidate rehearsal remain open.
+Status: in progress; FE-1 implementation, FE-2B, Zalo Login/OA linking, the FE-3 durable channel worker and the FE-4 narrow campaign-operation slice are deployed. Zalo natural-language planning now uses a bounded, structured `gpt-5.4-mini` Responses API layer while server-owned resolvers and workflows retain authority. Final campaign-bearing Zalo acceptance, FE-0 closeout and FE-5 release-candidate rehearsal remain open.
 
 Scope: finish the current campaign agent, add placement-aware creative generation, then add identity, conversation history, and Zalo OA as a first-class channel.
 
@@ -408,7 +408,7 @@ Verified across the foundation and campaign-agent slices: invalid signatures cre
 
 ## 9. FE-4 — Zalo campaign operations and notifications
 
-Implementation status (2026-07-18): the narrow operation set is deployed. The server-side resolver searches only actor-owned conversations/orders, remembers active campaign context, asks a numbered question when ambiguous and rechecks ownership before mutations. Report Q&A reuses the existing six-view synthetic report handler. Live view uses the existing screenshot service and a short-lived opaque, hashed, TTL-backed same-origin media URL. Pause/resume is explicit, expiring and idempotent. Progress delivery follows persisted Autopilot run events. Production acceptance has proved the signed linked-user worker/outbox path; campaign-bearing production journeys remain open because the linked test account currently owns no campaign.
+Implementation status (2026-07-18): the narrow operation set is deployed. The server-side resolver searches only actor-owned conversations/orders, remembers active campaign context, asks a numbered question when ambiguous and rechecks ownership before mutations. A bounded `gpt-5.4-mini` structured planner now interprets natural turns and recent context; it cannot establish ownership or execute a mutation. Report Q&A reuses the existing six-view synthetic report handler. Live view uses the existing screenshot service and a short-lived opaque, hashed, TTL-backed same-origin media URL. Pause/resume is explicit, expiring and idempotent. Progress delivery follows persisted Autopilot run events. Production acceptance has proved the signed linked-user worker/outbox path and the linked account now has a campaign; fresh end-to-end report/live/lifecycle/Autopilot journeys remain open.
 
 The deployed tool set is intentionally narrow:
 
@@ -423,7 +423,7 @@ Rules:
 
 - Pause/resume is the only existing-campaign mutation and is idempotent.
 - Backend ownership and campaign status are rechecked at execution time.
-- Campaign resolution is server-side: exact ID/name, unique partial match, remembered active context or an explicit numbered choice. The model never guesses an ambiguous campaign.
+  - Campaign ownership and final resolution are server-side. The model may interpret a natural reference or ordinal only within the already ownership-proven candidate list; unresolved ambiguity always becomes a question.
 - “Report” means Q&A over the same synthetic six-view dataset already rendered by the report module. This does not create a new analytics or optimization agent.
 
 ## 10. FE-5 — Final hackathon release candidate

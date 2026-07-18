@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-18.13"
+BUILD_VERSION = "2026-07-18.14"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -130,4 +130,5 @@ BUILD_FEATURES = [
     "zalo-synthetic-report-qa",          # reuse the existing six-view synthetic report module
     "zalo-confirmed-campaign-lifecycle", # pause/resume only after expiring explicit confirmation
     "zalo-two-mode-autopilot-progress",  # fully automatic or important-gate progress over OA
+    "zalo-openai-context-planner",       # GPT-5.4-mini plans contextual OA turns; server executes safely
 ]

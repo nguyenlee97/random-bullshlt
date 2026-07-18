@@ -132,6 +132,7 @@ async def zalo_webhook_health():
     from config import config
     from zalo_channel import channel_ready
     from zalo_worker import worker_running
+    from zalo_openai import openai_configured
 
     return {
         "ok": True,
@@ -142,6 +143,11 @@ async def zalo_webhook_health():
         "agent_worker_enabled": config.ZALO_AGENT_WORKER_ENABLED,
         "agent_worker_running": worker_running(),
         "outbound_enabled": config.ZALO_OUTBOUND_ENABLED,
+        "chat_planner": {
+            "enabled": config.ZALO_OPENAI_ENABLED,
+            "configured": openai_configured(),
+            "model": config.ZALO_CHAT_MODEL if config.ZALO_OPENAI_ENABLED else None,
+        },
     }
 
 

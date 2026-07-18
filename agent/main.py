@@ -178,6 +178,9 @@ async def readiness():
     if config.ZALO_AGENT_WORKER_ENABLED:
         from zalo_worker import worker_running as zalo_worker_running
         checks["zalo_worker"] = zalo_worker_running()
+    if config.ZALO_OPENAI_ENABLED:
+        from zalo_openai import openai_configured
+        checks["zalo_openai"] = openai_configured()
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             response = await client.get(f"{config.BACKEND_URL.rstrip('/')}/api/health")
