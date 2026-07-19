@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-20.6"
+BUILD_VERSION = "2026-07-20.7"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -166,4 +166,7 @@ BUILD_FEATURES = [
     "public-experience-revamp",           # landing, progressive onboarding, safe dual-mode demos and current docs
     "guided-interface-tours",             # real Copilot/Autopilot UI spotlight tours with launch safety boundary
     "kinetic-public-landing",              # code-native agentic campaign constellation and clear workspace entry
+    "connected-campaign-landing",          # linked brief-to-decision story with distinct mode visual systems
+    "autopilot-in-layout-guide",           # persistent brief, creative, control and run-reading guidance
+    "copilot-walkthrough-mode-retention",  # live walkthrough prepares a campaign without returning home
 ]

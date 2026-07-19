@@ -1042,7 +1042,7 @@ export default function App() {
 
   const handleReset = useCallback(async () => {
     const context = await newChat({ experienceMode })
-    if (!context) return
+    if (!context) return false
     applyConversationContext({ ...context, ui_messages: [] })
     if (experienceMode) {
       await AgentAPI.setWorkspacePreferences(
@@ -1055,6 +1055,7 @@ export default function App() {
       setActiveTab(experienceMode === 'autopilot' ? 'autopilot' : 'workspace')
       bootedRef.current = false
     }
+    return true
   }, [applyConversationContext, experienceMode, hydrateCanonicalWorkspace, newChat])
 
   const handleNewChat = useCallback(() => {
@@ -1330,16 +1331,6 @@ export default function App() {
     window.addEventListener('demo:set_form_field', handler)
     return () => window.removeEventListener('demo:set_form_field', handler)
   }, [setFormStateWithEvents])
-
-  // ── Demo: listen for demo:new_chat to reset state for live run ─────────
-  useEffect(() => {
-    const handler = () => {
-      log.step('demo:new_chat → resetting for demo live run')
-      handleNewChat()
-    }
-    window.addEventListener('demo:new_chat', handler)
-    return () => window.removeEventListener('demo:new_chat', handler)
-  }, [handleNewChat])
 
   // ── Demo: listen for demo:inject_creatives to add pre-generated assets ──
   useEffect(() => {
@@ -1720,6 +1711,7 @@ export default function App() {
       onRequestTab={setActiveTab}
       activeTab={activeTab}
       onActiveChange={(active) => { isDemoActiveRef.current = active }}
+      onPrepareLive={handleReset}
       experienceMode={experienceMode}
       autoStart={autoStartDemoMode}
       onAutoStartConsumed={() => setAutoStartDemoMode('')}

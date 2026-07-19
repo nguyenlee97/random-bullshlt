@@ -15,10 +15,24 @@ export const AUTOPILOT_TOUR_STEPS = [
   },
   {
     type: 'TOOLTIP',
+    target: '[data-demo="autopilot-guide"]',
+    position: 'bottom',
+    title: 'Bắt đầu từ guide bốn mốc',
+    text: 'Đây là bản đồ đọc Autopilot ngay trong layout: **Brief → Creative source → Control policy → Run**. Nó luôn ở đây để bạn kiểm tra đầu vào, không phải một walkthrough riêng cần chạy lại.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-brief-status"]',
+    position: 'left',
+    title: 'Brief phải đủ để Agent ra quyết định',
+    text: 'Tối thiểu cần **brand, objective, budget và thời gian chạy** đã được duyệt. KPI cùng ghi chú về audience, thị trường hoặc thông điệp không phải lúc nào cũng chặn run, nhưng chúng làm strategy và creative plan cụ thể hơn nhiều.',
+  },
+  {
+    type: 'TOOLTIP',
     target: '[data-demo="autopilot-creative-source"]',
     position: 'bottom',
-    title: 'Chọn nguồn creative',
-    text: 'Bạn quyết định tải creative có sẵn hoặc để Agent tạo asset theo format. Creative Intelligence vẫn kiểm tra kích thước, khả năng hiển thị và rủi ro trước launch.',
+    title: 'Chọn đúng loại creative đầu vào',
+    text: 'Chọn **Upload** nếu bạn đã có asset chính thức cần giữ nguyên. Chọn **AI tự tạo** nếu muốn Agent sinh draft theo các format placement đã lập kế hoạch. Cả hai đường đều đi qua Creative Intelligence trước launch.',
   },
   {
     type: 'TOOLTIP',
@@ -26,13 +40,6 @@ export const AUTOPILOT_TOUR_STEPS = [
     position: 'bottom',
     title: 'Đặt mức kiểm soát',
     text: 'Ba chính sách review cho phép bạn chọn giữa tự động tối đa, chỉ dừng ở điểm quan trọng hoặc duyệt từng giai đoạn. **Launch luôn là quyết định có kiểm soát.**',
-  },
-  {
-    type: 'TOOLTIP',
-    target: '[data-demo="autopilot-brief-status"]',
-    position: 'left',
-    title: 'Brief là điều kiện khởi chạy',
-    text: 'Agent chỉ lập plan khi brief đã đủ brand, ngân sách và thời gian. Nếu dữ liệu còn thiếu hoặc đang chờ duyệt, khu vực này chỉ rõ việc cần làm trước.',
   },
   {
     type: 'TOOLTIP',
@@ -45,7 +52,7 @@ export const AUTOPILOT_TOUR_STEPS = [
     type: 'TOOLTIP',
     target: '[data-demo="autopilot-start"]',
     position: 'top',
-    title: 'Bắt đầu khi bạn sẵn sàng',
-    text: 'Nút này tạo durable run gồm các tác vụ có lease, retry và idempotency. Tour dừng tại đây để **không khởi chạy run hoặc tạo order thay bạn**.',
+    title: 'Bắt đầu rồi đọc stage và evidence',
+    text: 'Khi mọi điều kiện đã đủ, nút này tạo durable run. Sau đó hãy theo dõi stage đang chạy, evidence được tạo và checkpoint màu vàng cần review. Tour dừng tại đây để **không khởi chạy run hoặc tạo order thay bạn**.',
   },
 ]

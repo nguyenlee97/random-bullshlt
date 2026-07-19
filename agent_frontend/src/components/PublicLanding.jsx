@@ -1,25 +1,28 @@
 import {
-  ArrowRight, Bot, Check, FileText, Image, MessageCircle, MousePointer2,
-  Play, Radar, ShieldCheck, Sparkles, Target, TrendingUp,
+  ArrowRight, ArrowUpRight, Bot, Check, FileText, Image, Layers3,
+  MessageCircle, MousePointer2, Play, Radar, Route, ShieldCheck,
+  Sparkles, Target, TrendingUp,
 } from 'lucide-react'
 
 const orbitNodes = [
-  { label: 'Audience', meta: '310 segments', icon: Radar, className: 'campaign-node-a' },
+  { label: 'Audience', meta: 'Intent matched', icon: Radar, className: 'campaign-node-a' },
   { label: 'Creative', meta: 'VLM reviewed', icon: Image, className: 'campaign-node-b' },
   { label: 'Placement', meta: 'Inventory fit', icon: Target, className: 'campaign-node-c' },
-  { label: 'Report', meta: '6 live views', icon: TrendingUp, className: 'campaign-node-d' },
+  { label: 'Report', meta: 'Decision ready', icon: TrendingUp, className: 'campaign-node-d' },
 ]
+
+const signalWords = ['BRIEF', 'STRATEGY', 'AUDIENCE', 'CREATIVE', 'MEDIA', 'LAUNCH', 'REPORTING', 'ZALO']
 
 const modes = [
   {
     number: '01', title: 'Campaign Copilot', icon: MousePointer2,
-    text: 'Bạn dẫn dắt từng quyết định. Agent kết nối brief, audience, creative và media ngay trên một workspace.',
-    mode: 'copilot', tour: 'Bắt đầu tour Copilot',
+    text: 'Bạn giữ tay lái. Agent mở rộng từng quyết định, nối ý tưởng với audience, creative và media ngay khi bạn làm việc.',
+    mode: 'copilot', tour: 'Bắt đầu tour Copilot', eyebrow: 'Human directs · Agent amplifies',
   },
   {
     number: '02', title: 'Campaign Autopilot', icon: Sparkles,
-    text: 'Bạn đặt mục tiêu và review policy. Agent vận hành một durable plan, dừng đúng điểm cần con người quyết định.',
-    mode: 'autopilot', tour: 'Bắt đầu tour Autopilot',
+    text: 'Bạn giao mục tiêu và giới hạn. Agent tự xây dựng campaign theo một plan có thể theo dõi, rồi dừng đúng nơi cần bạn quyết định.',
+    mode: 'autopilot', tour: 'Bắt đầu tour Autopilot', eyebrow: 'Goal in · Campaign plan out',
   },
 ]
 
@@ -55,6 +58,94 @@ function CampaignConstellation() {
       </div>
       <div className="campaign-chat-bubble"><MessageCircle /><span>Launch chỉ sau khi<br /><b>bạn duyệt</b></span></div>
       <div className="campaign-cursor"><MousePointer2 /></div>
+    </div>
+  )
+}
+
+function SignalRibbon() {
+  return (
+    <div className="landing-signal-ribbon" aria-hidden="true">
+      <div className="signal-ribbon-beam" />
+      <div className="signal-ribbon-track">
+        {[0, 1].map(copy => (
+          <div key={copy} className="signal-ribbon-sequence">
+            {signalWords.map((word, index) => (
+              <span key={`${copy}-${word}`} className={index === 0 ? 'is-active' : ''}>
+                <small>{String(index + 1).padStart(2, '0')}</small>{word}<ArrowUpRight />
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="signal-ribbon-caption"><i /> CAMPAIGN SIGNALS MOVING AS ONE <i /></div>
+    </div>
+  )
+}
+
+function CampaignTruthVisual() {
+  return (
+    <div className="truth-visual" aria-hidden="true">
+      <div className="truth-noise" />
+      <div className="truth-change-card">
+        <span><Route /></span>
+        <div><small>BRIEF SIGNAL CHANGED</small><b>Objective → Conversion</b></div>
+        <i>LIVE</i>
+      </div>
+      <div className="truth-flow">
+        <div className="truth-flow-line"><span /><span /><span /></div>
+        {[
+          ['01', 'Strategy', 'Reframed'],
+          ['02', 'Audience', 'Re-ranked'],
+          ['03', 'Creative', 'Re-checked'],
+          ['04', 'Placement', 'Re-scored'],
+        ].map(([number, label, state], index) => (
+          <div key={label} className="truth-flow-node" style={{ '--truth-index': index }}>
+            <small>{number}</small><b>{label}</b><span>{state}</span><Check />
+          </div>
+        ))}
+      </div>
+      <div className="truth-review-gate"><ShieldCheck /><span><small>HUMAN GATE PRESERVED</small><b>Nothing launches without you</b></span></div>
+    </div>
+  )
+}
+
+function ModeVisual({ mode }) {
+  if (mode === 'copilot') {
+    return (
+      <div className="landing-mode-visual mode-visual-copilot" aria-hidden="true">
+        <div className="copilot-chat-window">
+          <div className="mode-window-bar"><i /><i /><i /><span>CHAT</span></div>
+          <p>Launch a summer campaign</p>
+          <p>Let’s sharpen the audience first.</p>
+          <div className="copilot-thinking"><span /><span /><span /></div>
+        </div>
+        <div className="copilot-workspace-window">
+          <div className="mode-window-bar"><i /><i /><i /><span>WORKSPACE</span></div>
+          {['Brief', 'Audience', 'Creative'].map((label, index) => (
+            <div key={label} className={index === 1 ? 'is-current' : ''}><small>0{index + 1}</small><b>{label}</b><span>{index === 0 ? 'Ready' : index === 1 ? 'In focus' : 'Next'}</span></div>
+          ))}
+        </div>
+        <div className="copilot-control-path"><MousePointer2 /><span /></div>
+        <div className="mode-visual-caption"><i /> YOU DIRECT <span /> AGENT AMPLIFIES</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="landing-mode-visual mode-visual-autopilot" aria-hidden="true">
+      <div className="autopilot-goal-chip"><Target /><span><small>GOAL RECEIVED</small><b>Grow qualified reach</b></span><Check /></div>
+      <div className="autopilot-runway">
+        <div className="autopilot-run-line" />
+        {[
+          ['Brief', 'Normalized'], ['Plan', 'Building'], ['Assets', 'Checking'], ['Forecast', 'Ready'],
+        ].map(([label, state], index) => (
+          <div key={label} className="autopilot-run-node" style={{ '--run-index': index }}>
+            <span>{index + 1}</span><b>{label}</b><small>{state}</small>
+          </div>
+        ))}
+      </div>
+      <div className="autopilot-approval-gate"><ShieldCheck /><span><small>FINAL CONTROL POINT</small><b>Waiting for your approval</b></span></div>
+      <div className="mode-visual-caption"><i /> AGENT BUILDS <span /> YOU APPROVE</div>
     </div>
   )
 }
@@ -96,34 +187,31 @@ export default function PublicLanding({ onEnterAgent, onOpenDemo }) {
         <div className="landing-scroll-cue"><span>SCROLL TO EXPLORE</span><i /></div>
       </section>
 
-      <div className="landing-marquee" aria-hidden="true">
-        <div>BRIEF <i /> STRATEGY <i /> AUDIENCE <i /> CREATIVE <i /> MEDIA <i /> LAUNCH <i /> REPORTING <i /> ZALO <i /></div>
-        <div>BRIEF <i /> STRATEGY <i /> AUDIENCE <i /> CREATIVE <i /> MEDIA <i /> LAUNCH <i /> REPORTING <i /> ZALO <i /></div>
-      </div>
+      <SignalRibbon />
 
-      <section className="landing-manifesto">
+      <section className="landing-manifesto" aria-labelledby="manifesto-title">
         <div className="landing-section-label"><span>02</span> ONE CAMPAIGN TRUTH</div>
-        <div className="landing-manifesto-grid">
-          <h2>Không phải thêm một chatbot.<br /><em>Một cách mới để campaign thành hình.</em></h2>
-          <div>
-            <p>Agent nhìn campaign như một hệ thống liên kết. Khi brief đổi, nó biết audience, creative hay placement nào cần tính lại—và phần nào nên giữ nguyên.</p>
-            <div className="landing-proof-row"><span><b>310+</b> audience signals</span><span><b>18</b> durable tasks</span><span><b>6</b> report views</span></div>
+        <div className="landing-manifesto-card">
+          <div className="landing-manifesto-copy">
+            <p className="landing-manifesto-kicker"><Layers3 /> ONE INTENT. EVERY DECISION CONNECTED.</p>
+            <h2 id="manifesto-title">Không phải thêm một chatbot.<br /><em>Một cách mới để campaign thành hình.</em></h2>
+            <p>Một thay đổi trong brief không nên biến thành năm lần sửa rời rạc. Agent mang cùng một ý định xuyên suốt chiến lược, audience, creative và placement—đồng thời chỉ rõ điều gì vừa thay đổi và vì sao.</p>
+            <div className="landing-manifesto-proof"><span><b>01</b> campaign truth</span><i /><span><b>04</b> linked decisions</span><i /><span><b>YOU</b> keep final control</span></div>
           </div>
+          <CampaignTruthVisual />
         </div>
       </section>
 
       <section className="landing-mode-section" aria-labelledby="mode-title">
-        <div className="landing-section-label"><span>03</span> CHOOSE YOUR CONTROL</div>
-        <h2 id="mode-title">Hai cách làm việc.<br />Cùng một Agent.</h2>
+        <div className="landing-mode-heading">
+          <div><div className="landing-section-label"><span>03</span> CHOOSE YOUR CONTROL</div><h2 id="mode-title">Hai cách làm việc.<br /><em>Cùng một Agent.</em></h2></div>
+          <p>Không phải hai giao diện đổi màu. Đây là hai quan hệ làm việc khác nhau giữa bạn và AI—một bên cùng lái, một bên giao mục tiêu rồi giám sát.</p>
+        </div>
         <div className="landing-mode-grid">
-          {modes.map(({ number, title, icon: Icon, text, mode, tour }) => (
+          {modes.map(({ number, title, icon: Icon, text, mode, tour, eyebrow }) => (
             <article key={mode} className={`landing-mode-card landing-mode-${mode}`}>
-              <div className="landing-mode-top"><span>{number}</span><Icon /></div>
-              <div className="landing-mode-visual">
-                <div className="mode-thread"><i /><i /><i /></div>
-                <div className="mode-panel"><span /><span /><span /></div>
-                <div className="mode-pulse" />
-              </div>
+              <div className="landing-mode-top"><span>{number} · {eyebrow}</span><Icon /></div>
+              <ModeVisual mode={mode} />
               <h3>{title}</h3><p>{text}</p>
               <div className="landing-mode-actions">
                 <button type="button" onClick={() => onOpenDemo(mode)}><Play /> {tour}</button>
@@ -137,7 +225,7 @@ export default function PublicLanding({ onEnterAgent, onOpenDemo }) {
       <section className="landing-final-cta">
         <div className="landing-final-orbit" aria-hidden="true"><span /><span /><span /></div>
         <p>YOUR NEXT CAMPAIGN</p>
-        <h2>Đưa ý tưởng vào chuyển động.</h2>
+        <h2><span>Đưa ý tưởng vào</span><em>chuyển động.</em></h2>
         <button type="button" onClick={onEnterAgent}>Mở Advertising Agent <ArrowRight /></button>
       </section>
     </main>

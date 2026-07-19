@@ -96,7 +96,7 @@ function resolvePaneForStep(step) {
 // ─── DemoProvider ────────────────────────────────────────────────────────────
 export function DemoProvider({
   children, busy, messages, onSendMessage, onApprove, onRequestTab, activeTab,
-  onActiveChange, experienceMode = 'guided', autoStart = '', onAutoStartConsumed,
+  onActiveChange, onPrepareLive, experienceMode = 'guided', autoStart = '', onAutoStartConsumed,
 }) {
   const [phase, setPhase] = useState(PHASE.IDLE)
   const [stepIdx, setStepIdx] = useState(0)
@@ -712,22 +712,35 @@ export function DemoProvider({
     }
   }, [phase, stopDemo]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function startLiveDemo() {
-    // FIX: clear steps immediately to prevent Stage1 steps from flashing
-    // during the 2s new-chat settle delay
+  async function startLiveDemo() {
+    // Clear Stage 1 immediately, then let App prepare a fresh Copilot campaign
+    // without dropping the selected mode or returning to the homepage.
     setSteps([])
     setStepIdx(0)
     setTargetRect(null)
-    window.dispatchEvent(new CustomEvent('demo:new_chat'))
-    briefRef.current = pickRandomBrief()
-    log.step(`DemoEngine: picked brief "${briefRef.current.id}"`)
-    setTimeout(() => {
+    try {
+      const prepared = await onPrepareLive?.()
+      if (prepared === false) throw new Error('Không thể chuẩn bị campaign walkthrough.')
+      briefRef.current = pickRandomBrief()
+      log.step(`DemoEngine: picked brief "${briefRef.current.id}"`)
+      await new Promise(resolve => setTimeout(resolve, 350))
       const s2 = buildStage2Steps(briefRef.current)
       setSteps(s2)
       setStepIdx(0)
       setPhase(PHASE.STAGE2)
       prevMsgCountRef.current = messagesRef.current.length
-    }, 2000)
+    } catch (error) {
+      log.error(`DemoEngine: prepare live walkthrough failed: ${error.message}`)
+      setPhase(PHASE.CONFIRM_LIVE)
+      setPopup({
+        title: 'Chưa thể bắt đầu walkthrough',
+        text: 'Agent không tạo được workspace mới cho walkthrough. Bạn có thể thử lại mà không mất campaign hiện tại.',
+        buttons: [
+          { label: 'Thử lại', variant: 'primary', action: 'live' },
+          { label: 'Dừng tại đây', variant: 'ghost', action: 'skip' },
+        ],
+      })
+    }
   }
 
   // ── Handle "Tiếp theo" click ───────────────────────────────────────────

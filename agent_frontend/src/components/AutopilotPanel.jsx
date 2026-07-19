@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Activity, AlertTriangle, Check, Circle, Loader2, Pause, Play, RotateCw,
+  Activity, AlertTriangle, ArrowRight, Check, Circle, Loader2, Pause, Play, RotateCw,
   ExternalLink, ImageIcon, ListChecks, ShieldCheck, Sparkles, Square, Upload, X,
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
@@ -386,6 +386,7 @@ export default function AutopilotPanel({
   const displayBrief = canonicalBrief || brief || {}
   const briefErrors = useMemo(() => validateBrief(canonicalBrief), [canonicalBrief])
   const briefReady = Boolean(canonicalBrief) && briefErrors.length === 0 && !pendingProposals.length && !prerequisitesLoading
+  const briefHasDecisionContext = Boolean(String(displayBrief?.kpi || '').trim() && String(displayBrief?.notes || '').trim())
   const startBlockers = [
     !briefReady ? 'brief đã duyệt và hợp lệ' : null,
     !creativeSource ? 'nguồn creative (tải lên hoặc AI tự tạo)' : null,
@@ -466,6 +467,42 @@ export default function AutopilotPanel({
               </div>
             </div>
           </div>
+
+          <section data-demo="autopilot-guide" className="overflow-hidden rounded-3xl border border-slate-800 bg-[radial-gradient(circle_at_top_right,_rgba(0,104,255,0.32),_transparent_38%),linear-gradient(145deg,_#07172f,_#020817)] p-4 text-white shadow-[0_20px_55px_rgba(15,48,92,0.16)] sm:p-5" aria-labelledby="autopilot-guide-title">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">Start here · 4 điều cần nhìn</p>
+                <h3 id="autopilot-guide-title" className="mt-1 text-lg font-black tracking-tight">Chuẩn bị đúng đầu vào, rồi đọc Autopilot như một plan.</h3>
+              </div>
+              <p className="max-w-md text-xs leading-5 text-slate-400">Đây là guide nằm ngay trong workspace—không phải walkthrough. Bạn có thể quay lại bốn mốc này bất cứ lúc nào.</p>
+            </div>
+            <div className="mt-5 grid gap-2 md:grid-cols-4">
+              <article className={`rounded-2xl border p-3.5 ${briefReady ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-amber-300/30 bg-amber-300/10'}`}>
+                <div className="flex items-center justify-between"><span className="text-[10px] font-black tracking-[0.16em] text-slate-400">01 · BRIEF</span>{briefReady ? <Check className="h-4 w-4 text-emerald-300" /> : <AlertTriangle className="h-4 w-4 text-amber-300" />}</div>
+                <p className="mt-3 text-sm font-black">Đủ dữ kiện để lập plan</p>
+                <p className="mt-1.5 text-[11px] leading-5 text-slate-400">Bắt buộc: brand, objective, budget và ngày chạy. KPI + ghi chú audience/thị trường giúp plan sắc hơn.</p>
+                <button type="button" onClick={onOpenBrief} className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-cyan-300 hover:text-white">{briefReady && briefHasDecisionContext ? 'Brief đã đủ lực' : 'Mở và hoàn thiện Brief'} <ArrowRight className="h-3 w-3" /></button>
+              </article>
+              <article className={`rounded-2xl border p-3.5 ${creativeSource ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/10 bg-white/[0.045]'}`}>
+                <div className="flex items-center justify-between"><span className="text-[10px] font-black tracking-[0.16em] text-slate-400">02 · CREATIVE</span>{creativeSource ? <Check className="h-4 w-4 text-emerald-300" /> : <Circle className="h-3.5 w-3.5 text-slate-500" />}</div>
+                <p className="mt-3 text-sm font-black">Chọn đúng loại đầu vào</p>
+                <p className="mt-1.5 text-[11px] leading-5 text-slate-400">Upload khi đã có asset chính thức. Chọn AI generate khi cần Agent tạo draft theo format placement.</p>
+                <p className="mt-3 text-[11px] font-bold text-cyan-300">{creativeSource === 'upload' ? 'Đã chọn: creative tải lên' : creativeSource === 'ai_generate' ? 'Đã chọn: AI tự tạo' : 'Chưa chọn nguồn creative'}</p>
+              </article>
+              <article className="rounded-2xl border border-white/10 bg-white/[0.045] p-3.5">
+                <div className="flex items-center justify-between"><span className="text-[10px] font-black tracking-[0.16em] text-slate-400">03 · CONTROL</span><ShieldCheck className="h-4 w-4 text-cyan-300" /></div>
+                <p className="mt-3 text-sm font-black">Biết lúc Agent sẽ dừng</p>
+                <p className="mt-1.5 text-[11px] leading-5 text-slate-400">Review policy quyết định số checkpoint. Dù chọn policy nào, launch vẫn là một điểm kiểm soát rõ ràng.</p>
+                <p className="mt-3 text-[11px] font-bold text-cyan-300">{POLICY_OPTIONS.find(item => item.value === policy)?.label}</p>
+              </article>
+              <article className="rounded-2xl border border-white/10 bg-white/[0.045] p-3.5">
+                <div className="flex items-center justify-between"><span className="text-[10px] font-black tracking-[0.16em] text-slate-400">04 · RUN</span><ListChecks className="h-4 w-4 text-cyan-300" /></div>
+                <p className="mt-3 text-sm font-black">Theo dõi plan, không chờ mù</p>
+                <p className="mt-1.5 text-[11px] leading-5 text-slate-400">Sau khi chạy, nhìn stage, evidence và các checkpoint màu vàng. Mỗi artifact đều có đường quay lại để sửa.</p>
+                <p className="mt-3 text-[11px] font-bold text-cyan-300">{startBlockers.length ? `${startBlockers.length} điều kiện còn thiếu` : 'Sẵn sàng bắt đầu run'}</p>
+              </article>
+            </div>
+          </section>
 
           <div data-demo="autopilot-creative-source" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-3">

@@ -34,6 +34,12 @@ test('Zalo callback return path retains conversation and hash while removing cal
 test('landing uses a kinetic campaign system and opens real guided tours', () => {
   assert.match(landing, /CampaignConstellation/)
   assert.match(landing, /campaign-stage/)
+  assert.match(landing, /SignalRibbon/)
+  assert.match(landing, /CampaignTruthVisual/)
+  assert.match(landing, /mode-visual-copilot/)
+  assert.match(landing, /mode-visual-autopilot/)
+  assert.match(landing, /<em>chuyển động\.<\/em>/)
+  assert.doesNotMatch(landing, /310 segments/)
   assert.match(landing, /onOpenDemo\('copilot'\)/)
   assert.match(landing, /onOpenDemo\(mode\)/)
   assert.match(landing, /\/tech-docs\.html/)
@@ -57,21 +63,28 @@ test('Copilot demo is restored as a spotlight tour over the real interface', () 
   assert.match(engine, /data-demo="chat-pane"/)
   assert.match(scripts, /Brief → Audience → Creative → Setup → Launch review/)
   assert.doesNotMatch(scripts, /type: 'CLICK_EL', target: '#create-campaign-btn'/)
+  assert.match(app, /onPrepareLive=\{handleReset\}/)
+  assert.match(engine, /await onPrepareLive\?\.\(\)/)
+  assert.doesNotMatch(app, /demo:new_chat/)
+  assert.doesNotMatch(engine, /demo:new_chat/)
 })
 
 test('Autopilot guided tour maps every entry decision to the actual canvas', () => {
   assert.deepEqual(AUTOPILOT_TOUR_STEPS.map(step => step.target), [
     '[data-demo="autopilot-canvas"]',
     '[data-demo="autopilot-intro"]',
+    '[data-demo="autopilot-guide"]',
+    '[data-demo="autopilot-brief-status"]',
     '[data-demo="autopilot-creative-source"]',
     '[data-demo="autopilot-policy"]',
-    '[data-demo="autopilot-brief-status"]',
     '[data-demo="chat-pane"]',
     '[data-demo="autopilot-start"]',
   ])
-  for (const target of ['autopilot-canvas', 'autopilot-intro', 'autopilot-creative-source', 'autopilot-policy', 'autopilot-brief-status', 'autopilot-start']) {
+  for (const target of ['autopilot-canvas', 'autopilot-intro', 'autopilot-guide', 'autopilot-creative-source', 'autopilot-policy', 'autopilot-brief-status', 'autopilot-start']) {
     assert.match(autopilot, new RegExp(`data-demo="${target}"`))
   }
+  assert.match(autopilot, /KPI \+ ghi chú audience\/thị trường/)
+  assert.match(autopilot, /Upload khi đã có asset chính thức/)
 })
 
 test('technical document removes part 10 and forces a reliable Agent navigation', () => {
