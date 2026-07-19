@@ -33,7 +33,15 @@ function readResolution(file, dataUrl) {
 }
 
 // ─── File card (shared between upload + AI gallery) ───────────────────────────
-function FileCard({ file, onRemove, onPreview, onOverride, onFormat }) {
+const SAFETY_LABELS = {
+  nsfw: 'NSFW',
+  alcohol: 'Đồ uống có cồn',
+  gambling: 'Cờ bạc',
+  political: 'Chính trị',
+  medical: 'Y tế',
+}
+
+function FileCard({ file, onRemove, onPreview, onOverride, onFormat, readOnly = false }) {
   const [overrideReason, setOverrideReason] = useState('')
   const [overrideError, setOverrideError] = useState('')
   const [overriding, setOverriding] = useState(false)
@@ -42,6 +50,10 @@ function FileCard({ file, onRemove, onPreview, onOverride, onFormat }) {
   const canPreview = isImage || isVideo
   const res = file.width && file.height ? `${file.width}×${file.height}px` : null
   const status = file.analysisStatus
+  const vlm = file.vlm || {}
+  const safetyFlags = Object.entries(vlm.safety || {})
+    .filter(([, flagged]) => Boolean(flagged))
+    .map(([key]) => SAFETY_LABELS[key] || key)
   const statusUi = {
     uploading: { label: 'Đang tải lên', cls: 'bg-blue-100 text-blue-700' },
     queued: { label: 'Đang chờ phân tích', cls: 'bg-blue-100 text-blue-700' },
@@ -86,10 +98,12 @@ function FileCard({ file, onRemove, onPreview, onOverride, onFormat }) {
             </div>
           </div>
         )}
-        <button onClick={() => onRemove(file.id)}
-          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
-          <X className="w-3 h-3" />
-        </button>
+        {!readOnly && (
+          <button onClick={() => onRemove(file.id)}
+            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
+            <X className="w-3 h-3" />
+          </button>
+        )}
         {/* AI badge */}
         {file.aiGenerated && (
           <div className="absolute top-1.5 left-1.5">
@@ -111,7 +125,7 @@ function FileCard({ file, onRemove, onPreview, onOverride, onFormat }) {
             <span className="text-[10px] text-muted-foreground">{fmtSize(file.size)}</span>
           )}
         </div>
-        {!status || ['uploading', 'queued', 'needs_review'].includes(status) ? (
+        {!readOnly && (!status || ['uploading', 'queued', 'needs_review'].includes(status)) ? (
           <select
             value={inferIntendedFormat(file)}
             onChange={event => onFormat(file.id, event.target.value)}
@@ -136,6 +150,28 @@ function FileCard({ file, onRemove, onPreview, onOverride, onFormat }) {
             {(file.reviewReasons || []).map((reason, index) => (
               <p key={index} className="text-[10px] leading-snug text-amber-700">• {reason}</p>
             ))}
+            {(vlm.subject_desc || vlm.brand_guess || vlm.brief_match_score || vlm.confidence != null) && (
+              <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] text-slate-700">
+                {vlm.subject_desc && <p><strong>Nội dung:</strong> {vlm.subject_desc}</p>}
+                {vlm.brand_guess && <p><strong>Brand nhận diện:</strong> {vlm.brand_guess}</p>}
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {vlm.brief_match_score && (
+                    <span><strong>Khớp brief:</strong> {vlm.brief_match_score}/5</span>
+                  )}
+                  {vlm.confidence != null && (
+                    <span><strong>Độ tin cậy:</strong> {Math.round(Number(vlm.confidence) * 100)}%</span>
+                  )}
+                </div>
+                {(vlm.brief_match_reasons || []).map((reason, index) => (
+                  <p key={index}>• {reason}</p>
+                ))}
+                <p className={safetyFlags.length ? 'font-semibold text-amber-700' : 'font-semibold text-emerald-700'}>
+                  {safetyFlags.length
+                    ? `Cần lưu ý: ${safetyFlags.join(', ')}`
+                    : 'Không phát hiện nhóm nội dung nhạy cảm.'}
+                </p>
+              </div>
+            )}
             {(file.vlm?.ocr_text || []).length > 0 && (
               <details className="text-[10px] text-muted-foreground">
                 <summary className="cursor-pointer font-semibold">OCR · {file.vlm.ocr_text.length} dòng</summary>
@@ -337,18 +373,37 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
 
   if (isDone) {
     return (
-      <Card className="border-brand-200 bg-brand-50">
-        <CardContent className="py-4 flex items-center gap-3">
-          <CheckCircle2 className="w-5 h-5 text-brand-500 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-brand-700">Creative đã được duyệt</p>
-            <p className="text-xs text-brand-600 mt-0.5">
-              {files.length} file(s) đã upload
-              {files.some(f => f.aiGenerated) && ' (bao gồm ảnh AI)'}
-            </p>
+      <div className="space-y-3">
+        <Card className="border-brand-200 bg-brand-50">
+          <CardContent className="py-4 flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-brand-500 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-brand-700">Creative đã được phân tích và duyệt</p>
+              <p className="text-xs text-brand-600 mt-0.5">
+                {files.length} file(s) · Kết quả Creative Intelligence được lưu cùng campaign
+                {files.some(f => f.aiGenerated) && ' · bao gồm ảnh AI'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <div>
+          <Label className="mb-2 block">Kết quả phân tích Creative Intelligence</Label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {files.map(file => (
+              <FileCard
+                key={file.id}
+                file={file}
+                onRemove={() => {}}
+                onPreview={setLightboxFile}
+                onOverride={handleOverride}
+                onFormat={() => {}}
+                readOnly
+              />
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <Lightbox file={lightboxFile} onClose={() => setLightboxFile(null)} />
+      </div>
     )
   }
 

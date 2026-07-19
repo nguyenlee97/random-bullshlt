@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const AudienceLibrary = require('../models/AudienceLibrary');
+const { withAudienceSizeEstimate } = require('../lib/audienceSizeEstimate');
 
 // GET /api/dmp/attributes
 // Returns all audience segments (Interest + Behavior) from MongoDB.
@@ -28,7 +29,7 @@ router.get('/attributes', async (req, res) => {
       .limit(limit)
       .lean();
 
-    res.json(segments);
+    res.json(segments.map(withAudienceSizeEstimate));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -66,7 +67,7 @@ router.get('/attributes/:id', async (req, res) => {
   try {
     const seg = await AudienceLibrary.findOne({ segmentId: req.params.id }).lean();
     if (!seg) return res.status(404).json({ error: `Segment "${req.params.id}" not found` });
-    res.json(seg);
+    res.json(withAudienceSizeEstimate(seg));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

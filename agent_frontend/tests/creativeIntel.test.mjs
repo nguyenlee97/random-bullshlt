@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   defaultPlacementSelection,
@@ -45,4 +46,14 @@ test('recovers older canonical snapshots that captured a transient commit status
 test('placement review displays the shortlist but defaults to top six', () => {
   const value = { candidate_zone_ids: Array.from({ length: 12 }, (_, index) => `zone-${index + 1}`) }
   assert.deepEqual(defaultPlacementSelection(value), value.candidate_zone_ids.slice(0, 6))
+})
+
+test('completed Copilot creative view keeps the full analysis visible', () => {
+  const source = readFileSync(new URL('../src/steps/CreativeStep.jsx', import.meta.url), 'utf8')
+  assert.match(source, /Kết quả phân tích Creative Intelligence/)
+  assert.match(source, /Creative đã được phân tích và duyệt/)
+  assert.match(source, /Khớp brief:/)
+  assert.match(source, /Độ tin cậy:/)
+  assert.match(source, /Không phát hiện nhóm nội dung nhạy cảm/)
+  assert.match(source, /Phê duyệt có lý do/)
 })

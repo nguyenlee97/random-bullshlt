@@ -10,6 +10,7 @@ import {
 import { checkMismatch, getSelectedZones, fmtVnd, fmtImp, estImpressions } from './setupUtils'
 import { createCampaignOrder, fetchZonesFromAgent } from '@/api/agentApi'
 import { hasKnownAudienceSize } from '@/lib/audience'
+import { getAssignmentIssues, removeInvalidAssignments } from '@/lib/setupAssignments'
 
 const OBJECTIVE_LABELS = {
   awareness: 'Awareness — Tăng nhận biết',
@@ -34,7 +35,7 @@ function SectionCard({ icon: Icon, title, iconClass, children }) {
   )
 }
 
-export default function ConfirmPhase({ data, onChange, brief, segment, files, allZones, recoZones }) {
+export default function ConfirmPhase({ data, onChange, brief, segment, files, allZones, recoZones, onOpenCreativeReview }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [guardRejected, setGuardRejected] = useState(false)
@@ -53,6 +54,9 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
   const hasConflicts = conflictedZones.length > 0
   const hasAudienceEstimate = Number(segment?.size || 0) > 0
     || hasKnownAudienceSize(segment?.attrs || [])
+  const assignmentIssues = getAssignmentIssues(selectedZones, assignments, files)
+  const validZoneCount = selectedZones.length - assignmentIssues.length
+  const hasReviewIssue = assignmentIssues.some(issue => issue.kind === 'needs_review' || issue.kind === 'not_approved')
 
   const handleCreate = async () => {
     setSubmitting(true)
@@ -60,21 +64,16 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
     setGuardRejected(false)
 
     try {
+      if (assignmentIssues.length) return
       const assignmentsAsIndex = {}
       const fileUrls = {}
       for (const [zoneId, fileId] of Object.entries(data.assignments || {})) {
         const idx = files.findIndex(file => file.id === fileId)
-        if (idx < 0) throw new Error(`Zone ${zoneId} chưa được gán creative hợp lệ`)
+        if (idx < 0) continue
         const file = files[idx]
-        if (!['auto_approved', 'approved_override'].includes(file.analysisStatus)) {
-          throw new Error(`Creative ${file.name} chưa được phân tích và duyệt`)
-        }
-        if (!file.url) throw new Error(`Creative ${file.name} chưa có URL đã upload`)
+        if (!['auto_approved', 'approved_override'].includes(file.analysisStatus) || !file.url) continue
         assignmentsAsIndex[zoneId] = idx
         fileUrls[String(idx)] = file.url
-      }
-      if (Object.keys(assignmentsAsIndex).length !== (data.selectedZoneIds || []).length) {
-        throw new Error('Mỗi zone phải được gán một creative đã duyệt')
       }
 
       const response = await createCampaignOrder(
@@ -137,6 +136,56 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
             {totalMismatch} zone có tỷ lệ ảnh không khớp — kiểm tra lại ở bước trước nếu cần.
           </p>
         </div>
+      )}
+
+      {assignmentIssues.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50" role="alert">
+          <CardContent className="space-y-2 py-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+              <div>
+                <p className="text-xs font-bold text-amber-900">
+                  {assignmentIssues.length} zone cần xử lý creative trước khi tạo chiến dịch
+                </p>
+                <p className="mt-0.5 text-[10px] leading-4 text-amber-800">
+                  Đây là cảnh báo có thể sửa: gắn lại creative, mở kết quả phân tích để duyệt thủ công,
+                  hoặc bỏ riêng các zone lỗi và giữ phần còn lại của campaign.
+                </p>
+              </div>
+            </div>
+            <ul className="space-y-1 pl-6">
+              {assignmentIssues.map(issue => (
+                <li key={issue.zoneId} className="text-[11px] text-amber-800">
+                  <strong>{issue.zoneName}</strong>: {issue.message}
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-2 pl-6">
+              <Button type="button" variant="outline" size="sm"
+                className="h-8 border-amber-300 bg-white text-xs text-amber-800 hover:bg-amber-100"
+                onClick={() => onChange({ ...data, phase: 'assign' })}>
+                Gắn lại creative
+              </Button>
+              {hasReviewIssue && onOpenCreativeReview && (
+                <Button type="button" variant="outline" size="sm"
+                  className="h-8 border-amber-300 bg-white text-xs text-amber-800 hover:bg-amber-100"
+                  onClick={onOpenCreativeReview}>
+                  Mở phân tích &amp; duyệt creative
+                </Button>
+              )}
+              {validZoneCount > 0 && (
+                <Button type="button" variant="outline" size="sm"
+                  className="h-8 border-amber-300 bg-white text-xs text-amber-800 hover:bg-amber-100"
+                  onClick={() => onChange({
+                    ...removeInvalidAssignments(data, assignmentIssues),
+                    phase: 'confirm',
+                  })}>
+                  Bỏ {assignmentIssues.length} zone lỗi
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* ── Brief ─────────────────────────────────────────────────────────────── */}
@@ -301,11 +350,16 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
       {!data.submitted ? (
         <Button
           onClick={handleCreate}
-          disabled={submitting || hasConflicts}
+          disabled={submitting || hasConflicts || assignmentIssues.length > 0}
           className="w-full gap-2 h-11 text-sm font-bold"
           id="create-campaign-btn"
         >
-          {submitting ? (
+          {assignmentIssues.length > 0 ? (
+            <>
+              <AlertTriangle className="w-5 h-5" />
+              Xử lý cảnh báo creative trước khi tạo
+            </>
+          ) : submitting ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
               Đang kiểm tra an toàn · Tạo chiến dịch...

@@ -57,3 +57,42 @@ def test_known_catalog_size_remains_estimable():
     attrs = [{"sizeMin": 100_000, "sizeMax": 200_000}]
     assert _has_known_audience_size(attrs) is True
     assert _calc_audience_size(attrs) == 150_000
+
+
+@pytest.mark.asyncio
+async def test_modeled_catalog_size_is_visible_and_labeled(monkeypatch):
+    from handlers import audience as handler
+
+    async def update_form_state(*_args, **_kwargs):
+        return None
+
+    async def get_session(_session_id):
+        return {"form_state": {"brief": {
+            "brand": "Test Brand", "objective": "awareness", "kpi": "Reach",
+        }}}
+
+    async def log_event(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(handler, "update_form_state", update_form_state)
+    monkeypatch.setattr(handler, "get_or_create_session", get_session)
+    monkeypatch.setattr(handler, "log_event", log_event)
+    monkeypatch.setattr(
+        handler,
+        "simple_generate",
+        lambda *_args: '{"reasoning":"Phù hợp","match_quality":"good"}',
+    )
+
+    response = await handler.handle_audience(SegmentData(attrs=[{
+        "segmentId": "INT042",
+        "fullLabel": "Action games (video games)",
+        "type": "Interest",
+        "sizeMin": 2_700_000,
+        "sizeMax": 3_790_000,
+        "sizeRaw": "2.700.000 - 3.790.000",
+        "sizeSource": "modeled_estimate",
+    }]), "modeled-size")
+
+    assert response.blocks[0]["size_known"] is True
+    assert response.blocks[0]["size_source"] == "modeled_estimate"
+    assert "ước lượng mô hình" in response.blocks[1]["rows"][0][2]

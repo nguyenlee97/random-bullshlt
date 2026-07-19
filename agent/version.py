@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-19.9"
+BUILD_VERSION = "2026-07-20.1"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -156,4 +156,7 @@ BUILD_FEATURES = [
     "guided-order-response-normalization", # setup preserves guard details and successful order metadata
     "guided-live-conflict-recovery",       # commit-time booking conflicts refresh zones for safe reselection
     "audience-unknown-size-semantics",     # missing catalog size is never presented or prompted as zero people
+    "audience-modeled-size-backfill",      # missing catalog ranges receive labeled, stable Vietnam estimates
+    "guided-creative-intel-review",        # completed Copilot creatives retain VLM evidence and manual review
+    "guided-assignment-alert-recovery",    # stale/missing zone assignments expose safe repair choices
 ]

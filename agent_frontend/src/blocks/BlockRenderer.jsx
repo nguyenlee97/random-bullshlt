@@ -60,7 +60,9 @@ function AudienceSizeBlock({ block }) {
         <div>
           <p className="text-2xl font-black text-brand-700">{sizeKnown ? fmt(block.size) : '—'}</p>
           <p className="text-xs text-brand-600 font-medium">
-            {sizeKnown ? 'người dùng ước lượng' : 'catalog chưa cung cấp size'} · {block.count ?? block.breakdown?.length ?? 0} attributes
+            {sizeKnown
+              ? (block.size_source === 'modeled_estimate' ? 'người dùng · ước lượng mô hình' : 'người dùng ước lượng')
+              : 'catalog chưa cung cấp size'} · {block.count ?? block.breakdown?.length ?? 0} attributes
           </p>
         </div>
       </CardContent>

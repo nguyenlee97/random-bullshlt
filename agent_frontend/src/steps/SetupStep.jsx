@@ -10,7 +10,7 @@ function zoneNameFromId(id) { return id.replace(/_/g, ' ') }
 function platformFromId(id) { return id.split('_')[0] || id }
 function placementFromId(id) { return id.split('_').slice(1).join(' ') || id }
 
-export default function SetupStep({ data, onChange, brief, creative, segment, isDone, assignmentRepair = false }) {
+export default function SetupStep({ data, onChange, brief, creative, segment, isDone, assignmentRepair = false, onOpenCreativeReview }) {
   const files = creative?.files || []
   const phase = assignmentRepair ? 'assign' : (data.phase || 'zones')
   const isInitialized = data.initialized || false
@@ -175,6 +175,7 @@ export default function SetupStep({ data, onChange, brief, creative, segment, is
         files={files}
         allZones={allZones}
         recoZones={recoZones}
+        onOpenCreativeReview={onOpenCreativeReview}
       />
     )
   }

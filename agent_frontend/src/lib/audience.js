@@ -20,6 +20,8 @@ export function normalizeDmpAttr(raw = {}) {
     sizeMin,
     sizeMax,
     sizeRaw: raw.sizeRaw || null,
+    sizeSource: raw.sizeSource || null,
+    sizeEstimateVersion: raw.sizeEstimateVersion || null,
   }
 }
 
@@ -86,6 +88,8 @@ export function enrichAudienceSelection(value = {}, catalog = []) {
       est_size: selected.est_size || catalogAttr.est_size,
       sizeMin: selected.sizeMin || catalogAttr.sizeMin,
       sizeMax: selected.sizeMax || catalogAttr.sizeMax,
+      sizeSource: selected.sizeSource || catalogAttr.sizeSource,
+      sizeEstimateVersion: selected.sizeEstimateVersion || catalogAttr.sizeEstimateVersion,
     })
   }))
 

@@ -212,6 +212,8 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
         s_min = a.get("sizeMin")
         s_max = a.get("sizeMax")
         size_str = a.get("sizeRaw") or (f"{s_min:,} - {s_max:,}" if s_min and s_max else "—")
+        if a.get("sizeSource") == "modeled_estimate" and size_str != "—":
+            size_str += " · ước lượng mô hình"
         note = next((n["note"] for n in seg_notes if n.get("label") == label), "")
         seg_rows.append([label, seg_type, size_str, note])
 
@@ -220,6 +222,11 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
             "type": "audience_size",
             "size": total_size,
             "size_known": size_known,
+            "size_source": (
+                "modeled_estimate"
+                if any(a.get("sizeSource") == "modeled_estimate" for a in attrs)
+                else "catalog"
+            ),
             "count": len(attrs),
             "breakdown": [
                 {"label": a.get("fullLabel", a.get("name", "")), "size": ((a.get("sizeMin") or 0) + (a.get("sizeMax") or 0)) // 2}

@@ -27,3 +27,12 @@ test('setup confirmation does not render unknown audience size as zero people', 
   assert.match(confirm, /hasAudienceEstimate \? `\$\{fmt\(segment\?\.size \|\| 0\)\} người` : '—'/)
   assert.match(confirm, /Catalog chưa cung cấp size/)
 })
+
+test('invalid creative assignments render an actionable alert instead of a thrown zone error', () => {
+  assert.match(confirm, /getAssignmentIssues/)
+  assert.match(confirm, /role="alert"/)
+  assert.match(confirm, /Gắn lại creative/)
+  assert.match(confirm, /Mở phân tích &amp; duyệt creative/)
+  assert.match(confirm, /Bỏ \{assignmentIssues\.length\} zone lỗi/)
+  assert.doesNotMatch(confirm, /throw new Error\(`Zone \$\{zoneId\} chưa được gán creative hợp lệ`\)/)
+})

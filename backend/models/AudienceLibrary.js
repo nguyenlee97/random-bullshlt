@@ -13,6 +13,9 @@ const audienceLibrarySchema = new mongoose.Schema(
     sizeMin:     { type: Number, default: null },
     sizeMax:     { type: Number, default: null },
     sizeRaw:     { type: String, default: null },
+    sizeSource:  { type: String, enum: ['catalog', 'modeled_estimate'], default: null },
+    sizeEstimateVersion: { type: String, default: null },
+    sizeEstimatedAt: { type: Date, default: null },
   },
   {
     collection: 'audience_library',

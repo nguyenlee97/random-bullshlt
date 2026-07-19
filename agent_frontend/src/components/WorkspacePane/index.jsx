@@ -76,6 +76,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           segment={formState.segment}
           isDone={isReadOnly}
           assignmentRepair={autopilotMode && autopilotEditorArtifact === 'assignments'}
+          onOpenCreativeReview={() => onPartialReset?.(2)}
           onReRecommend={() => {}}
         />
       )

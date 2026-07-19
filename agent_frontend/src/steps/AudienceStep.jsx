@@ -36,6 +36,11 @@ function AttrCard({ attr, selected, onToggle, reason, isReco }) {
           <span className="text-[10px] text-muted-foreground">
             {Number(attr.est_size) > 0 ? fmt(attr.est_size) : 'Chưa có size'}
           </span>
+          {attr.sizeSource === 'modeled_estimate' && (
+            <Badge className="text-[9px] h-4 px-1 bg-sky-50 text-sky-700 border-sky-200">
+              Ước lượng
+            </Badge>
+          )}
         </div>
       </div>
     </button>
@@ -53,6 +58,7 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
 
   const objective = brief?.objective || 'awareness'
   const hasAudienceEstimate = Number(data.size || 0) > 0
+  const usesModeledEstimate = (data.attrs || []).some(attr => attr.sizeSource === 'modeled_estimate')
 
   // Load all DMP segments (cached)
   useEffect(() => {
@@ -135,6 +141,11 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
             <div className="flex flex-wrap gap-1.5">
               {data.attrs.map(a => <Badge key={getUid(a)} variant="muted">{a.name}</Badge>)}
             </div>
+            {usesModeledEstimate && (
+              <p className="mt-2 text-[10px] text-sky-700">
+                Một số segment dùng quy mô ước lượng theo mô hình catalog Việt Nam.
+              </p>
+            )}
           </CardContent>
         </Card>
         {Object.keys(data.targeting || {}).length > 0 && (
