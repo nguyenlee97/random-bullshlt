@@ -156,6 +156,32 @@ async def test_incomplete_brief_asks_a_question_without_claiming_it_was_saved(mo
 
 
 @pytest.mark.asyncio
+async def test_vague_clarification_is_replaced_with_explicit_missing_field_questions(monkeypatch):
+    async def generated(_state):
+        return BriefTurn(
+            action="ask_clarification",
+            message="Tôi cần xác nhận thêm một số thông tin để hoàn thiện brief:",
+            missing_fields=["objective", "kpi", "notes", "objective"],
+        ), 38
+
+    monkeypatch.setattr(collector, "generate_brief_turn", generated)
+    result = await collector.brief_collector_node({
+        "session_id": "brief-vague-clarification",
+        "step": 0,
+        "user_message": "Tạo campaign cho Mixifood",
+        "messages": [{"role": "user", "content": "Tạo campaign cho Mixifood"}],
+        "tokens_spent": 0,
+    })
+
+    response = result["response_text"]
+    assert "Mục tiêu campaign" in response
+    assert "KPI mong muốn" in response
+    assert "Sản phẩm, audience" in response
+    assert response.count("Mục tiêu campaign") == 1
+    assert not response.rstrip().endswith(":")
+
+
+@pytest.mark.asyncio
 async def test_explicit_past_campaign_is_rejected_before_proposal_creation(monkeypatch):
     async def generated(_state):
         return BriefTurn(

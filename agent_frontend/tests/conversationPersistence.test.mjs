@@ -22,6 +22,10 @@ test('campaign resume hydrates transcript, workspace, pending proposals and auto
   assert.match(app, /hydrateCanonicalWorkspace\(context\.workspace\)/)
   assert.match(app, /initialRun=\{restoredAutopilotRun\}/)
   assert.match(app, /context\.experience_mode \|\| context\.workspace\?\.experience_mode/)
+  assert.match(app, /setAudienceRecommendation\(null\)/)
+  assert.match(app, /campaignEpochRef\.current \+= 1/)
+  assert.match(app, /requestConversationId !== currentConversationIdRef\.current/)
+  assert.match(app, /!canonicalAudience\?\.attrs\?\.length/)
 })
 
 test('fresh loads stay on the homepage until a campaign is explicitly opened', () => {

@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn, fmt } from '@/lib/utils'
 import { fetchDmpAttributes } from '@/api/agentApi'
-import { calcAudienceSize, enrichAudienceSelection, normalizeDmpAttr } from '@/lib/audience'
+import { calcAudienceSize, dedupeDmpAttrs, enrichAudienceSelection, normalizeDmpAttr } from '@/lib/audience'
 import { Users, Check, Search, Loader2, Sparkles, ChevronDown, ChevronUp, BrainCircuit } from 'lucide-react'
 import TargetingPanel from '@/components/TargetingPanel'
 
@@ -79,16 +79,19 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
   // If recoFromChat is null (still loading), show spinner until it arrives.
   useEffect(() => {
     if (recoFromChat && recoFromChat.length > 0) {
-      setRecoAttrs(recoFromChat.map(normalizeDmpAttr))
+      setRecoAttrs(dedupeDmpAttrs(recoFromChat))
       setRecoLoading(false)
     } else if (data.attrs.length > 0) {
       // Editing an existing Autopilot artifact does not trigger audience-entry.
       // Reuse the current selection instead of leaving this card loading forever.
-      setRecoAttrs(data.attrs.map(normalizeDmpAttr))
+      setRecoAttrs(dedupeDmpAttrs(data.attrs))
       setRecoLoading(false)
+    } else {
+      // A new/resumed conversation can reuse this mounted component. Clear the
+      // previous campaign's recommendation DOM before the next request arrives.
+      setRecoAttrs([])
+      setRecoLoading(true)
     }
-    // If recoFromChat is null/empty, keep recoLoading=true (spinner shown)
-    // It will arrive shortly via audience-entry API
   }, [data.attrs, recoFromChat])
 
   const recoUids = useMemo(() => new Set(recoAttrs.map(a => a._uid)), [recoAttrs])

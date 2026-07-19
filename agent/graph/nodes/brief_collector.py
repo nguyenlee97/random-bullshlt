@@ -91,6 +91,37 @@ class BriefTurn(BaseModel):
         return self
 
 
+_BRIEF_CLARIFICATION_QUESTIONS = {
+    "brand": "Thương hiệu hoặc tên sản phẩm cần quảng cáo là gì?",
+    "objective": (
+        "Mục tiêu campaign là Awareness, Consideration, Conversion hay Retention? "
+        "Nếu muốn Agent chọn, anh/chị chỉ cần nói 'gợi ý giúp mình'."
+    ),
+    "kpi": (
+        "KPI mong muốn là gì (ví dụ Reach, Impressions, CTR hoặc số chuyển đổi)? "
+        "Agent cũng có thể đề xuất KPI nếu được yêu cầu."
+    ),
+    "budget": "Tổng ngân sách là bao nhiêu triệu VND?",
+    "startDate": "Campaign bắt đầu ngày nào?",
+    "endDate": "Campaign kết thúc ngày nào hoặc chạy trong bao nhiêu ngày?",
+    "notes": "Sản phẩm, audience, khu vực hoặc yêu cầu đặc biệt nào cần đưa vào Brief?",
+}
+
+
+def _clarification_message(turn: BriefTurn) -> str:
+    """Render an actionable clarification even when the model returns vague prose."""
+    fields = list(dict.fromkeys(
+        field for field in turn.missing_fields
+        if field in _BRIEF_CLARIFICATION_QUESTIONS
+    ))
+    if not fields:
+        return turn.message.strip()
+    questions = "\n".join(
+        f"- {_BRIEF_CLARIFICATION_QUESTIONS[field]}" for field in fields
+    )
+    return "Em cần thêm các thông tin sau để hoàn thiện Brief:\n" + questions
+
+
 def _brief_messages(state: AgentState) -> list[dict]:
     now = campaign_now()
     instructions = (
@@ -107,6 +138,8 @@ def _brief_messages(state: AgentState) -> list[dict]:
         "budget BẮT BUỘC dùng đơn vị TRIỆU VND: 2 triệu ghi budget=2, 2 tỷ ghi budget=2000; "
         "không ghi budget=2000000 cho 2 triệu. "
         "propose_brief chỉ tạo bản nháp chờ người dùng duyệt, không có nghĩa đã áp dụng. "
+        "Với ask_clarification, missing_fields phải liệt kê chính xác các field còn thiếu "
+        "và message phải nêu câu hỏi có thể trả lời được, không chỉ viết một câu dẫn chung. "
         "message phải ngắn, bằng tiếng Việt và không được nói rằng Brief đã được lưu."
     )
     conversation = [
@@ -195,7 +228,11 @@ async def brief_collector_node(state: AgentState) -> dict:
 
     if turn.action != "propose_brief":
         return {
-            "response_text": turn.message.strip(),
+            "response_text": (
+                _clarification_message(turn)
+                if turn.action == "ask_clarification"
+                else turn.message.strip()
+            ),
             "used_tool": "freeform_chat",
             "tokens_spent": state.get("tokens_spent", 0) + tokens,
         }

@@ -260,7 +260,25 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
 
     # 5. candidate-ID validation ⛔ — LLM may not invent segments
     label_map = {(c.get("fullLabel") or c.get("name", "")): c for c in top}
-    enriched, dropped = [], 0
+    enriched, dropped, duplicates_dropped = [], 0, 0
+    seen: set[str] = set()
+
+    def _identity(segment: dict) -> str:
+        return str(
+            segment.get("segmentId")
+            or segment.get("_id")
+            or segment.get("fullLabel")
+            or segment.get("name")
+            or ""
+        ).strip().casefold()
+
+    def _public_recommendation(segment: dict, reason: str) -> dict:
+        index_metadata = segment.get("_rag_index") or {}
+        source = catalog_source(segment, index_metadata)
+        internal = {"_rank", "_text", "_fusion_score", "_query_hits", "_rag_index"}
+        public = {key: value for key, value in segment.items() if key not in internal}
+        return {**public, "reason": reason, "source": source}
+
     for rec in recs:
         seg = label_map.get(rec.get("fullLabel", ""))
         if seg:
@@ -269,15 +287,32 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
                 RAG_GUARD_REJECTED.labels(reason=guard_reason).inc()
                 guard_rejected += 1
                 continue
-            index_metadata = seg.get("_rag_index") or {}
-            source = catalog_source(seg, index_metadata)
-            internal = {"_rank", "_text", "_fusion_score", "_query_hits", "_rag_index"}
-            seg = {k: v for k, v in seg.items() if k not in internal}
-            enriched.append({**seg, "reason": rec.get("reason", ""), "source": source})
+            identity = _identity(seg)
+            if not identity or identity in seen:
+                duplicates_dropped += 1
+                continue
+            seen.add(identity)
+            enriched.append(_public_recommendation(seg, rec.get("reason", "")))
         else:
             dropped += 1
     if dropped:
         RAG_HALLUCINATED.inc(dropped)
+
+    # Structured selection requires six rows, but a provider can repeat one
+    # valid label. Fill any resulting gap from the already-ranked, guarded
+    # candidate set so every output remains unique and catalog-grounded.
+    desired = min(6, len(top))
+    for seg in top:
+        if len(enriched) >= desired:
+            break
+        identity = _identity(seg)
+        if not identity or identity in seen:
+            continue
+        seen.add(identity)
+        enriched.append(_public_recommendation(
+            seg,
+            "Bổ sung theo thứ hạng truy xuất phù hợp với brief và mục tiêu campaign.",
+        ))
 
     RAG_REQUESTS.labels(outcome="ok").inc()
     await alog(session_id, "info", {
@@ -286,7 +321,9 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
         "rerank_enabled": config.RAG_USE_RERANK,
         "selector": selector,
         "reranked": bool(order), "returned": len(enriched),
-        "dropped_hallucinated": dropped, "guard_rejected": guard_rejected,
+        "dropped_hallucinated": dropped,
+        "dropped_duplicates": duplicates_dropped,
+        "guard_rejected": guard_rejected,
         "duration_ms": int((time.time() - t0) * 1000),
         "stage_ms": {"rewrite": int(rewrite_s * 1000),
                      "retrieve": int(retrieval_s * 1000),
@@ -299,6 +336,7 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
                     "rerank_enabled": config.RAG_USE_RERANK,
                     "selector": selector,
                     "guard_rejected": guard_rejected,
+                    "dropped_duplicates": duplicates_dropped,
                     "reranked": bool(order),
                     "stage_ms": {"rewrite": int(rewrite_s * 1000),
                                  "retrieve": int(retrieval_s * 1000),

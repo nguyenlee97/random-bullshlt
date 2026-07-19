@@ -13,8 +13,6 @@ from prompts.audience import (
     AUDIENCE_SYSTEM, AUDIENCE_USER,
     TARGETING_AUTOPICK_SYSTEM, TARGETING_AUTOPICK_USER,
     DMP_RECOMMEND_SYSTEM, DMP_RECOMMEND_USER,
-    AUDIENCE_ENTRY_SYSTEM, AUDIENCE_ENTRY_USER,
-    AUDIENCE_ENTRY_RETRY_SYSTEM, AUDIENCE_ENTRY_RETRY_USER,
 )
 from tools.targeting_options import get_targeting_options
 from tools.audience_library import get_all_segments
@@ -71,6 +69,35 @@ def _normalize_dmp_attr(seg: dict) -> dict:
         # Keep originals for compatibility
         "fullLabel": full_label,
     }
+
+
+def _segment_identity(seg: dict) -> str:
+    """Return one stable catalog identity across Mongo/API/RAG shapes."""
+    source = seg.get("source") if isinstance(seg.get("source"), dict) else {}
+    return str(
+        seg.get("segmentId")
+        or seg.get("_id")
+        or source.get("segmentId")
+        or source.get("recordId")
+        or seg.get("fullLabel")
+        or seg.get("name")
+        or ""
+    ).strip().casefold()
+
+
+def _dedupe_segments(segments: list[dict]) -> list[dict]:
+    """Preserve retrieval order while preventing duplicate catalog selections."""
+    result: list[dict] = []
+    seen: set[str] = set()
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        key = _segment_identity(segment)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(segment)
+    return result
 
 
 def _normalize_targeting(targeting: dict, options: dict) -> dict[str, list[str]]:
@@ -204,18 +231,17 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
     )
 
 
-async def handle_targeting_autopick(session_id: str) -> AgentResponse:
-    """
-    LLM auto-picks targeting. Triggered when user sends:
-    'Hãy tự động chọn targeting phù hợp nhất cho chiến dịch này'
-    """
-    session = await get_or_create_session(session_id)
-    brief = session.get("form_state", {}).get("brief", {})
-    segment = session.get("form_state", {}).get("segment", {})
-
-    options = await get_targeting_options()
-    seg_names = [a.get("fullLabel", a.get("name", "")) for a in segment.get("attrs", [])[:10]]
-
+async def _recommend_targeting(
+    session_id: str,
+    brief: dict,
+    options: dict,
+    segments: list[dict] | None = None,
+) -> tuple[dict[str, list[str]], list[dict], str]:
+    """Select catalog-valid targeting for every Guided entry point."""
+    seg_names = [
+        item.get("fullLabel", item.get("name", ""))
+        for item in (segments or [])[:10]
+    ]
     prompt = TARGETING_AUTOPICK_USER.format(
         brand=brief.get("brand", "?"),
         objective=brief.get("objective", "?"),
@@ -266,6 +292,22 @@ async def handle_targeting_autopick(session_id: str) -> AgentResponse:
         }, options)
         reasoning = [{"field": "geo", "picks": ["Hà Nội", "TP.HCM", "Đà Nẵng"], "reason": "3 thị trường lớn nhất"}]
         selected_model = "deterministic_fallback"
+
+    return targeting, reasoning, selected_model
+
+
+async def handle_targeting_autopick(session_id: str) -> AgentResponse:
+    """
+    LLM auto-picks targeting. Triggered when user sends:
+    'Hãy tự động chọn targeting phù hợp nhất cho chiến dịch này'
+    """
+    session = await get_or_create_session(session_id)
+    brief = session.get("form_state", {}).get("brief", {})
+    segment = session.get("form_state", {}).get("segment", {})
+    options = await get_targeting_options()
+    targeting, reasoning, selected_model = await _recommend_targeting(
+        session_id, brief, options, segment.get("attrs", [])
+    )
 
     await update_form_state(session_id, "targeting", targeting)
 
@@ -364,7 +406,133 @@ async def handle_dmp_recommend(session_id: str, brief_override: dict | None = No
                 "source": catalog_source(seg),
             })
 
-    return {"recommendations": enriched, "total_segments": len(all_segs)}
+    return {
+        "recommendations": _dedupe_segments(enriched),
+        "total_segments": len(all_segs),
+    }
+
+
+async def _grounded_audience_entry(session_id: str, brief: dict) -> dict:
+    """Build Guided's editable proposal from the shared audience pipeline."""
+    recommendation = await handle_dmp_recommend(
+        session_id, brief_override=brief
+    )
+    enriched_dmp = _dedupe_segments([
+        _normalize_dmp_attr(item)
+        for item in (recommendation.get("recommendations") or [])
+        if isinstance(item, dict)
+    ])
+    if not enriched_dmp:
+        await log_event(session_id, "error", {
+            "handler": "audience_entry",
+            "event": "grounded_retrieval_empty",
+        })
+        return {
+            "skip": False,
+            "need_more_info": True,
+            "text": "Em chưa lấy được audience an toàn từ catalog ở lượt này.",
+            "blocks": [{
+                "type": "info",
+                "text": "Anh/chị thử lại để Agent truy xuất lại catalog; workspace chưa bị thay đổi.",
+            }],
+            "meta": {"tool": "audience_entry_retry", "model": "none", "step": 1},
+            "suggestions": [{
+                "label": "🔄 Thử lại audience",
+                "action": "send",
+                "text": "Gợi ý lại audience phù hợp với brief này",
+            }],
+        }
+
+    options = await get_targeting_options()
+    targeting, targeting_reasoning, selected_model = await _recommend_targeting(
+        session_id, brief, options, enriched_dmp
+    )
+    reason_by_field = {
+        item.get("field"): item.get("reason", "")
+        for item in targeting_reasoning
+        if isinstance(item, dict) and item.get("field")
+    }
+    target_rows = [
+        [field.capitalize(), ", ".join(picks), reason_by_field.get(field, "")]
+        for field, picks in targeting.items()
+        if picks
+    ]
+    blocks: list[dict] = []
+    if target_rows:
+        blocks.append({
+            "type": "table",
+            "title": "🎯 Targeting Parameters gợi ý",
+            "columns": ["Nhóm", "Giá trị đề xuất", "Lý do"],
+            "rows": target_rows,
+        })
+
+    blocks.append({
+        "type": "table",
+        "title": "👥 DMP Audience Segments gợi ý",
+        "columns": ["Segment", "Loại", "Size ước tính", "Lý do phù hợp"],
+        "rows": [[
+            item.get("fullLabel", "?"),
+            item.get("type", ""),
+            item.get("sizeRaw") or "—",
+            item.get("reason", ""),
+        ] for item in enriched_dmp],
+    })
+    audience_size = _calc_audience_size(enriched_dmp)
+    blocks.append({
+        "type": "workspace_proposal",
+        "changes": {
+            "field": "segment",
+            "value": {
+                "attrs": enriched_dmp,
+                "targeting": targeting,
+                "size": audience_size,
+            },
+            "reason": (
+                f"AI gợi ý {len(enriched_dmp)} segment catalog-grounded "
+                f"phù hợp với brief {brief.get('brand', '')}"
+            ),
+        },
+        "is_locked": False,
+        "warning": "",
+        "instruction": (
+            "Anh/chị bấm **Đồng ý** để áp dụng tất cả segments, hoặc vào panel "
+            "phải để chọn/bỏ chọn từng segment trước khi xác nhận."
+        ),
+    })
+    diagnostics = recommendation.get("rag") or recommendation.get("retrieval") or {}
+    await log_event(session_id, "audience_entry", {
+        "brand": brief.get("brand"),
+        "pipeline": "shared_grounded_retrieval",
+        "dmp_count": len(enriched_dmp),
+        "audience_size": audience_size,
+        "retrieval_candidates": diagnostics.get("candidates"),
+        "targeting_model": selected_model,
+    })
+
+    reply_text = (
+        f"Dựa trên brief **{brief.get('brand')}** "
+        f"({brief.get('objective', 'awareness')}), em gợi ý audience như sau:"
+    )
+    from session import add_message as _add_message
+    await _add_message(
+        session_id,
+        "assistant",
+        reply_text
+        + f"\n\n(Em đã gợi ý {len(enriched_dmp)} DMP segments duy nhất từ catalog "
+          "và targeting params. Anh/chị có thể chỉnh trực tiếp ở workspace hoặc nhắn em.)",
+    )
+    return {
+        "skip": False,
+        "need_more_info": False,
+        "text": reply_text,
+        "blocks": blocks,
+        "meta": {"tool": "audience_entry", "model": selected_model, "step": 1},
+        "suggestions": [
+            {"label": "✅ Áp dụng tất cả", "action": "send", "text": "đồng ý, áp dụng tất cả segments này"},
+            {"label": "🗑️ Bỏ bớt segment", "action": "prefill", "text": "Bỏ segment "},
+            {"label": "🔍 Tìm thêm segments", "action": "prefill", "text": "Tìm thêm segments liên quan đến "},
+        ],
+    }
 
 
 async def handle_audience_entry(session_id: str, brief_hint: dict | None = None) -> dict:
@@ -416,245 +584,5 @@ async def handle_audience_entry(session_id: str, brief_hint: dict | None = None)
     if existing_segment.get("attrs"):
         return {"skip": True, "reason": "audience_already_set"}
 
-    # Fetch real targeting options + DMP segments
-    options = await get_targeting_options()
-    all_segs = await get_all_segments(limit=200)
-    # Build enriched segment list for LLM: "fullLabel [Type]" format
-    # Helps LLM match Vietnamese brief keywords to English segment names
-    seg_labels = [
-        f"{s.get('fullLabel') or s.get('name', '')} [{s.get('type', '')}]"
-        for s in all_segs
-        if s.get("fullLabel") or s.get("name")
-    ]
-
-    prompt = AUDIENCE_ENTRY_USER.format(
-        brand=brief.get("brand", "?"),
-        objective=brief.get("objective", "?"),
-        kpi=brief.get("kpi", "(chưa có)"),
-        notes=brief.get("notes", "(trống)"),
-        options_json=json.dumps(options, ensure_ascii=False),
-        segments_json=json.dumps(seg_labels[:200], ensure_ascii=False),  # send up to 200
-    )
-
-    try:
-        raw = await asyncio.to_thread(simple_generate, AUDIENCE_ENTRY_SYSTEM, prompt)
-        data = parse_json_response(raw)
-        await log_event(session_id, "llm_call", {"handler": "audience_entry", "response": raw[:500]})
-    except Exception as e:
-        await log_event(session_id, "error", {"handler": "audience_entry", "error": str(e)})
-        return {"skip": True, "reason": f"llm_error: {str(e)}"}
-
-    need_more = data.get("need_more_info", False)
-
-    # Build label maps (exact + case-insensitive fallback for LLM output variation)
-    label_map = {}
-    label_map_lower = {}
-    for s in all_segs:
-        lbl = s.get("fullLabel") or s.get("name", "")
-        if lbl:
-            label_map[lbl] = s
-            label_map_lower[lbl.lower().strip()] = s
-
-    def _lookup_seg(full_label: str) -> dict | None:
-        # 1. Exact match
-        if full_label in label_map:
-            return label_map[full_label]
-        # 2. Case-insensitive match
-        low = full_label.lower().strip()
-        if low in label_map_lower:
-            return label_map_lower[low]
-        # 3. Substring match — DB label contains LLM label (e.g. "Real estate" in "Real estate (industry)")
-        for db_label_low, seg in label_map_lower.items():
-            if low in db_label_low or db_label_low.startswith(low):
-                return seg
-        # 4. Word-overlap match (>= 2 words in common)
-        llm_words = set(low.split())
-        best_seg, best_score = None, 0
-        for db_label_low, seg in label_map_lower.items():
-            db_words = set(db_label_low.split())
-            score = len(llm_words & db_words)
-            if score >= 2 and score > best_score:
-                best_seg, best_score = seg, score
-        return best_seg
-
-    # ── Case 1: Need more info from user ──────────────────────────────────────
-    if need_more:
-        questions = data.get("questions", [
-            "Anh/chị muốn nhắm đến độ tuổi và giới tính nào?",
-            "Khu vực tập trung (TP.HCM, Hà Nội, toàn quốc...)?",
-        ])
-        dmp_recs = data.get("dmp_segments", [])
-        enriched_dmp = [
-            _normalize_dmp_attr({**_lookup_seg(r["fullLabel"]), "reason": r.get("reason", "")})
-            for r in dmp_recs if r.get("fullLabel") and _lookup_seg(r["fullLabel"])
-        ]
-        blocks = [{"type": "info", "text": "Em cần thêm thông tin để gợi ý targeting chính xác:\n\n" + "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))}]
-        if enriched_dmp:
-            rows = [[s.get("fullLabel", "?"), s.get("type", ""), s.get("sizeRaw", ""), s.get("reason", "")] for s in enriched_dmp[:6]]
-            blocks.append({"type": "table", "title": "💡 DMP Segments sơ bộ gợi ý", "columns": ["Segment", "Loại", "Size ước tính", "Lý do"], "rows": rows})
-        return {
-            "skip": False,
-            "need_more_info": True,
-            "text": f"Dựa trên brief **{brief.get('brand')}**, em cần thêm vài thông tin để gợi ý audience chính xác hơn:",
-            "blocks": blocks,
-            "meta": {"tool": "audience_entry", "model": "minimax", "step": 1},
-        }
-
-    # ── Case 2: Full recommendation ──────────────────────────────────────────────
-    targeting = data.get("targeting", {})
-    targeting_reasoning = data.get("targeting_reasoning", [])
-    dmp_recs = data.get("dmp_segments", [])
-    advanced_note = data.get("advanced_targeting_note", "")
-
-    enriched_dmp = [
-        _normalize_dmp_attr({**_lookup_seg(r["fullLabel"]), "reason": r.get("reason", "")})
-        for r in dmp_recs if r.get("fullLabel") and _lookup_seg(r["fullLabel"])
-    ]
-
-    # ── Keyword fallback when LLM segment names don't match DB ─────────────────
-    if not enriched_dmp:
-        await log_event(session_id, "warn", {
-            "handler": "audience_entry",
-            "event": "enriched_dmp_empty",
-            "llm_recs": [r.get("fullLabel", "") for r in dmp_recs],
-            "note": "Attempting retry with simplified prompt"
-        })
-
-        # ── Retry with a simpler, more constrained prompt ────────────────────────
-        # The first call may have returned segment names in wrong format or hallucinated.
-        # The retry uses a much simpler prompt with fewer tokens to reduce hallucination.
-        try:
-            # Give LLM only the segment names (no [Type] suffix) to reduce confusion
-            seg_labels_simple = [s.get("fullLabel") or s.get("name", "") for s in all_segs if s.get("fullLabel") or s.get("name")]
-            retry_prompt = AUDIENCE_ENTRY_RETRY_USER.format(
-                brand=brief.get("brand", "?"),
-                objective=brief.get("objective", "?"),
-                notes=brief.get("notes", "(trống)"),
-                segments_json=json.dumps(seg_labels_simple[:150], ensure_ascii=False),
-            )
-            raw_retry = await asyncio.to_thread(
-                simple_generate, AUDIENCE_ENTRY_RETRY_SYSTEM, retry_prompt
-            )
-            retry_data = parse_json_response(raw_retry)
-            retry_recs = retry_data.get("dmp_segments", [])
-            await log_event(session_id, "warn", {
-                "handler": "audience_entry",
-                "event": "retry_attempt",
-                "retry_recs": [r.get("fullLabel", "") for r in retry_recs],
-            })
-            enriched_dmp = [
-                _normalize_dmp_attr({**_lookup_seg(r["fullLabel"]), "reason": r.get("reason", "")})
-                for r in retry_recs if r.get("fullLabel") and _lookup_seg(r["fullLabel"])
-            ]
-        except Exception as e:
-            await log_event(session_id, "error", {"handler": "audience_entry", "event": "retry_failed", "error": str(e)})
-
-        # ── Last resort keyword fallback ────────────────────────────────────────
-        if not enriched_dmp:
-            await log_event(session_id, "warn", {
-                "handler": "audience_entry",
-                "event": "enriched_dmp_empty",
-                "llm_recs": [r.get("fullLabel", "") for r in dmp_recs],
-                "note": "Using keyword fallback"
-            })
-            # Build keyword set from brief (extract English words too, e.g. 'game', 'food')
-            search_text = " ".join([
-                brief.get("brand", ""),
-                brief.get("notes", ""),
-                brief.get("objective", ""),
-            ]).lower()
-            kw_set = set(w for w in search_text.split() if len(w) > 3)
-
-            def _score_seg(seg: dict) -> int:
-                lbl = (seg.get("fullLabel") or seg.get("name", "")).lower()
-                return sum(1 for kw in kw_set if kw in lbl)
-
-            # Sort by keyword overlap, then by size (sizeMax) as tiebreaker
-            scored = sorted(all_segs, key=lambda s: (_score_seg(s), s.get("sizeMax", 0) or 0), reverse=True)
-            fallback_segs = scored[:6]
-            enriched_dmp = [
-                _normalize_dmp_attr({**s, "reason": "Được chọn tự động dựa trên brief (fallback)"})
-                for s in fallback_segs
-            ]
-
-    blocks = []
-
-    # Block 1: Targeting Parameters table
-    target_rows = [
-        [r["field"].capitalize(), ", ".join(r.get("picks", [])), r.get("reason", "")]
-        for r in targeting_reasoning if r.get("picks")
-    ]
-    if target_rows:
-        blocks.append({
-            "type": "table",
-            "title": "🎯 Targeting Parameters gợi ý",
-            "columns": ["Nhóm", "Giá trị đề xuất", "Lý do"],
-            "rows": target_rows,
-        })
-
-    # Block 2: DMP Segments table
-    if enriched_dmp:
-        dmp_rows = [
-            [s.get("fullLabel", "?"), s.get("type", ""), s.get("sizeRaw", "—"), s.get("reason", "")]
-            for s in enriched_dmp
-        ]
-        blocks.append({
-            "type": "table",
-            "title": "👥 DMP Audience Segments gợi ý",
-            "columns": ["Segment", "Loại", "Size ước tính", "Lý do phù hợp"],
-            "rows": dmp_rows,
-        })
-
-    # Block 3: Advanced targeting note (optional)
-    if advanced_note:
-        blocks.append({"type": "info", "text": f"💡 Advanced Targeting: {advanced_note}"})
-
-    # Block 4: Workspace proposal — renders Đồng ý / Bỏ qua buttons in chat
-    # Compute audience size using same union-discount model as handle_audience
-    audience_size = _calc_audience_size(enriched_dmp)
-    blocks.append({
-        "type": "workspace_proposal",
-        "changes": {
-            "field": "segment",
-            "value": {
-                "attrs": enriched_dmp,
-                "targeting": targeting,
-                "size": audience_size,
-            },
-            "reason": f"AI gợi ý {len(enriched_dmp)} segments phù hợp với brief {brief.get('brand', '')}",
-        },
-        "is_locked": False,
-        "warning": "",
-        "instruction": "Anh/chị bấm **Đồng ý** để áp dụng tất cả segments, hoặc vào panel phải để chọn/bỏ chọn từng segment trước khi xác nhận.",
-    })
-
-    await log_event(session_id, "audience_entry", {
-        "brand": brief.get("brand"),
-        "dmp_count": len(enriched_dmp),
-        "audience_size": audience_size,
-    })
-
-    reply_text = f"Dựa trên brief **{brief.get('brand')}** ({brief.get('objective', 'awareness')}), em gợi ý audience như sau:"
-
-    # ── Persist to session history so LLM knows about this on the NEXT user message ─────
-    # Without this, the LLM sees no record of the audience recommendation and thinks
-    # it's still waiting for brief confirmation → causes wrong responses.
-    from session import add_message as _add_message
-    await _add_message(
-        session_id,
-        "assistant",
-        reply_text + f"\n\n(Em đã gợi ý {len(enriched_dmp)} DMP segments và targeting params. Anh/chị có thể chỉnh sửa trực tiếp trên workspace bên phải hoặc nhắn em để điều chỉnh.)"
-    )
-
-    return {
-        "skip": False,
-        "need_more_info": False,
-        "text": reply_text,
-        "blocks": blocks,
-        "meta": {"tool": "audience_entry", "model": "minimax", "step": 1},
-        "suggestions": [
-            {"label": "✅ Áp dụng tất cả",    "action": "send",    "text": "đồng ý, áp dụng tất cả segments này"},
-            {"label": "🗑️ Bỏ bớt segment",     "action": "prefill", "text": "Bỏ segment "},
-            {"label": "🔍 Tìm thêm segments",   "action": "prefill", "text": "Tìm thêm segments liên quan đến "},
-        ],
-    }
+    # Guided consumes the same catalog-grounded retrieval contract as Autopilot.
+    return await _grounded_audience_entry(session_id, brief)

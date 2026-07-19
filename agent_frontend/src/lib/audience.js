@@ -23,6 +23,19 @@ export function normalizeDmpAttr(raw = {}) {
   }
 }
 
+export function dedupeDmpAttrs(attrs = []) {
+  const seen = new Set()
+  const unique = []
+  for (const raw of attrs) {
+    const attr = normalizeDmpAttr(raw)
+    const identity = String(attr._uid || attr.name || '').trim().toLowerCase()
+    if (!identity || seen.has(identity)) continue
+    seen.add(identity)
+    unique.push(attr)
+  }
+  return unique
+}
+
 // Union model: selecting more segments increases reach while discounting overlap.
 export function calcAudienceSize(attrs = []) {
   if (!attrs.length) return 0
@@ -39,7 +52,7 @@ export function normalizeAudienceSelection(value = {}, fallback = {}) {
   const sourceAttrs = Array.isArray(value.attrs)
     ? value.attrs
     : (Array.isArray(fallback.attrs) ? fallback.attrs : [])
-  const attrs = sourceAttrs.map(normalizeDmpAttr).filter(attr => attr._uid)
+  const attrs = dedupeDmpAttrs(sourceAttrs)
   const explicitSize = Number(value.size || value.estimated_size || 0)
 
   return {
@@ -54,7 +67,7 @@ export function enrichAudienceSelection(value = {}, catalog = []) {
   const catalogByUid = new Map(
     catalog.map(normalizeDmpAttr).map(attr => [attr._uid, attr]),
   )
-  const attrs = (value.attrs || []).map(raw => {
+  const attrs = dedupeDmpAttrs((value.attrs || []).map(raw => {
     const selected = normalizeDmpAttr(raw)
     const catalogAttr = catalogByUid.get(selected._uid)
     if (!catalogAttr) return selected
@@ -65,7 +78,7 @@ export function enrichAudienceSelection(value = {}, catalog = []) {
       sizeMin: selected.sizeMin || catalogAttr.sizeMin,
       sizeMax: selected.sizeMax || catalogAttr.sizeMax,
     })
-  })
+  }))
 
   return {
     ...value,

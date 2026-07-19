@@ -3,6 +3,7 @@ import { test } from 'node:test'
 
 import {
   calcAudienceSize,
+  dedupeDmpAttrs,
   enrichAudienceSelection,
   normalizeAudienceSelection,
   normalizeDmpAttr,
@@ -48,4 +49,26 @@ test('enriches an older Autopilot selection from the current catalog', () => {
   assert.equal(audience.attrs[0].reason, 'Relevant')
   assert.equal(audience.attrs[0].est_size, 2000)
   assert.equal(audience.size, 2000)
+})
+
+test('deduplicates legacy and provider recommendations by stable catalog ID', () => {
+  const attrs = dedupeDmpAttrs([
+    { segmentId: 'INT158', fullLabel: 'Fast food', reason: 'first' },
+    { segmentId: 'INT158', fullLabel: 'Fast food', reason: 'duplicate' },
+    { segmentId: 'INT157', fullLabel: 'Desserts' },
+  ])
+
+  assert.deepEqual(attrs.map(attr => attr._uid), ['INT158', 'INT157'])
+  assert.equal(attrs[0].reason, 'first')
+})
+
+test('normalizing a stored audience removes duplicate IDs before rendering', () => {
+  const audience = normalizeAudienceSelection({
+    attrs: [
+      { segmentId: 'INT158', fullLabel: 'Fast food' },
+      { segmentId: 'INT158', fullLabel: 'Fast food' },
+    ],
+  })
+
+  assert.equal(audience.attrs.length, 1)
 })

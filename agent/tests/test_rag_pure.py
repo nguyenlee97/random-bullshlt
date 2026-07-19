@@ -5,7 +5,13 @@ import pytest
 
 from rag.index import _catalog_fingerprint
 from rag.recommend import _catalog_segment_count
-from rag.recommend import _guard_reason, _hybrid_search, _rank_merged, _raw_query
+from rag.recommend import (
+    _guard_reason,
+    _hybrid_search,
+    _rank_merged,
+    _raw_query,
+    recommend_rag,
+)
 from handlers.audience import _normalize_targeting
 from tools.audience_provenance import catalog_source
 
@@ -205,3 +211,63 @@ async def test_rewritten_qdrant_queries_execute_concurrently(monkeypatch):
     monkeypatch.setattr(recommend, "get_qdrant", lambda: Client())
 
     assert await _hybrid_search(["raw", "rewrite one", "rewrite two"], 5) == []
+
+
+@pytest.mark.asyncio
+async def test_rag_selection_dedupes_stable_ids_and_backfills_ranked_candidates(monkeypatch):
+    import rag.recommend as recommend
+
+    candidates = [
+        {
+            "_id": f"mongo-{index}",
+            "segmentId": f"INT{index:03d}",
+            "fullLabel": f"Segment {index}",
+            "name": f"Segment {index}",
+            "category": "Food",
+            "subcategory": "Snacks",
+            "_text": f"snack audience {index}",
+            "_rank": index,
+            "_query_hits": 1,
+            "_fusion_score": 1 / (61 + index),
+            "_rag_index": {"segment_count": 310},
+        }
+        for index in range(1, 7)
+    ]
+
+    async def ready(_session_id):
+        return True
+
+    async def search(_queries, _limit):
+        return candidates
+
+    async def select(_prompt):
+        # A valid provider response can still repeat one catalog label.
+        return [
+            {"fullLabel": "Segment 1", "reason": "first"},
+            {"fullLabel": "Segment 1", "reason": "duplicate"},
+            {"fullLabel": "Segment 3", "reason": "third"},
+            {"fullLabel": "Segment 4", "reason": "fourth"},
+            {"fullLabel": "Segment 5", "reason": "fifth"},
+            {"fullLabel": "Segment 6", "reason": "sixth"},
+        ], "fixture"
+
+    monkeypatch.setattr(recommend, "ensure_index", ready)
+    monkeypatch.setattr(recommend, "_hybrid_search", search)
+    monkeypatch.setattr(recommend, "_select", select)
+    monkeypatch.setattr(recommend.config, "RAG_QUERY_REWRITE", False)
+    monkeypatch.setattr(recommend.config, "RAG_USE_RERANK", False)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_RETRIEVE", 15)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_FINAL", 15)
+
+    result = await recommend_rag("rag-dedupe", {
+        "brand": "Mixifood",
+        "objective": "awareness",
+        "kpi": "Reach",
+        "notes": "snack food",
+    })
+
+    ids = [item["segmentId"] for item in result["recommendations"]]
+    assert len(ids) == 6
+    assert len(set(ids)) == 6
+    assert "INT002" in ids
+    assert result["rag"]["dropped_duplicates"] == 1

@@ -155,6 +155,11 @@ export default function App() {
   const bootedRef = useRef(false)
   const identityInitRef = useRef(false)
   const pendingConversationDeepLinkRef = useRef('')
+  const currentConversationIdRef = useRef('')
+  const campaignEpochRef = useRef(0)
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId
+  }, [currentConversationId])
 
   // ── Demo visibility: hide Demo button once user has interacted ──────────
   const [hasUserStarted, setHasUserStarted] = useState(false)
@@ -371,19 +376,7 @@ export default function App() {
     // Normalize segment attrs so AudienceStep getUid() can match them
     // audience-entry returns {fullLabel, _id} but AudienceStep needs {_uid, name, code}
     if (field === 'segment' && value?.attrs) {
-      value = {
-        ...value,
-        attrs: value.attrs.map(a => ({
-          ...a,
-          _uid: a._uid || (a._id ? String(a._id) : null) || a.fullLabel || a.name || '',
-          name: a.name || a.fullLabel || '',
-          code: a.code || '',
-          category: a.category || a.type || '',
-          est_size: a.est_size ?? (
-            a.sizeMin && a.sizeMax ? Math.round((a.sizeMin + a.sizeMax) / 2) : (a.sizeMin || a.sizeMax || 0)
-          ),
-        })),
-      }
+      value = normalizeAudienceSelection(value)
     }
 
     log.workspace('handleWorkspaceUpdate → applying', {
@@ -605,20 +598,33 @@ export default function App() {
   const audienceEntryFiredRef = useRef(false)
   const [audienceRecommendation, setAudienceRecommendation] = useState(null)
   useEffect(() => {
+    const canonicalAudience = canonicalWorkspace?.artifacts?.audience?.value
     if (
       experienceMode === 'guided' &&
+      currentConversationId &&
+      canonicalWorkspace &&
       currentStep === 1 &&
       stepStatuses[0] === 'done' &&
       !audienceEntryFiredRef.current &&
-      formState.segment.attrs.length === 0  // skip if already has segments
+      formState.segment.attrs.length === 0 &&
+      !canonicalAudience?.attrs?.length
     ) {
       audienceEntryFiredRef.current = true
+      const requestEpoch = campaignEpochRef.current
+      const requestConversationId = currentConversationId
       ;(async () => {
         log.step('audience-entry triggered — fetching recommendation')
         try {
           // Pass current formState.brief as hint — backend uses it when pending_proposal
           // hasn't been committed yet (e.g. user clicked '✅ Đồng ý, cập nhật' button)
           const data = await AgentAPI.getAudienceEntry(formState.brief)
+          if (
+            requestEpoch !== campaignEpochRef.current ||
+            requestConversationId !== currentConversationIdRef.current
+          ) {
+            log.step('audience-entry discarded — conversation changed while request was running')
+            return
+          }
           if (data && !data.skip) {
             // Extract workspace_proposal block
             const proposalBlock = (data.blocks || []).find(b => b.type === 'workspace_proposal' && b.changes?.field === 'segment')
@@ -646,7 +652,12 @@ export default function App() {
 
           }
         } catch (e) {
-          log.error('audience-entry fetch failed', e.message)
+          if (
+            requestEpoch === campaignEpochRef.current &&
+            requestConversationId === currentConversationIdRef.current
+          ) {
+            log.error('audience-entry fetch failed', e.message)
+          }
         }
       })()
     }
@@ -654,7 +665,16 @@ export default function App() {
     // Doing so causes a double-fire: stepStatuses[0] change fires the effect with currentStep=0
     // (resets flag), then currentStep=1 fires again and re-triggers the call.
     // Flag is reset only by handlePartialReset when the user explicitly resets the flow.
-  }, [currentStep, stepStatuses[0], experienceMode, handleWorkspaceUpdate])
+  }, [
+    canonicalWorkspace,
+    currentConversationId,
+    currentStep,
+    stepStatuses[0],
+    experienceMode,
+    formState.brief,
+    formState.segment.attrs.length,
+    handleWorkspaceUpdate,
+  ])
 
   // Setup-entry: when user reaches step 3 with creative done → proactive zone recommendation in chat
   const setupEntryFiredRef = useRef(false)
@@ -920,6 +940,9 @@ export default function App() {
   }, [pushWorkspaceEvent])
 
   const resetLocalCampaign = useCallback(() => {
+    // Invalidate slow proactive requests before clearing state. A response from
+    // the previous conversation must never inject chat or workspace updates.
+    campaignEpochRef.current += 1
     audienceEntryFiredRef.current = false
     setupEntryFiredRef.current = false
     reportEntryFiredRef.current = false
@@ -927,6 +950,7 @@ export default function App() {
     setStepStatuses(STEPS.map(() => 'pending'))
     setCanonicalWorkspace(null)
     setRecomputePlan(null)
+    setAudienceRecommendation(null)
     setWorkspaceEvents([])
     setCurrentStep(0)
   }, [])

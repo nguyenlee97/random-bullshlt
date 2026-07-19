@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-19.4"
+BUILD_VERSION = "2026-07-19.5"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -147,4 +147,9 @@ BUILD_FEATURES = [
     "report-pdf-readiness-gate",         # Zalo only delivers PDF after all six report types are ready
     "zalo-owned-workspace-link",          # model tool returns only an ownership-checked conversation deep link
     "zalo-autopilot-web-continuity",      # Zalo runs appear and live-refresh in account campaign history
+    "guided-shared-audience-retrieval",   # Copilot and Autopilot share catalog-grounded audience selection
+    "guided-audience-stable-dedupe",      # repeated provider labels cannot duplicate a catalog segment
+    "guided-actionable-brief-clarification", # missing Brief fields always render as explicit questions
+    "guided-conversation-audience-reset", # a new/resumed campaign cannot retain old recommendation cards
+    "guided-conversation-request-isolation", # late proactive responses are discarded after campaign switches
 ]
