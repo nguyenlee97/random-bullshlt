@@ -3,7 +3,7 @@
 Date: 2026-07-20
 Starting commit: `b6da5e4d4fd58107f39a6ca12ddddcc529d33bcd`
 Correction follows: `3d63e35`
-Production build: `2026-07-20.8`
+Production build: `2026-07-20.11`
 
 ## Delivered behavior
 
@@ -52,6 +52,13 @@ Production build: `2026-07-20.8`
   IntersectionObserver rooted to the landing scroll canvas. They fade/blur in
   on entry and recede on exit in either scroll direction; reduced-motion users
   receive the content immediately with no animation.
+- The signal rail now sits lower with a gentler tilt, keeping every moving chip
+  inside its blue frame. The mode introduction now states the practical choice:
+  build decisions together in Copilot, or hand over a brief and review a
+  complete campaign in Autopilot.
+- The Agent workspace shell is viewport-anchored and non-scrollable. Chat and
+  Autopilot retain their own scroll regions, preventing a homepage scroll
+  offset from carrying into the workspace and hiding the Autopilot header.
 - The served technical document has nine sections. Part 10, its limitations
   table and roadmap material were removed.
 - The document's “Vào Agent” link now reaches
@@ -104,13 +111,20 @@ Production build: `2026-07-20.8`
 - The `.8` signed-in walkthrough selected VinFast and visibly prepared
   `19/07/2026 → 26/07/2026` on 20/07/2026, matching yesterday plus seven days.
   Acceptance stopped before sending the brief; no campaign was launched.
+- The `.11` regression check scrolled the signed-in homepage to campaign
+  history, opened an existing Autopilot campaign, and measured the outer shell
+  at `scrollTop: 0` with `overflow: clip`. `Campaign Autopilot` was fully visible
+  at 125–157 px in a 720 px viewport.
+- The `.11` production landing was visually checked at 1280×720: the complete
+  moving chip row remains inside the signal rail and the replacement mode copy
+  is present in the deployed DOM.
 
 ## Production deployment and rollback
 
-- Production is live at **2026-07-20.8** on
+- Production is live at **2026-07-20.11** on
   `https://agent.pawgrammers.io.vn/`.
 - `/`, `/agent`, `/tech-docs.html`, `/agent/health` and `/agent/ready` return
-  HTTP 200. Health reports `.8`; readiness reports Mongo, backend, creative
+  HTTP 200. Health reports `.11`; readiness reports Mongo, backend, creative
   worker, Autopilot worker, Zalo worker and Zalo OpenAI healthy.
 - Baseline rollback before the guided-tour release:
   `/var/backups/advertising-agent/20260719T201216Z-guided-tours`.
@@ -127,6 +141,9 @@ Production build: `2026-07-20.8`
 - Rollback immediately before `.8`, including the full `.7` frontend and
   version file:
   `/var/backups/advertising-agent/20260719T213955Z-scroll-motion-dates`.
+- Rollback immediately before `.11`, including the `.10` frontend and version
+  file:
+  `/var/backups/advertising-agent/20260719T215640Z-workspace-overflow-clip`.
 
 ## Current limitations preserved in public wording
 

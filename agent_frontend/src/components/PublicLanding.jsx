@@ -236,7 +236,7 @@ export default function PublicLanding({ onEnterAgent, onOpenDemo }) {
       <section className="landing-mode-section" aria-labelledby="mode-title">
         <div className="landing-mode-heading scroll-reveal" data-scroll-reveal>
           <div><div className="landing-section-label"><span>03</span> CHOOSE YOUR CONTROL</div><h2 id="mode-title">Hai cách làm việc.<br /><em>Cùng một Agent.</em></h2></div>
-          <p>Không phải hai giao diện đổi màu. Đây là hai quan hệ làm việc khác nhau giữa bạn và AI—một bên cùng lái, một bên giao mục tiêu rồi giám sát.</p>
+          <p>Chọn Copilot để cùng Agent xây từng quyết định. Chọn Autopilot để giao brief, nhận một bản campaign hoàn chỉnh và duyệt trước khi launch.</p>
         </div>
         <div className="landing-mode-grid">
           {modes.map(({ number, title, icon: Icon, text, mode, tour, eyebrow }) => (

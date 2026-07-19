@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useChat } from '@/hooks/useChat'
 import { useIdentity } from '@/hooks/useIdentity'
 import TopBar from '@/components/TopBar'
@@ -158,6 +158,7 @@ export default function App() {
   const autopilotEditorArtifactRef = useRef(null)
   const workspaceRef = useRef(null)
   const mainRef = useRef(null)
+  const appShellRef = useRef(null)
   const bootedRef = useRef(false)
   const identityInitRef = useRef(false)
   const pendingConversationDeepLinkRef = useRef('')
@@ -598,6 +599,16 @@ export default function App() {
       boot()
     }
   }, [boot, experienceMode, identityReady])
+
+  // The mode selector and campaign history can sit far down the document.
+  // Opening a workspace must not inherit that window scroll position or the
+  // TopBar and Autopilot introduction render above the visible viewport.
+  useLayoutEffect(() => {
+    if (!experienceMode) return
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    appShellRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    mainRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [currentConversationId, experienceMode])
 
   const autopilotChatPolicy = (() => {
     if (experienceMode !== 'autopilot' || !autopilotSummary?.status) return { mode: 'normal' }
@@ -1716,7 +1727,7 @@ export default function App() {
       autoStart={autoStartDemoMode}
       onAutoStartConsumed={() => setAutoStartDemoMode('')}
     >
-    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-brand-50/30 pb-[env(safe-area-inset-bottom)] md:pb-0">
+    <div ref={appShellRef} className="fixed inset-0 flex h-screen flex-col overflow-clip bg-gradient-to-br from-slate-50 to-brand-50/30 pb-[env(safe-area-inset-bottom)] md:pb-0">
       <TopBar
         onReset={handleReset}
         onNewChat={handleNewChat}

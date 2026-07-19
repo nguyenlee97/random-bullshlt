@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-20.8"
+BUILD_VERSION = "2026-07-20.11"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -172,4 +172,8 @@ BUILD_FEATURES = [
     "seamless-campaign-signal-loop",        # three-copy rail loops without a Zalo-to-Brief animation snap
     "bidirectional-landing-reveals",        # campaign truth and mode sections fade on scroll entry and exit
     "rolling-demo-date-window",             # walkthrough dates stay yesterday through seven days later
+    "contained-signal-ribbon",              # shallow rail tilt and lower track prevent boundary clipping
+    "viewport-anchored-workspace",          # campaign entry cannot inherit homepage window scroll offset
+    "workspace-shell-scroll-reset",         # layout-phase reset clears retained shell scroll before paint
+    "non-scrollable-workspace-shell",        # outer app clips overflow; only child panes may own scroll state
 ]
