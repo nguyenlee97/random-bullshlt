@@ -1,5 +1,10 @@
 # Campaign Copilot Brief completeness consistency evidence
 
+> Superseded by build `2026-07-19.8`. Product review clarified that Guided
+> Copilot must ask for every missing Brief field rather than auto-suggesting
+> objective, KPI or audience/geo values. See
+> `39-copilot-explicit-brief-fields-evidence.md`.
+
 Date: 2026-07-19
 
 Branch: `revamp/next-hackathon`

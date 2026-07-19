@@ -73,7 +73,7 @@ def test_minimax_nested_json_string_is_coerced_then_strictly_validated():
 
 
 def test_clarification_rejects_empty_missing_fields():
-    with pytest.raises(ValueError, match="missing hard field"):
+    with pytest.raises(ValueError, match="missing Brief field"):
         BriefTurn.model_validate({
             "action": "ask_clarification",
             "message": "Cần làm rõ thêm thông tin.",
@@ -82,26 +82,32 @@ def test_clarification_rejects_empty_missing_fields():
 
 
 @pytest.mark.parametrize("soft_field", ["objective", "kpi", "notes"])
-def test_advisory_fields_cannot_block_a_brief_proposal(soft_field):
-    with pytest.raises(ValueError):
-        BriefTurn.model_validate({
-            "action": "ask_clarification",
-            "message": "Cần làm rõ thêm thông tin.",
-            "missing_fields": [soft_field],
-        })
+def test_every_missing_brief_field_can_block_a_proposal(soft_field):
+    turn = BriefTurn.model_validate({
+        "action": "ask_clarification",
+        "message": "Cần làm rõ thêm thông tin.",
+        "missing_fields": [soft_field],
+    })
+    assert turn.missing_fields == [soft_field]
 
 
-def test_only_hard_facts_can_trigger_clarification():
+def test_all_brief_fields_can_trigger_clarification():
     turn = BriefTurn.model_validate({
         "action": "ask_clarification",
         "message": "Cần bổ sung dữ kiện bắt buộc.",
-        "missing_fields": ["brand", "budget", "startDate", "endDate"],
+        "missing_fields": [
+            "brand", "objective", "kpi", "budget",
+            "startDate", "endDate", "notes",
+        ],
     })
-    assert turn.missing_fields == ["brand", "budget", "startDate", "endDate"]
+    assert turn.missing_fields == [
+        "brand", "objective", "kpi", "budget",
+        "startDate", "endDate", "notes",
+    ]
 
 
 @pytest.mark.asyncio
-async def test_campaign_statement_uses_intake_only_schema(monkeypatch):
+async def test_campaign_statement_cannot_autofill_missing_advisory_fields(monkeypatch):
     def generated(_messages, schema, schema_name, _role, _max_tokens):
         assert schema is BriefIntakeTurn
         assert schema_name == "brief_intake_turn"
@@ -119,8 +125,57 @@ async def test_campaign_statement_uses_intake_only_schema(monkeypatch):
             "content": "campaign Mixifood, budget 2 triệu, chạy 3 ngày từ 15/7",
         }],
     })
-    assert turn.action == "propose_brief"
+    assert turn.action == "ask_clarification"
+    assert turn.brief is None
+    assert turn.missing_fields == ["objective", "kpi", "notes"]
     assert tokens == 33
+
+
+def test_explicit_vng_budget_and_duration_are_not_reasked():
+    message = (
+        "quảng cáo chung kết thế giới liên minh huyền thoại, VNG, "
+        "budget 100 triệu, 3 ngày từ 18/7/2026"
+    )
+    turn = BriefTurn(
+        action="ask_clarification",
+        message="Cần bổ sung Brief.",
+        missing_fields=[
+            "brand", "objective", "kpi", "budget",
+            "startDate", "endDate", "notes",
+        ],
+    )
+    enforced = collector._enforce_explicit_brief_fields(turn, {
+        "messages": [{"role": "user", "content": message}],
+    })
+    assert enforced is not None
+    assert enforced.missing_fields == ["objective", "kpi", "notes"]
+
+
+@pytest.mark.asyncio
+async def test_explicit_objective_kpi_and_audience_allow_proposal(monkeypatch):
+    def generated(_messages, schema, schema_name, _role, _max_tokens):
+        assert schema is BriefIntakeTurn
+        assert schema_name == "brief_intake_turn"
+        return schema.model_validate({
+            "action": "propose_brief",
+            "message": "Em đã chuẩn hóa Brief đầy đủ.",
+            "brief": MIXIFOOD_DRAFT.model_dump(),
+        }), 44
+
+    monkeypatch.setattr(collector, "structured", generated)
+    message = (
+        "campaign Mixifood, objective conversion, KPI CTR > 0.8% và CPA < 50K, "
+        "budget 2 triệu, chạy 3 ngày từ 15/7, audience nam nữ 18-35 tại Hà Nội "
+        "và TP.HCM, sở thích đồ ăn vặt"
+    )
+    turn, tokens = await collector.generate_brief_turn({
+        "user_message": message,
+        "messages": [{"role": "user", "content": message}],
+    })
+    assert turn.action == "propose_brief"
+    assert turn.brief is not None
+    assert turn.missing_fields == []
+    assert tokens == 44
 
 
 @pytest.mark.asyncio
@@ -231,12 +286,15 @@ async def test_incomplete_brief_asks_a_question_without_claiming_it_was_saved(mo
 
 
 @pytest.mark.asyncio
-async def test_vague_clarification_is_replaced_with_explicit_hard_field_questions(monkeypatch):
+async def test_vague_clarification_is_replaced_with_all_explicit_missing_questions(monkeypatch):
     async def generated(_state):
         return BriefTurn(
             action="ask_clarification",
             message="Tôi cần xác nhận thêm một số thông tin để hoàn thiện brief:",
-            missing_fields=["budget", "startDate", "endDate", "budget"],
+            missing_fields=[
+                "objective", "kpi", "notes", "budget",
+                "startDate", "endDate", "budget",
+            ],
         ), 38
 
     monkeypatch.setattr(collector, "generate_brief_turn", generated)
@@ -252,6 +310,9 @@ async def test_vague_clarification_is_replaced_with_explicit_hard_field_question
     assert "Tổng ngân sách" in response
     assert "Campaign bắt đầu" in response
     assert "Campaign kết thúc" in response
+    assert "Mục tiêu campaign" in response
+    assert "KPI mong muốn" in response
+    assert "Đối tượng mục tiêu" in response
     assert response.count("Tổng ngân sách") == 1
     assert not response.rstrip().endswith(":")
 

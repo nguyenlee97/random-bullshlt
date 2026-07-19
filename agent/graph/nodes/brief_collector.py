@@ -60,7 +60,9 @@ class BriefDraft(BaseModel):
         return amount
 
 
-HardMissingBriefField = Literal["brand", "budget", "startDate", "endDate"]
+MissingBriefField = Literal[
+    "brand", "objective", "kpi", "budget", "startDate", "endDate", "notes",
+]
 
 
 class BriefTurn(BaseModel):
@@ -68,10 +70,10 @@ class BriefTurn(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     brief: BriefDraft | None = None
     reason: str = Field(default="", max_length=1000)
-    # Clarification is reserved for factual inputs that the Agent must never
-    # invent. Objective, KPI and notes/audience are advisory fields: the Agent
-    # proposes sensible values and the operator approves or edits the draft.
-    missing_fields: list[HardMissingBriefField] = Field(default_factory=list, max_length=4)
+    # Every field in the Guided Brief is operator-provided. The model may
+    # normalize wording and units, but it may not invent objective, KPI,
+    # audience/geo notes or any of the hard campaign facts.
+    missing_fields: list[MissingBriefField] = Field(default_factory=list, max_length=7)
 
     model_config = {"extra": "forbid"}
 
@@ -96,8 +98,7 @@ class BriefTurn(BaseModel):
             raise ValueError("brief is only allowed for propose_brief")
         if self.action == "ask_clarification" and not self.missing_fields:
             raise ValueError(
-                "ask_clarification requires at least one missing hard field: "
-                "brand, budget, startDate or endDate"
+                "ask_clarification requires at least one missing Brief field"
             )
         if self.action != "ask_clarification" and self.missing_fields:
             raise ValueError("missing_fields is only allowed for ask_clarification")
@@ -110,11 +111,27 @@ class BriefIntakeTurn(BriefTurn):
     action: Literal["ask_clarification", "propose_brief"]
 
 
+class BriefProposalTurn(BriefTurn):
+    """Repair schema when the provider asks for fields already supplied."""
+
+    action: Literal["propose_brief"]
+
+
 _BRIEF_CLARIFICATION_QUESTIONS = {
     "brand": "Thương hiệu hoặc tên sản phẩm cần quảng cáo là gì?",
+    "objective": (
+        "Mục tiêu campaign là Awareness, Consideration, Conversion hay Retention?"
+    ),
+    "kpi": (
+        "KPI mong muốn là gì (ví dụ Reach, Impressions, CTR, lượt xem hoặc số chuyển đổi)?"
+    ),
     "budget": "Tổng ngân sách là bao nhiêu triệu VND?",
     "startDate": "Campaign bắt đầu ngày nào?",
     "endDate": "Campaign kết thúc ngày nào hoặc chạy trong bao nhiêu ngày?",
+    "notes": (
+        "Đối tượng mục tiêu và phạm vi địa lý là ai/ở đâu? "
+        "Anh/chị có yêu cầu đặc biệt nào về sở thích, hành vi hoặc creative không?"
+    ),
 }
 
 
@@ -138,12 +155,11 @@ def _brief_messages(state: AgentState) -> list[dict]:
         "Bạn là bộ thu thập Brief có output bắt buộc theo schema. "
         f"Thời gian hiện tại có thẩm quyền: {now.isoformat(timespec='seconds')} "
         "(Asia/Ho_Chi_Minh). "
-        "Dùng ask_clarification CHỈ khi thiếu một hoặc nhiều dữ kiện cứng: brand, budget, "
-        "startDate hoặc endDate/thời lượng. Không bao giờ tự bịa các dữ kiện cứng này. "
-        "Objective, KPI, notes, audience và geo KHÔNG phải dữ kiện chặn: khi chúng chưa được nêu, "
-        "phải tự đề xuất giá trị hợp lý trong một propose_brief để người dùng duyệt hoặc sửa; "
-        "không hỏi người dùng chọn chúng trước. Dùng answer cho câu hỏi chỉ cần giải thích. "
-        "Dùng propose_brief ngay khi đã đủ bốn dữ kiện cứng. "
+        "Dùng ask_clarification khi thiếu bất kỳ field nào trong brand, objective, KPI, budget, "
+        "startDate, endDate/thời lượng hoặc notes (đối tượng mục tiêu + geo/yêu cầu). "
+        "Không bao giờ tự chọn hoặc tự bịa objective, KPI, audience, geo, budget, brand hay lịch chạy. "
+        "Chỉ chuẩn hóa thông tin người dùng đã nói rõ trong hội thoại. Dùng answer cho câu hỏi chỉ cần "
+        "giải thích. Dùng propose_brief chỉ khi tất cả field đã được người dùng cung cấp. "
         "Nếu ngày không có năm, dùng lần xuất hiện gần nhất không sớm hơn ngày hiện tại. "
         "Số ngày chạy tính bao gồm ngày bắt đầu. Ví dụ chạy 3 ngày từ 2026-07-15 thì "
         "endDate=2026-07-17. Audience, geo, sở thích và sản phẩm phải lưu trong notes. "
@@ -151,7 +167,7 @@ def _brief_messages(state: AgentState) -> list[dict]:
         "không ghi budget=2000000 cho 2 triệu. "
         "propose_brief chỉ tạo bản nháp chờ người dùng duyệt, không có nghĩa đã áp dụng. "
         "Với ask_clarification, missing_fields phải có ít nhất một field và chỉ được gồm "
-        "brand, budget, startDate, endDate; phải liệt kê chính xác các field còn thiếu "
+        "brand, objective, kpi, budget, startDate, endDate, notes; phải liệt kê chính xác tất cả field còn thiếu "
         "và message phải nêu câu hỏi có thể trả lời được, không chỉ viết một câu dẫn chung. "
         "message phải ngắn, bằng tiếng Việt và không được nói rằng Brief đã được lưu."
     )
@@ -175,6 +191,115 @@ def _is_brief_question(message: str) -> bool:
     return bool(_BRIEF_QUESTION_RE.search((message or "").strip()))
 
 
+_OBJECTIVE_SIGNAL_RE = re.compile(
+    r"\b(?:awareness|consideration|conversion|retention|nhận\s*biết|nhận\s*diện|"
+    r"tăng\s*quan\s*tâm|cân\s*nhắc|chuyển\s*đổi|giữ\s*chân)\b",
+    re.IGNORECASE,
+)
+_KPI_SIGNAL_RE = re.compile(
+    r"\b(?:kpi|reach|impressions?|ctr|cpm|cpa|roas|vtr|cvr|viewability|frequency|"
+    r"engagement|return\s*visit|lượt\s*xem|tương\s*tác|số\s*chuyển\s*đổi)\b",
+    re.IGNORECASE,
+)
+_NOTES_SIGNAL_RE = re.compile(
+    r"\b(?:audience|target|đối\s*tượng|khách\s*hàng|người\s*(?:dùng|hâm\s*mộ)|"
+    r"game\s*thủ|nam|nữ|tuổi|gen\s*[xyz]|geo|khu\s*vực|toàn\s*quốc|"
+    r"hà\s*nội|tp\.?\s*hcm|hồ\s*chí\s*minh|đà\s*nẵng|sở\s*thích|hành\s*vi)\b",
+    re.IGNORECASE,
+)
+_BRAND_SIGNAL_RE = re.compile(
+    r"(?:\b(?:brand|thương\s*hiệu)\s*[:=\-]?\s*[\wÀ-ỹ]|"
+    r"\bcủa\s+[\wÀ-ỹ][\wÀ-ỹ.\-]*|\b[A-ZĐ]{2,}\b)",
+)
+_BUDGET_SIGNAL_RE = re.compile(
+    r"(?:\b(?:budget|ngân\s*sách)\b[^\n,;]{0,35}\d|"
+    r"\d[\d.,]*\s*(?:triệu|tỷ|tỉ|vnd|đồng)\b)",
+    re.IGNORECASE,
+)
+_DATE_SIGNAL_RE = re.compile(
+    r"\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\b"
+)
+_DURATION_SIGNAL_RE = re.compile(
+    r"\b\d+(?:[.,]\d+)?\s*(?:ngày|tuần|tháng)\b", re.IGNORECASE,
+)
+
+
+def _all_user_text(state: AgentState) -> str:
+    return "\n".join(
+        str(message.get("content", ""))
+        for message in state.get("messages", [])
+        if message.get("role") == "user"
+    )
+
+
+def _explicit_hard_present_fields(state: AgentState) -> set[str]:
+    user_text = _all_user_text(state)
+    present: set[str] = set()
+    if _BRAND_SIGNAL_RE.search(user_text):
+        present.add("brand")
+    if _BUDGET_SIGNAL_RE.search(user_text):
+        present.add("budget")
+    dates = _DATE_SIGNAL_RE.findall(user_text)
+    if dates:
+        present.add("startDate")
+    if len(dates) >= 2 or (dates and _DURATION_SIGNAL_RE.search(user_text)):
+        present.add("endDate")
+    return present
+
+
+def _explicit_advisory_missing_fields(state: AgentState) -> list[MissingBriefField]:
+    """Detect advisory fields that must not be synthesized by the model.
+
+    Scan all user turns so multi-turn collection naturally removes a field
+    from the missing set once the operator supplies it.
+    """
+    user_text = _all_user_text(state)
+    missing: list[MissingBriefField] = []
+    if not _OBJECTIVE_SIGNAL_RE.search(user_text):
+        missing.append("objective")
+    if not _KPI_SIGNAL_RE.search(user_text):
+        missing.append("kpi")
+    if not _NOTES_SIGNAL_RE.search(user_text):
+        missing.append("notes")
+    return missing
+
+
+def _enforce_explicit_brief_fields(
+    turn: BriefTurn, state: AgentState,
+) -> BriefTurn | None:
+    if turn.action == "answer":
+        return turn
+
+    advisory_missing = _explicit_advisory_missing_fields(state)
+    if turn.action == "propose_brief" and advisory_missing:
+        return BriefTurn(
+            action="ask_clarification",
+            message="Brief còn thiếu thông tin người dùng cần cung cấp.",
+            missing_fields=advisory_missing,
+        )
+
+    if turn.action == "ask_clarification":
+        # The server owns advisory completeness: discard model-reported
+        # fields that are explicitly present and add any advisory field it
+        # omitted. This also prevents stochastic re-asking of visible brand,
+        # budget and schedule values.
+        hard_present = _explicit_hard_present_fields(state)
+        hard_fields = [
+            field for field in turn.missing_fields
+            if field in {"brand", "budget", "startDate", "endDate"}
+            and field not in hard_present
+        ]
+        missing = list(dict.fromkeys([*hard_fields, *advisory_missing]))
+        if not missing:
+            return None
+        return BriefTurn(
+            action="ask_clarification",
+            message=turn.message,
+            missing_fields=missing,
+        )
+    return turn
+
+
 async def generate_brief_turn(state: AgentState) -> tuple[BriefTurn, int]:
     is_question = _is_brief_question(state.get("user_message", ""))
     schema = BriefTurn if is_question else BriefIntakeTurn
@@ -182,8 +307,28 @@ async def generate_brief_turn(state: AgentState) -> tuple[BriefTurn, int]:
     turn, tokens = await asyncio.to_thread(
         structured, _brief_messages(state), schema, schema_name, "generator", 1600,
     )
-    # Normalize the narrower intake result for callers and instrumentation.
-    return BriefTurn.model_validate(turn.model_dump()), tokens
+    # Normalize the narrower intake result and apply the server-owned
+    # explicit-field policy before any proposal can be created.
+    normalized = BriefTurn.model_validate(turn.model_dump())
+    enforced = _enforce_explicit_brief_fields(normalized, state)
+    if enforced is not None:
+        return enforced, tokens
+
+    # The provider asked for advisory values the user already supplied. Force
+    # one schema-repaired proposal instead of repeating an unnecessary question.
+    proposal, repair_tokens = await asyncio.to_thread(
+        structured,
+        _brief_messages(state),
+        BriefProposalTurn,
+        "brief_proposal_turn",
+        "generator",
+        1600,
+    )
+    repaired = BriefTurn.model_validate(proposal.model_dump())
+    enforced = _enforce_explicit_brief_fields(repaired, state)
+    if enforced is None:
+        raise StructuredOutputError("brief proposal repair produced no actionable result")
+    return enforced, tokens + repair_tokens
 
 
 def _user_supplied_explicit_year(messages: list[dict]) -> bool:
