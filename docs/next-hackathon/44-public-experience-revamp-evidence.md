@@ -3,7 +3,7 @@
 Date: 2026-07-20
 Starting commit: `b6da5e4d4fd58107f39a6ca12ddddcc529d33bcd`
 Correction follows: `3d63e35`
-Production build: `2026-07-20.11`
+Production build: `2026-07-20.12`
 
 ## Delivered behavior
 
@@ -59,6 +59,12 @@ Production build: `2026-07-20.11`
 - The Agent workspace shell is viewport-anchored and non-scrollable. Chat and
   Autopilot retain their own scroll regions, preventing a homepage scroll
   offset from carrying into the workspace and hiding the Autopilot header.
+- A dedicated blue-and-white robot now represents Advertising Agent in the
+  public experience. Its transparent three-quarter render is the living center
+  of the campaign constellation, while a cropped face anchors the brand lockup.
+- The former sparse top divider is now a compact glass command bar with a live
+  brand state and an animated Brief to Campaign to Impact signal. Mobile keeps
+  the robot mark while simplifying the secondary label and signal.
 - The served technical document has nine sections. Part 10, its limitations
   table and roadmap material were removed.
 - The document's “Vào Agent” link now reaches
@@ -118,13 +124,17 @@ Production build: `2026-07-20.11`
 - The `.11` production landing was visually checked at 1280×720: the complete
   moving chip row remains inside the signal rail and the replacement mode copy
   is present in the deployed DOM.
+- The `.12` mascot hero was checked at 1280×720 and 390×844. Desktop keeps the
+  robot, orbiting campaign artifacts, headline and primary actions in view with
+  zero horizontal overflow; mobile preserves the compact robot brand mark and
+  introduces the full mascot with the campaign constellation below the fold.
 
 ## Production deployment and rollback
 
-- Production is live at **2026-07-20.11** on
+- Production is live at **2026-07-20.12** on
   `https://agent.pawgrammers.io.vn/`.
 - `/`, `/agent`, `/tech-docs.html`, `/agent/health` and `/agent/ready` return
-  HTTP 200. Health reports `.11`; readiness reports Mongo, backend, creative
+  HTTP 200. Health reports `.12`; readiness reports Mongo, backend, creative
   worker, Autopilot worker, Zalo worker and Zalo OpenAI healthy.
 - Baseline rollback before the guided-tour release:
   `/var/backups/advertising-agent/20260719T201216Z-guided-tours`.
@@ -144,6 +154,9 @@ Production build: `2026-07-20.11`
 - Rollback immediately before `.11`, including the `.10` frontend and version
   file:
   `/var/backups/advertising-agent/20260719T215640Z-workspace-overflow-clip`.
+- The immediate `.11` frontend remains available at
+  `/var/www/agent-prev-20260720-12`; its version metadata is retained at
+  `/var/backups/advertising-agent/20260719T221522Z-mascot-hero/version.py`.
 
 ## Current limitations preserved in public wording
 

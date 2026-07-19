@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-20.11"
+BUILD_VERSION = "2026-07-20.12"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -176,4 +176,6 @@ BUILD_FEATURES = [
     "viewport-anchored-workspace",          # campaign entry cannot inherit homepage window scroll offset
     "workspace-shell-scroll-reset",         # layout-phase reset clears retained shell scroll before paint
     "non-scrollable-workspace-shell",        # outer app clips overflow; only child panes may own scroll state
+    "advertising-agent-mascot",              # generated robot identity anchors the public hero and brand lockup
+    "glass-brand-command-bar",               # compact live-signal navigation replaces the sparse top divider
 ]

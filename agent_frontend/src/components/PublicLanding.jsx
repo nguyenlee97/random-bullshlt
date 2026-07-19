@@ -36,11 +36,10 @@ function CampaignConstellation() {
       <div className="campaign-orbit campaign-orbit-outer" />
       <div className="campaign-orbit campaign-orbit-inner" />
 
-      <div className="campaign-core">
-        <div className="campaign-core-halo" />
-        <div className="campaign-core-mark"><Bot /></div>
-        <p>AGENT CORE</p>
-        <span>Campaign reasoning live</span>
+      <div className="campaign-agent-core">
+        <div className="campaign-agent-aura" />
+        <img src="/brand/advertising-agent-mascot.png" alt="Robot đại diện cho Advertising Agent" />
+        <div className="campaign-agent-status"><i /> ADVERTISING AGENT <small>ONLINE</small></div>
       </div>
 
       {orbitNodes.map(({ label, meta, icon: Icon, className }) => (
@@ -188,8 +187,10 @@ export default function PublicLanding({ onEnterAgent, onOpenDemo }) {
       <div className="landing-pointer-light" aria-hidden="true" />
       <header className="landing-nav">
         <a href="/" className="landing-brand" aria-label="Advertising Agent">
-          <span><Bot /></span><div><b>ADVERTISING AGENT</b><small>Agentic campaign system</small></div>
+          <span><img src="/brand/advertising-agent-mascot.png" alt="" /></span>
+          <div><b>ADVERTISING AGENT</b><small><i /> Agentic campaign system</small></div>
         </a>
+        <div className="landing-nav-signal" aria-hidden="true"><span>BRIEF</span><i /><span>CAMPAIGN</span><i /><span>IMPACT</span></div>
         <nav aria-label="Điều hướng công khai">
           <a href="/tech-docs.html"><FileText /> <span>Tài liệu</span></a>
           <button type="button" onClick={onEnterAgent}>Mở Agent <ArrowRight /></button>

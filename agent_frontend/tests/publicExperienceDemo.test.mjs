@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { authReturnTo, hasAgentIntent } from '../src/lib/publicExperience.js'
 import { AUTOPILOT_TOUR_STEPS } from '../src/demo/autopilotTour.js'
@@ -35,6 +35,10 @@ test('Zalo callback return path retains conversation and hash while removing cal
 test('landing uses a kinetic campaign system and opens real guided tours', () => {
   assert.match(landing, /CampaignConstellation/)
   assert.match(landing, /campaign-stage/)
+  assert.match(landing, /campaign-agent-core/)
+  assert.match(landing, /\/brand\/advertising-agent-mascot\.png/)
+  assert.match(landing, /landing-nav-signal/)
+  assert.equal(existsSync(new URL('../public/brand/advertising-agent-mascot.png', import.meta.url)), true)
   assert.match(landing, /SignalRibbon/)
   assert.match(landing, /\[0, 1, 2\]\.map/)
   assert.match(landing, /CampaignTruthVisual/)
