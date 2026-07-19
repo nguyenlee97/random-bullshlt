@@ -315,12 +315,23 @@ def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int], curre
         import json as _json
         lines.append("--- Audience ---")
         lines.append(f"Segments hiện tại: {len(attrs)} đã chọn")
-        lines.append(f"Size ước tính: {segment.get('size', 0):,} người dùng")
+        audience_size = segment.get("size", 0)
+        size_known = segment.get("sizeKnown", audience_size > 0)
+        lines.append(
+            f"Size ước tính: {audience_size:,} người dùng"
+            if size_known
+            else "Size ước tính: chưa biết (catalog không cung cấp size; không phải 0 người)"
+        )
         # ─ Provide FULL segment data so LLM can modify without hallucinating ─
         # LLM must use this exact JSON as the base when calling update_workspace
         lines.append("CURRENT_SEGMENT_DATA (dùng làm base khi gọi update_workspace):")
         lines.append(_json.dumps(
-            {"attrs": attrs, "targeting": segment.get("targeting", {}), "size": segment.get("size", 0)},
+            {
+                "attrs": attrs,
+                "targeting": segment.get("targeting", {}),
+                "size": audience_size,
+                "sizeKnown": size_known,
+            },
             ensure_ascii=False, separators=(',', ':')
         ))
         lines.append("")

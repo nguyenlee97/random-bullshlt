@@ -1075,32 +1075,28 @@ let _orderIdempotencyKey = null
 export async function createCampaignOrder(selectedZoneIds, assignments, fileUrls = {}) {
   if (!_orderIdempotencyKey) _orderIdempotencyKey = `${DEMO_NAMESPACE || 'app'}:${crypto.randomUUID()}`
   try {
-    const res = await agentFetch(`${AGENT_URL}/api/agent/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_id: SESSION_ID,
-        step: 3,
-        message: '',
-        formData: {
-          setup: {
-            phase: 2,
-            selectedZoneIds: selectedZoneIds || [],
-            assignments: assignments || {},
-            fileUrls: fileUrls || {},
-            idempotencyKey: _orderIdempotencyKey,
-          },
+    // Use the same response adapter as every other chat mutation. Returning
+    // raw {text, meta} made ConfirmPhase look for missing {content, metadata},
+    // hiding guard reasons and treating successful orders as failures.
+    const response = await callAgent({
+      session_id: SESSION_ID,
+      step: 3,
+      message: '',
+      formData: {
+        setup: {
+          phase: 2,
+          selectedZoneIds: selectedZoneIds || [],
+          assignments: assignments || {},
+          fileUrls: fileUrls || {},
+          idempotencyKey: _orderIdempotencyKey,
         },
-      }),
-      signal: AbortSignal.timeout(180000),  // chat/order creation
+      },
     })
-    if (!res.ok) return null
-    const data = await res.json()
     // Success → next confirm is a new campaign, needs a new key.
     // (Guard-rejection returns tool 'order_guard'; keep the key so a fixed
     //  retry of the same intent still dedupes.)
-    if (data?.meta?.tool === 'order_create') _orderIdempotencyKey = null
-    return data
+    if (response?.metadata?.tool === 'order_create') _orderIdempotencyKey = null
+    return response
   } catch (e) {
     console.warn('[createCampaignOrder] failed:', e.message)
     return null

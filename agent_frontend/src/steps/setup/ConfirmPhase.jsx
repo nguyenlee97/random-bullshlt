@@ -8,7 +8,8 @@ import {
   FileText, Users, LayoutGrid, DollarSign, XCircle,
 } from 'lucide-react'
 import { checkMismatch, getSelectedZones, fmtVnd, fmtImp, estImpressions } from './setupUtils'
-import { createCampaignOrder } from '@/api/agentApi'
+import { createCampaignOrder, fetchZonesFromAgent } from '@/api/agentApi'
+import { hasKnownAudienceSize } from '@/lib/audience'
 
 const OBJECTIVE_LABELS = {
   awareness: 'Awareness — Tăng nhận biết',
@@ -36,6 +37,7 @@ function SectionCard({ icon: Icon, title, iconClass, children }) {
 export default function ConfirmPhase({ data, onChange, brief, segment, files, allZones, recoZones }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [guardRejected, setGuardRejected] = useState(false)
 
   const selectedZones = getSelectedZones(data.selectedZoneIds || [], allZones || null, recoZones || null)
   const assignments = data.assignments || {}
@@ -49,10 +51,13 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
   // Zones that have booking conflicts with the campaign date range
   const conflictedZones = selectedZones.filter(z => z.conflict)
   const hasConflicts = conflictedZones.length > 0
+  const hasAudienceEstimate = Number(segment?.size || 0) > 0
+    || hasKnownAudienceSize(segment?.attrs || [])
 
   const handleCreate = async () => {
     setSubmitting(true)
     setSubmitError('')
+    setGuardRejected(false)
 
     try {
       const assignmentsAsIndex = {}
@@ -76,6 +81,26 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
         data.selectedZoneIds || [], assignmentsAsIndex, fileUrls,
       )
       if (response?.metadata?.tool !== 'order_create') {
+        if (response?.metadata?.tool === 'order_guard') {
+          setGuardRejected(true)
+          // Inventory is re-checked at commit time. Refresh the visible catalog
+          // so a newly booked zone is marked and can be deselected safely.
+          const refreshed = await fetchZonesFromAgent()
+          if (refreshed?.zones?.length) {
+            const latestById = new Map(refreshed.zones.map(zone => [zone.id, zone]))
+            const mergeLatest = zone => ({
+              ...zone,
+              ...(latestById.get(zone.id) || {}),
+              conflict: latestById.get(zone.id)?.conflict || null,
+            })
+            onChange({
+              ...data,
+              allZones: (allZones || []).map(mergeLatest),
+              recoZones: (recoZones || []).map(mergeLatest),
+              submitted: false,
+            })
+          }
+        }
         throw new Error(response?.content || 'Order guard từ chối tạo chiến dịch')
       }
       onChange({ ...data, submitted: true })
@@ -142,7 +167,12 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
           </div>
           <div className="border-l border-border pl-4">
             <p className="text-xs text-muted-foreground">Audience size ước lượng</p>
-            <p className="text-lg font-black text-brand-700">{fmt(segment?.size || 0)} người</p>
+            <p className="text-lg font-black text-brand-700">
+              {hasAudienceEstimate ? `${fmt(segment?.size || 0)} người` : '—'}
+            </p>
+            {!hasAudienceEstimate && (
+              <p className="text-[10px] text-muted-foreground">Catalog chưa cung cấp size</p>
+            )}
           </div>
         </div>
         {(segment?.attrs || []).length > 0 && (
@@ -251,7 +281,20 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
         <Card className="border-red-200 bg-red-50">
           <CardContent className="py-3 flex items-start gap-2">
             <XCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-red-700">{submitError}</p>
+            <div className="flex-1 space-y-2">
+              <p className="text-xs text-red-700 whitespace-pre-line">{submitError}</p>
+              {guardRejected && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-red-300 bg-white text-xs text-red-700 hover:bg-red-100"
+                  onClick={() => onChange({ ...data, phase: 'zones' })}
+                >
+                  Chọn zone khác
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

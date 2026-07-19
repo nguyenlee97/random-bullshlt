@@ -48,18 +48,27 @@ export function calcAudienceSize(attrs = []) {
   ))
 }
 
+export function hasKnownAudienceSize(attrs = []) {
+  return attrs.some(raw => {
+    const attr = normalizeDmpAttr(raw)
+    return Number(attr.est_size || attr.sizeMin || attr.sizeMax || 0) > 0
+  })
+}
+
 export function normalizeAudienceSelection(value = {}, fallback = {}) {
   const sourceAttrs = Array.isArray(value.attrs)
     ? value.attrs
     : (Array.isArray(fallback.attrs) ? fallback.attrs : [])
   const attrs = dedupeDmpAttrs(sourceAttrs)
   const explicitSize = Number(value.size || value.estimated_size || 0)
+  const calculatedSize = calcAudienceSize(attrs)
 
   return {
     ...fallback,
     ...value,
     attrs,
-    size: explicitSize > 0 ? explicitSize : calcAudienceSize(attrs),
+    size: explicitSize > 0 ? explicitSize : calculatedSize,
+    sizeKnown: explicitSize > 0 || hasKnownAudienceSize(attrs),
   }
 }
 
@@ -84,5 +93,6 @@ export function enrichAudienceSelection(value = {}, catalog = []) {
     ...value,
     attrs,
     size: Number(value.size || 0) || calcAudienceSize(attrs),
+    sizeKnown: Number(value.size || 0) > 0 || hasKnownAudienceSize(attrs),
   }
 }

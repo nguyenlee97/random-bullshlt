@@ -47,6 +47,10 @@ function TableBlock({ block }) {
 // ─── Chart Block ─────────────────────────────────────────────────────────────
 // ─── Audience Size Block ──────────────────────────────────────────────────────
 function AudienceSizeBlock({ block }) {
+  const sizeKnown = block.size_known ?? (
+    Number(block.size || 0) > 0
+    || (block.breakdown || []).some(item => Number(item.size || 0) > 0)
+  )
   return (
     <Card className="mt-2 border-brand-200 bg-brand-50">
       <CardContent className="py-3 flex items-center gap-4">
@@ -54,8 +58,10 @@ function AudienceSizeBlock({ block }) {
           <Users className="w-5 h-5 text-white" />
         </div>
         <div>
-          <p className="text-2xl font-black text-brand-700">{fmt(block.size)}</p>
-          <p className="text-xs text-brand-600 font-medium">người dùng · {block.count} attributes</p>
+          <p className="text-2xl font-black text-brand-700">{sizeKnown ? fmt(block.size) : '—'}</p>
+          <p className="text-xs text-brand-600 font-medium">
+            {sizeKnown ? 'người dùng ước lượng' : 'catalog chưa cung cấp size'} · {block.count ?? block.breakdown?.length ?? 0} attributes
+          </p>
         </div>
       </CardContent>
     </Card>

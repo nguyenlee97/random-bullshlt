@@ -1,6 +1,7 @@
 """Audience handler prompts."""
 
 AUDIENCE_SYSTEM = """Bạn là Advertising Agent. Nhiệm vụ: Giải thích tại sao các audience segments phù hợp với chiến dịch.
+Nếu catalog không cung cấp size, đó là dữ liệu chưa biết — không được suy luận rằng audience bằng 0, segment không hoạt động hoặc cấu hình sai.
 Trả về JSON theo đúng schema. Không thêm text ngoài JSON."""
 
 AUDIENCE_USER = """Brief chiến dịch:
@@ -12,7 +13,7 @@ AUDIENCE_USER = """Brief chiến dịch:
 Audience segments đã chọn:
 {segments_json}
 
-Tổng audience size (sau union discount): {total_size:,}
+Audience size: {audience_size_status}
 
 Phân tích và trả JSON:
 {{

@@ -47,6 +47,15 @@ def _calc_audience_size(attrs: list[dict]) -> int:
     return round(total)
 
 
+def _has_known_audience_size(attrs: list[dict]) -> bool:
+    return any(
+        (a.get("sizeMin") or 0) > 0
+        or (a.get("sizeMax") or 0) > 0
+        or (a.get("est_size") or 0) > 0
+        for a in attrs
+    )
+
+
 def _normalize_dmp_attr(seg: dict) -> dict:
     """Normalize a raw MongoDB segment doc into the shape AudienceStep.jsx expects.
     
@@ -144,9 +153,14 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
 
     # ── Calculate audience size ───────────────────────────────────────────────
     total_size = _calc_audience_size(attrs)
+    size_known = _has_known_audience_size(attrs)
 
     # ── Store in session ──────────────────────────────────────────────────────
-    await update_form_state(session_id, "segment", {"attrs": attrs, "size": total_size})
+    await update_form_state(
+        session_id,
+        "segment",
+        {"attrs": attrs, "size": total_size, "sizeKnown": size_known},
+    )
     if segment.targeting:
         # Targeting is a separate canonical artifact. Persist it independently
         # so an Autopilot edit replans from derive_targeting instead of hiding
@@ -168,7 +182,11 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
         kpi=brief.get("kpi", "?"),
         notes=brief.get("notes", "(trống)"),
         segments_json=segments_json,
-        total_size=total_size,
+        audience_size_status=(
+            f"{total_size:,} người (ước lượng sau union discount)"
+            if size_known
+            else "Chưa biết — catalog không cung cấp size cho các segment đã chọn"
+        ),
     )
 
     try:
@@ -201,6 +219,8 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
         {
             "type": "audience_size",
             "size": total_size,
+            "size_known": size_known,
+            "count": len(attrs),
             "breakdown": [
                 {"label": a.get("fullLabel", a.get("name", "")), "size": ((a.get("sizeMin") or 0) + (a.get("sizeMax") or 0)) // 2}
                 for a in attrs
@@ -223,9 +243,13 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
 
     # NOTE: "Targeting nâng cao" prompt removed — targeting form is now in the UI panel.
 
-    total_str = f"{total_size:,}"
+    audience_summary = (
+        f"ước tính audience **{total_size:,} người**"
+        if size_known
+        else "catalog hiện chưa cung cấp audience size"
+    )
     return AgentResponse(
-        text=f"✅ Đã chọn **{len(attrs)} segments**, ước tính audience **{total_str} người**.",
+        text=f"✅ Đã chọn **{len(attrs)} segments**; {audience_summary}.",
         blocks=blocks,
         meta=ResponseMeta(tool="audience_handler", model="minimax", step=2),
     )
@@ -478,6 +502,7 @@ async def _grounded_audience_entry(session_id: str, brief: dict) -> dict:
         ] for item in enriched_dmp],
     })
     audience_size = _calc_audience_size(enriched_dmp)
+    audience_size_known = _has_known_audience_size(enriched_dmp)
     blocks.append({
         "type": "workspace_proposal",
         "changes": {
@@ -486,6 +511,7 @@ async def _grounded_audience_entry(session_id: str, brief: dict) -> dict:
                 "attrs": enriched_dmp,
                 "targeting": targeting,
                 "size": audience_size,
+                "sizeKnown": audience_size_known,
             },
             "reason": (
                 f"AI gợi ý {len(enriched_dmp)} segment catalog-grounded "

@@ -5,6 +5,7 @@ import {
   calcAudienceSize,
   dedupeDmpAttrs,
   enrichAudienceSelection,
+  hasKnownAudienceSize,
   normalizeAudienceSelection,
   normalizeDmpAttr,
 } from '../src/lib/audience.js'
@@ -71,4 +72,14 @@ test('normalizing a stored audience removes duplicate IDs before rendering', () 
   })
 
   assert.equal(audience.attrs.length, 1)
+})
+
+test('catalog segments without size remain unknown instead of becoming a zero audience', () => {
+  const audience = normalizeAudienceSelection({
+    attrs: [{ segmentId: 'INT158', fullLabel: 'Fast food' }],
+  })
+
+  assert.equal(hasKnownAudienceSize(audience.attrs), false)
+  assert.equal(audience.size, 0)
+  assert.equal(audience.sizeKnown, false)
 })
