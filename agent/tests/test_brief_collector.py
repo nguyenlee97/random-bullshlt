@@ -8,7 +8,9 @@ import pytest
 from graph.nodes import brief_collector as collector
 from graph.nodes.brief_collector import (
     BriefDraft,
+    BriefDelegationDecision,
     BriefIntakeTurn,
+    BriefProposalTurn,
     BriefTurn,
     normalize_inferred_dates,
 )
@@ -51,6 +53,17 @@ def _mixifood_state(session_id: str) -> dict:
             {"role": "user", "content": "gợi ý giúp mình luôn"},
         ],
     }
+
+
+def _mock_delegation(monkeypatch, fields, provided=()):
+    async def classified(_state):
+        return BriefDelegationDecision(
+            mode="fill_brief" if fields else "none",
+            provided_fields=list(provided),
+            delegated_fields=fields,
+        ), 0
+
+    monkeypatch.setattr(collector, "_classify_brief_delegation", classified)
 
 
 def test_yearless_dates_are_rolled_forward_from_stale_model_year():
@@ -118,6 +131,7 @@ async def test_campaign_statement_cannot_autofill_missing_advisory_fields(monkey
         }), 33
 
     monkeypatch.setattr(collector, "structured", generated)
+    _mock_delegation(monkeypatch, [])
     turn, tokens = await collector.generate_brief_turn({
         "user_message": "campaign Mixifood, budget 2 triệu, chạy 3 ngày từ 15/7",
         "messages": [{
@@ -163,6 +177,7 @@ async def test_explicit_objective_kpi_and_audience_allow_proposal(monkeypatch):
         }), 44
 
     monkeypatch.setattr(collector, "structured", generated)
+    _mock_delegation(monkeypatch, [], provided=["objective", "kpi", "notes"])
     message = (
         "campaign Mixifood, objective conversion, KPI CTR > 0.8% và CPA < 50K, "
         "budget 2 triệu, chạy 3 ngày từ 15/7, audience nam nữ 18-35 tại Hà Nội "
@@ -179,6 +194,105 @@ async def test_explicit_objective_kpi_and_audience_allow_proposal(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_natural_delegation_allows_missing_advisory_suggestions(monkeypatch):
+    def generated(_messages, schema, schema_name, _role, _max_tokens):
+        assert schema is BriefIntakeTurn
+        assert schema_name == "brief_intake_turn"
+        return schema.model_validate({
+            "action": "propose_brief",
+            "message": "Em đề xuất phần còn thiếu để anh/chị duyệt.",
+            "brief": MIXIFOOD_DRAFT.model_dump(),
+            "suggestion_fields": ["objective", "kpi", "notes"],
+        }), 47
+
+    monkeypatch.setattr(collector, "structured", generated)
+    _mock_delegation(monkeypatch, ["objective", "kpi", "notes"])
+    turn, tokens = await collector.generate_brief_turn({
+        "user_message": "gợi ý giúp mình đi",
+        "messages": [
+            {"role": "user", "content": (
+                "campaign Mixifood, budget 2 triệu, chạy 3 ngày từ 15/7"
+            )},
+            {"role": "assistant", "content": (
+                "Anh/chị cho em objective, KPI, audience và geo."
+            )},
+            {"role": "user", "content": "gợi ý giúp mình đi"},
+        ],
+    })
+    assert turn.action == "propose_brief"
+    assert turn.suggestion_fields == ["objective", "kpi", "notes"]
+    assert turn.brief is not None
+    assert tokens == 47
+
+
+@pytest.mark.asyncio
+async def test_partial_delegation_still_asks_for_other_missing_fields(monkeypatch):
+    def generated(_messages, schema, _schema_name, _role, _max_tokens):
+        return schema.model_validate({
+            "action": "propose_brief",
+            "message": "Em chọn KPI phù hợp.",
+            "brief": MIXIFOOD_DRAFT.model_dump(),
+            "suggestion_fields": ["kpi"],
+        }), 31
+
+    monkeypatch.setattr(collector, "structured", generated)
+    _mock_delegation(monkeypatch, ["kpi"])
+    turn, _ = await collector.generate_brief_turn({
+        "user_message": "KPI chọn giúp mình, phần còn lại để mình cung cấp",
+        "messages": [
+            {"role": "user", "content": (
+                "campaign Mixifood, budget 2 triệu, chạy 3 ngày từ 15/7"
+            )},
+            {"role": "user", "content": (
+                "KPI chọn giúp mình, phần còn lại để mình cung cấp"
+            )},
+        ],
+    })
+    assert turn.action == "ask_clarification"
+    assert turn.missing_fields == ["objective", "notes"]
+    assert turn.suggestion_fields == ["kpi"]
+
+
+@pytest.mark.asyncio
+async def test_delegated_clarification_is_repaired_into_proposal(monkeypatch):
+    calls = []
+
+    def generated(_messages, schema, schema_name, _role, _max_tokens):
+        calls.append(schema_name)
+        if schema is BriefIntakeTurn:
+            return schema.model_validate({
+                "action": "ask_clarification",
+                "message": "Cần thêm objective, KPI và audience.",
+                "missing_fields": ["objective", "kpi", "notes"],
+                "suggestion_fields": ["objective", "kpi", "notes"],
+            }), 20
+        assert schema is BriefProposalTurn
+        return schema.model_validate({
+            "action": "propose_brief",
+            "message": "Em đã đề xuất các field được ủy quyền.",
+            "brief": MIXIFOOD_DRAFT.model_dump(),
+        }), 25
+
+    monkeypatch.setattr(collector, "structured", generated)
+    _mock_delegation(monkeypatch, ["objective", "kpi", "notes"])
+    turn, tokens = await collector.generate_brief_turn({
+        "user_message": "tự gợi ý toàn bộ phần còn thiếu giúp mình",
+        "messages": [
+            {"role": "user", "content": (
+                "campaign Mixifood, budget 2 triệu, chạy 3 ngày từ 15/7"
+            )},
+            {"role": "user", "content": (
+                "tự gợi ý toàn bộ phần còn thiếu giúp mình"
+            )},
+        ],
+    })
+    assert calls == ["brief_intake_turn", "brief_proposal_turn"]
+    assert turn.action == "propose_brief"
+    assert turn.suggestion_fields == ["objective", "kpi", "notes"]
+    assert tokens == 45
+
+
+@pytest.mark.asyncio
 async def test_explanatory_question_keeps_answer_schema(monkeypatch):
     def generated(_messages, schema, schema_name, _role, _max_tokens):
         assert schema is BriefTurn
@@ -189,6 +303,7 @@ async def test_explanatory_question_keeps_answer_schema(monkeypatch):
         ), 21
 
     monkeypatch.setattr(collector, "structured", generated)
+    _mock_delegation(monkeypatch, [])
     turn, tokens = await collector.generate_brief_turn({
         "user_message": "Objective nào phù hợp với tôi?",
         "messages": [{"role": "user", "content": "Objective nào phù hợp với tôi?"}],

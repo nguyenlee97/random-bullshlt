@@ -1,5 +1,9 @@
 # Campaign Copilot explicit Brief-field evidence
 
+> Superseded by build `2026-07-19.9`. Product review clarified that users may
+> naturally delegate missing objective, KPI and audience/geo decisions to the
+> Agent. See `40-copilot-model-led-brief-delegation-evidence.md`.
+
 Date: 2026-07-19
 
 Branch: `revamp/next-hackathon`
