@@ -184,6 +184,9 @@ router.post('/send-email/:campaignId', async (req, res) => {
     res.json({ ok: true, messageId: result.messageId, to: email });
   } catch (err) {
     console.error('[send-email] Error:', err.message);
+    if (err.code === 'REPORT_NOT_READY') {
+      return res.status(409).json({ error: err.message, missingTypes: err.missingTypes || [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -196,9 +199,13 @@ router.get('/export/:campaignId/pdf', async (req, res) => {
     const { generatePDF } = require('../services/reportPDFGenerator');
     const buf = await generatePDF(campaignId);
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Disposition', `attachment; filename="report_${campaignId}.pdf"`);
     res.send(buf);
   } catch (err) {
+    if (err.code === 'REPORT_NOT_READY') {
+      return res.status(409).json({ error: err.message, missingTypes: err.missingTypes || [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });

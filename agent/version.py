@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-19.2"
+BUILD_VERSION = "2026-07-19.3"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -142,4 +142,7 @@ BUILD_FEATURES = [
     "zalo-ordered-live-captures",        # per-site heading, zone crops, then annotated full page
     "zalo-one-mb-image-guard",           # provider-safe compression + expiring full-resolution fallback
     "post-launch-report-generation",     # order commit starts the existing idempotent report pipeline
+    "complete-unicode-report-pdf",       # embedded Unicode fonts + six full chart/Q&A report sections
+    "shared-report-pdf-download",        # Guided and Autopilot outcomes expose the same full PDF action
+    "report-pdf-readiness-gate",         # Zalo only delivers PDF after all six report types are ready
 ]

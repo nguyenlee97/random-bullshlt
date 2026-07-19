@@ -11,8 +11,10 @@ import {
 import {
   BarChart2, Loader2, TrendingUp, TrendingDown, Minus, CheckCircle2,
   Activity, Eye, MousePointerClick, DollarSign, RefreshCw, Users, Target,
-  AlertCircle, Zap,
+  AlertCircle, Zap, Download, FileText,
 } from 'lucide-react'
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
 
 // ─── Report tab config ───────────────────────────────────────────────────────
 const REPORT_TABS = [
@@ -857,12 +859,26 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
   // ── Reports ready — show tabs + charts ─────────────────────────────────────
   return (
     <div className="space-y-0">
-      {/* Showcase badge */}
-      <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-amber-50 border border-amber-200">
-        <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-        <p className="text-[11px] text-amber-700 font-medium">
-          Dữ liệu mô phỏng (showcase) · {records.length} records · {Object.keys(analyses).length} phân tích AI
-        </p>
+      {/* Ready summary + shared Copilot/Autopilot export action */}
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2">
+          <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+          <p className="text-[11px] text-amber-700 font-medium">
+            Dữ liệu mô phỏng (showcase) · {records.length} records · {Object.keys(analyses).length} phân tích AI
+          </p>
+        </div>
+        <a
+          href={`${BACKEND_URL}/api/reports/export/${encodeURIComponent(campaignId)}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+          download={`report-${campaignId}.pdf`}
+          className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-brand-700"
+          aria-label="Tải PDF đầy đủ gồm 6 báo cáo"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          Tải PDF đầy đủ (6 báo cáo)
+          <Download className="h-3.5 w-3.5" />
+        </a>
       </div>
 
       {/* Tab bar */}

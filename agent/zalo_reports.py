@@ -47,6 +47,12 @@ def report_catalog_for_model() -> list[dict]:
     ]
 
 
+def _all_reports_ready(status: dict) -> bool:
+    """The downloadable PDF is a six-report package, never a partial view."""
+    types = status.get("types") or {}
+    return all(types.get(view) == "ready" for view in REPORT_CATALOG)
+
+
 def _font(size: int, bold: bool = False):
     names = (
         [
@@ -414,6 +420,25 @@ async def get_report_bundle(*, campaign: dict, view: str, mode: str, question: s
                 "message": "Báo cáo đang được tạo. Hãy thử lại sau ít phút.",
             }
         if mode == "pdf":
+            if not _all_reports_ready(status):
+                missing = [
+                    REPORT_CATALOG[item]["label"]
+                    for item in REPORT_CATALOG
+                    if (status.get("types") or {}).get(item) != "ready"
+                ]
+                return {
+                    "ok": True,
+                    "status": "generating",
+                    "view": view,
+                    "report": REPORT_CATALOG[view],
+                    "ready": status.get("ready", 0),
+                    "total": status.get("total", len(REPORT_CATALOG)),
+                    "missing_reports": missing,
+                    "message": (
+                        "File PDF đầy đủ đang được tạo sau khi chiến dịch ra mắt. "
+                        "Mình sẽ chỉ gửi khi cả 6 báo cáo đã hoàn tất; hãy thử lại sau ít phút."
+                    ),
+                }
             pdf_response = await client.get(f"{config.BACKEND_URL}/api/reports/export/{campaign_id}/pdf")
             pdf_response.raise_for_status()
             return {

@@ -36,6 +36,23 @@ def test_report_catalog_exposes_all_six_explained_views():
     assert all(item["label"] and item["description"] for item in reports)
 
 
+def test_complete_pdf_requires_all_six_report_types_ready():
+    from zalo_reports import _all_reports_ready
+
+    ready = {
+        "types": {
+            view: "ready"
+            for view in (
+                "daily_ops", "awareness", "consideration",
+                "conversion", "retention", "executive",
+            )
+        }
+    }
+    assert _all_reports_ready(ready) is True
+    ready["types"]["executive"] = "generating"
+    assert _all_reports_ready(ready) is False
+
+
 def test_report_renderer_creates_zalo_sized_jpeg_from_existing_metrics():
     from zalo_media import ZALO_IMAGE_SAFE_BYTES, prepare_zalo_image
     from zalo_reports import render_report_images
