@@ -15,16 +15,16 @@
 </style>
 </head>
 <body>
-<div class="top-actions"><a href="/">← <span>Trang giới thiệu</span></a><a href="/agent">Vào Agent <span>→</span></a></div>
+<div class="top-actions"><a href="/">← <span>Trang giới thiệu</span></a><a href="/agent?from=docs" id="agent-entry-link">Vào Agent <span>→</span></a></div>
 <header class="hero">
   <div class="kicker">Product · Business · Technical Architecture</div>
   <h1>Advertising Agent<br/><span>AI campaign operating system</span></h1>
   <p>Một hệ thống AI quảng cáo end-to-end kết nối brief, strategy, audience, creative, media, launch, live view và reporting trong một canonical workspace — vận hành bằng Copilot trên web, Autopilot bền vững và Zalo OA.</p>
   <div class="badges"><span class="badge">React · FastAPI · Node</span><span class="badge">LangGraph orchestration</span><span class="badge">MongoDB canonical workspace</span><span class="badge">Hybrid RAG · Qdrant</span><span class="badge">VLM Creative Intelligence</span><span class="badge">Zalo Login &amp; OA</span><span class="badge">Prometheus · Grafana · Langfuse</span></div>
-  <div class="meta">Current-state build 2026-07-20.4 · Capability đã chạy được tách rõ khỏi roadmap</div>
+  <div class="meta">Current-state build 2026-07-20.6 · Capability đã chạy được tách rõ khỏi roadmap</div>
 </header>
 <main class="wrap">
-  <nav class="toc"><b>Nội dung</b><ol><li><a href="#business">Bài toán &amp; hành trình business</a></li><li><a href="#modes">Copilot và Autopilot</a></li><li><a href="#architecture">Kiến trúc hệ thống</a></li><li><a href="#workspace">Canonical workspace</a></li><li><a href="#intelligence">Audience &amp; Creative Intelligence</a></li><li><a href="#durability">Durable execution</a></li><li><a href="#zalo">Zalo identity &amp; channel</a></li><li><a href="#reports">Live view &amp; sáu báo cáo</a></li><li><a href="#security">Security &amp; observability</a></li><li><a href="#evidence">Evidence &amp; giới hạn</a></li></ol></nav>
+  <nav class="toc"><b>Nội dung</b><ol><li><a href="#business">Bài toán &amp; hành trình business</a></li><li><a href="#modes">Copilot và Autopilot</a></li><li><a href="#architecture">Kiến trúc hệ thống</a></li><li><a href="#workspace">Canonical workspace</a></li><li><a href="#intelligence">Audience &amp; Creative Intelligence</a></li><li><a href="#durability">Durable execution</a></li><li><a href="#zalo">Zalo identity &amp; channel</a></li><li><a href="#reports">Live view &amp; sáu báo cáo</a></li><li><a href="#security">Security &amp; observability</a></li></ol></nav>
 
   <h2 id="business"><span class="n">01</span>Từ business brief đến campaign có thể vận hành</h2>
   <p class="lead">Bài toán không phải “chat với AI để lấy một đoạn copy”. Đội quảng cáo phải chuyển một mục tiêu kinh doanh mơ hồ thành audience có căn cứ, creative đúng format, placement khả thi, order an toàn và báo cáo có thể giải thích — đồng thời giữ cho con người quyền sửa và quyết định launch.</p>
@@ -160,20 +160,7 @@ sequenceDiagram
     <div class="card"><h3>Release discipline</h3><p>Frontend production build, focused suites, browser matrix, tracked-secret scan, health/readiness, rollback snapshot rồi mới switch static assets.</p></div>
   </div>
 
-  <h2 id="evidence"><span class="n">10</span>Current evidence, giới hạn và roadmap trung thực</h2>
-  <div class="metrics"><div class="metric"><b>322</b><span>Agent tests ở baseline build 2026-07-20.3</span></div><div class="metric"><b>76</b><span>frontend tests ở baseline build 2026-07-20.3</span></div><div class="metric"><b>127/128</b><span>FE-5 scenarios pass; 1 blocked do thiếu email được ủy quyền</span></div><div class="metric"><b>5</b><span>server-owned production campaign references đã xác minh</span></div></div>
-  <div class="table"><table><thead><tr><th>Trạng thái</th><th>Hạng mục</th><th>Ý nghĩa</th></tr></thead><tbody>
-    <tr><td><span class="status done">CURRENT</span></td><td>Copilot creative review, Autopilot durable plan, Zalo worker/tool agent, cross-device ownership, report image/PDF</td><td>Đã có code, automated evidence và production health/acceptance ở phạm vi ghi nhận.</td></tr>
-    <tr><td><span class="status partial">LIMITATION</span></td><td>Analytical delivery data</td><td>Sáu report hiện dùng synthetic showcase data và được gắn nhãn; chưa phải live ad-delivery truth.</td></tr>
-    <tr><td><span class="status partial">LIMITATION</span></td><td>Inbound Zalo creative image</td><td>Zalo hỗ trợ live/report media outbound; nhận creative image trực tiếp để xây campaign vẫn chưa có.</td></tr>
-    <tr><td><span class="status partial">LIMITATION</span></td><td>Email acceptance REP-004</td><td>Không gửi external email vì chưa có recipient được project owner ủy quyền.</td></tr>
-    <tr><td><span class="status later">ROADMAP</span></td><td>Live analytics &amp; optimization agent</td><td>Thay synthetic delivery bằng pipeline thật, anomaly/optimization proposals có approval boundary.</td></tr>
-    <tr><td><span class="status later">ROADMAP</span></td><td>Horizontal scale &amp; SLO</td><td>Multi-worker concurrency/soak rộng hơn, error budget dashboard, provider failover và policy automation.</td></tr>
-    <tr><td><span class="status later">DEFERRED</span></td><td>Qwen reranker</td><td>Giữ tắt cho đến khi A/B chứng minh relevance/latency tốt hơn production hybrid path.</td></tr>
-  </tbody></table></div>
-  <div class="callout warn"><b>Nguyên tắc public claim:</b> “current” chỉ dùng cho capability có trong code và evidence. Khái niệm như live optimization agent, broad provider failover hoặc horizontal production SLO được giữ rõ trong roadmap, không mô tả như tính năng đang chạy.</div>
-
-  <footer>Advertising Agent · Current-state technical document · Release 2026-07-20.4 · Updated 2026-07-20</footer>
+  <footer>Advertising Agent · Current-state technical document · Release 2026-07-20.6 · Updated 2026-07-20</footer>
 </main>
 
 <div class="lightbox" id="diagram-lightbox" role="dialog" aria-modal="true" aria-label="Sơ đồ phóng to">

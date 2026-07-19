@@ -449,10 +449,10 @@ export default function AutopilotPanel({
   }, [onStatusChange, progress, run?.status, waiting?.task_id, waiting?.key, waitingMessage])
 
   return (
-    <section className="h-full w-full overflow-y-auto bg-slate-50/70 p-3 sm:p-5" aria-label="Không gian Campaign Autopilot">
+    <section data-demo="autopilot-canvas" className="h-full w-full overflow-y-auto bg-slate-50/70 p-3 sm:p-5" aria-label="Không gian Campaign Autopilot">
       {!run ? (
         <div className="mx-auto max-w-5xl space-y-4 pb-6">
-          <div className="overflow-hidden rounded-3xl border border-brand-100 bg-[radial-gradient(circle_at_top_right,_#dcebff_0,_#ffffff_48%)] p-5 shadow-sm sm:p-7">
+          <div data-demo="autopilot-intro" className="overflow-hidden rounded-3xl border border-brand-100 bg-[radial-gradient(circle_at_top_right,_#dcebff_0,_#ffffff_48%)] p-5 shadow-sm sm:p-7">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-500 text-white shadow-[0_10px_24px_rgba(0,104,255,0.24)]">
                 <Sparkles className="h-6 w-6" />
@@ -467,7 +467,7 @@ export default function AutopilotPanel({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div data-demo="autopilot-creative-source" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-3">
               <p className="text-sm font-black text-slate-900">Creative cho chiến dịch</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">Chọn cách chuẩn bị creative. Lựa chọn này độc lập với chính sách duyệt của Agent.</p>
@@ -491,7 +491,7 @@ export default function AutopilotPanel({
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div data-demo="autopilot-policy" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <div className="mb-4">
                 <p className="text-sm font-black text-slate-900">Chọn cách Agent xin duyệt</p>
                 <p className="mt-1 text-xs leading-5 text-slate-500">Có thể tạm dừng Autopilot bất cứ lúc nào; campaign này vẫn giữ nguyên mode đã chọn từ trang chủ.</p>
@@ -509,7 +509,7 @@ export default function AutopilotPanel({
               </div>
             </div>
 
-            <aside className={`rounded-2xl border p-4 shadow-sm ${briefReady ? 'border-green-200 bg-green-50/70' : 'border-amber-200 bg-amber-50/70'}`}>
+            <aside data-demo="autopilot-brief-status" className={`rounded-2xl border p-4 shadow-sm ${briefReady ? 'border-green-200 bg-green-50/70' : 'border-amber-200 bg-amber-50/70'}`}>
               <div className="flex items-center gap-2">
                 {briefReady ? <Check className="h-4 w-4 text-green-700" /> : <AlertTriangle className="h-4 w-4 text-amber-700" />}
                 <p className={`text-xs font-black uppercase tracking-wide ${briefReady ? 'text-green-800' : 'text-amber-900'}`}>
@@ -529,7 +529,7 @@ export default function AutopilotPanel({
             </aside>
           </div>
 
-          <div className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-brand-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
+          <div data-demo="autopilot-start" className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-brand-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
             <div>
               <p className="text-sm font-bold text-slate-900">Sẵn sàng để Agent lập kế hoạch?</p>
               {startBlockers.length ? (

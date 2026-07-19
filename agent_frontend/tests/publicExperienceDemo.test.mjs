@@ -2,14 +2,17 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { authReturnTo, hasAgentIntent } from '../src/lib/publicExperience.js'
-import { createDemoState, DEMO_JOURNEYS, demoTransition, REPORT_VIEWS } from '../src/demo/demoJourneys.js'
+import { AUTOPILOT_TOUR_STEPS } from '../src/demo/autopilotTour.js'
 
-const landing = readFileSync(new URL('../src/components/PublicLanding.jsx', import.meta.url), 'utf8')
-const demo = readFileSync(new URL('../src/components/ProductDemo.jsx', import.meta.url), 'utf8')
-const engine = readFileSync(new URL('../src/demo/DemoEngine.jsx', import.meta.url), 'utf8')
-const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
-const home = readFileSync(new URL('../src/components/ExperienceSelector.jsx', import.meta.url), 'utf8')
-const styles = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8')
+const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
+const landing = read('../src/components/PublicLanding.jsx')
+const engine = read('../src/demo/DemoEngine.jsx')
+const scripts = read('../src/demo/demoScripts.js')
+const app = read('../src/App.jsx')
+const home = read('../src/components/ExperienceSelector.jsx')
+const autopilot = read('../src/components/AutopilotPanel.jsx')
+const docs = read('../public/tech-docs.html')
+const styles = read('../src/index.css')
 
 test('public landing routes ordinary visitors to /agent while callbacks and deep links bypass it', () => {
   assert.equal(hasAgentIntent({ pathname: '/', search: '' }), false)
@@ -28,63 +31,59 @@ test('Zalo callback return path retains conversation and hash while removing cal
   )
 })
 
-test('landing exposes Agent, both demos and technical documentation', () => {
-  assert.match(landing, /Bắt đầu với Agent/)
-  assert.match(landing, /Xem Copilot demo/)
-  assert.match(landing, /Xem Autopilot demo/)
+test('landing uses a kinetic campaign system and opens real guided tours', () => {
+  assert.match(landing, /CampaignConstellation/)
+  assert.match(landing, /campaign-stage/)
+  assert.match(landing, /onOpenDemo\('copilot'\)/)
+  assert.match(landing, /onOpenDemo\(mode\)/)
   assert.match(landing, /\/tech-docs\.html/)
-  assert.match(landing, /Dùng ẩn danh ngay/)
+  assert.match(app, /enterAgentForDemo/)
+  assert.match(app, /startGuidedDemo/)
+  assert.doesNotMatch(app, /ProductDemo/)
 })
 
-test('agent onboarding copy distinguishes anonymous and synchronized account states', () => {
+test('agent homepage exposes unmistakable workspace CTAs and ordered guided tours', () => {
+  assert.match(home, /Mở .*workspace/)
+  assert.match(home, /min-h-14/)
+  assert.match(home, /Guided tour/)
+  assert.match(home, /Workspace entrance/)
   assert.match(home, /Bắt đầu ẩn danh — không cần đăng nhập/)
-  assert.match(home, /Đăng nhập Zalo \(tuỳ chọn\)/)
-  assert.match(home, /Lịch sử đa thiết bị/)
-  assert.match(home, /liên kết Zalo OA/)
-  assert.match(home, /email\/password|email dành cho kiểm thử|Đăng nhập Zalo/)
 })
 
-test('Copilot demo follows every review-aware stage without campaign side effects', () => {
-  const ids = DEMO_JOURNEYS.copilot.steps.map(step => step.id)
-  assert.deepEqual(ids, [
-    'copilot-request', 'copilot-brief', 'copilot-audience', 'copilot-creative-review',
-    'copilot-setup', 'copilot-launch', 'copilot-result', 'copilot-reports',
+test('Copilot demo is restored as a spotlight tour over the real interface', () => {
+  assert.match(engine, /DemoOverlay/)
+  assert.match(engine, /STAGE1_STEPS/)
+  assert.match(engine, /buildStage2Steps/)
+  assert.match(engine, /data-demo="chat-pane"/)
+  assert.match(scripts, /Brief → Audience → Creative → Setup → Launch review/)
+  assert.doesNotMatch(scripts, /type: 'CLICK_EL', target: '#create-campaign-btn'/)
+})
+
+test('Autopilot guided tour maps every entry decision to the actual canvas', () => {
+  assert.deepEqual(AUTOPILOT_TOUR_STEPS.map(step => step.target), [
+    '[data-demo="autopilot-canvas"]',
+    '[data-demo="autopilot-intro"]',
+    '[data-demo="autopilot-creative-source"]',
+    '[data-demo="autopilot-policy"]',
+    '[data-demo="autopilot-brief-status"]',
+    '[data-demo="chat-pane"]',
+    '[data-demo="autopilot-start"]',
   ])
-  assert.match(DEMO_JOURNEYS.copilot.steps[3].eyebrow, /Review bắt buộc/)
-  assert.match(DEMO_JOURNEYS.copilot.steps[5].description, /không gọi endpoint tạo order/)
-})
-
-test('Autopilot demo follows its durable state machine and includes all six reports', () => {
-  const ids = DEMO_JOURNEYS.autopilot.steps.map(step => step.id)
-  for (const id of ['autopilot-policy', 'autopilot-strategy', 'autopilot-audience', 'autopilot-creative', 'autopilot-placement', 'autopilot-review', 'autopilot-launch', 'autopilot-timeline', 'autopilot-reports', 'autopilot-zalo']) {
-    assert.ok(ids.includes(id), `${id} is missing`)
+  for (const target of ['autopilot-canvas', 'autopilot-intro', 'autopilot-creative-source', 'autopilot-policy', 'autopilot-brief-status', 'autopilot-start']) {
+    assert.match(autopilot, new RegExp(`data-demo="${target}"`))
   }
-  assert.equal(REPORT_VIEWS.length, 6)
-  assert.deepEqual(DEMO_JOURNEYS.autopilot.steps.find(step => step.id === 'autopilot-reports').reports, REPORT_VIEWS)
 })
 
-test('demo reducer supports pause, skip, restart and bounded transitions', () => {
-  let state = createDemoState('copilot')
-  state = demoTransition(state, { type: 'TOGGLE_PAUSE' })
-  assert.equal(state.paused, true)
-  state = demoTransition(state, { type: 'SKIP' })
-  assert.equal(state.completed, true)
-  assert.equal(state.index, DEMO_JOURNEYS.copilot.steps.length - 1)
-  state = demoTransition(state, { type: 'RESTART' })
-  assert.deepEqual(state, createDemoState('copilot'))
-  state = demoTransition(state, { type: 'PREVIOUS' })
-  assert.equal(state.index, 0)
-})
-
-test('all demo surfaces remain deterministic and never invoke campaign APIs', () => {
-  assert.match(demo, /data-demo-sandbox="true"/)
-  assert.match(engine, /deterministic sandbox/)
-  assert.doesNotMatch(`${demo}\n${engine}`, /AgentAPI|createCampaign|create-campaign-btn|onSendMessage\(|onApprove\(|fetch\(/)
+test('technical document removes part 10 and forces a reliable Agent navigation', () => {
+  assert.doesNotMatch(docs, /id="evidence"/)
+  assert.doesNotMatch(docs, /<span class="n">10<\/span>/)
+  assert.match(docs, /href="\/agent\?from=docs" id="agent-entry-link"/)
+  assert.doesNotMatch(docs, /agent-entry-link.*preventDefault|window\.location\.assign/)
 })
 
 test('public experience is responsive and honors reduced motion', () => {
-  assert.match(landing, /sm:text-7xl/)
-  assert.match(demo, /sm:grid-cols-\[150px_1fr\]/)
+  assert.match(styles, /@media \(max-width: 700px\)/)
   assert.match(styles, /prefers-reduced-motion: reduce/)
+  assert.match(styles, /campaign-stage \*/)
   assert.match(styles, /animation: none !important/)
 })

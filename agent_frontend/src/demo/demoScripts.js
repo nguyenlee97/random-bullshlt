@@ -157,7 +157,6 @@ export function pickRandomBrief() {
   _lastBriefId = pick.id
   return pick
 }
-
 // ─── Pre-generated creative format metadata ──────────────────────────────────
 // These formats are injected automatically after the Box AI generation step.
 // Images are served from /public/demo-creatives/{briefId}/{formatId}.png
@@ -853,48 +852,12 @@ export function buildStage2Steps(brief) {
       title: '✅ Xác nhận & Tạo Chiến Dịch',
       text: 'Workspace tóm tắt đầy đủ: Brief, Audience, Zones với creative đã gắn, budget phân bổ và est. impressions.\n\nKiểm tra lại rồi nhấn **Tiếp theo** để xác nhận và tạo chiến dịch thật trên hệ thống!',
     },
-    { type: 'CLICK_EL', target: '#create-campaign-btn', delay: 400 },
-    {
-      type: 'WAIT_FOR_SELECTOR',
-      target: '[data-demo="result-hero"]',
-      timeout: 90000,
-      title: '⏳ Đang tạo chiến dịch...',
-      text: 'Hệ thống đang gửi order đến nền tảng quảng cáo và tạo chiến dịch thật. Vui lòng chờ...',
-    },
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '[data-demo="result-hero"]',
-      position: 'bottom',
-      title: '🎉 Chiến dịch đã được tạo!',
-      text: 'Chiến dịch đã chạy thành công trên **nền tảng quảng cáo**. Bước Kết quả tổng hợp thông tin về chiến dịch vừa tạo — từ zones, creative, budget đến các chỉ số dự kiến.',
-    },
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '[data-demo="quick-links-card"]',
-      position: 'top',
-      title: '🔗 Liên Kết Nhanh',
-      text: '**Trình quản lý quảng cáo**: Mở trực tiếp trang quản lý chiến dịch để kiểm tra, pause hoặc chỉnh sửa.\n\n**Test Site**: Mở trang web thực tế chứa ad zone để xác nhận quảng cáo đang hiển thị đúng vị trí.',
-    },
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '[data-demo="ad-live-card"]',
-      position: 'top',
-      title: '📸 Ảnh Chụp Ad Live',
-      text: 'Khi chiến dịch đang **live**, hệ thống triển khai một **sub-agent** tự động điều hướng đến trang web, chụp ảnh màn hình và cắt chính xác từng ad zone.\n\nKết quả trả về ảnh crop của từng zone kèm toàn cảnh trang có đánh dấu — xác nhận quảng cáo đang chạy đúng vị trí và đúng creative.',
-    },
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '[data-demo="kpi-grid"]',
-      position: 'top',
-      title: '📊 Chỉ Số Dự Kiến',
-      text: 'Dựa trên dữ liệu lịch sử của từng zone, hệ thống ước tính:\n- **Impressions**: tổng lượt hiển thị\n- **Avg CTR**: tỷ lệ nhấp trung bình\n- **Avg Viewability**: % quảng cáo thực sự được nhìn thấy\n\nCác con số giúp đánh giá hiệu quả dự kiến ngay sau khi chiến dịch được tạo.',
-    },
     {
       type: 'POPUP',
-      title: '🎉 Demo hoàn thành!',
-      text: 'Bạn đã trải nghiệm toàn bộ luồng:\n**Brief → Audience → Creative → Setup → Kết quả**\n\nAgent đã tự động:\n- ✅ Phân tích brief và điền workspace\n- ✅ Gợi ý DMP audience segments\n- ✅ Sinh ảnh AI và thêm creative pool\n- ✅ Đề xuất ad zones không xung đột\n- ✅ Gắn creative phù hợp và tạo chiến dịch\n- ✅ Hiển thị kết quả và liên kết live\n\nTừ đây, bạn có thể tự khám phá bước **Report** và **Email**!',
+      title: 'Walkthrough hoàn tất tại launch gate',
+      text: 'Bạn đã đi qua **Brief → Audience → Creative → Setup → Launch review** trên workspace thật.\n\nTour chủ động dừng trước hành động tạo order. Hãy tự kiểm tra bản tóm tắt và chỉ launch khi bạn thực sự muốn.',
       buttons: [
-        { label: '🚀 Tiếp tục tự khám phá', variant: 'primary', action: 'skip' },
+        { label: 'Tiếp tục tự khám phá', variant: 'primary', action: 'skip' },
       ],
     },
   ]

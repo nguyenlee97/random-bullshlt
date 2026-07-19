@@ -1,0 +1,51 @@
+export const AUTOPILOT_TOUR_STEPS = [
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-canvas"]',
+    position: 'left',
+    title: 'Campaign Autopilot',
+    text: 'Đây là **không gian thực của Autopilot** — nơi một brief được chuyển thành kế hoạch có thứ tự, bằng chứng và các điểm review. Tour chỉ hướng dẫn giao diện, không khởi chạy run hay tạo order.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-intro"]',
+    position: 'bottom',
+    title: 'Một run, một campaign truth',
+    text: 'Autopilot dùng cùng canonical workspace với Copilot. Chat, brief, audience, creative, placement và report không bị tách thành những bản sao khác nhau.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-creative-source"]',
+    position: 'bottom',
+    title: 'Chọn nguồn creative',
+    text: 'Bạn quyết định tải creative có sẵn hoặc để Agent tạo asset theo format. Creative Intelligence vẫn kiểm tra kích thước, khả năng hiển thị và rủi ro trước launch.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-policy"]',
+    position: 'bottom',
+    title: 'Đặt mức kiểm soát',
+    text: 'Ba chính sách review cho phép bạn chọn giữa tự động tối đa, chỉ dừng ở điểm quan trọng hoặc duyệt từng giai đoạn. **Launch luôn là quyết định có kiểm soát.**',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-brief-status"]',
+    position: 'left',
+    title: 'Brief là điều kiện khởi chạy',
+    text: 'Agent chỉ lập plan khi brief đã đủ brand, ngân sách và thời gian. Nếu dữ liệu còn thiếu hoặc đang chờ duyệt, khu vực này chỉ rõ việc cần làm trước.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="chat-pane"]',
+    position: 'right',
+    title: 'Chat vẫn luôn ở bên cạnh',
+    text: 'Bạn có thể nhờ Agent làm rõ brief, giải thích một quyết định hoặc mở đúng artifact cần chỉnh. Trên điện thoại, tour tự chuyển giữa tab Chat và Autopilot.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-start"]',
+    position: 'top',
+    title: 'Bắt đầu khi bạn sẵn sàng',
+    text: 'Nút này tạo durable run gồm các tác vụ có lease, retry và idempotency. Tour dừng tại đây để **không khởi chạy run hoặc tạo order thay bạn**.',
+  },
+]

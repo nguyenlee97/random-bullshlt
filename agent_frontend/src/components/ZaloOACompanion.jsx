@@ -18,11 +18,11 @@ export default function ZaloOACompanion({ identity, onOpenZaloOA }) {
     <aside
       data-testid="zalo-oa-companion"
       aria-labelledby="zalo-oa-companion-title"
-      className="relative mt-6 overflow-hidden rounded-3xl border border-[#b8d7ff] bg-gradient-to-br from-white via-[#f3f8ff] to-[#e7f1ff] p-4 shadow-[0_14px_40px_rgba(0,104,255,0.12)] sm:p-5 min-[1680px]:fixed min-[1680px]:bottom-6 min-[1680px]:right-6 min-[1680px]:z-40 min-[1680px]:mt-0 min-[1680px]:w-[296px] min-[1680px]:p-4"
+      className="relative overflow-hidden rounded-3xl border border-[#b8d7ff] bg-gradient-to-br from-white via-[#f3f8ff] to-[#e7f1ff] p-4 shadow-[0_14px_40px_rgba(0,104,255,0.12)] sm:p-5 lg:sticky lg:top-6"
     >
       <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-[#0068ff]/10 blur-2xl" />
 
-      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center min-[1680px]:block">
+      <div className="relative flex flex-col gap-5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#0068ff] shadow-[0_10px_24px_rgba(0,104,255,0.25)]">
@@ -73,12 +73,12 @@ export default function ZaloOACompanion({ identity, onOpenZaloOA }) {
           target="_blank"
           rel="noreferrer"
           aria-label="Mở Zalo OA bằng mã QR"
-          className="mx-auto flex w-fit shrink-0 flex-col items-center rounded-2xl border border-blue-100 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-200 sm:mx-0 min-[1680px]:mt-4 min-[1680px]:w-full"
+          className="mx-auto flex w-full shrink-0 flex-col items-center rounded-2xl border border-blue-100 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-200"
         >
           <img
             src="/zalo-oa-qr.jpg"
             alt="Mã QR theo dõi Zalo OA của Advertising Agent"
-            className="h-28 w-28 rounded-xl object-cover min-[1680px]:h-32 min-[1680px]:w-32"
+            className="h-32 w-32 rounded-xl object-cover"
           />
           <span className="mt-2 text-center text-[11px] font-bold text-slate-700">Quét mã để theo dõi OA</span>
         </a>

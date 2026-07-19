@@ -11,7 +11,6 @@ import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
 import ExperienceSelector from '@/components/ExperienceSelector'
 import PublicLanding from '@/components/PublicLanding'
-import ProductDemo from '@/components/ProductDemo'
 import AutopilotPanel from '@/components/AutopilotPanel'
 import { AgentAPI, getSetupEntry } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
@@ -125,7 +124,8 @@ function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew, experienc
 export default function App() {
   const account = useIdentity()
   const [showPublicLanding, setShowPublicLanding] = useState(() => !hasAgentIntent(window.location))
-  const [publicDemoMode, setPublicDemoMode] = useState(null)
+  const [pendingDemoMode, setPendingDemoMode] = useState('')
+  const [autoStartDemoMode, setAutoStartDemoMode] = useState('')
   const [experienceMode, setExperienceMode] = useState(null)
   const [modeSelectionBusy, setModeSelectionBusy] = useState(false)
   const [modeSelectionError, setModeSelectionError] = useState('')
@@ -196,6 +196,11 @@ export default function App() {
     window.history.pushState({}, '', nextUrl)
     setShowPublicLanding(false)
   }, [])
+
+  const enterAgentForDemo = useCallback((mode) => {
+    setPendingDemoMode(mode === 'autopilot' ? 'autopilot' : 'copilot')
+    enterAgent()
+  }, [enterAgent])
 
   const returnToPublicLanding = useCallback(() => {
     window.history.pushState({}, '', '/')
@@ -1185,6 +1190,21 @@ export default function App() {
     }
   }, [applyConversationContext, hydrateCanonicalWorkspace, newChat])
 
+  const startGuidedDemo = useCallback(async (requestedMode) => {
+    const demoMode = requestedMode === 'autopilot' ? 'autopilot' : 'copilot'
+    setAutoStartDemoMode(demoMode === 'copilot' ? 'copilot-tour' : 'autopilot')
+    const started = await startCampaign(demoMode === 'autopilot' ? 'autopilot' : 'guided')
+    if (!started) setAutoStartDemoMode('')
+    return started
+  }, [startCampaign])
+
+  useEffect(() => {
+    if (!pendingDemoMode || showPublicLanding || !identityReady || identityError || experienceMode || modeSelectionBusy) return
+    const mode = pendingDemoMode
+    setPendingDemoMode('')
+    startGuidedDemo(mode)
+  }, [experienceMode, identityError, identityReady, modeSelectionBusy, pendingDemoMode, showPublicLanding, startGuidedDemo])
+
   const openConversationHistory = useCallback(async () => {
     setHistoryOpen(true)
     setHistoryLoading(true)
@@ -1628,12 +1648,7 @@ export default function App() {
     : null
 
   if (showPublicLanding) {
-    return (
-      <>
-        <PublicLanding onEnterAgent={enterAgent} onOpenDemo={setPublicDemoMode} />
-        {publicDemoMode && <ProductDemo mode={publicDemoMode} onClose={() => setPublicDemoMode(null)} />}
-      </>
-    )
+    return <PublicLanding onEnterAgent={enterAgent} onOpenDemo={enterAgentForDemo} />
   }
 
   if (!identityReady) {
@@ -1680,10 +1695,9 @@ export default function App() {
           onLinkZalo={linkZaloLogin}
           onOpenZaloOA={() => setZaloLinkDialogOpen(true)}
           onUnlinkZaloOA={unlinkZaloChannel}
-          onOpenDemo={setPublicDemoMode}
+          onOpenDemo={startGuidedDemo}
           onBackToLanding={returnToPublicLanding}
         />
-        {publicDemoMode && <ProductDemo mode={publicDemoMode} onClose={() => setPublicDemoMode(null)} />}
         <DeleteConversationDialog target={deleteTarget} busy={deleteBusy} error={deleteError}
           onCancel={closeDeleteDialog} onConfirm={confirmDeleteConversations} />
         <AuthDialog open={authDialogOpen} busy={account.busy} error={account.error}
@@ -1706,13 +1720,17 @@ export default function App() {
       onRequestTab={setActiveTab}
       activeTab={activeTab}
       onActiveChange={(active) => { isDemoActiveRef.current = active }}
+      experienceMode={experienceMode}
+      autoStart={autoStartDemoMode}
+      onAutoStartConsumed={() => setAutoStartDemoMode('')}
     >
     <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-brand-50/30 pb-[env(safe-area-inset-bottom)] md:pb-0">
       <TopBar
         onReset={handleReset}
         onNewChat={handleNewChat}
         onOpenHistory={openConversationHistory}
-        showDemo={!hasUserStarted}
+        showDemo
+        experienceMode={experienceMode}
         identity={account.identity}
         identityBusy={account.busy}
         onLogin={openAuthDialog}

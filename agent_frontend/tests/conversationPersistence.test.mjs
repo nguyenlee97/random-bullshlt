@@ -31,7 +31,8 @@ test('campaign resume hydrates transcript, workspace, pending proposals and auto
 test('fresh loads stay on the homepage until a campaign is explicitly opened', () => {
   assert.match(app, /initializeIdentity\(\{ restoreCurrent: false \}\)/)
   assert.match(app, /setConversationHistory\(await AgentAPI\.listConversations\(\)\)/)
-  assert.match(homepage, /Biến ý tưởng thành campaign tạo khác biệt/)
+  assert.match(homepage, /Bạn muốn Agent/)
+  assert.match(homepage, /đồng hành thế nào/)
   assert.match(homepage, /Tiếp nối những campaign đang viết dở/)
   assert.match(homepage, /Campaign Copilot/)
   assert.doesNotMatch(homepage, /Quy trình từng bước/)

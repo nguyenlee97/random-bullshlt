@@ -4,7 +4,7 @@ import { useDemo } from '@/demo/DemoEngine'
 import AccountMenu from '@/components/AccountMenu'
 
 export default function TopBar({
-  onReset, onNewChat, onOpenHistory, showDemo,
+  onReset, onNewChat, onOpenHistory, showDemo, experienceMode,
   identity, identityBusy, onLogin, onLogout, onLoadSessions, onRevokeSession,
   onLinkZalo, onOpenZaloOA, onUnlinkZaloOA,
 }) {
@@ -56,18 +56,18 @@ export default function TopBar({
           <span className="hidden sm:inline">Docs</span>
         </Button>
 
-        {/* Demo button — available on all viewports, hidden once user starts interacting */}
+        {/* Guided tour stays discoverable after workspace entry. */}
         {showDemo && demo && (
           <Button
             variant="outline"
             size="sm"
-            onClick={demo.startDemo}
+            onClick={() => demo.startDemo(experienceMode === 'autopilot' ? 'autopilot' : 'copilot')}
             className="flex gap-1.5 text-xs h-8 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 animate-pulse hover:animate-none"
             id="demo-btn"
-            aria-label="Bắt đầu demo hướng dẫn"
+            aria-label="Bắt đầu guided tour"
           >
             <Play className="w-3.5 h-3.5" />
-            Demo
+            Tour
           </Button>
         )}
 

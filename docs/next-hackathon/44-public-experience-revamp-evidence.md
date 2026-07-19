@@ -2,77 +2,80 @@
 
 Date: 2026-07-20
 Starting commit: `b6da5e4d4fd58107f39a6ca12ddddcc529d33bcd`
-Production build: `2026-07-20.4`
+Correction follows: `3d63e35`
+Production build: `2026-07-20.6`
 
 ## Delivered behavior
 
-- `/` is a public, animated, reduced-motion-safe product landing page.
-- `/agent` is the durable Agent entry. Zalo callbacks and `?conversation=` deep
-  links bypass the landing and preserve their return intent.
-- The Agent homepage uses progressive disclosure: anonymous use is explicit;
-  Zalo login is optional and primary; local email/password stays inside the
-  existing testing fallback.
-- Copilot and Autopilot have separate deterministic product demos with pause,
-  resume, previous, next, skip, restart and exit controls.
-- Both demos use local fixtures only. The legacy controller no longer sends
-  chat, edits the real workspace or clicks the real order action.
-- The served technical document now covers current business flow, canonical
-  artifacts, hybrid RAG, Creative Intelligence, durable workers, identity,
-  Zalo OA, live view, six reports/PDF, security, recovery, observability,
-  deployment, limitations and roadmap.
-- Mermaid diagrams retain a fullscreen zoom/lightbox; tables scroll within the
-  document rather than widening the mobile viewport.
+- `/` is now a high-motion, reduced-motion-safe campaign landing page built
+  around one animated campaign constellation: Agent core, audience, creative,
+  placement, reporting, Zalo-style conversation and campaign artwork.
+- `/agent` is a durable SPA entry, including hard navigation and refresh. An
+  exact Nginx route keeps it separate from the slash-terminated `/agent/` API
+  proxy.
+- The Agent homepage now has a contained visual hierarchy: introduction and
+  identity, a named workspace entrance, two ordered mode cards, large primary
+  workspace CTAs, secondary guided-tour actions, then campaign history and the
+  Zalo companion.
+- The temporary slideshow demos were removed. Copilot once again uses the
+  original spotlight guide over the real Chat and Workspace UI; Autopilot has
+  a matching real-interface tour over its actual input canvas.
+- The Copilot interactive walkthrough still exercises the real workflow, but
+  it deliberately stops at launch review. No guided flow clicks the real order
+  action.
+- The served technical document has nine sections. Part 10, its limitations
+  table and roadmap material were removed.
+- The document's “Vào Agent” link now reaches
+  `/agent?from=docs`. The source Nginx config and VPS both serve `/agent` as
+  the SPA instead of redirecting it into the API root.
+- Mermaid diagrams retain fullscreen zoom/lightbox behavior; tables remain
+  contained on mobile.
 
 ## Automated verification
 
-- Frontend: **85 passed**, 0 failed.
-- Agent: **322 passed**, 0 failed, with the two existing dependency warnings.
+- Frontend: **84 passed**, 0 failed.
 - Frontend production build: Vite 6.4.3, **2,586 modules transformed**.
-- Focused route/demo tests cover callback/deep-link intent, anonymous/account
-  copy, both state machines, no external campaign side effects and reduced
-  motion.
+- Focused acceptance covers the kinetic landing, clear workspace entrances,
+  real Copilot spotlight targets, all Autopilot tour targets, launch safety,
+  document section removal, direct Agent navigation, exact Nginx routing,
+  responsive layout and reduced motion.
+- The Agent behavior suite previously passed **322 tests** for the `.4`
+  release. This correction changes no Agent business logic; only version
+  metadata and the frontend/Nginx boundary changed.
 
-## Browser acceptance before deployment
+## Production browser acceptance
 
-- Desktop landing at 1280×720: zero horizontal overflow; primary Agent, both
-  demo and documentation actions are reachable.
-- Mobile landing at 390×844: zero horizontal overflow; all actions stack and
-  remain reachable.
-- Copilot demo completed **8/8** stages.
-- Autopilot demo completed **12/12** stages and ended at Zalo/web continuity.
-- The demo DOM contained `data-demo-sandbox=true` and no
-  `#create-campaign-btn`.
-- Technical document: four Mermaid diagrams rendered; three table containers,
-  zoom lightbox and `/` plus `/agent` navigation present. At 390×844 the page
-  had zero document overflow, one-column contents navigation and contained
-  table scrolling.
+- Desktop landing at 1280×720 shows the editorial hero and animated campaign
+  constellation without widening the document viewport.
+- The signed-in homepage shows one ordered launchpad with prominent
+  “Mở Copilot workspace” and “Mở Autopilot workspace” CTAs plus two secondary
+  guided-tour actions.
+- An existing Copilot campaign opened without creating new campaign data. The
+  top-bar Tour opened its mode chooser, launched `Demo Guide` over the real
+  interface and advanced from step 1/10 to 2/10.
+- The technical document exposes nine TOC entries and no section 10. A real
+  browser click on “Vào Agent” navigated to `/agent?from=docs`, where the
+  homepage heading and Copilot workspace CTA were present.
+- Mobile acceptance at 390×844 confirms the landing CTAs stack cleanly and the
+  homepage preserves its introduction → identity → workspace entrance order.
+- The signed-in session, Zalo linkage and existing five campaign-history
+  entries were preserved. No campaign was launched or deleted for acceptance.
 
 ## Production deployment and rollback
 
-- Production switched successfully to build **2026-07-20.4** on
-  `agent.pawgrammers.io.vn`.
-- `/`, `/tech-docs.html`, `/agent/health` and `/agent/ready` all returned
-  HTTP 200 after cutover. Health reported `2026-07-20.4`; readiness reported
-  Mongo, backend, creative worker, Autopilot worker, Zalo worker and Zalo
-  OpenAI checks healthy.
-- Signed-in browser acceptance preserved the account identity, Zalo linkage
-  and all five existing campaign-history entries at `/agent`.
-- The live Copilot and Autopilot sandboxes reached **8/8** and **12/12**
-  respectively with `data-demo-sandbox=true`.
-- Live mobile acceptance at 390x844 measured `scrollWidth=390` on the landing;
-  every primary CTA remained reachable. The technical document rendered four
-  Mermaid SVGs and three horizontally scrollable tables without document
-  overflow, and its diagram lightbox opened successfully.
-- A clean, cookie-free auth probe returned an unauthenticated identity with
-  Zalo login available, while the source-level acceptance suite verifies the
-  anonymous-first copy and entry flow. The signed-in browser session was not
-  logged out or mutated merely to manufacture a second screenshot.
-- Recoverable frontend backup:
-  `/var/backups/advertising-agent/20260719T192045Z-public-experience/frontend`.
-- Immediate previous frontend:
-  `/var/www/agent-prev-20260720-4`.
-- Previous API version file:
-  `/var/backups/advertising-agent/20260719T192045Z-public-experience/version.py`.
+- Production is live at **2026-07-20.6** on
+  `https://agent.pawgrammers.io.vn/`.
+- `/`, `/agent`, `/tech-docs.html`, `/agent/health` and `/agent/ready` return
+  HTTP 200. Health reports `.6`; readiness reports Mongo, backend, creative
+  worker, Autopilot worker, Zalo worker and Zalo OpenAI healthy.
+- Baseline rollback before the guided-tour release:
+  `/var/backups/advertising-agent/20260719T201216Z-guided-tours`.
+- Rollback immediately before `.6`, including the prior frontend, version file
+  and Nginx config:
+  `/var/backups/advertising-agent/20260719T202257Z-docs-navigation`.
+- Immediate previous frontends remain recoverable at
+  `/var/www/agent-prev-20260720-5` and
+  `/var/www/agent-prev-20260720-6`.
 
 ## Current limitations preserved in public wording
 

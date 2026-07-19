@@ -54,8 +54,8 @@ export default function ExperienceSelector({
   onOpenDemo, onBackToLanding,
 }) {
   return (
-    <main className="h-screen h-[100dvh] overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top_left,_#dcebff_0,_#f4f7fb_38%,_#eef4fb_100%)] px-5 py-8 sm:px-8 sm:py-12">
-      <div className="mx-auto max-w-5xl">
+    <main className="h-screen h-[100dvh] overflow-y-auto overscroll-contain bg-[#eef4fb] px-4 py-5 sm:px-8 sm:py-8">
+      <div className="mx-auto max-w-6xl rounded-[28px] border border-white/80 bg-white/60 p-4 shadow-[0_30px_100px_rgba(22,70,130,0.10)] backdrop-blur-xl sm:p-7 lg:p-9">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-500 shadow-[0_12px_30px_rgba(0,104,255,0.28)]">
@@ -76,19 +76,22 @@ export default function ExperienceSelector({
           </div>
         </div>
 
-        <section className="pt-12 sm:pt-16" aria-labelledby="home-title">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white/80 px-3 py-1 text-xs font-semibold text-brand-700 shadow-sm">
-            <Zap className="h-3.5 w-3.5 text-orange-500" />
-            Một brief. Một AI. Trọn hành trình campaign.
-          </span>
-          <h1 id="home-title" className="mt-4 max-w-3xl text-3xl font-black tracking-tight text-slate-900 sm:text-5xl">
-            Biến ý tưởng thành campaign tạo khác biệt
-          </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-            Chọn cách bạn muốn làm việc. Copilot để cùng AI quyết định từng chặng; Autopilot để giao mục tiêu và giám sát một kế hoạch tự thực thi có review gate.
-          </p>
+        <section className="pt-10" aria-labelledby="home-title">
+          <div className="grid items-end gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(310px,.8fr)]">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+                <Zap className="h-3.5 w-3.5 text-orange-500" />
+                Một brief. Một AI. Trọn hành trình campaign.
+              </span>
+              <h1 id="home-title" className="mt-4 max-w-3xl text-3xl font-black tracking-[-0.045em] text-slate-950 sm:text-5xl">
+                Bạn muốn Agent<br className="hidden sm:block" /> đồng hành thế nào?
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+                Chọn một workspace để bắt đầu. Mỗi campaign giữ nguyên chat, dữ liệu và lịch sử dù bạn làm việc theo Copilot hay Autopilot.
+              </p>
+            </div>
 
-          <div className={`mt-7 flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${identity?.authenticated ? 'border-emerald-200 bg-emerald-50/80' : 'border-brand-200 bg-white/80'}`} data-testid="identity-onboarding-card">
+          <div className={`flex flex-col gap-4 rounded-2xl border p-4 ${identity?.authenticated ? 'border-emerald-200 bg-emerald-50/80' : 'border-brand-200 bg-brand-50/70'}`} data-testid="identity-onboarding-card">
             <div className="flex items-start gap-3">
               <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${identity?.authenticated ? 'bg-emerald-100 text-emerald-700' : 'bg-brand-50 text-brand-700'}`}>
                 {identity?.authenticated ? <ShieldCheck className="h-5 w-5" /> : <Zap className="h-5 w-5" />}
@@ -108,20 +111,26 @@ export default function ExperienceSelector({
               </button>
             )}
           </div>
+          </div>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
+          <div className="mt-10 flex items-end justify-between gap-4 border-t border-slate-200 pt-7">
+            <div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-brand-600">Workspace entrance</p><h2 className="mt-1 text-xl font-black text-slate-900">Chọn chế độ để mở campaign</h2></div>
+            <p className="hidden max-w-sm text-right text-xs leading-5 text-slate-500 md:block">Guided tour sẽ hướng dẫn trực tiếp trên giao diện thật và dừng trước mọi hành động launch.</p>
+          </div>
+
+          <div className="mt-5 grid gap-5 md:grid-cols-2">
             {modes.map(mode => {
               const Icon = mode.icon
               return (
                 <article
                   key={mode.id}
-                  className="group flex min-h-[330px] flex-col rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-[0_12px_40px_rgba(28,62,104,0.08)] transition-all hover:-translate-y-1 hover:border-brand-300 hover:shadow-[0_20px_50px_rgba(0,104,255,0.16)] motion-reduce:transform-none"
+                  className="group flex min-h-[390px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-[0_14px_40px_rgba(28,62,104,0.08)] transition-all hover:-translate-y-1 hover:border-brand-300 hover:shadow-[0_24px_60px_rgba(0,104,255,0.16)] motion-reduce:transform-none"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-500 group-hover:text-white">
                       <Icon className="h-6 w-6" />
                     </div>
-                    <ArrowRight className="h-5 w-5 text-slate-300 transition-transform group-hover:translate-x-1 group-hover:text-brand-500" />
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{mode.id === 'guided' ? 'Human-led' : 'Goal-led'}</span>
                   </div>
                   <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-brand-600">{mode.eyebrow}</p>
                   <h2 className="mt-2 text-2xl font-extrabold text-slate-900">{mode.title}</h2>
@@ -136,12 +145,12 @@ export default function ExperienceSelector({
                       </li>
                     ))}
                   </ul>
-                  <div className="mt-auto flex gap-2 pt-6">
-                    <button type="button" disabled={busy} onClick={() => onSelect(mode.id)} aria-label={`Bắt đầu ${mode.title}: ${mode.description}`} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-500 px-4 py-3 text-xs font-black text-white hover:bg-brand-600 disabled:cursor-wait disabled:opacity-60">
-                      Bắt đầu {mode.id === 'guided' ? 'với Copilot' : 'Autopilot'} <ArrowRight className="h-4 w-4" />
+                  <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <button type="button" disabled={busy} onClick={() => onSelect(mode.id)} aria-label={`Bắt đầu ${mode.title}: ${mode.description}`} className="inline-flex min-h-14 items-center justify-between gap-3 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,104,255,0.22)] hover:bg-brand-600 disabled:cursor-wait disabled:opacity-60">
+                      <span className="text-left">Mở {mode.id === 'guided' ? 'Copilot workspace' : 'Autopilot workspace'}</span><ArrowRight className="h-5 w-5 shrink-0" />
                     </button>
-                    <button type="button" onClick={() => onOpenDemo(mode.id === 'guided' ? 'copilot' : 'autopilot')} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-3 text-xs font-black text-slate-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700" aria-label={`Xem demo ${mode.title}`}>
-                      <Play className="h-4 w-4" /> Demo
+                    <button type="button" onClick={() => onOpenDemo(mode.id === 'guided' ? 'copilot' : 'autopilot')} className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700" aria-label={`Xem demo ${mode.title}`}>
+                      <Play className="h-4 w-4" /> Guided tour
                     </button>
                   </div>
                 </article>
@@ -149,10 +158,10 @@ export default function ExperienceSelector({
             })}
           </div>
           {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-          <ZaloOACompanion identity={identity} onOpenZaloOA={onOpenZaloOA} />
         </section>
 
-        <section className="mt-14 border-t border-slate-200/80 pt-8 pb-8" aria-labelledby="campaign-history-title">
+        <div className="mt-12 grid items-start gap-6 border-t border-slate-200/80 pt-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="pb-8" aria-labelledby="campaign-history-title">
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-brand-600"><History className="h-4 w-4" /> Hành trình của bạn</p>
@@ -231,6 +240,8 @@ export default function ExperienceSelector({
             </div>
           )}
         </section>
+        <ZaloOACompanion identity={identity} onOpenZaloOA={onOpenZaloOA} />
+        </div>
 
         <p className="mx-auto max-w-2xl pb-8 text-center text-[11px] leading-5 text-slate-500">
           Nội dung campaign được dịch vụ AI xử lý để lập kế hoạch và thực thi. Không nhập dữ liệu cá nhân hoặc bí mật không cần thiết.
