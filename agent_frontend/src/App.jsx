@@ -27,6 +27,7 @@ import {
 } from '@/lib/campaignOutcome'
 import {
   deriveStepStatuses,
+  deriveResumeStep,
   firstRecomputeStep,
   isStepReachable,
   workspacePatchTarget,
@@ -968,9 +969,26 @@ export default function App() {
     // first preference write, so it must not override the conversation here.
     const mode = context.experience_mode || context.workspace?.experience_mode || null
     if (mode === 'guided') {
-      const restoredStatuses = deriveStepStatuses(STEPS.map(() => 'pending'), context.workspace)
-      const firstIncomplete = restoredStatuses.findIndex(status => status !== 'done')
-      setCurrentStep(firstIncomplete < 0 ? STEPS.length - 1 : firstIncomplete)
+      const progress = context.workflow_progress || {}
+      const restoredStatuses = deriveStepStatuses(
+        STEPS.map(() => 'pending'),
+        context.workspace,
+        progress,
+      )
+      setStepStatuses(restoredStatuses)
+      setCurrentStep(deriveResumeStep(restoredStatuses, progress))
+      if (progress.report_campaign_id) {
+        setFormState(prev => ({
+          ...prev,
+          report: {
+            ...prev.report,
+            campaignId: progress.report_campaign_id,
+          },
+        }))
+      }
+      reportEntryFiredRef.current = progress.report_started
+        ? (progress.report_campaign_id || context.conversation_id)
+        : false
     }
     setExperienceMode(mode)
     setActiveTab(mode === 'autopilot' ? 'autopilot' : mode === 'guided' ? 'workspace' : 'chat')

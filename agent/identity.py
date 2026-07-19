@@ -347,11 +347,39 @@ async def get_conversation(actor: dict | str, conversation_id: str) -> dict:
         raise KeyError("conversation not found")
 
     from autopilot.service import get_latest_run
-    from session import get_display_history
+    from session import get_display_history, get_or_create_session
     from workspace.service import get_workspace, list_pending_proposals
 
     session_id = doc["session_id"]
     workspace = await get_workspace(session_id)
+    session = await get_or_create_session(session_id)
+    form_state = session.get("form_state") or {}
+    report_context = form_state.get("report_context") or {}
+    canonical_order = (
+        (workspace.get("artifacts") or {}).get("order") or {}
+    )
+    canonical_report = (
+        (workspace.get("artifacts") or {}).get("report") or {}
+    )
+    report_value = canonical_report.get("value") or {}
+    if not isinstance(report_value, dict):
+        report_value = {}
+    report_campaign_id = str(
+        report_context.get("campaignId")
+        or report_value.get("campaignId")
+        or ""
+    )
+    workflow_progress = {
+        "order_created": bool(
+            session.get("created_order_ids")
+            or canonical_order.get("status") == "approved"
+        ),
+        "report_started": bool(
+            report_campaign_id
+            or canonical_report.get("status") == "approved"
+        ),
+        "report_campaign_id": report_campaign_id or None,
+    }
     workspace_mode = workspace.get("experience_mode")
     # An explicit homepage selection belongs to the conversation and is the
     # source of truth. Only legacy conversations with no selected mode inherit
@@ -363,6 +391,7 @@ async def get_conversation(actor: dict | str, conversation_id: str) -> dict:
         **_public_conversation(doc, actor),
         "messages": await get_display_history(session_id),
         "workspace": workspace,
+        "workflow_progress": workflow_progress,
         "pending_proposals": await list_pending_proposals(session_id),
         "latest_run": await get_latest_run(session_id),
     }

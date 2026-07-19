@@ -85,9 +85,10 @@ test('logout drops account-owned open state while anonymous-first entry stays av
   assert.match(auth, /Bạn vẫn có thể dùng ẩn danh/)
 })
 
-test('cross-device resume restores the first incomplete guided step and keeps the compact account control accessible', () => {
+test('cross-device resume restores server-derived guided progress and keeps the compact account control accessible', () => {
   const restoreBody = app.slice(app.indexOf('const applyConversationContext'), app.indexOf('const handleReset'))
-  assert.match(restoreBody, /deriveStepStatuses\(STEPS\.map\(\(\) => 'pending'\), context\.workspace\)/)
-  assert.match(restoreBody, /setCurrentStep\(firstIncomplete/)
+  assert.match(restoreBody, /context\.workflow_progress/)
+  assert.match(restoreBody, /deriveResumeStep\(restoredStatuses, progress\)/)
+  assert.match(restoreBody, /reportEntryFiredRef\.current = progress\.report_started/)
   assert.match(accountMenu, /aria-label={`Tài khoản/)
 })

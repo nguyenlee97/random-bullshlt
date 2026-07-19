@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-20.1"
+BUILD_VERSION = "2026-07-20.2"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -159,4 +159,6 @@ BUILD_FEATURES = [
     "audience-modeled-size-backfill",      # missing catalog ranges receive labeled, stable Vietnam estimates
     "guided-creative-intel-review",        # completed Copilot creatives retain VLM evidence and manual review
     "guided-assignment-alert-recovery",    # stale/missing zone assignments expose safe repair choices
+    "guided-creative-terminal-gate",       # queued analysis cannot present Creative as complete or enter Setup
+    "guided-server-derived-resume-step",   # history restores durable order/report progress across devices
 ]

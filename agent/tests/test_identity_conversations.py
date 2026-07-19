@@ -163,6 +163,34 @@ async def test_explicit_homepage_mode_is_not_overwritten_by_legacy_workspace_def
 
 
 @pytest.mark.asyncio
+async def test_resume_exposes_server_derived_guided_order_and_report_progress():
+    from identity import bootstrap_anonymous, create_conversation, get_conversation
+    from session import update_form_state, update_order_ids
+
+    identity = await bootstrap_anonymous()
+    conversation = await create_conversation(
+        identity["identity_id"], experience_mode="guided"
+    )
+    session_id = conversation["session_id"]
+    await update_order_ids(session_id, ["ORD-RESUME-001"])
+    await update_form_state(
+        session_id,
+        "report_context",
+        {"campaignId": "ORD-RESUME-001", "gen_status": "generating"},
+        sync_workspace=False,
+    )
+
+    restored = await get_conversation(
+        identity["identity_id"], conversation["conversation_id"]
+    )
+    assert restored["workflow_progress"] == {
+        "order_created": True,
+        "report_started": True,
+        "report_campaign_id": "ORD-RESUME-001",
+    }
+
+
+@pytest.mark.asyncio
 async def test_owned_session_rejects_missing_and_foreign_identity_tokens():
     from identity import (
         bootstrap_anonymous,
