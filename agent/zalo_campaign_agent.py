@@ -67,6 +67,7 @@ def _help_text() -> str:
     return (
         "Chào bạn 👋 Mình là trợ lý đồng hành cùng chiến dịch quảng cáo của bạn. "
         "Mình có thể giúp xem báo cáo, kiểm tra ảnh live, cấu hình hoặc tiến độ campaign.\n\n"
+        "Nếu bạn muốn được hướng dẫn kỹ hơn, hãy nói với mình nhé.\n\n"
         "Hôm nay bạn muốn mình xem điều gì trước?"
     )
 
@@ -150,6 +151,9 @@ async def get_or_create_thread(external_uid: str) -> dict:
         "active_campaign_id": None,
         "active_campaign_conversation_id": None,
         "active_campaign_session_id": None,
+        "active_report_campaign_id": None,
+        "active_report_view": None,
+        "pending_report_request": None,
         "pending_action": None, "revision": 1,
         "created_at": now, "updated_at": now,
     }
@@ -321,6 +325,9 @@ async def _select_campaign(thread: dict, campaign: dict) -> dict:
         "active_campaign_id": campaign["campaign_id"],
         "active_campaign_conversation_id": campaign["conversation_id"],
         "active_campaign_session_id": campaign["session_id"],
+        "active_report_campaign_id": None,
+        "active_report_view": None,
+        "pending_report_request": None,
         "pending_action": None,
     })
 
@@ -428,8 +435,10 @@ def _live_text(campaign: dict) -> str:
     return "\n".join(lines)
 
 
-async def _store_channel_media(image_bytes: bytes, content_type: str = "image/png") -> str:
-    """Persist short-lived screenshot bytes behind a hashed opaque URL token."""
+async def _store_channel_media(
+    image_bytes: bytes, content_type: str = "image/png", *, filename: str | None = None,
+) -> str:
+    """Persist short-lived media bytes behind a hashed opaque URL token."""
     import hashlib
     import secrets
     from bson.binary import Binary
@@ -443,6 +452,10 @@ async def _store_channel_media(image_bytes: bytes, content_type: str = "image/pn
         "created_at": now,
         "expires_at": now + timedelta(seconds=max(60, config.ZALO_MEDIA_TTL_SECONDS)),
     }
+    if filename:
+        safe_filename = re.sub(r"[^A-Za-z0-9._-]+", "-", filename).strip(".-")[:120]
+        if safe_filename:
+            doc["filename"] = safe_filename
     collections = await _collections()
     if collections is not None:
         await collections["media"].insert_one(doc)
@@ -476,7 +489,7 @@ async def _delivery_image_parts(
     return parts
 
 
-async def get_channel_media(token: str) -> tuple[bytes, str] | None:
+async def _get_channel_media_doc(token: str) -> dict | None:
     import hashlib
     digest = hashlib.sha256(str(token or "").encode()).hexdigest()
     collections = await _collections()
@@ -490,7 +503,25 @@ async def get_channel_media(token: str) -> tuple[bytes, str] | None:
             doc = None
     if not doc:
         return None
+    return doc
+
+
+async def get_channel_media(token: str) -> tuple[bytes, str] | None:
+    """Backward-compatible media lookup used by existing image callers/tests."""
+    doc = await _get_channel_media_doc(token)
+    if not doc:
+        return None
     return bytes(doc["data"]), str(doc.get("content_type") or "image/png")
+
+
+async def get_channel_media_download(token: str) -> tuple[bytes, str, str | None] | None:
+    doc = await _get_channel_media_doc(token)
+    if not doc:
+        return None
+    return (
+        bytes(doc["data"]), str(doc.get("content_type") or "application/octet-stream"),
+        str(doc.get("filename")) if doc.get("filename") else None,
+    )
 
 
 async def _live_response(

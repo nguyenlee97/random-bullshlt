@@ -153,15 +153,18 @@ async def zalo_webhook_health():
 
 @zalo_router.get("/zalo/media/{token}")
 async def zalo_channel_media(token: str):
-    """Serve one short-lived opaque live-view image for Zalo's media fetcher."""
-    from zalo_campaign_agent import get_channel_media
-    media = await get_channel_media(token)
+    """Serve short-lived opaque channel media for Zalo or user download."""
+    from zalo_campaign_agent import get_channel_media_download
+    media = await get_channel_media_download(token)
     if not media:
         raise HTTPException(status_code=404, detail="media not found")
-    data, content_type = media
+    data, content_type, filename = media
+    headers = {"Cache-Control": "private, max-age=300, immutable"}
+    if filename:
+        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return Response(
         content=data, media_type=content_type,
-        headers={"Cache-Control": "private, max-age=300, immutable"},
+        headers=headers,
     )
 
 

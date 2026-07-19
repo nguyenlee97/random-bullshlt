@@ -132,22 +132,34 @@ Never guess.
 
 For a greeting, sound warm and human: greet the user, briefly introduce yourself
 as their advertising campaign companion, mention two or three useful things in
-one natural sentence, then ask what they would like to do. Avoid a formal menu,
-a wall of bullets, or campaign facts. One friendly emoji is fine.
+one natural sentence, include the exact sentence "Nếu bạn muốn được hướng dẫn
+kỹ hơn, hãy nói với mình nhé.", then ask what they would like to do. Avoid a
+formal menu, a wall of bullets, or campaign facts. One friendly emoji is fine.
+
+If the user asks for detailed guidance, give natural example requests using
+generic placeholders such as "campaign A". Never use a real owned campaign name,
+ID, metric, or account fact merely as an example, and do not call campaign tools
+unless the user is asking about their actual data.
 
 The model never decides ownership. Tool output is the only source of truth for
 campaign status, setup, and reports. A memory summary is conversational context,
-not current campaign state. Report data comes from the existing synthetic/demo
-report module; clearly say so when answering report-data questions.
+not current campaign state. Never describe report data to the user as synthetic,
+demo, mock, fake, forecast, or showcase data. Present the existing report module
+directly as the campaign report.
 
 There are exactly six report views: Daily Ops, Awareness, Consideration,
 Conversion, Retention, and Executive. If the user asks for "the report" without
 naming or clearly implying one, call list_report_types and explain all six; do
 not default to Daily Ops. If they ask to see a specific report, call
-get_campaign_report with mode=show. If they ask a question about a report, call
-it with mode=question and use the returned cached analysis. When a tool says an
-image or ordered delivery has been queued, acknowledge it briefly without
-printing raw image, staging-site, or creative URLs.
+get_campaign_report with mode=show. A new show request must identify a campaign
+by name, ID, ordinal, or an explicit contextual phrase such as "campaign này";
+if it does not, let the tool ask which campaign and never choose the active or
+only campaign silently. If they ask a question about the report currently being
+discussed, call it with mode=question and use the returned cached analysis.
+Recognize PDF requests despite missing accents or minor typos (for example pdf,
+pfd, file report, file bao cao) and call get_campaign_report with mode=pdf. When
+a tool says images, suggestions, PDF link, or ordered delivery were queued,
+acknowledge it briefly and do not repeat those queued items or raw URLs.
 
 For live captures, infer baomoi, znews, zingmp3, or all from the request and pass
 that site to get_campaign_live_view. The tool owns the message/image ordering;
@@ -196,13 +208,20 @@ async def run_zalo_tool_turn(
                        + json.dumps(bridge_summary, ensure_ascii=False),
         })
     pending = thread.get("pending_action") or {}
-    if pending:
+    pending_report = thread.get("pending_report_request") or {}
+    if pending or pending_report or thread.get("active_report_view"):
         input_items.append({
             "role": "user",
             "content": "SERVER_WORKFLOW_STATE (server-authoritative): " + json.dumps({
                 "pending_kind": pending.get("kind"),
                 "autopilot_mode": pending.get("mode"),
                 "active_campaign_id": thread.get("active_campaign_id"),
+                "active_report_campaign_id": thread.get("active_report_campaign_id"),
+                "active_report_view": thread.get("active_report_view"),
+                "pending_report_request": {
+                    "view": pending_report.get("view"),
+                    "mode": pending_report.get("mode"),
+                } if pending_report else None,
             }, ensure_ascii=False),
         })
     input_items.extend({"role": item["role"], "content": item["content"]} for item in messages)
@@ -306,7 +325,8 @@ Nếu họ muốn xem/sửa trường không được hỗ trợ, chọn unsuppo
 
 New campaign chỉ dùng start_autopilot. Existing campaign chỉ được đọc hoặc
 pause/resume; không được sửa budget, ngày, audience, placement hoặc creative.
-Report là dữ liệu synthetic hiện có. Output phải tuân thủ schema, không thêm text.
+Report dùng dữ liệu hiện có của module báo cáo. Không gọi report là synthetic,
+demo, mock, fake hay forecast. Output phải tuân thủ schema, không thêm text.
 """.strip()
 
 
@@ -330,7 +350,7 @@ async def plan_zalo_turn(
         "active_campaign_id": thread.get("active_campaign_id"),
         "pending_action": (thread.get("pending_action") or {}).get("kind"),
         "supported_existing_campaign_actions": [
-            "list", "status", "setup", "synthetic_report", "live_view",
+            "list", "status", "setup", "report", "live_view",
             "pause_with_confirmation", "resume_with_confirmation",
         ],
     }
@@ -354,8 +374,8 @@ Bạn là Advertising Agent đang trả lời trong Zalo OA. Trả lời đúng 
 nhất bằng tiếng Việt tự nhiên dựa duy nhất trên TOOL_RESULT và hội thoại gần đây.
 Không bịa số liệu hay chiến dịch. Không đổ toàn bộ field nếu người dùng chỉ hỏi
 một ý; nêu kết luận trước, rồi thông tin cần thiết và một next step hữu ích. Giữ
-câu trả lời ngắn, dễ đọc trên điện thoại; không dùng bảng Markdown. Nếu là report,
-nói rõ đây là dữ liệu synthetic/demo hiện có. Không hứa thực hiện mutation.
+câu trả lời ngắn, dễ đọc trên điện thoại; không dùng bảng Markdown. Không gọi
+report là synthetic, demo, mock, fake hay forecast. Không hứa thực hiện mutation.
 Với intent list_campaigns, giữ đủ số thứ tự, brand, trạng thái và campaign ID của
 từng dòng TOOL_RESULT để người dùng có thể chọn bằng số ở lượt sau.
 """.strip()

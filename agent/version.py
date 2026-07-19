@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-19.1"
+BUILD_VERSION = "2026-07-19.2"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -127,14 +127,18 @@ BUILD_FEATURES = [
     "legacy-brief-approval-recovery",    # reconstruct and atomically approve model-only Briefs
     "zalo-durable-agent-worker",         # leased inbound turns, outbox sends and restart recovery
     "zalo-owned-campaign-resolver",      # server-owned exact/active/ambiguous campaign selection
-    "zalo-synthetic-report-qa",          # reuse the existing six-view synthetic report module
+    "zalo-report-qa",                    # reuse the existing six-view report module
     "zalo-confirmed-campaign-lifecycle", # pause/resume only after expiring explicit confirmation
     "zalo-two-mode-autopilot-progress",  # fully automatic or important-gate progress over OA
     "zalo-openai-tool-controller",       # GPT-5.4-mini selects strict server-owned tools over Responses API
     "zalo-time-bounded-chat-sessions",   # one-hour hard / twenty-minute idle context boundaries
     "zalo-rolling-conversation-memory",  # asynchronous structured summaries bridge later OA sessions
     "zalo-30-message-token-context",     # recent-session context with a server-side total token budget
-    "zalo-native-report-images",         # six existing synthetic reports rendered as OA-safe images
+    "zalo-native-report-images",         # six existing reports rendered as OA-safe images
+    "zalo-detailed-report-pages",        # three OA-safe pages cover KPIs, trends and zone performance
+    "zalo-report-explicit-campaign",     # new report requests never silently select active/only campaign
+    "zalo-opaque-pdf-export",            # expiring hashed media link serves the existing full PDF
+    "zalo-guided-help-copy",             # warm intro plus campaign-neutral example guidance
     "zalo-ordered-live-captures",        # per-site heading, zone crops, then annotated full page
     "zalo-one-mb-image-guard",           # provider-safe compression + expiring full-resolution fallback
     "post-launch-report-generation",     # order commit starts the existing idempotent report pipeline

@@ -38,7 +38,7 @@ def test_report_catalog_exposes_all_six_explained_views():
 
 def test_report_renderer_creates_zalo_sized_jpeg_from_existing_metrics():
     from zalo_media import ZALO_IMAGE_SAFE_BYTES, prepare_zalo_image
-    from zalo_reports import render_report_image
+    from zalo_reports import render_report_images
 
     records = [
         {
@@ -53,14 +53,16 @@ def test_report_renderer_creates_zalo_sized_jpeg_from_existing_metrics():
         "overall": "Độ phủ tăng đều, viewability ổn định và CPM nằm trong vùng kế hoạch.",
         "questions": [{"question": "Reach thay đổi thế nào?"}],
     }
-    rendered = render_report_image(
+    rendered_pages = render_report_images(
         campaign=_campaign(), view="awareness", records=records, analysis=analysis,
     )
-    with Image.open(io.BytesIO(rendered)) as opened:
-        assert opened.format == "JPEG"
-        assert opened.size == (1080, 1350)
-    prepared = prepare_zalo_image(rendered, "image/jpeg")
-    assert len(prepared.data) <= ZALO_IMAGE_SAFE_BYTES
+    assert len(rendered_pages) == 3
+    for rendered in rendered_pages:
+        with Image.open(io.BytesIO(rendered)) as opened:
+            assert opened.format == "JPEG"
+            assert opened.size == (1080, 1350)
+        prepared = prepare_zalo_image(rendered, "image/jpeg")
+        assert len(prepared.data) <= ZALO_IMAGE_SAFE_BYTES
 
 
 def test_oversized_image_is_reduced_below_zalo_limit():
@@ -93,6 +95,11 @@ async def test_specific_report_queues_image_then_generated_questions(monkeypatch
     from zalo_tools import ToolExecutionContext, execute_zalo_tool
 
     campaign = _campaign()
+    async def update(thread, updates):
+        return {**thread, **updates}
+
+    monkeypatch.setattr("zalo_campaign_agent.owned_campaigns", AsyncMock(return_value=[campaign]))
+    monkeypatch.setattr("zalo_campaign_agent._update_thread", update)
     monkeypatch.setattr(
         zalo_tools, "_campaign_for_reference",
         AsyncMock(return_value=(campaign, None)),
@@ -101,22 +108,113 @@ async def test_specific_report_queues_image_then_generated_questions(monkeypatch
         "zalo_reports.get_report_bundle",
         AsyncMock(return_value={
             "ok": True, "status": "ready", "view": "awareness",
-            "data_class": "synthetic_demo", "overall": "Reach đang tăng.",
+            "overall": "Reach đang tăng.",
             "suggested_questions": ["Reach thay đổi thế nào?", "CPM có ổn không?"],
-            "image_bytes": _image_bytes("JPEG"), "image_content_type": "image/jpeg",
+            "image_pages": [_image_bytes("JPEG") for _ in range(3)],
+            "image_content_type": "image/jpeg",
         }),
     )
     ctx = ToolExecutionContext(
-        thread={"thread_id": "zth-2"}, current_message="xem Awareness", history=[],
+        thread={"thread_id": "zth-2"},
+        current_message="xem Awareness của Warm Brand", history=[],
     )
     result = await execute_zalo_tool(ctx, "get_campaign_report", {
         "campaign_reference": "Warm Brand", "view": "awareness",
         "mode": "show", "question": None,
     })
     assert result["status"] == "ready"
-    assert ctx.media_parts[0]["kind"] == "image"
-    assert ctx.media_parts[0]["byte_size"] < 1_000_000
+    assert len([part for part in ctx.media_parts if isinstance(part, dict)]) == 3
+    assert all(part["byte_size"] < 1_000_000 for part in ctx.media_parts if isinstance(part, dict))
     assert "Reach thay đổi" in ctx.media_parts[-1]
+    assert ctx.media_parts[-1].count("Bạn có thể hỏi tiếp") == 1
+    assert "Tôi muốn file report PDF" in ctx.media_parts[-1]
+    assert "suggested_questions" not in result
+    assert "data_class" not in result
+
+
+@pytest.mark.asyncio
+async def test_report_without_campaign_never_silently_uses_active_or_only_campaign(monkeypatch):
+    from zalo_tools import ToolExecutionContext, execute_zalo_tool
+
+    campaign = _campaign()
+    async def update(thread, updates):
+        return {**thread, **updates}
+
+    monkeypatch.setattr("zalo_campaign_agent.owned_campaigns", AsyncMock(return_value=[campaign]))
+    monkeypatch.setattr("zalo_campaign_agent._update_thread", update)
+    report_bundle = AsyncMock()
+    monkeypatch.setattr("zalo_reports.get_report_bundle", report_bundle)
+    ctx = ToolExecutionContext(
+        thread={"thread_id": "zth-missing", "active_campaign_id": campaign["campaign_id"]},
+        current_message="cho xin report awareness", history=[],
+    )
+    result = await execute_zalo_tool(ctx, "get_campaign_report", {
+        "campaign_reference": "Warm Brand", "view": "awareness",
+        "mode": "show", "question": None,
+    })
+    assert result["error"] == "campaign_reference_required"
+    assert result["candidates"][0]["brand"] == "Warm Brand"
+    assert ctx.thread["pending_report_request"]["view"] == "awareness"
+    report_bundle.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_pdf_request_uses_active_report_and_queues_only_opaque_link(monkeypatch):
+    from zalo_tools import ToolExecutionContext, execute_zalo_tool
+
+    campaign = _campaign()
+    async def update(thread, updates):
+        return {**thread, **updates}
+
+    async def select(thread, selected):
+        return {**thread, "active_campaign_id": selected["campaign_id"]}
+
+    monkeypatch.setattr("zalo_campaign_agent.owned_campaigns", AsyncMock(return_value=[campaign]))
+    monkeypatch.setattr("zalo_campaign_agent._update_thread", update)
+    monkeypatch.setattr("zalo_campaign_agent._select_campaign", select)
+    monkeypatch.setattr("zalo_campaign_agent._store_channel_media", AsyncMock(
+        return_value="https://agent.test/zalo/media/opaque-token",
+    ))
+    monkeypatch.setattr("zalo_reports.get_report_bundle", AsyncMock(return_value={
+        "ok": True, "status": "ready", "view": "awareness",
+        "pdf_bytes": b"%PDF-test", "pdf_content_type": "application/pdf",
+    }))
+    ctx = ToolExecutionContext(thread={
+        "thread_id": "zth-pdf", "active_report_campaign_id": campaign["campaign_id"],
+        "active_report_view": "awareness",
+    }, current_message="toi muon file report pfd", history=[])
+    result = await execute_zalo_tool(ctx, "get_campaign_report", {
+        "campaign_reference": "", "view": "daily_ops", "mode": "pdf", "question": None,
+    })
+    assert result["view"] == "awareness"
+    assert "opaque-token" in ctx.media_parts[-1]
+    assert "opaque-token" not in str(result)
+    assert result["pdf_delivery"].startswith("One opaque")
+
+
+@pytest.mark.asyncio
+async def test_opaque_pdf_media_preserves_download_filename(monkeypatch):
+    import zalo_campaign_agent as agent
+
+    monkeypatch.setattr(agent, "_collections", AsyncMock(return_value=None))
+    url = await agent._store_channel_media(
+        b"%PDF-test", "application/pdf", filename="report-ORD-REPORT-1.pdf",
+    )
+    token = url.rsplit("/", 1)[-1]
+    media = await agent.get_channel_media_download(token)
+    assert media == (b"%PDF-test", "application/pdf", "report-ORD-REPORT-1.pdf")
+
+
+def test_intro_guidance_and_report_tool_contract_are_explicit():
+    from zalo_campaign_agent import _help_text
+    from zalo_openai import _TOOL_AGENT_INSTRUCTIONS
+    from zalo_tools import ZALO_TOOLS
+
+    assert "Nếu bạn muốn được hướng dẫn kỹ hơn" in _help_text()
+    assert 'generic placeholders such as "campaign A"' in _TOOL_AGENT_INSTRUCTIONS
+    report_tool = next(tool for tool in ZALO_TOOLS if tool["name"] == "get_campaign_report")
+    assert report_tool["parameters"]["properties"]["mode"]["enum"] == ["show", "question", "pdf"]
+    assert "synthetic report" not in report_tool["description"].lower()
 
 
 def test_similar_report_question_matches_generated_analysis():
