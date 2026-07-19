@@ -2,160 +2,84 @@
 // Used by DemoEngine to drive the guided walkthrough.
 
 // ─── Predefined Brief Pool (randomly selected per demo run) ─────────────────
-export const DEMO_BRIEFS = [
-  // 1. Mixi — Social networking app
-  {
-    id: 'mixi',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Mixi\n' +
-      '- Objective: awareness\n' +
-      '- KPI: Reach\n' +
-      '- Budget: 150 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng Nam 18–30 tuổi, quan tâm mạng xã hội và gaming',
-    briefPatch: { brand: 'Mixi', objective: 'awareness', kpi: 'Reach', budget: 150, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nam 18–30, mạng xã hội & gaming' },
-    budgetEdit: 180,
-  },
-  // 2. Café 24 — F&B chain
-  {
-    id: 'cafe24',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Café 24\n' +
-      '- Objective: awareness\n' +
-      '- KPI: CTR\n' +
-      '- Budget: 250 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng Nữ 22–35, thích cà phê và lifestyle',
-    briefPatch: { brand: 'Café 24', objective: 'awareness', kpi: 'CTR', budget: 250, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nữ 22–35, café & lifestyle' },
-    budgetEdit: 300,
-  },
-  // 3. ZPlay — Mobile gaming
-  {
-    id: 'zplay',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: ZPlay\n' +
-      '- Objective: awareness\n' +
-      '- KPI: Reach, VTR\n' +
-      '- Budget: 200 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng Nam 15–28, gaming và esports',
-    briefPatch: { brand: 'ZPlay', objective: 'awareness', kpi: 'Reach, VTR', budget: 200, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nam 15–28, gaming & esports' },
-    budgetEdit: 220,
-  },
-  // 4. VPBank Neo — Digital banking / Fintech
-  {
-    id: 'vpbank-neo',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: VPBank Neo\n' +
-      '- Objective: awareness\n' +
-      '- KPI: CTR, Reach\n' +
-      '- Budget: 400 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 22–40 tuổi, quan tâm tài chính số và đầu tư',
-    briefPatch: { brand: 'VPBank Neo', objective: 'awareness', kpi: 'CTR, Reach', budget: 400, startDate: '2026-06-30', endDate: '2026-07-07', notes: '22–40, tài chính số & đầu tư' },
-    budgetEdit: 450,
-  },
-  // 5. Tiki — E-commerce
-  {
-    id: 'tiki',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Tiki\n' +
-      '- Objective: awareness\n' +
-      '- KPI: CTR\n' +
-      '- Budget: 350 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 20–45 tuổi, thích mua sắm online và deals',
-    briefPatch: { brand: 'Tiki', objective: 'awareness', kpi: 'CTR', budget: 350, startDate: '2026-06-30', endDate: '2026-07-07', notes: '20–45, mua sắm online & deals' },
-    budgetEdit: 400,
-  },
-  // 6. Gentis — Healthcare / DNA testing
-  {
-    id: 'gentis',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Gentis\n' +
-      '- Objective: awareness\n' +
-      '- KPI: Reach, VTR\n' +
-      '- Budget: 180 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 28–50 tuổi, quan tâm sức khỏe và y tế gia đình',
-    briefPatch: { brand: 'Gentis', objective: 'awareness', kpi: 'Reach, VTR', budget: 180, startDate: '2026-06-30', endDate: '2026-07-07', notes: '28–50, sức khỏe & y tế gia đình' },
-    budgetEdit: 200,
-  },
-  // 7. ELSA Speak — EdTech / English learning
-  {
-    id: 'elsa',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: ELSA Speak\n' +
-      '- Objective: awareness\n' +
-      '- KPI: CTR, Reach\n' +
-      '- Budget: 220 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 16–35 tuổi, sinh viên và đi làm muốn học tiếng Anh',
-    briefPatch: { brand: 'ELSA Speak', objective: 'awareness', kpi: 'CTR, Reach', budget: 220, startDate: '2026-06-30', endDate: '2026-07-07', notes: '16–35, sinh viên & đi làm học tiếng Anh' },
-    budgetEdit: 250,
-  },
-  // 8. Vietjet Air — Low-cost travel
-  {
-    id: 'vietjet',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Vietjet Air\n' +
-      '- Objective: awareness\n' +
-      '- KPI: Reach, VTR\n' +
-      '- Budget: 500 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 20–45 tuổi, thích du lịch và săn vé giá rẻ',
-    briefPatch: { brand: 'Vietjet Air', objective: 'awareness', kpi: 'Reach, VTR', budget: 500, startDate: '2026-06-30', endDate: '2026-07-07', notes: '20–45, du lịch & săn vé rẻ' },
-    budgetEdit: 550,
-  },
-  // 9. Cocoon — Vietnamese beauty / skincare
-  {
-    id: 'cocoon',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Cocoon\n' +
-      '- Objective: awareness\n' +
-      '- KPI: CTR, Reach\n' +
-      '- Budget: 160 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng Nữ 18–35, quan tâm làm đẹp và skincare thuần Việt',
-    briefPatch: { brand: 'Cocoon', objective: 'awareness', kpi: 'CTR, Reach', budget: 160, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nữ 18–35, làm đẹp & skincare thuần Việt' },
-    budgetEdit: 200,
-  },
-  // 10. VinFast — EV automotive
-  {
-    id: 'vinfast',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: VinFast\n' +
-      '- Objective: awareness\n' +
-      '- KPI: Reach, VTR\n' +
-      '- Budget: 800 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 30–55 tuổi, thu nhập khá, quan tâm xe điện và công nghệ',
-    briefPatch: { brand: 'VinFast', objective: 'awareness', kpi: 'Reach, VTR', budget: 800, startDate: '2026-06-30', endDate: '2026-07-07', notes: '30–55, thu nhập khá, xe điện & công nghệ' },
-    budgetEdit: 900,
-  },
+// Dates are materialized when a walkthrough starts so no scenario can age into
+// an invalid campaign. The start is yesterday; the end is seven days later.
+const DEMO_BRIEF_TEMPLATES = [
+  { id: 'mixi', brand: 'Mixi', kpi: 'Reach', budget: 150, budgetEdit: 180, audience: 'Đối tượng Nam 18–30 tuổi, quan tâm mạng xã hội và gaming', notes: 'Nam 18–30, mạng xã hội & gaming' },
+  { id: 'cafe24', brand: 'Café 24', kpi: 'CTR', budget: 250, budgetEdit: 300, audience: 'Đối tượng Nữ 22–35, thích cà phê và lifestyle', notes: 'Nữ 22–35, café & lifestyle' },
+  { id: 'zplay', brand: 'ZPlay', kpi: 'Reach, VTR', budget: 200, budgetEdit: 220, audience: 'Đối tượng Nam 15–28, gaming và esports', notes: 'Nam 15–28, gaming & esports' },
+  { id: 'vpbank-neo', brand: 'VPBank Neo', kpi: 'CTR, Reach', budget: 400, budgetEdit: 450, audience: 'Đối tượng 22–40 tuổi, quan tâm tài chính số và đầu tư', notes: '22–40, tài chính số & đầu tư' },
+  { id: 'tiki', brand: 'Tiki', kpi: 'CTR', budget: 350, budgetEdit: 400, audience: 'Đối tượng 20–45 tuổi, thích mua sắm online và deals', notes: '20–45, mua sắm online & deals' },
+  { id: 'gentis', brand: 'Gentis', kpi: 'Reach, VTR', budget: 180, budgetEdit: 200, audience: 'Đối tượng 28–50 tuổi, quan tâm sức khỏe và y tế gia đình', notes: '28–50, sức khỏe & y tế gia đình' },
+  { id: 'elsa', brand: 'ELSA Speak', kpi: 'CTR, Reach', budget: 220, budgetEdit: 250, audience: 'Đối tượng 16–35 tuổi, sinh viên và đi làm muốn học tiếng Anh', notes: '16–35, sinh viên & đi làm học tiếng Anh' },
+  { id: 'vietjet', brand: 'Vietjet Air', kpi: 'Reach, VTR', budget: 500, budgetEdit: 550, audience: 'Đối tượng 20–45 tuổi, thích du lịch và săn vé giá rẻ', notes: '20–45, du lịch & săn vé rẻ' },
+  { id: 'cocoon', brand: 'Cocoon', kpi: 'CTR, Reach', budget: 160, budgetEdit: 200, audience: 'Đối tượng Nữ 18–35, quan tâm làm đẹp và skincare thuần Việt', notes: 'Nữ 18–35, làm đẹp & skincare thuần Việt' },
+  { id: 'vinfast', brand: 'VinFast', kpi: 'Reach, VTR', budget: 800, budgetEdit: 900, audience: 'Đối tượng 30–55 tuổi, thu nhập khá, quan tâm xe điện và công nghệ', notes: '30–55, thu nhập khá, xe điện & công nghệ' },
 ]
 
+const toLocalIsoDate = date => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+].join('-')
 
+const toDisplayDate = date => [
+  String(date.getDate()).padStart(2, '0'),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  date.getFullYear(),
+].join('/')
 
-// Pick a random brief, never repeating the last one
+export function getDemoDateRange(now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
+  return {
+    startDate: toLocalIsoDate(start),
+    endDate: toLocalIsoDate(end),
+    displayStart: toDisplayDate(start),
+    displayEnd: toDisplayDate(end),
+  }
+}
+
+export function materializeDemoBrief(template, now = new Date()) {
+  const dates = getDemoDateRange(now)
+  return {
+    id: template.id,
+    chatMessage: [
+      'Brief chiến dịch:',
+      `- Brand: ${template.brand}`,
+      '- Objective: awareness',
+      `- KPI: ${template.kpi}`,
+      `- Budget: ${template.budget} triệu VND`,
+      `- Thời gian: ${dates.displayStart} đến ${dates.displayEnd}`,
+      `- Ghi chú: ${template.audience}`,
+    ].join('\n'),
+    briefPatch: {
+      brand: template.brand,
+      objective: 'awareness',
+      kpi: template.kpi,
+      budget: template.budget,
+      startDate: dates.startDate,
+      endDate: dates.endDate,
+      notes: template.notes,
+    },
+    budgetEdit: template.budgetEdit,
+  }
+}
+
+// Exported for tooling/preview compatibility. `pickRandomBrief` rematerializes
+// the chosen template at run time, including if the page stays open overnight.
+export const DEMO_BRIEFS = DEMO_BRIEF_TEMPLATES.map(template => materializeDemoBrief(template))
+
+// Pick a random brief, never repeating the last one.
 let _lastBriefId = null
-export function pickRandomBrief() {
+export function pickRandomBrief(now = new Date()) {
   const pool = _lastBriefId
-    ? DEMO_BRIEFS.filter(b => b.id !== _lastBriefId)
-    : DEMO_BRIEFS
+    ? DEMO_BRIEF_TEMPLATES.filter(brief => brief.id !== _lastBriefId)
+    : DEMO_BRIEF_TEMPLATES
   const pick = pool[Math.floor(Math.random() * pool.length)]
   _lastBriefId = pick.id
-  return pick
+  return materializeDemoBrief(pick, now)
 }
 // ─── Pre-generated creative format metadata ──────────────────────────────────
 // These formats are injected automatically after the Box AI generation step.

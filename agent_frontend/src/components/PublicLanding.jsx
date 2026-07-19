@@ -3,6 +3,7 @@ import {
   MessageCircle, MousePointer2, Play, Radar, Route, ShieldCheck,
   Sparkles, Target, TrendingUp,
 } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 
 const orbitNodes = [
   { label: 'Audience', meta: 'Intent matched', icon: Radar, className: 'campaign-node-a' },
@@ -67,7 +68,7 @@ function SignalRibbon() {
     <div className="landing-signal-ribbon" aria-hidden="true">
       <div className="signal-ribbon-beam" />
       <div className="signal-ribbon-track">
-        {[0, 1].map(copy => (
+        {[0, 1, 2].map(copy => (
           <div key={copy} className="signal-ribbon-sequence">
             {signalWords.map((word, index) => (
               <span key={`${copy}-${word}`} className={index === 0 ? 'is-active' : ''}>
@@ -151,6 +152,31 @@ function ModeVisual({ mode }) {
 }
 
 export default function PublicLanding({ onEnterAgent, onOpenDemo }) {
+  const landingRef = useRef(null)
+
+  useEffect(() => {
+    const root = landingRef.current
+    if (!root) return undefined
+
+    const reveals = [...root.querySelectorAll('[data-scroll-reveal]')]
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reducedMotion || !('IntersectionObserver' in window)) {
+      reveals.forEach(element => element.classList.add('is-visible'))
+      return undefined
+    }
+
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => entry.target.classList.toggle('is-visible', entry.isIntersecting))
+    }, {
+      root,
+      threshold: 0.14,
+      rootMargin: '-5% 0px -7%',
+    })
+
+    reveals.forEach(element => observer.observe(element))
+    return () => observer.disconnect()
+  }, [])
+
   const moveLight = event => {
     const box = event.currentTarget.getBoundingClientRect()
     event.currentTarget.style.setProperty('--pointer-x', `${event.clientX - box.left}px`)
@@ -158,7 +184,7 @@ export default function PublicLanding({ onEnterAgent, onOpenDemo }) {
   }
 
   return (
-    <main className="public-landing-v2 h-screen h-[100dvh] overflow-y-auto overflow-x-hidden bg-[#020817] text-white" onPointerMove={moveLight}>
+    <main ref={landingRef} className="public-landing-v2 h-screen h-[100dvh] overflow-y-auto overflow-x-hidden bg-[#020817] text-white" onPointerMove={moveLight}>
       <div className="landing-pointer-light" aria-hidden="true" />
       <header className="landing-nav">
         <a href="/" className="landing-brand" aria-label="Advertising Agent">
@@ -190,8 +216,13 @@ export default function PublicLanding({ onEnterAgent, onOpenDemo }) {
       <SignalRibbon />
 
       <section className="landing-manifesto" aria-labelledby="manifesto-title">
-        <div className="landing-section-label"><span>02</span> ONE CAMPAIGN TRUTH</div>
-        <div className="landing-manifesto-card">
+        <div className="landing-manifesto-card scroll-reveal" data-scroll-reveal>
+          <div className="landing-manifesto-chapter">
+            <span>02</span>
+            <div><small>CONNECTED CAMPAIGN SYSTEM</small><b>ONE CAMPAIGN TRUTH</b></div>
+            <i />
+            <em>LIVE SIGNAL</em>
+          </div>
           <div className="landing-manifesto-copy">
             <p className="landing-manifesto-kicker"><Layers3 /> ONE INTENT. EVERY DECISION CONNECTED.</p>
             <h2 id="manifesto-title">Không phải thêm một chatbot.<br /><em>Một cách mới để campaign thành hình.</em></h2>
@@ -203,13 +234,13 @@ export default function PublicLanding({ onEnterAgent, onOpenDemo }) {
       </section>
 
       <section className="landing-mode-section" aria-labelledby="mode-title">
-        <div className="landing-mode-heading">
+        <div className="landing-mode-heading scroll-reveal" data-scroll-reveal>
           <div><div className="landing-section-label"><span>03</span> CHOOSE YOUR CONTROL</div><h2 id="mode-title">Hai cách làm việc.<br /><em>Cùng một Agent.</em></h2></div>
           <p>Không phải hai giao diện đổi màu. Đây là hai quan hệ làm việc khác nhau giữa bạn và AI—một bên cùng lái, một bên giao mục tiêu rồi giám sát.</p>
         </div>
         <div className="landing-mode-grid">
           {modes.map(({ number, title, icon: Icon, text, mode, tour, eyebrow }) => (
-            <article key={mode} className={`landing-mode-card landing-mode-${mode}`}>
+            <article key={mode} className={`landing-mode-card landing-mode-${mode} scroll-reveal`} data-scroll-reveal style={{ '--reveal-delay': `${number === '01' ? 0 : 120}ms` }}>
               <div className="landing-mode-top"><span>{number} · {eyebrow}</span><Icon /></div>
               <ModeVisual mode={mode} />
               <h3>{title}</h3><p>{text}</p>

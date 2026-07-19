@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-20.7"
+BUILD_VERSION = "2026-07-20.8"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -169,4 +169,7 @@ BUILD_FEATURES = [
     "connected-campaign-landing",          # linked brief-to-decision story with distinct mode visual systems
     "autopilot-in-layout-guide",           # persistent brief, creative, control and run-reading guidance
     "copilot-walkthrough-mode-retention",  # live walkthrough prepares a campaign without returning home
+    "seamless-campaign-signal-loop",        # three-copy rail loops without a Zalo-to-Brief animation snap
+    "bidirectional-landing-reveals",        # campaign truth and mode sections fade on scroll entry and exit
+    "rolling-demo-date-window",             # walkthrough dates stay yesterday through seven days later
 ]

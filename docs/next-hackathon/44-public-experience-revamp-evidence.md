@@ -3,7 +3,7 @@
 Date: 2026-07-20
 Starting commit: `b6da5e4d4fd58107f39a6ca12ddddcc529d33bcd`
 Correction follows: `3d63e35`
-Production build: `2026-07-20.7`
+Production build: `2026-07-20.8`
 
 ## Delivered behavior
 
@@ -13,9 +13,15 @@ Production build: `2026-07-20.7`
 - The former numeric audience boast is now a useful capability signal
   (`Intent matched`). The flat blue marquee is now a glass signal rail that
   carries Brief through Reporting and Zalo as one connected system.
+- That rail now uses three identical sequences and translates exactly one-third
+  of its track per animation cycle, preserving the same rotated transform at
+  both keyframes. Zalo therefore flows directly into Brief without the prior
+  end-of-cycle transform snap.
 - The manifesto now explains one campaign truth flowing through four linked
   decisions, with an explicit human launch gate. Its contained editorial card
   keeps copy away from the viewport edge and adds a live decision-chain visual.
+- Its former detached `02 / ONE CAMPAIGN TRUTH` label is now an integrated
+  chapter rail inside the card, with a live-signal state and visual connector.
 - Copilot and Autopilot no longer reuse one recolored illustration. Copilot is
   shown as a moving chat-and-workspace collaboration; Autopilot is a goal-led
   plan runway ending at an approval gate. The mode heading is high-contrast and
@@ -38,6 +44,14 @@ Production build: `2026-07-20.7`
   action.
 - Starting that walkthrough now prepares a blank Copilot campaign while keeping
   the Guided workspace active; it no longer invokes the homepage reset path.
+- Every Copilot walkthrough brief now materializes its campaign range when the
+  run starts: yesterday through seven days later. Both the chat brief and form
+  patch use the same generated local-calendar dates, so saved scenarios cannot
+  age into an already-ended campaign.
+- The campaign-truth card, mode heading and both mode cards use an
+  IntersectionObserver rooted to the landing scroll canvas. They fade/blur in
+  on entry and recede on exit in either scroll direction; reduced-motion users
+  receive the content immediately with no animation.
 - The served technical document has nine sections. Part 10, its limitations
   table and roadmap material were removed.
 - The document's “Vào Agent” link now reaches
@@ -48,7 +62,7 @@ Production build: `2026-07-20.7`
 
 ## Automated verification
 
-- Frontend: **84 passed**, 0 failed.
+- Frontend: **85 passed**, 0 failed.
 - Frontend production build: Vite 6.4.3, **2,586 modules transformed**.
 - Focused acceptance covers the kinetic landing, clear workspace entrances,
   real Copilot spotlight targets, all Autopilot tour targets, launch safety,
@@ -64,6 +78,9 @@ Production build: `2026-07-20.7`
   constellation without widening the document viewport.
 - The deployed campaign signal rail, decision story, readable mode heading,
   distinct mode systems and editorial final CTA were visually checked.
+- Production DOM acceptance confirmed three signal-rail copies and the new
+  integrated chapter. Down-scroll and up-scroll checks both toggled the story
+  and mode reveal states correctly.
 - The signed-in homepage shows one ordered launchpad with prominent
   “Mở Copilot workspace” and “Mở Autopilot workspace” CTAs plus two secondary
   guided-tour actions.
@@ -84,13 +101,16 @@ Production build: `2026-07-20.7`
   step 1/69 instead of returning to the homepage. This created one blank
   campaign as the walkthrough preparation contract requires; no campaign was
   launched or deleted.
+- The `.8` signed-in walkthrough selected VinFast and visibly prepared
+  `19/07/2026 → 26/07/2026` on 20/07/2026, matching yesterday plus seven days.
+  Acceptance stopped before sending the brief; no campaign was launched.
 
 ## Production deployment and rollback
 
-- Production is live at **2026-07-20.7** on
+- Production is live at **2026-07-20.8** on
   `https://agent.pawgrammers.io.vn/`.
 - `/`, `/agent`, `/tech-docs.html`, `/agent/health` and `/agent/ready` return
-  HTTP 200. Health reports `.7`; readiness reports Mongo, backend, creative
+  HTTP 200. Health reports `.8`; readiness reports Mongo, backend, creative
   worker, Autopilot worker, Zalo worker and Zalo OpenAI healthy.
 - Baseline rollback before the guided-tour release:
   `/var/backups/advertising-agent/20260719T201216Z-guided-tours`.
@@ -99,10 +119,14 @@ Production build: `2026-07-20.7`
   `/var/backups/advertising-agent/20260719T202257Z-docs-navigation`.
 - Immediate previous frontends remain recoverable at
   `/var/www/agent-prev-20260720-5`, `/var/www/agent-prev-20260720-6` and
-  `/var/www/agent-prev-20260720-7`.
+  `/var/www/agent-prev-20260720-7`; `.7` is also preserved as
+  `/var/www/agent-prev-20260720-8`.
 - Rollback immediately before `.7`, including the full `.6` frontend and
   version file:
   `/var/backups/advertising-agent/20260719T211332Z-landing-refinement`.
+- Rollback immediately before `.8`, including the full `.7` frontend and
+  version file:
+  `/var/backups/advertising-agent/20260719T213955Z-scroll-motion-dates`.
 
 ## Current limitations preserved in public wording
 

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { authReturnTo, hasAgentIntent } from '../src/lib/publicExperience.js'
 import { AUTOPILOT_TOUR_STEPS } from '../src/demo/autopilotTour.js'
+import { getDemoDateRange, pickRandomBrief } from '../src/demo/demoScripts.js'
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 const landing = read('../src/components/PublicLanding.jsx')
@@ -35,7 +36,11 @@ test('landing uses a kinetic campaign system and opens real guided tours', () =>
   assert.match(landing, /CampaignConstellation/)
   assert.match(landing, /campaign-stage/)
   assert.match(landing, /SignalRibbon/)
+  assert.match(landing, /\[0, 1, 2\]\.map/)
   assert.match(landing, /CampaignTruthVisual/)
+  assert.match(landing, /landing-manifesto-chapter/)
+  assert.match(landing, /IntersectionObserver/)
+  assert.match(landing, /data-scroll-reveal/)
   assert.match(landing, /mode-visual-copilot/)
   assert.match(landing, /mode-visual-autopilot/)
   assert.match(landing, /<em>chuyển động\.<\/em>/)
@@ -69,6 +74,22 @@ test('Copilot demo is restored as a spotlight tour over the real interface', () 
   assert.doesNotMatch(engine, /demo:new_chat/)
 })
 
+test('every live walkthrough uses yesterday through seven days later', () => {
+  const now = new Date(2026, 6, 20, 12, 0, 0)
+  assert.deepEqual(getDemoDateRange(now), {
+    startDate: '2026-07-19',
+    endDate: '2026-07-26',
+    displayStart: '19/07/2026',
+    displayEnd: '26/07/2026',
+  })
+
+  const brief = pickRandomBrief(now)
+  assert.equal(brief.briefPatch.startDate, '2026-07-19')
+  assert.equal(brief.briefPatch.endDate, '2026-07-26')
+  assert.match(brief.chatMessage, /Thời gian: 19\/07\/2026 đến 26\/07\/2026/)
+  assert.doesNotMatch(scripts, /2026-06-30|2026-07-07|30\/6\/2026|7\/7\/2026/)
+})
+
 test('Autopilot guided tour maps every entry decision to the actual canvas', () => {
   assert.deepEqual(AUTOPILOT_TOUR_STEPS.map(step => step.target), [
     '[data-demo="autopilot-canvas"]',
@@ -99,4 +120,6 @@ test('public experience is responsive and honors reduced motion', () => {
   assert.match(styles, /prefers-reduced-motion: reduce/)
   assert.match(styles, /campaign-stage \*/)
   assert.match(styles, /animation: none !important/)
+  assert.match(styles, /translate3d\(-33\.333333%/)
+  assert.match(styles, /\.scroll-reveal\.is-visible/)
 })
