@@ -4,6 +4,19 @@ export const TERMINAL_CREATIVE_STATUSES = new Set([
   'approved_override',
 ])
 
+export const APPROVED_CREATIVE_STATUSES = new Set([
+  'auto_approved',
+  'approved_override',
+])
+
+export function creativeReviewState(files = []) {
+  if (!files.length) return 'empty'
+  const statuses = files.map(file => file.analysisStatus || '')
+  if (statuses.some(status => status === 'needs_review')) return 'blocked'
+  if (statuses.every(status => APPROVED_CREATIVE_STATUSES.has(status))) return 'ready'
+  return 'analysis_required'
+}
+
 const terminalStatus = verdict => (
   TERMINAL_CREATIVE_STATUSES.has(verdict?.effective_status)
     ? verdict.effective_status

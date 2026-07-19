@@ -14,11 +14,13 @@ from config import config
 async def _lifespan(_app):
     from accounts import ensure_account_indexes
     from autopilot.service import ensure_autopilot_indexes
+    from campaign_ownership import ensure_campaign_ownership_indexes
     from identity import ensure_identity_indexes
     from zalo_auth import ensure_zalo_auth_indexes
     from zalo_channel import ensure_zalo_channel_indexes
     await ensure_account_indexes()
     await ensure_autopilot_indexes()
+    await ensure_campaign_ownership_indexes()
     await ensure_identity_indexes()
     await ensure_zalo_auth_indexes()
     await ensure_zalo_channel_indexes()

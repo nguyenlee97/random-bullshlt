@@ -57,7 +57,16 @@ export function deriveStepStatuses(currentStatuses, workspace, workflowProgress 
     }
     if (index === 2 && primaryState?.status === 'approved' && primaryState?.value != null) {
       const analysisComplete = creativeAnalysisComplete(artifacts)
-      return analysisComplete == null ? current : analysisComplete ? 'done' : 'pending'
+      if (analysisComplete == null) return current
+      if (!analysisComplete) return 'pending'
+      // Legacy creative snapshots without analysis statuses remain resumable.
+      // New terminal verdicts stay visible until the operator explicitly
+      // confirms that they have reviewed the result.
+      const files = primaryState.value?.files || []
+      const hasAnalysisStatuses = files.some(file => file.analysisStatus)
+        || Boolean(artifacts.creative_verdict?.value)
+      if (!hasAnalysisStatuses) return 'done'
+      return workflowProgress.creative_review_confirmed ? 'done' : current
     }
     const hasOrder = workflowProgress.order_created || artifacts.order?.status === 'approved'
     if (index === 3 && hasOrder) return 'done'

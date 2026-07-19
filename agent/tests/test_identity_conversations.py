@@ -1,4 +1,5 @@
 import pytest
+from fastapi import HTTPException
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -85,6 +86,7 @@ async def test_delete_conversation_removes_owned_history_and_session_artifacts()
 
     assert result["ok"] is True
     assert result["orders_retained"] is True
+    assert result["retained_campaign_ids"] == []
     assert result["deleted_artifacts"]["agent_sessions"] == 1
     conversations = await list_conversations(identity["identity_id"])
     assert [item["conversation_id"] for item in conversations] == [kept["conversation_id"]]
@@ -187,7 +189,39 @@ async def test_resume_exposes_server_derived_guided_order_and_report_progress():
         "order_created": True,
         "report_started": True,
         "report_campaign_id": "ORD-RESUME-001",
+        "confirmed_steps": [],
+        "creative_review_confirmed": True,
     }
+
+
+@pytest.mark.asyncio
+async def test_creative_review_confirmation_is_durable_for_resume():
+    from identity import bootstrap_anonymous, create_conversation, get_conversation
+    from session import confirm_workflow_step
+
+    identity = await bootstrap_anonymous()
+    conversation = await create_conversation(
+        identity["identity_id"], experience_mode="guided"
+    )
+    await confirm_workflow_step(conversation["session_id"], 2)
+
+    restored = await get_conversation(
+        identity["identity_id"], conversation["conversation_id"]
+    )
+    assert restored["workflow_progress"]["confirmed_steps"] == [2]
+    assert restored["workflow_progress"]["creative_review_confirmed"] is True
+
+
+@pytest.mark.asyncio
+async def test_workflow_confirmation_rejects_unowned_legacy_session():
+    from router import _WorkflowStepConfirmRequest, workflow_step_confirm
+
+    request = Request({"type": "http", "method": "POST", "path": "/", "headers": []})
+    with pytest.raises(HTTPException) as rejected:
+        await workflow_step_confirm(
+            2, request, _WorkflowStepConfirmRequest(session_id="legacy-evaluator")
+        )
+    assert rejected.value.status_code == 401
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,7 @@ import SuccessStep from '@/steps/SuccessStep'
 import ReportStep from '@/steps/ReportStep'
 import EmailStep from '@/steps/EmailStep'
 import { AlertTriangle, LayoutDashboard } from 'lucide-react'
+import { creativeReviewState } from '@/lib/creativeIntel'
 
 const STEP_DESCS = [
   'Điền brief khách hàng — agent chuẩn hóa về JSON schema và đề xuất KPI.',
@@ -239,6 +240,11 @@ const WorkspacePane = forwardRef(function WorkspacePane(
         onApprove={onApprove}
         onBack={() => onStepJump(currentStep - 1)}
         onNext={() => onStepJump(currentStep + 1)}
+        approveLabel={currentStep === 2
+          ? (creativeReviewState(formState.creative?.files || []) === 'ready'
+            ? 'Xác nhận & sang Setup'
+            : 'Phân tích creative')
+          : ''}
       />}
       {autopilotMode && (
         <div className="flex-shrink-0 border-t border-brand-100 bg-white px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.05)] sm:px-5">

@@ -67,7 +67,20 @@ test('queued creative stays pending until every analysis has a terminal verdict'
       },
     },
   })
-  assert.equal(complete[2], 'done')
+  assert.equal(complete[2], 'pending')
+  const confirmed = deriveStepStatuses(statuses, {
+    artifacts: {
+      creative: {
+        status: 'approved',
+        value: { files: [{ id: 'f1', name: 'creative.png', analysisStatus: 'queued' }] },
+      },
+      creative_verdict: {
+        status: 'approved',
+        value: { files: [{ name: 'creative.png', status: 'auto_approved' }] },
+      },
+    },
+  }, { creative_review_confirmed: true })
+  assert.equal(confirmed[2], 'done')
 })
 
 test('Guided resume uses durable order and report progress instead of stale Setup state', () => {

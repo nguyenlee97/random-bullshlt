@@ -85,6 +85,10 @@ class _ConversationDeleteAllRequest(BaseModel):
     confirmation: str
 
 
+class _WorkflowStepConfirmRequest(BaseModel):
+    session_id: str
+
+
 class _RegisterRequest(BaseModel):
     email: str
     password: str
@@ -382,6 +386,28 @@ async def conversations_claim(conversation_id: str, request: Request):
         return await claim_conversation(actor, conversation_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="conversation not found") from exc
+
+
+@agent_router.post("/workflow/steps/{step}/confirm")
+async def workflow_step_confirm(
+    step: int, request: Request, body: _WorkflowStepConfirmRequest,
+):
+    """Record an explicit operator review checkpoint for an owned session."""
+    if step < 0 or step > 6:
+        raise HTTPException(status_code=422, detail="invalid workflow step")
+    from identity import require_session_access
+    actor = await _request_actor(request)
+    try:
+        conversation = await require_session_access(actor, body.session_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=404, detail="owned session not found") from exc
+    # Unlike legacy evaluator chat routes, an explicit browser workflow
+    # checkpoint must belong to a persisted conversation authority.
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="owned session not found")
+    from session import confirm_workflow_step
+    confirmed_steps = await confirm_workflow_step(body.session_id, step)
+    return {"ok": True, "step": step, "confirmed_steps": confirmed_steps}
 
 
 @agent_router.get("/logs/{session_id}")

@@ -32,6 +32,7 @@ def _default_session(sid: str) -> dict:
         "display_history": [],
         "form_state": {},
         "current_step": -1,
+        "confirmed_steps": [],
         "created_order_ids": [],
         "created_at": _now(),
         "updated_at": _now(),
@@ -112,6 +113,33 @@ async def update_order_ids(session_id: str, order_ids: list) -> None:
     else:
         s = _mem.setdefault(session_id, _default_session(session_id))
         s["created_order_ids"] = order_ids
+
+
+async def confirm_workflow_step(session_id: str, step: int) -> list[int]:
+    """Persist an explicit operator checkpoint for cross-device resume."""
+    if step < 0 or step > 6:
+        raise ValueError("workflow step must be between 0 and 6")
+    if await _ensure_mongo():
+        await _sessions_col.update_one(
+            {"_id": session_id},
+            {
+                "$addToSet": {"confirmed_steps": step},
+                "$max": {"current_step": step},
+                "$set": {"updated_at": _now()},
+            },
+            upsert=True,
+        )
+        doc = await _sessions_col.find_one(
+            {"_id": session_id}, {"confirmed_steps": 1}
+        )
+        return sorted(set((doc or {}).get("confirmed_steps") or []))
+    session = _mem.setdefault(session_id, _default_session(session_id))
+    session["confirmed_steps"] = sorted(set([
+        *(session.get("confirmed_steps") or []), step,
+    ]))
+    session["current_step"] = max(int(session.get("current_step", -1)), step)
+    session["updated_at"] = _now()
+    return session["confirmed_steps"]
 
 
 async def add_message(session_id: str, role: str, content: str) -> None:

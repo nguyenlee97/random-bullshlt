@@ -313,6 +313,20 @@ async def _owned_conversation(actor: dict | str, conversation_id: str) -> dict |
     return doc if doc and _actor_owns(doc, actor) else None
 
 
+async def conversation_record_for_session(session_id: str) -> dict | None:
+    """Return the private owner record for internal campaign registration."""
+    _, conversations = await _collections()
+    if conversations is not None:
+        return await conversations.find_one({"session_id": session_id})
+    return next(
+        (
+            item for item in _mem_conversations.values()
+            if item.get("session_id") == session_id
+        ),
+        None,
+    )
+
+
 async def list_conversations(actor: dict | str, *, include_archived: bool = False) -> list[dict]:
     _, conversations = await _collections()
     query = _actor_query(actor)
@@ -379,6 +393,18 @@ async def get_conversation(actor: dict | str, conversation_id: str) -> dict:
             or canonical_report.get("status") == "approved"
         ),
         "report_campaign_id": report_campaign_id or None,
+        "confirmed_steps": sorted(set(session.get("confirmed_steps") or [])),
+        # Old Guided campaigns that already reached Setup/Result predate the
+        # explicit review checkpoint and remain migration-compatible.
+        "creative_review_confirmed": bool(
+            2 in (session.get("confirmed_steps") or [])
+            or session.get("created_order_ids")
+            or any(
+                ((workspace.get("artifacts") or {}).get(name) or {}).get("status")
+                == "approved"
+                for name in ("placements", "assignments", "order_draft", "order")
+            )
+        ),
     }
     workspace_mode = workspace.get("experience_mode")
     # An explicit homepage selection belongs to the conversation and is the
@@ -442,8 +468,10 @@ async def delete_conversation(actor: dict | str, conversation_id: str) -> dict:
         raise KeyError("conversation not found")
     await _assert_conversations_deletable([doc])
 
+    from campaign_ownership import preserve_session_campaigns
     from session import delete_session_data
 
+    retained_campaign_ids = await preserve_session_campaigns(doc["session_id"])
     deleted_artifacts = await delete_session_data(doc["session_id"])
     _, conversations = await _collections()
     if conversations is not None:
@@ -461,6 +489,7 @@ async def delete_conversation(actor: dict | str, conversation_id: str) -> dict:
         "session_id": doc["session_id"],
         "deleted_artifacts": deleted_artifacts,
         "orders_retained": True,
+        "retained_campaign_ids": retained_campaign_ids,
     }
 
 
@@ -476,10 +505,15 @@ async def delete_all_conversations(actor: dict | str) -> dict:
         ]
     await _assert_conversations_deletable(docs)
 
+    from campaign_ownership import preserve_session_campaigns
     from session import delete_session_data
 
     artifact_counts: dict[str, int] = {}
+    retained_campaign_ids: list[str] = []
     for doc in docs:
+        retained_campaign_ids.extend(
+            await preserve_session_campaigns(doc["session_id"])
+        )
         deleted = await delete_session_data(doc["session_id"])
         for collection, count in deleted.items():
             artifact_counts[collection] = artifact_counts.get(collection, 0) + int(count)
@@ -500,6 +534,7 @@ async def delete_all_conversations(actor: dict | str) -> dict:
         "conversation_ids": ids,
         "deleted_artifacts": artifact_counts,
         "orders_retained": True,
+        "retained_campaign_ids": list(dict.fromkeys(retained_campaign_ids)),
     }
 
 
@@ -531,6 +566,8 @@ async def claim_conversation(actor: dict, conversation_id: str) -> dict:
     anonymous_id = actor.get("anonymous_id")
     if not user_id or not anonymous_id:
         raise PermissionError("claim requires account and anonymous credentials")
+    from campaign_ownership import claim_campaigns, preserve_session_campaigns
+
     _, conversations = await _collections()
     now = _now()
     if conversations is not None:
@@ -539,6 +576,17 @@ async def claim_conversation(actor: dict, conversation_id: str) -> dict:
         })
         if already:
             return _public_conversation(already, actor)
+        claimable = await conversations.find_one({
+            "_id": conversation_id,
+            "owner_user_id": None,
+            "$or": [
+                {"anonymous_id": anonymous_id},
+                {"identity_id": anonymous_id},
+            ],
+        })
+        if not claimable:
+            raise KeyError("conversation not found")
+        await preserve_session_campaigns(claimable["session_id"])
         doc = await conversations.find_one_and_update(
             {
                 "_id": conversation_id,
@@ -572,6 +620,7 @@ async def claim_conversation(actor: dict, conversation_id: str) -> dict:
                 return _public_conversation(doc, actor)
             if not doc or doc.get("owner_user_id") or _anonymous_owner(doc) != anonymous_id:
                 raise KeyError("conversation not found")
+            await preserve_session_campaigns(doc["session_id"])
             doc.update({
                 "owner_user_id": user_id,
                 "anonymous_id": None,
@@ -584,6 +633,11 @@ async def claim_conversation(actor: dict, conversation_id: str) -> dict:
             if identity:
                 identity["claimed_by_user_id"] = user_id
                 identity["claimed_at"] = now
+    await claim_campaigns(
+        user_id=user_id,
+        anonymous_id=anonymous_id,
+        conversation_ids=[conversation_id],
+    )
     from accounts import _audit
     await _audit(
         "conversation_claimed",
@@ -606,6 +660,8 @@ async def claim_channel_anonymous_conversations(
     """
     if not user_id or not anonymous_id:
         raise ValueError("channel claim requires both verified owners")
+    from campaign_ownership import claim_campaigns, preserve_session_campaigns
+
     _, conversations = await _collections()
     now = _now()
     query = {
@@ -625,15 +681,33 @@ async def claim_channel_anonymous_conversations(
         "claim_source": "verified_zalo_channel_link",
     }}
     if conversations is not None:
+        claimable = await conversations.find(query).to_list(None)
+        for doc in claimable:
+            await preserve_session_campaigns(doc["session_id"])
         result = await conversations.update_many(query, updates)
+        await claim_campaigns(
+            user_id=user_id,
+            anonymous_id=anonymous_id,
+            conversation_ids=[
+                doc.get("conversation_id") or doc.get("_id") for doc in claimable
+            ],
+        )
         return int(result.modified_count)
     count = 0
+    claimed_ids: list[str] = []
     async with _claim_lock:
         for doc in _mem_conversations.values():
             if doc.get("owner_user_id") or _anonymous_owner(doc) != anonymous_id:
                 continue
+            await preserve_session_campaigns(doc["session_id"])
             doc.update(updates["$set"])
+            claimed_ids.append(doc.get("conversation_id") or doc.get("_id"))
             count += 1
+    await claim_campaigns(
+        user_id=user_id,
+        anonymous_id=anonymous_id,
+        conversation_ids=claimed_ids,
+    )
     return count
 
 

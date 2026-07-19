@@ -3,9 +3,19 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 import {
+  creativeReviewState,
   defaultPlacementSelection,
   mergeCreativeVerdicts,
 } from '../src/lib/creativeIntel.js'
+
+test('creative review separates analysis completion from operator confirmation', () => {
+  assert.equal(creativeReviewState([{ analysisStatus: 'queued' }]), 'analysis_required')
+  assert.equal(creativeReviewState([{ analysisStatus: 'needs_review' }]), 'blocked')
+  assert.equal(creativeReviewState([
+    { analysisStatus: 'auto_approved' },
+    { analysisStatus: 'approved_override' },
+  ]), 'ready')
+})
 
 test('hydrates queued creative files with canonical terminal verdicts', () => {
   const creative = {

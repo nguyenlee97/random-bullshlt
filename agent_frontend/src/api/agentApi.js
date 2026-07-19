@@ -1549,6 +1549,22 @@ export const AgentAPI = {
     }
   },
 
+  async confirmWorkflowStep(step) {
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/workflow/steps/${encodeURIComponent(step)}/confirm`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: SESSION_ID }),
+        signal: AbortSignal.timeout(5000),
+      },
+    )
+    if (!response.ok) {
+      throw await responseError(response, 'Không thể lưu xác nhận bước workflow.')
+    }
+    return response.json()
+  },
+
   async getWorkspace() {
     try {
       const res = await agentFetch(

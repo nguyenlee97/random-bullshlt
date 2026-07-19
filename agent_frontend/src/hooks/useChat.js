@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { AgentAPI, AGENT_SCENARIOS, fetchDmpAttributes, matchDmpByKeywords, extractTargetingKeywords, extractTargetingMap, prepareCreativeFiles } from '@/api/agentApi'
+import { creativeReviewState } from '@/lib/creativeIntel'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
 import { responseAllowsAdvance } from '@/lib/workflowValidation'
@@ -337,8 +338,23 @@ export function useChat({
 
       case 2: {
         try {
+          const currentFiles = stepData.creative?.files || []
+          if (creativeReviewState(currentFiles) === 'ready') {
+            if (markApproved) await AgentAPI.confirmWorkflowStep(2)
+            response = {
+              id: generateId(),
+              role: 'assistant',
+              content: '✅ Kết quả phân tích creative đã được xác nhận. Mời Anh/Chị tiếp tục sang Setup Camp.',
+              blocks: [],
+              timestamp: new Date().toISOString(),
+              metadata: { tool: 'creative_review_confirmed', model: 'none', step: 2 },
+              suggestions: [],
+            }
+            shouldAdvance = true
+            break
+          }
           const prepared = await prepareCreativeFiles(
-            stepData.creative?.files || [],
+            currentFiles,
             files => onCreativePrepared?.(files),
           )
           onCreativePrepared?.(prepared)
@@ -360,13 +376,18 @@ export function useChat({
             response = {
               id: generateId(),
               role: 'assistant',
-              content: `✅ ${prepared.length} creative đã được phân tích và lưu an toàn.`,
+              content: markApproved
+                ? `✅ Đã phân tích xong ${prepared.length} creative. Anh/Chị hãy đọc kết quả trong workspace, sau đó bấm “Xác nhận & sang Setup” khi đã sẵn sàng.`
+                : `✅ ${prepared.length} creative đã được phân tích và lưu an toàn.`,
               blocks: [],
               timestamp: new Date().toISOString(),
               metadata: { tool: 'creative_approved', model: 'none', step: 2 },
               suggestions: [],
             }
-            shouldAdvance = true
+            // Guided mode always pauses so the operator can read the completed
+            // analysis. Autopilot artifact repair already uses this click as
+            // its explicit review/save boundary and may return to the run.
+            shouldAdvance = !markApproved
           }
         } catch (error) {
           shouldAdvance = false

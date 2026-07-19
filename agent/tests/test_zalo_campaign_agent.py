@@ -193,6 +193,29 @@ async def test_owned_campaigns_fetches_only_order_ids_from_owned_conversations(m
 
 
 @pytest.mark.asyncio
+async def test_owned_campaign_survives_history_deletion(monkeypatch):
+    from identity import bootstrap_anonymous, create_conversation, delete_conversation
+    from session import update_order_ids
+    from zalo_campaign_agent import owned_campaigns
+
+    owner = await bootstrap_anonymous()
+    conversation = await create_conversation(owner["identity_id"], title="Delete chat")
+    await update_order_ids(conversation["session_id"], ["ORD-RETAINED"])
+    result = await delete_conversation(
+        owner["identity_id"], conversation["conversation_id"]
+    )
+
+    assert result["retained_campaign_ids"] == ["ORD-RETAINED"]
+    monkeypatch.setattr("tools.order_api.fetch_order", AsyncMock(return_value={
+        "id": "ORD-RETAINED", "brand": "Retained", "status": "active",
+    }))
+    campaigns = await owned_campaigns({
+        "anonymous_id": owner["identity_id"], "user_id": None,
+    })
+    assert [item["campaign_id"] for item in campaigns] == ["ORD-RETAINED"]
+
+
+@pytest.mark.asyncio
 async def test_pause_requires_confirmation_and_rechecks_selected_campaign(monkeypatch):
     import zalo_campaign_agent as agent
 

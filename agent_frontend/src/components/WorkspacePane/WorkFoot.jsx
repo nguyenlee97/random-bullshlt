@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { ChevronRight, ChevronLeft, Check, Loader2, Wrench, Cpu } from 'lucide-react'
 
-export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canApprove, busy, onApprove, onBack, onNext }) {
+export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canApprove, busy, onApprove, onBack, onNext, approveLabel = '' }) {
   const isDone = stepStatus === 'done'
   const isLast = stepIndex === totalSteps - 1
   // No model toggle needed — single backend model
@@ -60,7 +60,7 @@ export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canA
             {busy ? (
               <><Loader2 className="w-3.5 h-3.5 animate-spin" />Đang xử lý...</>
             ) : (
-              <><Check className="w-3.5 h-3.5" />{isLast ? 'Đồng ý & Hoàn tất' : 'Đồng ý & Tiếp tục'}</>
+              <><Check className="w-3.5 h-3.5" />{approveLabel || (isLast ? 'Đồng ý & Hoàn tất' : 'Đồng ý & Tiếp tục')}</>
             )}
           </Button>
         )}

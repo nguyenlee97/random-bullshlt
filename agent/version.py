@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-20.2"
+BUILD_VERSION = "2026-07-20.3"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -153,6 +153,8 @@ BUILD_FEATURES = [
     "guided-model-led-brief-delegation",   # ask by default; infer advisory fields only when naturally delegated
     "guided-conversation-audience-reset", # a new/resumed campaign cannot retain old recommendation cards
     "guided-conversation-request-isolation", # late proactive responses are discarded after campaign switches
+    "guided-explicit-creative-review",       # terminal analysis remains visible until operator confirmation
+    "durable-account-campaign-ownership",    # campaign discovery survives transcript deletion
     "guided-order-response-normalization", # setup preserves guard details and successful order metadata
     "guided-live-conflict-recovery",       # commit-time booking conflicts refresh zones for safe reselection
     "audience-unknown-size-semantics",     # missing catalog size is never presented or prompted as zero people

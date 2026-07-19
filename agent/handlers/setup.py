@@ -456,6 +456,8 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
     order_id = result.get("id", "—")
     ORDERS_CREATED.inc()
     await update_order_ids(session_id, [order_id])
+    from campaign_ownership import register_campaign_for_session
+    await register_campaign_for_session(session_id, order_id)
 
     api_warnings = result.get("warnings", [])
     budget_display = brief.get("budget", 0)

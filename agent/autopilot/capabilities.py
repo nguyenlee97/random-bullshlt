@@ -976,6 +976,8 @@ async def _create_order(run: dict, workspace: dict) -> CapabilityResult:
             *(session.get("created_order_ids") or []), str(order_id),
         ]))
         await update_order_ids(run["session_id"], order_ids)
+        from campaign_ownership import register_campaign_for_session
+        await register_campaign_for_session(run["session_id"], str(order_id))
     return CapabilityResult(
         value={"order": result, "idempotency_key": payload["idempotencyKey"]},
         evidence=[{"type": "order_api", "order_id": order_id,

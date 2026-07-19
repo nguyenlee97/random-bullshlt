@@ -193,38 +193,26 @@ async def _update_thread(thread: dict, updates: dict) -> dict:
 
 
 async def owned_campaigns(thread: dict) -> list[dict]:
-    """Return orders referenced by conversations owned by this channel actor."""
+    """Return orders from the durable registry owned by this channel actor."""
+    from campaign_ownership import (
+        list_owned_campaign_references,
+        preserve_session_campaigns,
+    )
     from identity import list_conversations
-    from session import get_or_create_session
     from tools.order_api import fetch_order
-    from workspace.service import get_workspace
 
     actor = _thread_actor(thread)
+    # Additive migration: every surviving legacy conversation self-backfills on
+    # read. Future conversation deletion also preserves these references first.
     conversations = await list_conversations(actor, include_archived=True)
-    references: dict[str, dict] = {}
     for conversation in conversations:
         session_id = conversation.get("session_id")
-        if not session_id:
-            continue
-        session = await get_or_create_session(session_id)
-        order_ids = list(session.get("created_order_ids") or [])
-        try:
-            workspace = await get_workspace(session_id)
-            order_value = (workspace.get("artifacts", {}).get("order", {}) or {}).get("value") or {}
-            if isinstance(order_value, dict):
-                order_value = order_value.get("order", order_value)
-                order_id = order_value.get("id") or order_value.get("_id")
-                if order_id:
-                    order_ids.append(str(order_id))
-        except Exception:
-            pass
-        for order_id in dict.fromkeys(str(item) for item in order_ids if item):
-            references.setdefault(order_id, {
-                "conversation_id": conversation["conversation_id"],
-                "session_id": session_id,
-                "experience_mode": conversation.get("experience_mode"),
-                "conversation_title": conversation.get("title"),
-            })
+        if session_id:
+            await preserve_session_campaigns(session_id)
+    references = {
+        item["order_id"]: item
+        for item in await list_owned_campaign_references(actor)
+    }
 
     async def fetch(item: tuple[str, dict]) -> dict | None:
         order_id, reference = item
