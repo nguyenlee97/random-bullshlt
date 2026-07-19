@@ -3,136 +3,192 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Advertising Agent — Kiến trúc &amp; hướng dẫn vận hành</title>
+<meta name="description" content="Kiến trúc, business flow, safety boundary và current-state của Advertising Agent." />
+<title>Advertising Agent — Technical &amp; Product Architecture</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
-  :root{--bg:#08111f;--panel:#101c2e;--panel2:#14243a;--ink:#eef6ff;--muted:#9bb0c9;--line:#243a57;--brand:#0068ff;--accent2:#0068ff;--cyan:#38a3ff;--green:#34d399;--amber:#ffb454;--red:#fb7185;--max:1120px}
-  *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:#72baff}code{background:#07101d;border:1px solid #1c314d;border-radius:6px;padding:.12em .38em;color:#bde0ff}pre{overflow:auto;background:#07101d;border:1px solid var(--line);border-radius:14px;padding:16px;color:#cfe7ff}.wrap{max-width:var(--max);margin:auto;padding:0 24px 100px}.back{position:fixed;z-index:20;top:16px;left:16px;text-decoration:none;color:white;background:rgba(16,28,46,.9);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:13px}.hero{padding:76px 24px 58px;text-align:center;border-bottom:1px solid var(--line);background:radial-gradient(900px 380px at 50% -10%,rgba(0,104,255,.35),transparent),linear-gradient(180deg,#0d1a2c,#08111f)}.kicker{text-transform:uppercase;letter-spacing:.22em;color:#74b9ff;font-size:12px;font-weight:800}.hero h1{font-size:46px;line-height:1.08;margin:14px 0 10px}.hero p{max-width:810px;margin:auto;color:var(--muted);font-size:18px}.badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:25px}.badge{border:1px solid var(--line);background:#13243a;border-radius:999px;padding:6px 11px;font-size:12px;font-weight:700}.meta{margin-top:17px;color:#7590ad;font-size:13px}.toc,.card,.callout{background:var(--panel);border:1px solid var(--line);border-radius:18px}.toc{margin:32px 0;padding:22px 26px}.toc ol{columns:2;margin:10px 0 0;padding-left:22px}.toc li{margin:6px 0}.toc a{text-decoration:none}h2{font-size:28px;margin:58px 0 14px;padding-top:14px;border-top:1px solid var(--line)}h2 .n{display:inline-flex;width:34px;height:34px;align-items:center;justify-content:center;margin-right:10px;border-radius:10px;background:var(--brand);font-size:14px}h3{margin-top:28px}.lead{font-size:18px;color:#cbd9e9}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{padding:18px}.card h3,.card h4{margin:0 0 7px}.card p{margin:0;color:var(--muted)}.status{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800}.done{background:rgba(52,211,153,.14);color:#6ee7b7}.partial{background:rgba(255,180,84,.15);color:#ffc777}.later{background:rgba(114,186,255,.14);color:#8ac7ff}.callout{padding:16px 18px;margin:18px 0;border-left:4px solid var(--cyan)}.warn{border-left-color:var(--amber)}.danger{border-left-color:var(--red)}table{width:100%;border-collapse:collapse;margin:16px 0;background:var(--panel);border:1px solid var(--line)}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:11px 12px}th{background:var(--panel2);font-size:13px;color:#bcd2e9}.table{overflow:auto;border-radius:14px}.mermaid{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;overflow:auto}.steps{counter-reset:s}.step{position:relative;margin:14px 0;padding:16px 18px 16px 56px;background:var(--panel);border:1px solid var(--line);border-radius:14px}.step:before{counter-increment:s;content:counter(s);position:absolute;left:16px;top:17px;width:27px;height:27px;display:flex;align-items:center;justify-content:center;border-radius:9px;background:var(--brand);font-weight:800}.step b{display:block;margin-bottom:3px}.step span{color:var(--muted)}footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:#748ba6;text-align:center;font-size:13px}
-  @media(max-width:720px){.wrap{padding:0 14px 80px}.hero{padding:65px 16px 42px}.hero h1{font-size:31px}.hero p{font-size:15px}.grid{grid-template-columns:1fr}.toc ol{columns:1}h2{font-size:23px}.back span{display:none}table{min-width:680px}.card{padding:15px}}
+  :root{--bg:#030916;--panel:#0b1628;--panel2:#10213a;--ink:#f2f7ff;--muted:#9aacc2;--line:#203653;--brand:#0068ff;--accent2:#0068ff;--cyan:#68d8ff;--green:#45dfb1;--amber:#ffc36d;--red:#fb7185;--max:1180px}
+  *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 500px at 50% -180px,rgba(0,104,255,.3),transparent),var(--bg);color:var(--ink);font:16px/1.72 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:#83c3ff}code{background:#06101e;border:1px solid #1b3150;border-radius:6px;padding:.12em .38em;color:#c8e8ff}pre{overflow:auto;background:#06101e;border:1px solid var(--line);border-radius:14px;padding:16px;color:#cfe7ff}.wrap{max-width:var(--max);margin:auto;padding:0 24px 100px}.top-actions{position:fixed;z-index:30;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;pointer-events:none}.top-actions a{pointer-events:auto;text-decoration:none;color:white;background:rgba(8,18,33,.88);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:13px;font-weight:700}.hero{padding:100px 24px 72px;text-align:center;border-bottom:1px solid var(--line)}.kicker{text-transform:uppercase;letter-spacing:.24em;color:#7fc5ff;font-size:12px;font-weight:900}.hero h1{font-size:clamp(40px,7vw,76px);line-height:.98;letter-spacing:-.055em;margin:18px auto 20px;max-width:980px}.hero h1 span{background:linear-gradient(100deg,#75b5ff,#9de8ff,#8cf0ce);background-clip:text;-webkit-background-clip:text;color:transparent}.hero p{max-width:860px;margin:auto;color:var(--muted);font-size:18px}.badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:28px}.badge{border:1px solid var(--line);background:rgba(16,33,58,.78);border-radius:999px;padding:6px 11px;font-size:12px;font-weight:800}.meta{margin-top:18px;color:#7188a4;font-size:13px}.toc,.card,.callout,.metric{background:rgba(11,22,40,.88);border:1px solid var(--line);border-radius:18px}.toc{margin:34px 0;padding:22px 26px}.toc ol{columns:2;margin:10px 0 0;padding-left:22px}.toc li{margin:6px 0}.toc a{text-decoration:none}h2{font-size:30px;line-height:1.25;margin:62px 0 15px;padding-top:18px;border-top:1px solid var(--line)}h2 .n{display:inline-flex;width:36px;height:36px;align-items:center;justify-content:center;margin-right:10px;border-radius:10px;background:var(--brand);font-size:14px}h3{margin-top:28px}.lead{font-size:18px;color:#cedbeb}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.card{padding:20px}.card h3,.card h4{margin:0 0 7px}.card p{margin:0;color:var(--muted)}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:24px 0}.metric{padding:18px}.metric b{display:block;font-size:31px;line-height:1;color:white}.metric span{display:block;margin-top:8px;color:var(--muted);font-size:12px}.status{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:900}.done{background:rgba(69,223,177,.14);color:#7ff1ce}.partial{background:rgba(255,195,109,.15);color:#ffd38e}.later{background:rgba(131,195,255,.14);color:#9bd0ff}.callout{padding:16px 18px;margin:18px 0;border-left:4px solid var(--cyan)}.warn{border-left-color:var(--amber)}.danger{border-left-color:var(--red)}.success{border-left-color:var(--green)}table{width:100%;border-collapse:collapse;margin:0;background:var(--panel);border:1px solid var(--line)}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:12px 13px}th{background:var(--panel2);font-size:13px;color:#c7d9ec}.table{overflow:auto;border-radius:14px;margin:16px 0}.diagram{position:relative;margin:18px 0}.mermaid{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;overflow:auto;cursor:zoom-in}.zoom-hint{position:absolute;right:12px;top:10px;border:1px solid var(--line);border-radius:999px;background:#081426;padding:4px 9px;color:#91a6bf;font-size:11px;pointer-events:none}.steps{counter-reset:s}.step{position:relative;margin:14px 0;padding:16px 18px 16px 58px;background:var(--panel);border:1px solid var(--line);border-radius:14px}.step:before{counter-increment:s;content:counter(s);position:absolute;left:16px;top:17px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:9px;background:var(--brand);font-weight:900}.step b{display:block;margin-bottom:3px}.step span{color:var(--muted)}.small{font-size:13px;color:var(--muted)}footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);color:#7188a4;text-align:center;font-size:13px}
+  .lightbox{position:fixed;inset:0;z-index:100;display:none;flex-direction:column;background:rgba(1,5,13,.97);padding:18px}.lightbox.open{display:flex}.lightbox-bar{display:flex;align-items:center;gap:8px;margin-bottom:12px}.lightbox-bar span{margin-right:auto;color:#a9bbcf;font-weight:800}.lightbox button{border:1px solid var(--line);border-radius:10px;background:#0e1e34;color:white;padding:8px 12px;font-weight:800;cursor:pointer}.lightbox-stage{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:16px;background:#07111f;display:flex;align-items:flex-start;justify-content:center;padding:24px}.lightbox-content{transform-origin:top center;transition:transform .15s ease}.lightbox-content svg{max-width:none!important;height:auto!important}
+  @media(max-width:760px){.wrap{padding:0 14px 80px}.hero{padding:92px 16px 48px}.hero p{font-size:15px}.grid,.grid3{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.toc ol{columns:1}h2{font-size:23px}.top-actions a span{display:none}table{min-width:720px}.card{padding:16px}.zoom-hint{display:none}.mermaid{padding:12px}}
+  @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.lightbox-content{transition:none}}
 </style>
 </head>
 <body>
-<a class="back" href="/">← <span>Về Advertising Agent</span></a>
+<div class="top-actions"><a href="/">← <span>Trang giới thiệu</span></a><a href="/agent">Vào Agent <span>→</span></a></div>
 <header class="hero">
-  <div class="kicker">Current system walkthrough</div>
-  <h1>Advertising Agent</h1>
-  <p>Trợ lý xây dựng chiến dịch quảng cáo với hai trải nghiệm được chọn cố định từ trang chủ: Campaign Copilot để cùng AI làm từng bước và Campaign Autopilot để giao một brief rồi giám sát kế hoạch tự động.</p>
-  <div class="badges"><span class="badge">React · FastAPI · Node</span><span class="badge">MongoDB canonical workspace</span><span class="badge">LangGraph freeform</span><span class="badge">Hybrid RAG · Qdrant</span><span class="badge">VLM creative review</span><span class="badge">Prometheus · Langfuse</span></div>
-  <div class="meta">Cập nhật 2026-07-17 · Mô tả build hiện tại, giới hạn hiện tại và cách kiểm thử</div>
+  <div class="kicker">Product · Business · Technical Architecture</div>
+  <h1>Advertising Agent<br/><span>AI campaign operating system</span></h1>
+  <p>Một hệ thống AI quảng cáo end-to-end kết nối brief, strategy, audience, creative, media, launch, live view và reporting trong một canonical workspace — vận hành bằng Copilot trên web, Autopilot bền vững và Zalo OA.</p>
+  <div class="badges"><span class="badge">React · FastAPI · Node</span><span class="badge">LangGraph orchestration</span><span class="badge">MongoDB canonical workspace</span><span class="badge">Hybrid RAG · Qdrant</span><span class="badge">VLM Creative Intelligence</span><span class="badge">Zalo Login &amp; OA</span><span class="badge">Prometheus · Grafana · Langfuse</span></div>
+  <div class="meta">Current-state build 2026-07-20.4 · Capability đã chạy được tách rõ khỏi roadmap</div>
 </header>
 <main class="wrap">
-  <nav class="toc"><b>Nội dung</b><ol><li><a href="#state">Trạng thái hiện tại</a></li><li><a href="#modes">Hai chế độ làm việc</a></li><li><a href="#architecture">Kiến trúc</a></li><li><a href="#workspace">Workspace &amp; non-linear flow</a></li><li><a href="#rag">Audience RAG không reranker</a></li><li><a href="#creative">Creative upload / AI tự tạo</a></li><li><a href="#safety">An toàn &amp; độ bền</a></li><li><a href="#test">Walkthrough kiểm thử</a></li><li><a href="#roadmap">Việc còn lại</a></li></ol></nav>
+  <nav class="toc"><b>Nội dung</b><ol><li><a href="#business">Bài toán &amp; hành trình business</a></li><li><a href="#modes">Copilot và Autopilot</a></li><li><a href="#architecture">Kiến trúc hệ thống</a></li><li><a href="#workspace">Canonical workspace</a></li><li><a href="#intelligence">Audience &amp; Creative Intelligence</a></li><li><a href="#durability">Durable execution</a></li><li><a href="#zalo">Zalo identity &amp; channel</a></li><li><a href="#reports">Live view &amp; sáu báo cáo</a></li><li><a href="#security">Security &amp; observability</a></li><li><a href="#evidence">Evidence &amp; giới hạn</a></li></ol></nav>
 
-  <h2 id="state"><span class="n">01</span>Trạng thái hiện tại</h2>
-  <p class="lead">Ứng dụng đã vượt qua mức hackathon prototype ở nền tảng kiến trúc, nhưng chưa phải release production hoàn chỉnh. Campaign Copilot, workspace phiên bản hóa, RAG audience, creative intelligence và Autopilot foundation đều chạy được; các tích hợp provider dài, browser E2E và chất lượng golden set vẫn cần tiếp tục gia cố.</p>
-  <div class="grid">
-    <div class="card"><h3><span class="status done">ĐÃ CÓ</span> Nền tảng</h3><p>Docker Compose, health/readiness, API key proxy, rate limit, structured logs, metrics, Langfuse, canonical workspace và optimistic revision.</p></div>
-    <div class="card"><h3><span class="status done">ĐÃ CÓ</span> Agent</h3><p>Campaign Copilot, LangGraph freeform, proposal/approval, dependency invalidation, durable Autopilot tasks, pause/resume/retry/replan và final launch gate.</p></div>
-    <div class="card"><h3><span class="status done">ĐÃ CÓ</span> Intelligence</h3><p>Hybrid audience RAG, query rewrite, critic selector, deterministic exclusion guard, VLM creative analysis, zone ranking và order guard.</p></div>
-    <div class="card"><h3><span class="status partial">ĐANG GIA CỐ</span> Release</h3><p>Golden-label human review, real upload/provider journeys và browser E2E. Multi-format AI generation cùng report phân tích dùng chung cho Copilot/Autopilot đã code-complete; journey provider thật vẫn cần sign-off.</p></div>
-  </div>
-
-  <h2 id="modes"><span class="n">02</span>Hai chế độ làm việc</h2>
-  <div class="grid">
-    <div class="card"><h3>Campaign Copilot</h3><p>Người dùng cùng AI điều khiển Brief → Audience → Creative → Setup → Result. Chat giải thích hoặc tạo proposal; thay đổi chỉ vào canonical workspace sau khi được duyệt.</p></div>
-    <div class="card"><h3>Campaign Autopilot</h3><p>Người dùng đưa brief, chọn nguồn creative và chính sách duyệt. Worker chạy capability graph, ghi artifact có revision/evidence và dừng tại review hoặc launch gate.</p></div>
-  </div>
-  <div class="callout"><b>Ranh giới quan trọng:</b> Mode được chọn một lần trên trang chủ và cố định cho campaign. Trong Autopilot, chat bị khóa khi worker đang chạy, chỉ nhận quyết định duyệt/từ chối tại review gate, rồi chuyển thành hỏi đáp chỉ đọc sau khi run kết thúc. Tab Báo cáo phân tích dùng cùng module, sáu loại report và report Q&amp;A như Campaign Copilot. Tạo order luôn yêu cầu launch approval; VLM cảnh báo hoặc độ tin cậy thấp luôn chuyển sang người dùng.</div>
-
-  <h2 id="architecture"><span class="n">03</span>Kiến trúc đang chạy</h2>
-  <div class="mermaid">
+  <h2 id="business"><span class="n">01</span>Từ business brief đến campaign có thể vận hành</h2>
+  <p class="lead">Bài toán không phải “chat với AI để lấy một đoạn copy”. Đội quảng cáo phải chuyển một mục tiêu kinh doanh mơ hồ thành audience có căn cứ, creative đúng format, placement khả thi, order an toàn và báo cáo có thể giải thích — đồng thời giữ cho con người quyền sửa và quyết định launch.</p>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
 flowchart LR
-  UI["React UI :5175<br/>Homepage + Copilot + Autopilot"] -->|"/agent/*"| AG["FastAPI Agent :8080<br/>LangGraph + durable worker"]
-  UI -->|"/api/*"| BE["Node Backend :3000<br/>catalog · order · creative storage"]
-  AG --> WS[("MongoDB<br/>workspace · run · task · logs")]
-  AG --> QD[("Qdrant<br/>dense + sparse vectors")]
-  AG --> MAAS["GreenNode MaaS<br/>MiniMax · VLM · image generation"]
-  AG -. optional .-> CRITIC["GPT critic / selector"]
-  PROM["Prometheus + Grafana"] --> AG
-  AG --> LF["Langfuse traces"]
-  BE --> WS
+  B[Business goal] --> BR[Structured brief]
+  BR --> ST[Strategy & budget]
+  ST --> AU[Audience RAG]
+  AU --> CR[Creative Intelligence]
+  CR --> PL[Placement & assignments]
+  PL --> HG{Human launch gate}
+  HG --> OR[Create + verify order]
+  OR --> LIVE[Live-view evidence]
+  OR --> RP[Six reports + PDF]
+  RP --> WEB[Web workspace]
+  RP --> ZA[Zalo OA]
+  </div></div>
+  <div class="grid3">
+    <div class="card"><h3>Plan</h3><p>Brief → strategy → audience → targeting → placement intent. Mỗi quyết định có source, revision và evidence.</p></div>
+    <div class="card"><h3>Build &amp; launch</h3><p>Upload hoặc AI-generate creative, phân tích VLM, map đúng zone, chạy order guard và chờ explicit approval.</p></div>
+    <div class="card"><h3>Observe &amp; continue</h3><p>Result, setup report, live screenshots, sáu report, full PDF và continuity giữa web/Zalo.</p></div>
   </div>
-  <div class="table"><table><thead><tr><th>Thành phần</th><th>Vai trò</th><th>Không được làm</th></tr></thead><tbody><tr><td>Frontend</td><td>Hiển thị workspace, proposal, run, evidence và review actions</td><td>Không là nguồn dữ liệu cuối cùng</td></tr><tr><td>Agent API</td><td>Hiểu ý định, chạy capability, kiểm tra revision và orchestration</td><td>Không cho model ghi JSON tùy ý</td></tr><tr><td>Node backend</td><td>Catalog, creative storage và order APIs</td><td>Không tự bỏ qua order guard</td></tr><tr><td>MongoDB</td><td>Canonical workspace và durable run/task state</td><td>Không dùng fallback memory như production truth</td></tr></tbody></table></div>
 
-  <h2 id="workspace"><span class="n">04</span>Workspace và luồng phi tuyến</h2>
-  <p>Mỗi artifact có value, status và revision. Một thay đổi được tạo thành proposal với base revision; khi duyệt, server commit atomically, tăng workspace revision và chỉ đánh dấu stale các artifact phụ thuộc.</p>
-  <div class="mermaid">
+  <h2 id="modes"><span class="n">02</span>Hai chế độ, cùng một product truth</h2>
+  <div class="grid">
+    <div class="card"><h3><span class="status done">LIVE</span> Campaign Copilot</h3><p>Operator cùng AI đi qua <b>Brief → Audience → Creative Intelligence → Setup → Result → Report</b>. Chat hiểu workspace và tạo proposal; UI cho phép sửa phi tuyến. Creative phải có verdict hoàn tất và explicit review confirmation trước khi Setup mở.</p></div>
+    <div class="card"><h3><span class="status done">LIVE</span> Campaign Autopilot</h3><p>Operator duyệt brief, chọn nguồn creative và review policy. Durable worker thực thi capability graph, dừng tại input/review boundary, luôn dừng ở final launch approval, rồi trình bày Result, Setup report và Report module dùng chung.</p></div>
+  </div>
+  <div class="callout success"><b>Intelligence đi cùng safety:</b> Autopilot tự động hóa phần có thể kiểm chứng; warning, timeout, low-confidence VLM, thiếu input hoặc side effect quan trọng đều fail-closed về con người. Manual override được ghi thành quyết định, không phải đường tắt vô hình.</div>
+
+  <h2 id="architecture"><span class="n">03</span>Kiến trúc LLM + tool controller + service boundary</h2>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart TB
+  U[Web / Mobile] --> FE[React experience layer]
+  Z[Zalo OA] --> ZA[Signed webhook + durable Zalo worker]
+  FE --> AG[FastAPI Agent gateway]
+  ZA --> CTRL[Bounded GPT tool controller]
+  CTRL --> AG
+  AG --> LG[LangGraph Copilot / Autopilot orchestration]
+  LG --> CAP[Typed capability registry]
+  CAP --> RAG[Qdrant hybrid audience RAG]
+  CAP --> VLM[VLM + image provider]
+  CAP --> BE[Node campaign backend]
+  AG --> DB[(MongoDB)]
+  BE --> DB
+  CAP --> OBS[Prometheus · Grafana · Langfuse]
+  BE --> SITES[ZNews · BaoMoi · ZingMP3 replicas]
+  </div></div>
+  <div class="table"><table><thead><tr><th>Layer</th><th>Trách nhiệm</th><th>Trust boundary</th></tr></thead><tbody>
+    <tr><td>Experience</td><td>Landing, identity, Copilot workspace, Autopilot timeline/review, report, responsive mobile</td><td>Không phải nguồn dữ liệu cuối cùng</td></tr>
+    <tr><td>LLM controller</td><td>Intent, function calling, artifact-grounded explanation, Zalo tool loop</td><td>Không tự truyền owner ID hoặc ghi arbitrary JSON</td></tr>
+    <tr><td>Capability layer</td><td>RAG, creative analysis/generation, placement, forecast, guard, order, report</td><td>Typed schema + server validation + idempotency</td></tr>
+    <tr><td>Persistence</td><td>Conversation, canonical workspace, proposal, run/task/event, leases, ownership registry</td><td>Server-side actor resolution và revision checks</td></tr>
+  </tbody></table></div>
+
+  <h2 id="workspace"><span class="n">04</span>Canonical campaign workspace và artifact graph</h2>
+  <p>Một campaign không phải một chuỗi chat. Nó là đồ thị artifact có revision: brief, strategy, audience, targeting, placement intent, creative format plan, creative verdict, assignments, forecast, order draft, guard, verified order và reports. Chat, web và Zalo cùng đọc một nguồn sự thật này.</p>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
 flowchart LR
   B[Brief] --> S[Strategy]
   S --> A[Audience] --> T[Targeting]
-  T --> I[Placement intent]
-  I --> FP[Creative format plan]
-  FP --> C[Upload / generate creative]
-  C --> V[Creative verdict]
-  I --> P[Final compatible placements]
-  V --> P --> AS[Assignments] --> F[Forecast] --> D[Order draft] --> G[Order guard] --> H{Launch approval} --> O[Create + verify order] --> R[Report]
-  </div>
-  <p>Ví dụ: đổi budget làm strategy/forecast/order draft stale nhưng không xóa file creative. Thay creative chỉ yêu cầu phân tích, placement compatibility và assignments chạy lại. Kết quả worker chậm bị từ chối nếu input revision đã đổi.</p>
+  T --> PI[Placement intent] --> FP[Creative format plan]
+  FP --> C[Upload / AI generate] --> V[Creative verdict]
+  PI --> P[Final compatible placement]
+  V --> P --> AS[Assignments] --> F[Forecast]
+  F --> D[Order draft] --> G[Order guard] --> H{Launch approval}
+  H --> O[Verified order] --> R[Reports & live view]
+  </div></div>
+  <p>Dependency invalidation có chọn lọc: đổi budget làm strategy/forecast/order draft stale nhưng không xóa creative; đổi creative chỉ chạy lại analysis, compatibility và assignments. Kết quả worker chậm bị từ chối nếu input revision không còn khớp.</p>
 
-  <h2 id="rag"><span class="n">05</span>300+ audience datapoint được chọn thế nào khi không có reranker?</h2>
-  <p class="lead">Không bật reranker không có nghĩa là chọn ngẫu nhiên. Pipeline hiện tại vẫn có hai lớp retrieval, hợp nhất thứ hạng, lọc an toàn và một selector bị khóa vào candidate IDs.</p>
+  <h2 id="intelligence"><span class="n">05</span>Audience RAG và Creative Intelligence</h2>
+  <div class="grid">
+    <div class="card"><h3>Hybrid audience retrieval</h3><p>Query rewrite đa khía cạnh giữ tín hiệu gốc; dense multilingual embeddings + sparse BM25 được Reciprocal Rank Fusion hợp nhất. Candidate IDs được grounding vào catalog và exclusion guard trước khi selector chọn.</p></div>
+    <div class="card"><h3>Creative analysis</h3><p>Deterministic dimension/format checks kết hợp VLM semantic fit, brand safety và confidence. Verdict cùng analysis ID được lưu; Copilot và Autopilot đều có human review boundary.</p></div>
+    <div class="card"><h3>Bounded multi-format generation</h3><p>Placement intent tạo exact-format plan; worker deduplicate size, cap tối đa ba asset, tạo có giới hạn, normalize và persist theo revision trước final compatibility ranking.</p></div>
+    <div class="card"><h3>Catalog-grounded planning</h3><p>Zone, CPM, inventory và segment đều đọc từ catalog/service. Qwen reranker hiện tắt vì A/B gần nhất làm giảm relevance và tăng latency; hybrid fallback vẫn là production path.</p></div>
+  </div>
+  <div class="metrics"><div class="metric"><b>310</b><span>audience segments trong production fingerprint</span></div><div class="metric"><b>0.840</b><span>must-recall@25 trên 80-case run gần nhất</span></div><div class="metric"><b>0</b><span>unknown/exclusion/grounding violations trong safety run</span></div><div class="metric"><b>3</b><span>AI assets tối đa cho một format plan hiện tại</span></div></div>
+  <p class="small">Các số eval là bằng chứng regression của dataset/run đã ghi nhận, không phải SLA chất lượng cho mọi brief.</p>
+
+  <h2 id="durability"><span class="n">06</span>Durable runs, workers, leases và side-effect safety</h2>
   <div class="steps">
-    <div class="step"><b>Giữ nguyên tín hiệu trong brief</b><span>Brand, objective, KPI, notes và các câu loại trừ được bảo toàn.</span></div>
-    <div class="step"><b>Query rewrite theo nhiều khía cạnh</b><span>Tạo các truy vấn bổ sung nhưng kiểm tra coverage để không làm mất ý định gốc.</span></div>
-    <div class="step"><b>Hybrid retrieval trong Qdrant</b><span>Dense multilingual MiniLM tìm ý nghĩa; sparse BM25 giữ từ khóa/chính tả; Reciprocal Rank Fusion hợp nhất hai danh sách.</span></div>
-    <div class="step"><b>Merge đa truy vấn</b><span>Deduplicate theo segment ID, ưu tiên best rank và dùng mức đồng thuận giữa query làm tie-break.</span></div>
-    <div class="step"><b>Candidate pool hữu hạn</b><span>Chỉ top 25 catalog-backed candidates đi tiếp. Nếu reranker tắt hoặc lỗi, thứ tự hybrid được giữ nguyên.</span></div>
-    <div class="step"><b>Exclusion guard + critic selector</b><span>Taxonomy guard loại xung đột rõ ràng; GPT critic chọn đúng 6 trong whitelist. ID ngoài candidate pool bị từ chối.</span></div>
+    <div class="step"><b>Plan thành task bền vững</b><span>Mỗi capability task có input revision, status, attempt, evidence và trace; process restart không làm mất run.</span></div>
+    <div class="step"><b>Worker lease + heartbeat</b><span>Lease ngăn hai worker cùng sở hữu task; stale lease có thể reclaim. Bounded retry phân biệt lỗi có thể phục hồi với lỗi cần người dùng.</span></div>
+    <div class="step"><b>Idempotency tại side effect</b><span>Image generation, report generation và order creation dùng key/lease/verification để retry không nhân đôi kết quả.</span></div>
+    <div class="step"><b>Human review &amp; manual repair</b><span>Run pause ở artifact review, input gate hoặc launch gate. Edit commit vào canonical workspace rồi run tiếp từ đúng dependency.</span></div>
   </div>
-  <div class="callout"><b>Kết quả regression gần nhất:</b> recall@15 0,819 · MRR 0,851 · p95 5,51 giây · 0 audience-exclusion violation trên run hậu sửa. Đây là kết quả eval, không phải cam kết chất lượng cho mọi brief.</div>
+  <div class="callout danger"><b>Launch invariant:</b> không mode, policy hoặc channel nào được tạo order khi chưa có explicit launch approval và order guard hợp lệ. Các product demo mới chỉ chạy fixture nội bộ và không gọi external campaign endpoint.</div>
 
-  <h2 id="creative"><span class="n">06</span>Creative: tải lên hoặc để AI tự tạo</h2>
-  <p>Trước khi bắt đầu Autopilot, người dùng phải chọn rõ một nguồn:</p>
-  <div class="grid"><div class="card"><h3>Upload</h3><p>Nếu chưa có file, task dừng với hành động retry. Sau khi user upload, run dùng lại canonical file và đi qua deterministic analysis + VLM.</p></div><div class="card"><h3>AI generate</h3><p>Worker chọn tối đa ba format exact-size từ placement intent, tạo song song có giới hạn, lưu idempotently, rồi đưa tất cả asset qua cùng luồng creative analysis.</p></div></div>
-  <div class="mermaid">
-flowchart LR
-  PI[Placement intent] --> FP[Deduplicate exact formats<br/>cost cap = 3]
-  FP --> CH{Creative source}
-  CH -->|upload| WAIT[Wait for canonical files]
-  CH -->|ai_generate| GEN[Bounded multi-format generation]
-  GEN --> FIT[Exact-size normalization]
-  FIT --> STORE[Revision-idempotent storage]
-  WAIT --> DET[Deterministic checks]
-  STORE --> DET
-  DET --> VLM[VLM semantic + safety analysis]
-  VLM -->|high confidence, safe| NEXT[Final exact-size placement]
-  VLM -->|warning / timeout / low confidence| REVIEW[Human review]
+  <h2 id="zalo"><span class="n">07</span>Anonymous-first, account ownership và Zalo continuity</h2>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+sequenceDiagram
+  participant V as Anonymous visitor
+  participant W as Web Agent
+  participant I as Identity authority
+  participant Z as Zalo Login / OA
+  participant C as Canonical campaign
+  V->>W: Start without login
+  W->>C: Device-owned conversation
+  V->>I: Optional Zalo login
+  I-->>V: Opaque HttpOnly account session
+  V->>I: Explicit claim conversation
+  I->>C: Atomic ownership transfer
+  Z->>I: Signed OA link / actor resolution
+  Z->>C: Owned status · report · live · review
+  C-->>W: Cross-device resume
+  </div></div>
+  <div class="grid">
+    <div class="card"><h3>Anonymous usage</h3><p>Visitor dùng đầy đủ campaign flow ngay, history bền trên thiết bị. Login không bắt buộc và không tự claim dữ liệu.</p></div>
+    <div class="card"><h3>Zalo as primary identity</h3><p>Zalo Login dùng Social OAuth v4 PKCE. Local email/password vẫn tồn tại như testing fallback trên cùng user/session model.</p></div>
+    <div class="card"><h3>Explicit ownership</h3><p>Claim conversation là atomic server operation. Foreign account không thể resume; Ads order vẫn là business record ngay cả khi conversation bị xóa.</p></div>
+    <div class="card"><h3>Zalo OA tool agent</h3><p>Signed webhook → immediate ACK → durable worker → bounded tool loop. Tool chỉ đọc campaign thuộc actor: list, status, setup, progress, six reports, PDF/live view, workspace link và confirmed pause/resume.</p></div>
   </div>
-  <div class="callout warn"><b>Phạm vi hiện tại:</b> Hỗ trợ các family có trong zone catalog: 300×250, 300×600, 1160×250, 1160×280, 2032×528 và skin. Zone cùng kích thước dùng chung một asset; format không hỗ trợ được báo rõ. Mỗi format hiện tạo một variant.</div>
+  <div class="callout"><b>Một campaign, không có “Zalo database” riêng:</b> campaign khởi tạo trên Zalo chạy cùng Autopilot graph, dùng campaign ownership registry và canonical conversation. Web history tự sắp lại khi Zalo run tiến triển.</div>
 
-  <h2 id="safety"><span class="n">07</span>An toàn, độ bền và observability</h2>
-  <div class="grid"><div class="card"><h4>Structured outputs</h4><p>MiniMax dùng function calling vì spike đạt schema-valid 10/10; model output vẫn được Pydantic validate.</p></div><div class="card"><h4>Durable worker</h4><p>Run/task ở Mongo, bounded retry, worker lease + heartbeat, pause/resume/cancel và idempotency boundary.</p></div><div class="card"><h4>Side-effect gate</h4><p>Order guard chạy server-side. Launch approval luôn là human gate; edit sau create không replay side effect.</p></div><div class="card"><h4>Evidence</h4><p>Mỗi task ghi catalog IDs, selector/rerank state, analysis IDs, order guard result, trace ID và artifact revisions.</p></div></div>
-  <p>Prometheus cung cấp request/LLM/tool/order metrics; Grafana hiển thị dashboard; Langfuse nhận traces khi cấu hình. Trace ID ổn định theo một Autopilot run, còn request ID có thể đổi ở mỗi HTTP request—đó là hành vi bình thường.</p>
+  <h2 id="reports"><span class="n">08</span>Launch, live screenshots và six-report workflow</h2>
+  <p>Verified order mở Result, Setup report và module phân tích dùng chung. Backend tạo sáu analysis view: <b>Daily Ops, Awareness, Consideration, Conversion, Retention, Executive</b>; mỗi view có KPI, chart, generated questions và cached report Q&amp;A. Full PDF chứa đủ sáu report, charts, KPI và Q&amp;A.</p>
+  <div class="table"><table><thead><tr><th>Surface</th><th>Current capability</th><th>Truth label</th></tr></thead><tbody>
+    <tr><td>Result</td><td>Verified order, placements, creative mapping, forecast, manager/test-site links</td><td>Canonical artifacts</td></tr>
+    <tr><td>Setup report</td><td>Brief, strategy, audience, targeting, placements, assignments, guard/order state</td><td>Canonical artifacts</td></tr>
+    <tr><td>Six analytical views</td><td>KPI, charts, questions, cached Q&amp;A, retry-safe generation</td><td>Synthetic showcase delivery data</td></tr>
+    <tr><td>Full PDF</td><td>Complete six-report export through opaque download URL</td><td>Only exposed when all views are ready</td></tr>
+    <tr><td>Zalo media</td><td>1080×1350 report JPEG, site/zone live screenshots, full PDF link</td><td>Owned campaign only</td></tr>
+  </tbody></table></div>
 
-  <h2 id="test"><span class="n">08</span>Walkthrough kiểm thử local</h2>
-  <pre><code>docker compose up -d --build
-docker compose ps
+  <h2 id="security"><span class="n">09</span>Security, failure recovery, observability và deploy</h2>
+  <div class="grid3">
+    <div class="card"><h3>Identity &amp; CSRF</h3><p>Opaque hashed revocable HttpOnly sessions, centralized CSRF header/cookie contract, Argon2id local credentials và server-side actor resolution.</p></div>
+    <div class="card"><h3>Channel safety</h3><p>PKCE login, one-time TTL link attempts, signed webhook verification, dedupe, persisted rotating OA token và owner-free tool schema.</p></div>
+    <div class="card"><h3>Observability</h3><p>Structured request/LLM/tool/order logs; Prometheus metrics, Grafana dashboards, Langfuse traces và stable Autopilot run trace ID.</p></div>
+    <div class="card"><h3>Failure recovery</h3><p>Pause/resume/cancel/replan, retry policy, stale lease reclaim, revision conflict, idempotent order/report/image boundaries và rollback backups.</p></div>
+    <div class="card"><h3>Deployment</h3><p>Nginx serves frontend/proxies APIs; FastAPI Agent và Node backend chạy dưới PM2; MongoDB/Qdrant/workers cùng readiness contract.</p></div>
+    <div class="card"><h3>Release discipline</h3><p>Frontend production build, focused suites, browser matrix, tracked-secret scan, health/readiness, rollback snapshot rồi mới switch static assets.</p></div>
+  </div>
 
-# kiểm thử code
-docker compose exec agent python -m pytest tests -q
-npm test --prefix agent_frontend
-npm test --prefix backend
+  <h2 id="evidence"><span class="n">10</span>Current evidence, giới hạn và roadmap trung thực</h2>
+  <div class="metrics"><div class="metric"><b>322</b><span>Agent tests ở baseline build 2026-07-20.3</span></div><div class="metric"><b>76</b><span>frontend tests ở baseline build 2026-07-20.3</span></div><div class="metric"><b>127/128</b><span>FE-5 scenarios pass; 1 blocked do thiếu email được ủy quyền</span></div><div class="metric"><b>5</b><span>server-owned production campaign references đã xác minh</span></div></div>
+  <div class="table"><table><thead><tr><th>Trạng thái</th><th>Hạng mục</th><th>Ý nghĩa</th></tr></thead><tbody>
+    <tr><td><span class="status done">CURRENT</span></td><td>Copilot creative review, Autopilot durable plan, Zalo worker/tool agent, cross-device ownership, report image/PDF</td><td>Đã có code, automated evidence và production health/acceptance ở phạm vi ghi nhận.</td></tr>
+    <tr><td><span class="status partial">LIMITATION</span></td><td>Analytical delivery data</td><td>Sáu report hiện dùng synthetic showcase data và được gắn nhãn; chưa phải live ad-delivery truth.</td></tr>
+    <tr><td><span class="status partial">LIMITATION</span></td><td>Inbound Zalo creative image</td><td>Zalo hỗ trợ live/report media outbound; nhận creative image trực tiếp để xây campaign vẫn chưa có.</td></tr>
+    <tr><td><span class="status partial">LIMITATION</span></td><td>Email acceptance REP-004</td><td>Không gửi external email vì chưa có recipient được project owner ủy quyền.</td></tr>
+    <tr><td><span class="status later">ROADMAP</span></td><td>Live analytics &amp; optimization agent</td><td>Thay synthetic delivery bằng pipeline thật, anomaly/optimization proposals có approval boundary.</td></tr>
+    <tr><td><span class="status later">ROADMAP</span></td><td>Horizontal scale &amp; SLO</td><td>Multi-worker concurrency/soak rộng hơn, error budget dashboard, provider failover và policy automation.</td></tr>
+    <tr><td><span class="status later">DEFERRED</span></td><td>Qwen reranker</td><td>Giữ tắt cho đến khi A/B chứng minh relevance/latency tốt hơn production hybrid path.</td></tr>
+  </tbody></table></div>
+  <div class="callout warn"><b>Nguyên tắc public claim:</b> “current” chỉ dùng cho capability có trong code và evidence. Khái niệm như live optimization agent, broad provider failover hoặc horizontal production SLO được giữ rõ trong roadmap, không mô tả như tính năng đang chạy.</div>
 
-# mở UI
-http://localhost:5175
-# agent health / metrics
-http://localhost:8080/health
-http://localhost:8080/metrics</code></pre>
-  <h3>Test Campaign Copilot nhanh</h3>
-  <ol><li>Tải mới trang và xác nhận luôn thấy trang chủ, hai mode và lịch sử campaign.</li><li>Chọn <b>Campaign Copilot</b>, nhập brief tiếng Việt, yêu cầu chat sửa budget và kiểm tra proposal chưa tự ghi.</li><li>Duyệt proposal; mở Audience và kiểm tra segment có ID/catalog source.</li><li>Sửa lại brief sau khi đã có audience; kiểm tra banner stale/recompute thay vì reset mọi thứ.</li><li>Về trang chủ, mở lại campaign trong lịch sử và xác nhận mode cùng workspace được khôi phục đúng.</li></ol>
-  <h3>Test xóa lịch sử an toàn</h3>
-  <ol><li>Ở trang chủ hoặc ngăn lịch sử, bấm <b>Xóa</b> trên một campaign và xác nhận hộp thoại hiển thị đúng tên campaign.</li><li>Bấm <b>Giữ lại</b> và xác nhận campaign chưa bị xóa.</li><li>Với một campaign thử nghiệm đã kết thúc, mở lại hộp thoại và xác nhận xóa; campaign phải biến mất khỏi lịch sử và không thể resume.</li><li>Mở <b>Xóa tất cả</b>; nút xác nhận phải bị khóa cho đến khi nhập đúng <code>XÓA TẤT CẢ</code>. Không cần hoàn tất thao tác trong môi trường có dữ liệu cần giữ.</li><li>Campaign đang có Autopilot run chưa kết thúc phải từ chối xóa. Dừng run trước rồi thử lại. Xóa hội thoại không xóa AdsPilot order đã tạo.</li></ol>
-  <h3>Test Autopilot upload</h3>
-  <ol><li>Chọn Autopilot trên trang chủ, tạo và duyệt brief.</li><li>Chọn “Tôi sẽ tải creative lên”, chọn policy, bắt đầu.</li><li>Xác nhận chat bị khóa khi run đang chạy và chỉ nhận duyệt/từ chối khi có review gate.</li><li>Xác nhận run dừng ở “Chuẩn bị creative” nếu chưa có file.</li><li>Upload file, bấm retry; xác nhận VLM result hoặc manual-review card.</li></ol>
-  <h3>Test Autopilot AI generate</h3>
-  <ol><li>Chọn “Để AI tự tạo creative”, sau đó bắt đầu.</li><li>Theo dõi task “Chuẩn bị creative”: file phải xuất hiện trong canonical workspace với <code>source=ai_generated</code> và generation provenance.</li><li>Kiểm tra Audience hiển thị tên segment/lý do chọn; Forecast hiển thị budget, CPM catalog, frequency, reach cap và công thức.</li><li>Nếu VLM an toàn, run đi tiếp; nếu timeout/rủi ro, run phải dừng review.</li><li>Dù policy là auto-build, run vẫn phải dừng ở launch approval trước create order.</li><li>Sau duyệt launch, order phải ở trạng thái active. Mở <b>Báo cáo phân tích</b>, chờ đủ 6/6 report, kiểm tra nhãn dữ liệu mô phỏng, KPI/chart và bấm một câu hỏi gợi ý để nhận block phân tích trong chat. Retry liên tiếp không được tạo hai job hoặc nhân đôi analytics record.</li></ol>
-  <div class="callout danger"><b>Không dùng nút review để “ép qua” lỗi provider.</b> Retry chỉ hợp lệ khi input hoặc external state đã được sửa. VLM timeout chuyển manual review là fail-safe, không phải bằng chứng creative đã đạt.</div>
-  <p>Bộ test hiện <b>định nghĩa 128 unique scenarios</b>. Đây là test specification và report contract, không phải tuyên bố cả 128 case đã chạy/passed. Input/expected output cho AI tester nằm trong <code>docs/testing/COMPREHENSIVE-TEST-PLAN.md</code>, <code>SCENARIO-CATALOG.md</code> và <code>AI-TEST-EXECUTOR-PROMPT.md</code>.</p>
-
-  <h2 id="roadmap"><span class="n">09</span>Việc còn lại trong roadmap</h2>
-  <div class="table"><table><thead><tr><th>Ưu tiên</th><th>Hạng mục</th><th>Release condition</th></tr></thead><tbody><tr><td>FE-0</td><td>Áp dụng golden review 041–080 đã được chủ sở hữu chấp thuận</td><td>Apply edit trước khi đánh dấu approved/edited; validator và exclusion gate pass</td></tr><tr><td>FE-1</td><td>Placement intent → multi-format AI generation → final placement</td><td><b>Code-complete:</b> còn upload và AI journey thật</td></tr><tr><td>Report</td><td>Module phân tích dùng chung cho Copilot và Autopilot</td><td><b>Code-complete:</b> 6 report, KPI/chart, Q&amp;A cache, retry chống trùng; dữ liệu hiện là synthetic showcase</td></tr><tr><td>FE-2</td><td>Anonymous + account + lịch sử hội thoại</td><td><b>Zalo identity foundation complete locally:</b> FE-2B session/claim/resume, Zalo Login PKCE và explicit OA account link; local email chỉ còn là test fallback, Google không triển khai</td></tr><tr><td>FE-3</td><td>Zalo OA cho Autopilot và Guided rút gọn</td><td>Signed webhook + dedupe + account link đã có; còn durable worker, rotating OA token, send/receipt và live activation</td></tr><tr><td>FE-4</td><td>Kiểm tra/sửa campaign và thông báo live qua Zalo</td><td>Owned campaign only, proposal diff, policy-compliant notification</td></tr><tr><td>Later</td><td>Qwen reranker A/B, live analytics/optimization agent, broad chaos</td><td>Deferred theo ưu tiên sản phẩm</td></tr></tbody></table></div>
-  <footer>Advertising Agent · Tài liệu current-state sinh từ code, eval evidence và production roadmap của repository · 2026-07-17</footer>
+  <footer>Advertising Agent · Current-state technical document · Release 2026-07-20.4 · Updated 2026-07-20</footer>
 </main>
-<script>mermaid.initialize({startOnLoad:true,theme:'dark',themeVariables:{background:'#101c2e',primaryColor:'#14243a',primaryTextColor:'#eef6ff',primaryBorderColor:'#38a3ff',lineColor:'#72baff',fontFamily:'Inter,Segoe UI,sans-serif'},flowchart:{curve:'basis',useMaxWidth:true}})</script>
+
+<div class="lightbox" id="diagram-lightbox" role="dialog" aria-modal="true" aria-label="Sơ đồ phóng to">
+  <div class="lightbox-bar"><span>Sơ đồ kiến trúc</span><button type="button" data-action="minus">−</button><button type="button" data-action="reset">100%</button><button type="button" data-action="plus">+</button><button type="button" data-action="close">Đóng</button></div>
+  <div class="lightbox-stage"><div class="lightbox-content"></div></div>
+</div>
+<script>
+  mermaid.initialize({startOnLoad:true,theme:'dark',securityLevel:'strict',themeVariables:{background:'#0b1628',primaryColor:'#10213a',primaryTextColor:'#f2f7ff',primaryBorderColor:'#68d8ff',lineColor:'#83c3ff',fontFamily:'Inter,Segoe UI,sans-serif'},flowchart:{curve:'basis',useMaxWidth:true}});
+  const box=document.getElementById('diagram-lightbox'),content=box.querySelector('.lightbox-content'),reset=box.querySelector('[data-action="reset"]');let scale=1;
+  const paint=()=>{content.style.transform=`scale(${scale})`;reset.textContent=`${Math.round(scale*100)}%`};
+  document.querySelectorAll('.mermaid').forEach(node=>node.addEventListener('click',()=>{const svg=node.querySelector('svg');if(!svg)return;content.innerHTML=svg.outerHTML;scale=1;paint();box.classList.add('open');document.body.style.overflow='hidden'}));
+  const close=()=>{box.classList.remove('open');content.innerHTML='';document.body.style.overflow=''};
+  box.querySelector('[data-action="close"]').onclick=close;box.querySelector('[data-action="plus"]').onclick=()=>{scale=Math.min(3,scale+.2);paint()};box.querySelector('[data-action="minus"]').onclick=()=>{scale=Math.max(.4,scale-.2);paint()};reset.onclick=()=>{scale=1;paint()};
+  box.querySelector('.lightbox-stage').addEventListener('wheel',event=>{event.preventDefault();scale=Math.max(.4,Math.min(3,scale+(event.deltaY<0?.12:-.12)));paint()},{passive:false});
+  window.addEventListener('keydown',event=>{if(event.key==='Escape')close()});
+</script>
 </body>
 </html>

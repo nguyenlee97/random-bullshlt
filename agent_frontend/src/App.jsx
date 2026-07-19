@@ -10,6 +10,8 @@ import ClaimConversationDialog from '@/components/ClaimConversationDialog'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
 import ExperienceSelector from '@/components/ExperienceSelector'
+import PublicLanding from '@/components/PublicLanding'
+import ProductDemo from '@/components/ProductDemo'
 import AutopilotPanel from '@/components/AutopilotPanel'
 import { AgentAPI, getSetupEntry } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
@@ -20,6 +22,7 @@ import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { canApproveWorkflowStep } from '@/lib/workflowValidation'
 import { normalizeAudienceSelection } from '@/lib/audience'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
+import { AGENT_PATH, agentEntryUrl, hasAgentIntent } from '@/lib/publicExperience'
 import {
   assignmentsToFileIndexes,
   normalizeAssignmentsForEditor,
@@ -121,6 +124,8 @@ function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew, experienc
 
 export default function App() {
   const account = useIdentity()
+  const [showPublicLanding, setShowPublicLanding] = useState(() => !hasAgentIntent(window.location))
+  const [publicDemoMode, setPublicDemoMode] = useState(null)
   const [experienceMode, setExperienceMode] = useState(null)
   const [modeSelectionBusy, setModeSelectionBusy] = useState(false)
   const [modeSelectionError, setModeSelectionError] = useState('')
@@ -179,6 +184,23 @@ export default function App() {
   // While the guided demo is running it is the sole controller of the mobile
   // tab, so App's own auto-navigation must stand down to avoid fighting it.
   const isDemoActiveRef = useRef(false)
+
+  useEffect(() => {
+    const syncEntryRoute = () => setShowPublicLanding(!hasAgentIntent(window.location))
+    window.addEventListener('popstate', syncEntryRoute)
+    return () => window.removeEventListener('popstate', syncEntryRoute)
+  }, [])
+
+  const enterAgent = useCallback(() => {
+    const nextUrl = agentEntryUrl(window.location)
+    window.history.pushState({}, '', nextUrl)
+    setShowPublicLanding(false)
+  }, [])
+
+  const returnToPublicLanding = useCallback(() => {
+    window.history.pushState({}, '', '/')
+    setShowPublicLanding(true)
+  }, [])
 
   // Visual Viewport API — tracks keyboard height on mobile so the composer
   // is never hidden behind the soft keyboard. Sets a CSS variable used in index.css.
@@ -528,7 +550,7 @@ export default function App() {
           authParams.delete('auth')
           authParams.delete('auth_error')
           const nextQuery = authParams.toString()
-          window.history.replaceState({}, '', `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`)
+          window.history.replaceState({}, '', `${AGENT_PATH}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`)
         }
         setHistoryLoading(true)
         const history = await AgentAPI.listConversations()
@@ -540,7 +562,7 @@ export default function App() {
           pendingConversationDeepLinkRef.current = requestedConversation
           authParams.delete('conversation')
           const nextQuery = authParams.toString()
-          window.history.replaceState({}, '', `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`)
+          window.history.replaceState({}, '', `${AGENT_PATH}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`)
         }
       } catch (error) {
         setIdentityError(error.message || 'Không thể khởi tạo Advertising Agent trên thiết bị này.')
@@ -1048,6 +1070,7 @@ export default function App() {
     setConversationHistory(prev => [...prev].sort((a, b) => (
       new Date(b.last_message_at || b.updated_at || 0) - new Date(a.last_message_at || a.updated_at || 0)
     )))
+    if (window.location.pathname !== AGENT_PATH) window.history.replaceState({}, '', AGENT_PATH)
   }, [hydrateMessages, resetLocalCampaign])
 
   const openAuthDialog = useCallback(() => {
@@ -1137,6 +1160,7 @@ export default function App() {
     setModeSelectionBusy(true)
     setModeSelectionError('')
     try {
+      if (window.location.pathname !== AGENT_PATH) window.history.replaceState({}, '', AGENT_PATH)
       const context = await newChat({ experienceMode: mode })
       if (!context) throw new Error('Không thể tạo campaign mới.')
       applyConversationContext({ ...context, ui_messages: [] })
@@ -1603,6 +1627,15 @@ export default function App() {
     ? currentConversation
     : null
 
+  if (showPublicLanding) {
+    return (
+      <>
+        <PublicLanding onEnterAgent={enterAgent} onOpenDemo={setPublicDemoMode} />
+        {publicDemoMode && <ProductDemo mode={publicDemoMode} onClose={() => setPublicDemoMode(null)} />}
+      </>
+    )
+  }
+
   if (!identityReady) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">
@@ -1647,7 +1680,10 @@ export default function App() {
           onLinkZalo={linkZaloLogin}
           onOpenZaloOA={() => setZaloLinkDialogOpen(true)}
           onUnlinkZaloOA={unlinkZaloChannel}
+          onOpenDemo={setPublicDemoMode}
+          onBackToLanding={returnToPublicLanding}
         />
+        {publicDemoMode && <ProductDemo mode={publicDemoMode} onClose={() => setPublicDemoMode(null)} />}
         <DeleteConversationDialog target={deleteTarget} busy={deleteBusy} error={deleteError}
           onCancel={closeDeleteDialog} onConfirm={confirmDeleteConversations} />
         <AuthDialog open={authDialogOpen} busy={account.busy} error={account.error}

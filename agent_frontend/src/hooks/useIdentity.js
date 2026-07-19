@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { AgentAPI } from '@/api/agentApi'
+import { authReturnTo } from '@/lib/publicExperience'
 
 const anonymousState = {
   authenticated: false,
@@ -70,7 +71,7 @@ export function useIdentity() {
     try {
       const result = await AgentAPI.startZaloAuth({
         intent,
-        returnTo: window.location.pathname,
+        returnTo: authReturnTo(window.location),
       })
       window.location.assign(result.authorization_url)
       return result
