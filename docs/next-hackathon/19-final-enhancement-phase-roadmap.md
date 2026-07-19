@@ -1,8 +1,8 @@
 # Advertising Agent — Final Enhancement Phase Roadmap
 
-Date: 2026-07-18
+Date: 2026-07-19
 
-Status: in progress; FE-1 implementation, FE-2B, Zalo Login/OA linking, the FE-3 durable channel worker and the FE-4 narrow campaign-operation slice are deployed. Zalo natural-language planning now uses a bounded, structured `gpt-5.4-mini` Responses API layer while server-owned resolvers and workflows retain authority. Final campaign-bearing Zalo acceptance, FE-0 closeout and FE-5 release-candidate rehearsal remain open.
+Status: release-candidate verification executed. FE-0 is complete; the project owner accepted the FE-1 real upload/provider journey and the campaign-bearing Zalo journey; FE-2B, Zalo Login/OA linking, the FE-3 durable worker and FE-4 campaign operations remain deployed. The FE-5 inventory is structurally complete at 127 pass, 0 fail, 1 blocked and 0 not-run. The sole incomplete gate is `REP-004`, because no explicitly authorized test email recipient was supplied and no external send was attempted.
 
 Scope: finish the current campaign agent, add placement-aware creative generation, then add identity, conversation history, and Zalo OA as a first-class channel.
 
@@ -21,8 +21,8 @@ The web application remains the richest workspace. Zalo is a conversational cont
 | Item | Decision |
 |---|---|
 | Golden set | The independent review is accepted by the human owner. Apply its proposed edits, preserve catalog-gap notes, validate, and mark each case `approved` or `edited`; do not mark the unedited files approved. |
-| 128-scenario suite | The suite and report contract exist, but all 128 scenarios have **not** been executed end to end. Existing unit/API/evaluator evidence is not equivalent to the full browser suite. |
-| Manual creative journeys | The operator will manually test one upload journey and one real AI-generation journey against the healthy local stack. |
+| 128-scenario suite | Executed on 2026-07-19 with the structured contract validator: 127 pass, 0 fail, 1 blocked, 0 not-run. `REP-004` remains blocked pending an authorized email recipient. Long-duration P2 soak evidence is explicitly identified as reused and corroborated by fresh regressions. |
+| Manual creative journeys | Project-owner acceptance recorded on 2026-07-19 for one real upload journey and one real provider-backed AI-generation journey. |
 | Provider/restart drills | Downgraded from a broad product milestone to two small release checks around irreversible or paid side effects: generated-image retry and order-creation retry. Exhaustive chaos testing is deferred. |
 | Multi-format generation | Highest-priority product feature. Add placement intent before AI generation, then finalize placements after creative analysis. |
 | Qwen reranker | Leave configured but disabled; no A/B work in this phase. |
@@ -114,11 +114,13 @@ Exit criteria:
 - Current deterministic tests remain green.
 - The two side-effect recovery checks pass.
 
+Completion evidence (2026-07-19): both golden validators passed all 80 cases; the review ledger contains 12 approved and 28 edited v2 cases with six catalog gaps preserved; the 80-case final-output safety run produced zero exclusion, unknown-ID, source-grounding or fallback violations; durable upload recovery reused the stored asset without a provider call; and three launch retries each produced exactly one order before scoped cleanup.
+
 ## 6. FE-1 — Placement-aware multi-format creative generation
 
 This is the first implementation milestone.
 
-Implementation status (2026-07-16): code-complete and deterministic-test green. The capability graph now contains `plan_placement_intent` and `plan_creative_formats`; generated assets are capped, dimension-deduplicated, concurrent and revision-idempotent; final placement runs after creative verdicts. Completed runs now normalize those artifacts into the shared Guided Result surface plus a dedicated setup report, while pending orders are never labeled live. Verification after the outcome enhancement: 27 frontend tests and a production frontend build; the existing backend capability tests remain green from the FE-1 slice. FE-1 remains open until one real upload journey and one real provider-backed multi-format generation journey pass locally.
+Implementation status (2026-07-19): complete and accepted. The capability graph contains `plan_placement_intent` and `plan_creative_formats`; generated assets are capped, dimension-deduplicated, concurrent and revision-idempotent; final placement runs after creative verdicts. Completed runs normalize those artifacts into the shared Guided Result surface plus a dedicated setup report, while pending orders are never labeled live. The project owner confirmed both the real upload journey and real provider-backed multi-format generation journey passed.
 
 ### 6.1 Problem and approach
 
@@ -404,11 +406,11 @@ Official references: [Zalo for Developers](https://developers.zalo.me/), [Zalo O
 - Repeated final approval creates one order.
 - Text/image outputs render correctly; unsupported UI blocks become concise text plus a deep link.
 
-Verified across the foundation and campaign-agent slices: invalid signatures create no event even though the transport is acknowledged with HTTP 200 for Zalo compatibility; valid events are normalized and stored once; replay is idempotent; link codes are hashed, expiring and one-time; a verified OA sender links to exactly one internal user; unlink preserves account/web history; durable inbound work produces one idempotent outbox delivery; and production successfully delivered a signed linked-user campaign-list response. The remaining manual gap is a production linked account with an owned campaign for report/live/pause/resume and complete Autopilot launch journeys.
+Verified across the foundation and campaign-agent slices: invalid signatures create no event even though the transport is acknowledged with HTTP 200 for Zalo compatibility; valid events are normalized and stored once; replay is idempotent; link codes are hashed, expiring and one-time; a verified OA sender links to exactly one internal user; unlink preserves account/web history; durable inbound work produces one idempotent outbox delivery; and production successfully delivered signed linked-user campaign operations. On 2026-07-19 the project owner confirmed the campaign-bearing Zalo manual journey passed.
 
 ## 9. FE-4 — Zalo campaign operations and notifications
 
-Implementation status (2026-07-18): the narrow operation set is deployed. The server-side resolver searches only actor-owned conversations/orders, remembers active campaign context, asks a numbered question when ambiguous and rechecks ownership before mutations. A bounded `gpt-5.4-mini` structured planner now interprets natural turns and recent context; it cannot establish ownership or execute a mutation. Report Q&A reuses the existing six-view synthetic report handler. Live view uses the existing screenshot service and a short-lived opaque, hashed, TTL-backed same-origin media URL. Pause/resume is explicit, expiring and idempotent. Progress delivery follows persisted Autopilot run events. Production acceptance has proved the signed linked-user worker/outbox path and the linked account now has a campaign; fresh end-to-end report/live/lifecycle/Autopilot journeys remain open.
+Implementation status (2026-07-19): the narrow operation set is deployed and the project owner accepted the campaign-bearing manual Zalo journey. The server-side resolver searches only actor-owned conversations/orders, remembers active campaign context, asks a numbered question when ambiguous and rechecks ownership before mutations. A bounded `gpt-5.4-mini` structured planner interprets natural turns and recent context; it cannot establish ownership or execute a mutation. Report Q&A reuses the existing six-view synthetic report handler. Live view uses the existing screenshot service and short-lived opaque, hashed, TTL-backed same-origin media URLs. Pause/resume is explicit, expiring and idempotent. Progress delivery follows persisted Autopilot run events.
 
 The deployed tool set is intentionally narrow:
 
@@ -428,6 +430,10 @@ Rules:
 
 ## 10. FE-5 — Final hackathon release candidate
 
+Execution status (2026-07-19): all 128 manifest entries appear exactly once in the validated report: 127 pass, 0 fail, 1 blocked, 0 not-run. Python finished at 299 passed, Node backend at 15 passed and frontend at 63 passed; the production build passed. The 20-case Autopilot evaluator and five consecutive rehearsals passed. Desktop/laptop/mobile/narrow production browser checks passed without horizontal overflow. Provider, Qdrant, Mongo approval, agent restart and backend order recovery drills passed. Rollback images/commit and scoped reset evidence are recorded in `35-fe0-fe5-release-candidate-evidence.md`.
+
+The release gate remains intentionally **incomplete**, not failed: `REP-004` requires an explicitly authorized test recipient. No email was sent and there are no blocker or major defects.
+
 Required before calling the final enhancement complete:
 
 - Golden labels and audience safety gate green.
@@ -446,8 +452,9 @@ Required before calling the final enhancement complete:
 3. User manual upload and real AI-generation journeys; fix journey defects.
 4. FE-2 anonymous identity, conversation history and Zalo Login behind one user model.
 5. Completed: FE-3 Zalo worker, rotating OA tokens, outbound delivery and channel rendering on top of the verified webhook/account-link foundation.
-6. Completed in code/deployment, pending campaign-bearing manual acceptance: FE-4 campaign operations and eligible live progress notification.
-7. Next: FE-0 remaining truth closeout and FE-5 full suite, campaign-bearing Zalo browser/OA evidence and demo rehearsal.
+6. Completed and manually accepted: FE-4 campaign operations and eligible live progress notification.
+7. Completed: FE-0 truth closeout and FE-5 full inventory, production browser evidence and five demo rehearsals.
+8. Remaining release decision: provide an authorized email recipient for `REP-004`, or explicitly waive/defer that optional external-send scenario while preserving the incomplete status in historical evidence.
 
 Do not build a second auth authority or a second agent for Zalo. Keep temporary local auth and Zalo identities attached to the same internal user. Do not begin the analytics/report agent until campaign creation and channel journeys are stable.
 

@@ -92,16 +92,12 @@ def _one(client: httpx.Client, base: str, namespace: str, index: int) -> dict:
 
     started = client.post(f"{base}/agent/api/agent/autopilot/runs", json={
         "session_id": session_id, "approval_policy": "review_every_stage",
+        "creative_source": "upload",
         "actor": "demo_rehearsal", "idempotency_key": f"{session_id}:run",
     })
     started.raise_for_status()
     run_id = started.json()["run_id"]
-    validate = _wait_for_task(client, base, run_id, "validate_brief")
-    reviewed = client.post(
-        f"{base}/agent/api/agent/autopilot/runs/{run_id}/tasks/{validate['task_id']}/review",
-        json={"approved": True, "actor": "demo_rehearsal", "reason": "valid fixture"},
-    )
-    reviewed.raise_for_status()
+    _wait_for_task(client, base, run_id, "validate_brief", expected="succeeded")
     strategy = _wait_for_task(client, base, run_id, "generate_strategy")
     options = strategy.get("result", {}).get("options", [])
     if len(options) != 3 or not all(option.get("metrics", {}).get("is_estimate") for option in options):

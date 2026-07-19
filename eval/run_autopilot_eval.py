@@ -70,6 +70,37 @@ async def _fake_execute(task: dict, run: dict) -> CapabilityResult:
         "generate_strategy": {"selected": "balanced"},
         "retrieve_audience": {"attrs": [{"_id": "catalog-segment"}], "size": 1},
         "derive_targeting": {"geo": ["TP.HCM"], "age": ["25-34"]},
+        "plan_placement_intent": {
+            "kind": "placement_intent",
+            "candidate_zone_ids": ["ZingMP3_Masthead"],
+            "candidates": [{
+                "id": "ZingMP3_Masthead", "format": "banner",
+                "width": 1160, "height": 250, "cpm": 60000,
+                "reach": 14000000,
+            }],
+            "strategy_id": "balanced",
+            "selection_method": "autopilot_eval_fixture",
+        },
+        "plan_creative_formats": {
+            "source": "upload",
+            "formats": [{
+                "format_id": "znews-masthead-1160x250",
+                "width": 1160, "height": 250,
+                "zone_ids": ["ZingMP3_Masthead"],
+            }],
+            "covered_zone_ids": ["ZingMP3_Masthead"],
+            "estimated_provider_calls": 0,
+            "max_assets": 3,
+        },
+        "prepare_creatives": {
+            "files": [{
+                "name": "autopilot-eval.png", "type": "image/png",
+                "width": 1160, "height": 250,
+                "url": "http://localhost:3000/uploads/autopilot-eval.png",
+            }],
+            "uploaded": True,
+            "source": "upload",
+        },
         "analyze_creatives": {"files": [{"status": "auto_approved"}]},
         "rank_placements": {
             "selectedZoneIds": ["ZingMP3_Masthead"],

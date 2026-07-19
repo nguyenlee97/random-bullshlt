@@ -21,7 +21,8 @@ def main() -> int:
         "messages": [{"role": "user", "content": "provider health drill"}],
         "max_tokens": 1,
     }
-    for attempt in range(2):
+    attempts = llm.config.LLM_CIRCUIT_FAILURE_THRESHOLD + 1
+    for attempt in range(attempts):
         started = time.perf_counter()
         try:
             llm._create_completion(kwargs)
@@ -34,10 +35,10 @@ def main() -> int:
             })
 
     passed = bool(
-        len(observations) == 2
+        len(observations) == attempts
         and observations[0].get("error_type")
-        and observations[1].get("error_type") == "CircuitOpenError"
-        and observations[1].get("duration_s", 99) < 0.1
+        and observations[-1].get("error_type") == "CircuitOpenError"
+        and observations[-1].get("duration_s", 99) < 0.1
         and llm._fallback_client is None
     )
     print(json.dumps({
