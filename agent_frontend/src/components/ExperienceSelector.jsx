@@ -3,6 +3,7 @@ import {
   Route, Save, Sparkles, Trash2, Zap,
 } from 'lucide-react'
 import AccountMenu from '@/components/AccountMenu'
+import ZaloOACompanion from '@/components/ZaloOACompanion'
 
 const modes = [
   {
@@ -107,6 +108,7 @@ export default function ExperienceSelector({
             })}
           </div>
           {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+          <ZaloOACompanion identity={identity} onOpenZaloOA={onOpenZaloOA} />
         </section>
 
         <section className="mt-14 border-t border-slate-200/80 pt-8 pb-8" aria-labelledby="campaign-history-title">

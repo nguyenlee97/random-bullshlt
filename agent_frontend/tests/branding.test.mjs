@@ -392,3 +392,18 @@ test('report answers use adaptive metrics and suppress meaningless trend deltas'
   assert.match(blocks, /min-w-\[420px\]/)
   assert.match(thread, /showSuggestions=\{msg\.id === lastAssistantId\}/)
 })
+
+test('homepage exposes a responsive Zalo OA companion with the supplied QR', async () => {
+  const home = await source('agent_frontend/src/components/ExperienceSelector.jsx')
+  const companion = await source('agent_frontend/src/components/ZaloOACompanion.jsx')
+  const qr = await readFile(path.resolve(root, 'agent_frontend/public/zalo-oa-qr.jpg'))
+  assert.match(home, /import ZaloOACompanion/)
+  assert.match(home, /<ZaloOACompanion identity=\{identity\} onOpenZaloOA=\{onOpenZaloOA\} \/>/)
+  assert.match(companion, /Tiếp tục cùng Agent trên Zalo/)
+  assert.match(companion, /Theo dõi OA để hỏi nhanh về trạng thái campaign/)
+  assert.match(companion, /https:\/\/zalo\.me\/2224936774907333597/)
+  assert.match(companion, /src="\/zalo-oa-qr\.jpg"/)
+  assert.match(companion, /min-\[1680px\]:fixed/)
+  assert.match(companion, /aria-label="Mở Zalo OA bằng mã QR"/)
+  assert.ok(qr.length > 10_000)
+})
