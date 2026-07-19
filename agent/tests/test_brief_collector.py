@@ -6,7 +6,12 @@ import time
 import pytest
 
 from graph.nodes import brief_collector as collector
-from graph.nodes.brief_collector import BriefDraft, BriefTurn, normalize_inferred_dates
+from graph.nodes.brief_collector import (
+    BriefDraft,
+    BriefIntakeTurn,
+    BriefTurn,
+    normalize_inferred_dates,
+)
 from graph.nodes.intercepts import intercepts_node
 from session import get_history
 from workspace.service import get_workspace, list_pending_proposals
@@ -65,6 +70,76 @@ def test_minimax_nested_json_string_is_coerced_then_strictly_validated():
     })
     assert turn.brief.brand == "Mixifood"
     assert turn.brief.objective == "conversion"
+
+
+def test_clarification_rejects_empty_missing_fields():
+    with pytest.raises(ValueError, match="missing hard field"):
+        BriefTurn.model_validate({
+            "action": "ask_clarification",
+            "message": "Cần làm rõ thêm thông tin.",
+            "missing_fields": [],
+        })
+
+
+@pytest.mark.parametrize("soft_field", ["objective", "kpi", "notes"])
+def test_advisory_fields_cannot_block_a_brief_proposal(soft_field):
+    with pytest.raises(ValueError):
+        BriefTurn.model_validate({
+            "action": "ask_clarification",
+            "message": "Cần làm rõ thêm thông tin.",
+            "missing_fields": [soft_field],
+        })
+
+
+def test_only_hard_facts_can_trigger_clarification():
+    turn = BriefTurn.model_validate({
+        "action": "ask_clarification",
+        "message": "Cần bổ sung dữ kiện bắt buộc.",
+        "missing_fields": ["brand", "budget", "startDate", "endDate"],
+    })
+    assert turn.missing_fields == ["brand", "budget", "startDate", "endDate"]
+
+
+@pytest.mark.asyncio
+async def test_campaign_statement_uses_intake_only_schema(monkeypatch):
+    def generated(_messages, schema, schema_name, _role, _max_tokens):
+        assert schema is BriefIntakeTurn
+        assert schema_name == "brief_intake_turn"
+        return schema.model_validate({
+            "action": "propose_brief",
+            "message": "Em đề xuất một Brief để duyệt.",
+            "brief": MIXIFOOD_DRAFT.model_dump(),
+        }), 33
+
+    monkeypatch.setattr(collector, "structured", generated)
+    turn, tokens = await collector.generate_brief_turn({
+        "user_message": "campaign Mixifood, budget 2 triệu, chạy 3 ngày từ 15/7",
+        "messages": [{
+            "role": "user",
+            "content": "campaign Mixifood, budget 2 triệu, chạy 3 ngày từ 15/7",
+        }],
+    })
+    assert turn.action == "propose_brief"
+    assert tokens == 33
+
+
+@pytest.mark.asyncio
+async def test_explanatory_question_keeps_answer_schema(monkeypatch):
+    def generated(_messages, schema, schema_name, _role, _max_tokens):
+        assert schema is BriefTurn
+        assert schema_name == "brief_turn"
+        return schema(
+            action="answer",
+            message="Awareness phù hợp khi mục tiêu chính là tăng nhận biết.",
+        ), 21
+
+    monkeypatch.setattr(collector, "structured", generated)
+    turn, tokens = await collector.generate_brief_turn({
+        "user_message": "Objective nào phù hợp với tôi?",
+        "messages": [{"role": "user", "content": "Objective nào phù hợp với tôi?"}],
+    })
+    assert turn.action == "answer"
+    assert tokens == 21
 
 
 @pytest.mark.parametrize(
@@ -156,12 +231,12 @@ async def test_incomplete_brief_asks_a_question_without_claiming_it_was_saved(mo
 
 
 @pytest.mark.asyncio
-async def test_vague_clarification_is_replaced_with_explicit_missing_field_questions(monkeypatch):
+async def test_vague_clarification_is_replaced_with_explicit_hard_field_questions(monkeypatch):
     async def generated(_state):
         return BriefTurn(
             action="ask_clarification",
             message="Tôi cần xác nhận thêm một số thông tin để hoàn thiện brief:",
-            missing_fields=["objective", "kpi", "notes", "objective"],
+            missing_fields=["budget", "startDate", "endDate", "budget"],
         ), 38
 
     monkeypatch.setattr(collector, "generate_brief_turn", generated)
@@ -174,10 +249,10 @@ async def test_vague_clarification_is_replaced_with_explicit_missing_field_quest
     })
 
     response = result["response_text"]
-    assert "Mục tiêu campaign" in response
-    assert "KPI mong muốn" in response
-    assert "Sản phẩm, audience" in response
-    assert response.count("Mục tiêu campaign") == 1
+    assert "Tổng ngân sách" in response
+    assert "Campaign bắt đầu" in response
+    assert "Campaign kết thúc" in response
+    assert response.count("Tổng ngân sách") == 1
     assert not response.rstrip().endswith(":")
 
 

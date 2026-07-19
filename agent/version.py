@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-19.6"
+BUILD_VERSION = "2026-07-19.7"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -150,6 +150,7 @@ BUILD_FEATURES = [
     "guided-shared-audience-retrieval",   # Copilot and Autopilot share catalog-grounded audience selection
     "guided-audience-stable-dedupe",      # repeated provider labels cannot duplicate a catalog segment
     "guided-actionable-brief-clarification", # missing Brief fields always render as explicit questions
+    "guided-deterministic-brief-completeness", # only missing hard facts may block an editable Brief proposal
     "guided-conversation-audience-reset", # a new/resumed campaign cannot retain old recommendation cards
     "guided-conversation-request-isolation", # late proactive responses are discarded after campaign switches
     "guided-order-response-normalization", # setup preserves guard details and successful order metadata

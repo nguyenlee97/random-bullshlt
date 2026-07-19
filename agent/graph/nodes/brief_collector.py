@@ -60,12 +60,18 @@ class BriefDraft(BaseModel):
         return amount
 
 
+HardMissingBriefField = Literal["brand", "budget", "startDate", "endDate"]
+
+
 class BriefTurn(BaseModel):
     action: Literal["ask_clarification", "propose_brief", "answer"]
     message: str = Field(min_length=1, max_length=4000)
     brief: BriefDraft | None = None
     reason: str = Field(default="", max_length=1000)
-    missing_fields: list[str] = Field(default_factory=list, max_length=7)
+    # Clarification is reserved for factual inputs that the Agent must never
+    # invent. Objective, KPI and notes/audience are advisory fields: the Agent
+    # proposes sensible values and the operator approves or edits the draft.
+    missing_fields: list[HardMissingBriefField] = Field(default_factory=list, max_length=4)
 
     model_config = {"extra": "forbid"}
 
@@ -88,23 +94,27 @@ class BriefTurn(BaseModel):
             raise ValueError("propose_brief requires brief")
         if self.action != "propose_brief" and self.brief is not None:
             raise ValueError("brief is only allowed for propose_brief")
+        if self.action == "ask_clarification" and not self.missing_fields:
+            raise ValueError(
+                "ask_clarification requires at least one missing hard field: "
+                "brand, budget, startDate or endDate"
+            )
+        if self.action != "ask_clarification" and self.missing_fields:
+            raise ValueError("missing_fields is only allowed for ask_clarification")
         return self
+
+
+class BriefIntakeTurn(BriefTurn):
+    """Campaign intake statements must either propose or ask for hard facts."""
+
+    action: Literal["ask_clarification", "propose_brief"]
 
 
 _BRIEF_CLARIFICATION_QUESTIONS = {
     "brand": "Thương hiệu hoặc tên sản phẩm cần quảng cáo là gì?",
-    "objective": (
-        "Mục tiêu campaign là Awareness, Consideration, Conversion hay Retention? "
-        "Nếu muốn Agent chọn, anh/chị chỉ cần nói 'gợi ý giúp mình'."
-    ),
-    "kpi": (
-        "KPI mong muốn là gì (ví dụ Reach, Impressions, CTR hoặc số chuyển đổi)? "
-        "Agent cũng có thể đề xuất KPI nếu được yêu cầu."
-    ),
     "budget": "Tổng ngân sách là bao nhiêu triệu VND?",
     "startDate": "Campaign bắt đầu ngày nào?",
     "endDate": "Campaign kết thúc ngày nào hoặc chạy trong bao nhiêu ngày?",
-    "notes": "Sản phẩm, audience, khu vực hoặc yêu cầu đặc biệt nào cần đưa vào Brief?",
 }
 
 
@@ -128,17 +138,20 @@ def _brief_messages(state: AgentState) -> list[dict]:
         "Bạn là bộ thu thập Brief có output bắt buộc theo schema. "
         f"Thời gian hiện tại có thẩm quyền: {now.isoformat(timespec='seconds')} "
         "(Asia/Ho_Chi_Minh). "
-        "Dùng ask_clarification khi thiếu brand, budget hoặc thời gian chạy và người dùng "
-        "chưa cho phép tự chọn. Dùng answer cho câu hỏi chỉ cần giải thích. "
-        "Dùng propose_brief ngay khi đủ dữ liệu hoặc khi người dùng nói chọn/gợi ý giúp: "
-        "được phép đề xuất objective và KPI hợp lý, nhưng không bịa brand, budget hay lịch chạy. "
+        "Dùng ask_clarification CHỈ khi thiếu một hoặc nhiều dữ kiện cứng: brand, budget, "
+        "startDate hoặc endDate/thời lượng. Không bao giờ tự bịa các dữ kiện cứng này. "
+        "Objective, KPI, notes, audience và geo KHÔNG phải dữ kiện chặn: khi chúng chưa được nêu, "
+        "phải tự đề xuất giá trị hợp lý trong một propose_brief để người dùng duyệt hoặc sửa; "
+        "không hỏi người dùng chọn chúng trước. Dùng answer cho câu hỏi chỉ cần giải thích. "
+        "Dùng propose_brief ngay khi đã đủ bốn dữ kiện cứng. "
         "Nếu ngày không có năm, dùng lần xuất hiện gần nhất không sớm hơn ngày hiện tại. "
         "Số ngày chạy tính bao gồm ngày bắt đầu. Ví dụ chạy 3 ngày từ 2026-07-15 thì "
         "endDate=2026-07-17. Audience, geo, sở thích và sản phẩm phải lưu trong notes. "
         "budget BẮT BUỘC dùng đơn vị TRIỆU VND: 2 triệu ghi budget=2, 2 tỷ ghi budget=2000; "
         "không ghi budget=2000000 cho 2 triệu. "
         "propose_brief chỉ tạo bản nháp chờ người dùng duyệt, không có nghĩa đã áp dụng. "
-        "Với ask_clarification, missing_fields phải liệt kê chính xác các field còn thiếu "
+        "Với ask_clarification, missing_fields phải có ít nhất một field và chỉ được gồm "
+        "brand, budget, startDate, endDate; phải liệt kê chính xác các field còn thiếu "
         "và message phải nêu câu hỏi có thể trả lời được, không chỉ viết một câu dẫn chung. "
         "message phải ngắn, bằng tiếng Việt và không được nói rằng Brief đã được lưu."
     )
@@ -149,15 +162,28 @@ def _brief_messages(state: AgentState) -> list[dict]:
     return [{"role": "system", "content": instructions}, *conversation]
 
 
+_BRIEF_QUESTION_RE = re.compile(
+    r"(?:[?？]\s*$|\b(?:là gì|bao nhiêu|như thế nào|tại sao|vì sao|"
+    r"có nên|được không|objective\s+nào|kpi\s+nào|kpi\s+gì|"
+    r"mục tiêu\s+nào|ngân sách\s+tối thiểu)\b)",
+    re.IGNORECASE,
+)
+
+
+def _is_brief_question(message: str) -> bool:
+    """Keep explanatory Q&A while routing campaign statements to intake."""
+    return bool(_BRIEF_QUESTION_RE.search((message or "").strip()))
+
+
 async def generate_brief_turn(state: AgentState) -> tuple[BriefTurn, int]:
-    return await asyncio.to_thread(
-        structured,
-        _brief_messages(state),
-        BriefTurn,
-        "brief_turn",
-        "generator",
-        1600,
+    is_question = _is_brief_question(state.get("user_message", ""))
+    schema = BriefTurn if is_question else BriefIntakeTurn
+    schema_name = "brief_turn" if is_question else "brief_intake_turn"
+    turn, tokens = await asyncio.to_thread(
+        structured, _brief_messages(state), schema, schema_name, "generator", 1600,
     )
+    # Normalize the narrower intake result for callers and instrumentation.
+    return BriefTurn.model_validate(turn.model_dump()), tokens
 
 
 def _user_supplied_explicit_year(messages: list[dict]) -> bool:
