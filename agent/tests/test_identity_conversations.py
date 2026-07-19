@@ -222,3 +222,38 @@ async def test_resume_restores_full_transcript_workspace_pending_review_and_run(
     assert restored["pending_proposals"][0]["proposal_id"] == proposal["proposal_id"]
     assert restored["latest_run"]["run_id"] == run["run_id"]
     assert restored["title"] == "Mixifood"
+
+
+@pytest.mark.asyncio
+async def test_history_includes_live_autopilot_summary_and_activity_ordering():
+    from autopilot.service import _set_run, create_run
+    from identity import bootstrap_anonymous, create_conversation, list_conversations
+    from workspace.service import apply_mutation, get_workspace
+
+    identity = await bootstrap_anonymous()
+    autopilot = await create_conversation(
+        identity["identity_id"], title="Zalo campaign", experience_mode="autopilot",
+    )
+    workspace = await get_workspace(autopilot["session_id"])
+    await apply_mutation(
+        autopilot["session_id"], "brief", BRIEF,
+        base_revision=workspace["revision"], actor="zalo_campaign_operator",
+        idempotency_key="history-zalo:brief",
+    )
+    run = await create_run(
+        autopilot["session_id"], creative_source="ai_generate",
+        idempotency_key="history-zalo:run",
+    )
+    later = await create_conversation(identity["identity_id"], title="Later campaign")
+
+    await _set_run(run["run_id"], {"status": "running"})
+    history = await list_conversations(identity["identity_id"])
+
+    assert history[0]["conversation_id"] == autopilot["conversation_id"]
+    summary = history[0]["latest_run_summary"]
+    assert summary["run_id"] == run["run_id"]
+    assert summary["status"] == "running"
+    assert summary["task_total"] == 18
+    assert summary["task_completed"] == 0
+    assert "tasks" not in summary
+    assert all(item["conversation_id"] != later["conversation_id"] for item in history[:1])

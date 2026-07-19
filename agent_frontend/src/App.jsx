@@ -1132,6 +1132,24 @@ export default function App() {
     }
   }, [])
 
+  // Zalo-created Autopilot runs advance without browser chat traffic. Keep both
+  // the homepage history and the open drawer synchronized with their bounded
+  // server-side summaries; opening a campaign still hydrates the full run and
+  // its normal live poller.
+  useEffect(() => {
+    if (!identityReady || (experienceMode && !historyOpen)) return undefined
+    let cancelled = false
+    const refresh = async () => {
+      const items = await AgentAPI.listConversations()
+      if (!cancelled) setConversationHistory(items)
+    }
+    const timer = setInterval(refresh, 4000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [experienceMode, historyOpen, identityReady])
+
   const resumeConversation = useCallback(async (conversationId) => {
     if (experienceMode && conversationId === currentConversationId) {
       setHistoryOpen(false)

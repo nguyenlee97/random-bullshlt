@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 import json
 import re
 import unicodedata
+from urllib.parse import quote
 import uuid
 
 from pymongo import ReturnDocument
@@ -337,7 +338,7 @@ def _workspace_link(campaign: dict | None) -> str:
         return config.ZALO_WEB_WORKSPACE_URL
     return (
         f"{config.ZALO_WEB_WORKSPACE_URL}/?conversation="
-        f"{campaign['conversation_id']}"
+        f"{quote(str(campaign['conversation_id']), safe='')}"
     )
 
 

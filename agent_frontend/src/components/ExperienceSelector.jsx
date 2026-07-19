@@ -26,6 +26,16 @@ const modes = [
 
 const modeLabel = mode => mode === 'autopilot' ? 'Campaign Autopilot' : 'Campaign Copilot'
 
+const runStatus = status => ({
+  queued: ['Đang chờ', 'bg-slate-100 text-slate-700'],
+  running: ['Đang chạy', 'bg-blue-50 text-blue-700'],
+  waiting_review: ['Cần duyệt', 'bg-amber-50 text-amber-800'],
+  paused: ['Đã tạm dừng', 'bg-amber-50 text-amber-800'],
+  completed: ['Hoàn tất', 'bg-emerald-50 text-emerald-700'],
+  failed: ['Có lỗi', 'bg-red-50 text-red-700'],
+  cancelled: ['Đã hủy', 'bg-slate-100 text-slate-600'],
+}[status] || [status || 'Chưa chạy', 'bg-slate-100 text-slate-600'])
+
 const formatTime = value => {
   if (!value) return 'Chưa có tin nhắn'
   try {
@@ -143,8 +153,10 @@ export default function ExperienceSelector({
           )}
           {!historyLoading && !historyError && conversations.length > 0 && (
             <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {conversations.map(item => (
-                <article key={item.conversation_id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-200 hover:shadow-md">
+              {conversations.map(item => {
+                const run = item.latest_run_summary
+                const [runLabel, runTone] = runStatus(run?.status)
+                return <article key={item.conversation_id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-200 hover:shadow-md">
                   <button type="button" className="w-full text-left" onClick={() => onResume(item.conversation_id)}>
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">{item.title || 'Campaign mới'}</h3>
@@ -157,6 +169,16 @@ export default function ExperienceSelector({
                       </span>
                       <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatTime(item.last_message_at || item.updated_at)}</span>
                     </div>
+                    {run && (
+                      <div className="mt-3 flex items-center gap-2" aria-label={`Tiến độ Autopilot: ${runLabel}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${runTone}`}>{runLabel}</span>
+                        <div className="h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-slate-100">
+                          <div className="h-full rounded-full bg-brand-500 transition-all"
+                            style={{ width: `${run.task_total ? Math.round((run.task_completed / run.task_total) * 100) : 0}%` }} />
+                        </div>
+                        <span className="text-[10px] font-semibold text-slate-500">{run.task_completed}/{run.task_total} bước</span>
+                      </div>
+                    )}
                   </button>
                   <div className="mt-3 flex items-center gap-3">
                     {item.can_claim && (
@@ -174,7 +196,7 @@ export default function ExperienceSelector({
                     </button>
                   </div>
                 </article>
-              ))}
+              })}
             </div>
           )}
         </section>

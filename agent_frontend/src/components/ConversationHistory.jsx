@@ -3,6 +3,16 @@ import { Button } from '@/components/ui/button'
 
 const modeLabel = mode => mode === 'autopilot' ? 'Campaign Autopilot' : mode === 'guided' ? 'Campaign Copilot' : 'Chưa chọn cách làm việc'
 
+const runStatus = status => ({
+  queued: ['Đang chờ', 'bg-slate-100 text-slate-700'],
+  running: ['Đang chạy', 'bg-blue-50 text-blue-700'],
+  waiting_review: ['Cần duyệt', 'bg-amber-50 text-amber-800'],
+  paused: ['Đã tạm dừng', 'bg-amber-50 text-amber-800'],
+  completed: ['Hoàn tất', 'bg-emerald-50 text-emerald-700'],
+  failed: ['Có lỗi', 'bg-red-50 text-red-700'],
+  cancelled: ['Đã hủy', 'bg-slate-100 text-slate-600'],
+}[status] || [status || 'Chưa chạy', 'bg-slate-100 text-slate-600'])
+
 const formatTime = value => {
   if (!value) return 'Chưa có tin nhắn'
   try {
@@ -62,6 +72,8 @@ export default function ConversationHistory({
           <div className="space-y-2">
             {conversations.map(item => {
               const active = item.conversation_id === currentId
+              const run = item.latest_run_summary
+              const [runLabel, runTone] = runStatus(run?.status)
               return (
                 <div key={item.conversation_id} className={`rounded-xl border p-3 transition ${active ? 'border-brand-300 bg-brand-50/60' : 'border-slate-200 hover:border-slate-300'}`}>
                   <button type="button" className="w-full text-left" onClick={() => onResume(item.conversation_id)} disabled={active}>
@@ -76,6 +88,18 @@ export default function ConversationHistory({
                       </span>
                       <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatTime(item.last_message_at || item.updated_at)}</span>
                     </div>
+                    {run && (
+                      <div className="mt-2 flex items-center gap-2" aria-label={`Tiến độ Autopilot: ${runLabel}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${runTone}`}>{runLabel}</span>
+                        <div className="h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-slate-100">
+                          <div className="h-full rounded-full bg-brand-500 transition-all"
+                            style={{ width: `${run.task_total ? Math.round((run.task_completed / run.task_total) * 100) : 0}%` }} />
+                        </div>
+                        <span className="text-[10px] font-semibold text-slate-500">
+                          {run.task_completed}/{run.task_total} bước
+                        </span>
+                      </div>
+                    )}
                   </button>
                   <div className="mt-2 flex items-center gap-3">
                     {item.can_claim && (

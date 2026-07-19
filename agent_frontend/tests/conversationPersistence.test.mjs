@@ -38,6 +38,12 @@ test('history UI exposes resume, archive and new campaign actions', () => {
   assert.match(history, /onResume/)
   assert.match(history, /onArchive/)
   assert.match(history, /onNew/)
+  assert.match(history, /latest_run_summary/)
+  assert.match(history, /Tiến độ Autopilot/)
+  assert.match(homepage, /latest_run_summary/)
+  assert.match(homepage, /Tiến độ Autopilot/)
+  assert.match(app, /if \(!identityReady \|\| \(experienceMode && !historyOpen\)\) return undefined/)
+  assert.match(app, /setInterval\(refresh, 4000\)/)
 })
 
 test('conversation deletion is available individually and in bulk with safety confirmation', () => {

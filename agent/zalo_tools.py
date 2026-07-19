@@ -59,6 +59,11 @@ ZALO_TOOLS = [
      "strict": True, "parameters": _schema({
          "campaign_reference": {"type": ["string", "null"]},
      }, ["campaign_reference"])},
+    {"type": "function", "name": "get_workspace_link",
+     "description": "Get the secure web workspace deep link for the current Zalo Autopilot run or one referenced owned campaign. Use whenever the user asks for the workspace, web app, browser, or a link to continue on the site.",
+     "strict": True, "parameters": _schema({
+         "campaign_reference": {"type": ["string", "null"], "description": "Campaign name, ID or contextual reference; null means the currently selected campaign or Autopilot run."},
+     }, ["campaign_reference"])},
     {"type": "function", "name": "search_conversation_memory",
      "description": "Search compact summaries of older Zalo chat sessions when the user explicitly refers to an earlier discussion.",
      "strict": True, "parameters": _schema({
@@ -220,6 +225,61 @@ async def execute_zalo_tool(ctx: ToolExecutionContext, name: str, arguments: dic
                 "status": run.get("status"), "approval_policy": run.get("approval_policy"),
                 "tasks": [{"key": item.get("key"), "title": item.get("title"),
                            "status": item.get("status")} for item in tasks]}}
+
+    if name == "get_workspace_link":
+        from identity import get_conversation
+        from zalo_campaign_agent import _thread_actor, _workspace_link, owned_campaigns
+
+        actor = _thread_actor(ctx.thread)
+        reference = str(arguments.get("campaign_reference") or "").strip()
+        active_id = str(ctx.thread.get("active_campaign_conversation_id") or "")
+        conversation = None
+        if active_id:
+            try:
+                active = await get_conversation(actor, active_id)
+            except KeyError:
+                active = None
+            folded_reference = _fold(reference)
+            folded_title = _fold((active or {}).get("title") or "")
+            contextual = any(phrase in folded_reference for phrase in (
+                "campaign nay", "chien dich nay", "cua no", "hien tai", "current",
+            ))
+            if active and (
+                not reference or contextual
+                or (folded_title and folded_title in folded_reference)
+            ):
+                conversation = active
+        if conversation is None and reference:
+            campaign, error = await _campaign_for_reference(ctx, reference)
+            if error:
+                return error
+            try:
+                conversation = await get_conversation(actor, campaign["conversation_id"])
+            except KeyError:
+                return {"ok": False, "error": "workspace_not_found",
+                        "message": "No owned workspace matches that campaign."}
+        if conversation is None:
+            campaigns = await owned_campaigns(ctx.thread)
+            return {
+                "ok": False, "error": "campaign_reference_required",
+                "message": "Ask which campaign workspace the user wants. Never choose one silently.",
+                "candidates": [
+                    _safe_campaign(item, index)
+                    for index, item in enumerate(campaigns[:8], 1)
+                ],
+            }
+        return {
+            "ok": True,
+            "workspace_url": _workspace_link(conversation),
+            "campaign": {
+                "title": conversation.get("title"),
+                "experience_mode": conversation.get("experience_mode"),
+            },
+            "instruction": (
+                "Give this exact link to the user and mention that they must sign in "
+                "with the same linked Zalo account on another device."
+            ),
+        }
 
     if name == "begin_autopilot":
         mode = arguments.get("mode")

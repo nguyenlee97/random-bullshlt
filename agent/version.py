@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-19.3"
+BUILD_VERSION = "2026-07-19.4"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -145,4 +145,6 @@ BUILD_FEATURES = [
     "complete-unicode-report-pdf",       # embedded Unicode fonts + six full chart/Q&A report sections
     "shared-report-pdf-download",        # Guided and Autopilot outcomes expose the same full PDF action
     "report-pdf-readiness-gate",         # Zalo only delivers PDF after all six report types are ready
+    "zalo-owned-workspace-link",          # model tool returns only an ownership-checked conversation deep link
+    "zalo-autopilot-web-continuity",      # Zalo runs appear and live-refresh in account campaign history
 ]

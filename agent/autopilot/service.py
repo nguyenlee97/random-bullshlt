@@ -124,6 +124,25 @@ async def _collections():
     return None, None, None
 
 
+async def ensure_autopilot_indexes() -> None:
+    """Create additive indexes used by resume and account history summaries."""
+    runs, tasks, events = await _collections()
+    if runs is None:
+        return
+    await runs.create_index(
+        [("session_id", 1), ("created_at", -1)],
+        name="autopilot_session_created",
+    )
+    await tasks.create_index(
+        [("run_id", 1), ("plan_index", 1)],
+        name="autopilot_task_run_plan",
+    )
+    await events.create_index(
+        [("run_id", 1), ("created_at", 1)],
+        name="autopilot_event_run_created",
+    )
+
+
 async def _emit(run_id: str, event_type: str, payload: dict | None = None) -> dict:
     event = {
         "event_id": f"are_{uuid.uuid4().hex}", "run_id": run_id,
@@ -295,6 +314,72 @@ async def get_latest_run(session_id: str) -> dict | None:
     return await get_run(doc["run_id"]) if doc else None
 
 
+def _history_run_summary(run: dict, task_docs: list[dict]) -> dict:
+    terminal_count = sum(
+        1 for task in task_docs if task.get("status") in TASK_TERMINAL
+    )
+    waiting = next(
+        (task for task in task_docs if task.get("status") == "waiting_review"),
+        None,
+    )
+    running = next(
+        (task for task in task_docs if task.get("status") == "running"),
+        None,
+    )
+    return {
+        "run_id": run.get("run_id"),
+        "status": run.get("status"),
+        "approval_policy": run.get("approval_policy"),
+        "task_total": len(task_docs),
+        "task_completed": terminal_count,
+        "current_task": (waiting or running or {}).get("key"),
+        "updated_at": run.get("updated_at"),
+    }
+
+
+async def get_latest_run_summaries(session_ids: list[str]) -> dict[str, dict]:
+    """Return one bounded run summary per session without N+1 history reads."""
+    wanted = list(dict.fromkeys(value for value in session_ids if value))
+    if not wanted:
+        return {}
+    runs, tasks, _ = await _collections()
+    if runs is not None:
+        run_docs = await runs.find(
+            {"session_id": {"$in": wanted}}
+        ).sort("created_at", -1).to_list(None)
+        latest: dict[str, dict] = {}
+        for run in run_docs:
+            latest.setdefault(run.get("session_id"), run)
+        run_ids = [run.get("run_id") for run in latest.values() if run.get("run_id")]
+        task_docs = await tasks.find(
+            {"run_id": {"$in": run_ids}},
+            {"run_id": 1, "key": 1, "status": 1, "plan_index": 1},
+        ).to_list(None) if run_ids else []
+    else:
+        latest = {}
+        for run in sorted(
+            _mem_runs.values(), key=lambda item: item.get("created_at") or _now(),
+            reverse=True,
+        ):
+            session_id = run.get("session_id")
+            if session_id in wanted:
+                latest.setdefault(session_id, run)
+        run_ids = {run.get("run_id") for run in latest.values()}
+        task_docs = [
+            task for task in _mem_tasks.values() if task.get("run_id") in run_ids
+        ]
+    tasks_by_run: dict[str, list[dict]] = {}
+    for task in task_docs:
+        tasks_by_run.setdefault(task.get("run_id"), []).append(task)
+    return {
+        session_id: _history_run_summary(
+            run, sorted(tasks_by_run.get(run.get("run_id"), []), key=_task_order_key),
+        )
+        for session_id, run in latest.items()
+        if session_id
+    }
+
+
 async def list_events(run_id: str, after: datetime | None = None) -> list[dict]:
     _, _, events = await _collections()
     query: dict[str, Any] = {"run_id": run_id}
@@ -319,6 +404,12 @@ async def _set_run(run_id: str, updates: dict) -> None:
         if run_id not in _mem_runs:
             raise KeyError(f"run not found: {run_id}")
         _mem_runs[run_id].update(updates)
+    # A Zalo-created run has no browser chat traffic to update conversation
+    # recency. Touch only the canonical conversation activity timestamp so it
+    # stays visible in account history while the worker advances it.
+    run = await get_run(run_id)
+    from identity import touch_conversation_activity_for_session
+    await touch_conversation_activity_for_session(run["session_id"])
 
 
 async def pause_run(run_id: str, actor: str = "campaign_operator") -> dict:

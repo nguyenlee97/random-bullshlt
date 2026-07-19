@@ -327,7 +327,18 @@ async def list_conversations(actor: dict | str, *, include_archived: bool = Fals
             and (include_archived or item.get("archived_at") is None)
         ]
         docs.sort(key=lambda item: item.get("updated_at") or item["created_at"], reverse=True)
-    return [_public_conversation(item, actor) for item in docs]
+    from autopilot.service import get_latest_run_summaries
+    run_summaries = await get_latest_run_summaries(
+        [item.get("session_id") for item in docs]
+    )
+    result = []
+    for item in docs:
+        public = _public_conversation(item, actor)
+        summary = run_summaries.get(item.get("session_id"))
+        if summary:
+            public["latest_run_summary"] = summary
+        result.append(public)
+    return result
 
 
 async def get_conversation(actor: dict | str, conversation_id: str) -> dict:
@@ -624,6 +635,21 @@ async def touch_conversation_for_session(
             doc["title"] = title
             doc["title_source"] = "first_message"
         return
+
+
+async def touch_conversation_activity_for_session(session_id: str) -> None:
+    """Refresh history ordering without pretending a browser message occurred."""
+    _, conversations = await _collections()
+    now = _now()
+    if conversations is not None:
+        await conversations.update_one(
+            {"session_id": session_id}, {"$set": {"updated_at": now}}
+        )
+        return
+    for doc in _mem_conversations.values():
+        if doc.get("session_id") == session_id:
+            doc["updated_at"] = now
+            return
 
 
 async def set_conversation_mode_for_session(session_id: str, mode: str) -> None:

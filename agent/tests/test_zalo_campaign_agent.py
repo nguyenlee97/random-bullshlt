@@ -260,6 +260,68 @@ async def test_zalo_autopilot_modes_map_to_existing_policies(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_workspace_link_tool_uses_owned_active_conversation(monkeypatch):
+    import zalo_campaign_agent as agent
+    from config import config
+    from identity import create_conversation
+    from zalo_tools import ToolExecutionContext, ZALO_TOOLS, execute_zalo_tool
+
+    thread = await agent.get_or_create_thread("oa-user-workspace-link")
+    campaign = await create_conversation(
+        agent._thread_actor(thread), title="Workspace Link",
+        experience_mode="autopilot",
+    )
+    thread = await agent._update_thread(thread, {
+        "active_campaign_conversation_id": campaign["conversation_id"],
+        "active_campaign_session_id": campaign["session_id"],
+    })
+    ctx = ToolExecutionContext(
+        thread=thread, current_message="give me workspace link", history=[],
+    )
+
+    result = await execute_zalo_tool(
+        ctx, "get_workspace_link", {"campaign_reference": None},
+    )
+
+    assert result["ok"] is True
+    assert result["workspace_url"] == (
+        f"{config.ZALO_WEB_WORKSPACE_URL}/?conversation={campaign['conversation_id']}"
+    )
+    assert campaign["session_id"] not in result["workspace_url"]
+    schema = next(tool for tool in ZALO_TOOLS if tool["name"] == "get_workspace_link")
+    assert schema["strict"] is True
+    assert "user_id" not in str(schema["parameters"])
+
+
+@pytest.mark.asyncio
+async def test_workspace_link_tool_does_not_leak_foreign_conversation():
+    import zalo_campaign_agent as agent
+    from identity import bootstrap_anonymous, create_conversation
+    from zalo_tools import ToolExecutionContext, execute_zalo_tool
+
+    thread = await agent.get_or_create_thread("oa-user-workspace-owner")
+    foreign = await bootstrap_anonymous()
+    foreign_campaign = await create_conversation(
+        foreign["identity_id"], title="Foreign", experience_mode="autopilot",
+    )
+    thread = await agent._update_thread(thread, {
+        "active_campaign_conversation_id": foreign_campaign["conversation_id"],
+        "active_campaign_session_id": foreign_campaign["session_id"],
+    })
+    ctx = ToolExecutionContext(
+        thread=thread, current_message="give me workspace link", history=[],
+    )
+
+    result = await execute_zalo_tool(
+        ctx, "get_workspace_link", {"campaign_reference": None},
+    )
+
+    assert result["ok"] is False
+    assert result["error"] == "campaign_reference_required"
+    assert foreign_campaign["conversation_id"] not in str(result)
+
+
+@pytest.mark.asyncio
 async def test_openai_understands_natural_autopilot_mode_without_starting_run(monkeypatch):
     import zalo_campaign_agent as agent
     from config import config
