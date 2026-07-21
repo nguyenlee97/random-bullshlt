@@ -348,6 +348,33 @@ async def handle_openai_freeform(
             duration_ms=int((time.perf_counter() - decision_started) * 1000),
         )
 
+        # Match the established Copilot contract for an uncommitted initial
+        # Brief. The semantic coordinator decides whether this is a Brief
+        # action; the OpenAI-owned typed collector gathers every hard fact,
+        # asks for missing operator fields, and creates one atomic proposal.
+        if (
+            step == 0
+            and pending is None
+            and decision.workflow_action in {"update_brief", "approve"}
+        ):
+            from workspace.service import get_workspace
+
+            canonical = await get_workspace(session_id)
+            current_brief = (
+                canonical.get("artifacts", {}).get("brief", {}).get("value")
+            )
+            if not current_brief:
+                from openai_campaign.brief import handle_openai_brief_intake
+
+                return await handle_openai_brief_intake(
+                    message,
+                    step,
+                    session_id,
+                    history=history,
+                    auto_approve_brief=(decision.workflow_action == "approve"),
+                    client=api,
+                )
+
         if decision.requires_clarification():
             reply = decision.clarification_question.strip() or (
                 "Anh/chị có thể nói rõ thông tin hoặc thay đổi muốn thực hiện không?"

@@ -3,7 +3,11 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { ChevronRight, ChevronLeft, Check, Loader2, Wrench, Cpu } from 'lucide-react'
 
-export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canApprove, busy, onApprove, onBack, onNext, approveLabel = '' }) {
+const modelLabel = model => model === 'openai_gpt_5_4_mini'
+  ? 'OpenAI · GPT-5.4 mini'
+  : 'GreenNode · MiniMax M2.5'
+
+export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canApprove, busy, onApprove, onBack, onNext, approveLabel = '', conversationModel = 'greennode_minimax' }) {
   const isDone = stepStatus === 'done'
   const isLast = stepIndex === totalSteps - 1
   // No model toggle needed — single backend model
@@ -18,7 +22,7 @@ export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canA
         </Badge>
         <Badge variant="model-qwen" className="gap-1 text-[10px] h-5 hidden sm:flex">
           <Cpu className="w-2.5 h-2.5" />
-          Minimax-M2.5
+          {modelLabel(conversationModel)}
         </Badge>
       </div>
 

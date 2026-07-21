@@ -1882,6 +1882,7 @@ export default function App() {
             workspaceRevision={canonicalWorkspace?.revision}
             creativeFormatPlan={canonicalWorkspace?.artifacts?.creative_format_plan?.value}
             onOpenRecompute={openFirstRecomputeStep}
+            conversationModel={currentConversationModel}
             autopilotMode={experienceMode === 'autopilot'}
             autopilotEditorArtifact={autopilotEditorArtifact}
             onAutopilotSave={handleAutopilotEditorSave}

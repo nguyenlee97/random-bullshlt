@@ -25,7 +25,7 @@ const STEP_DESCS = [
 ]
 
 const WorkspacePane = forwardRef(function WorkspacePane(
-  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false, autopilotEditorArtifact = null, onAutopilotSave, onReturnToAutopilot },
+  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, conversationModel = 'greennode_minimax', autopilotMode = false, autopilotEditorArtifact = null, onAutopilotSave, onReturnToAutopilot },
   ref
 ) {
   const bodyRef = useRef(null)
@@ -240,6 +240,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
         onApprove={onApprove}
         onBack={() => onStepJump(currentStep - 1)}
         onNext={() => onStepJump(currentStep + 1)}
+        conversationModel={conversationModel}
         approveLabel={currentStep === 2
           ? (creativeReviewState(formState.creative?.files || []) === 'ready'
             ? 'Xác nhận & sang Setup'

@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-21.4"
+BUILD_VERSION = "2026-07-21.5"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -189,4 +189,6 @@ BUILD_FEATURES = [
     "openai-autopilot-model-purity",             # OpenAI audience/Q&A never call GreenNode inference
     "zalo-autopilot-model-policy",               # Zalo-created runs use an explicit channel model policy
     "openai-campaign-engine-ready",               # OpenAI becomes selectable only when configured server-side
+    "openai-typed-brief-intake",                  # initial Copilot briefs collect all supplied fields through OpenAI
+    "conversation-model-workspace-provenance",   # workspace footer names the immutable provider selected for the run
 ]

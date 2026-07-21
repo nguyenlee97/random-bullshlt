@@ -5,6 +5,8 @@ import test from 'node:test'
 const api = readFileSync(new URL('../src/api/agentApi.js', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const selector = readFileSync(new URL('../src/components/ExperienceSelector.jsx', import.meta.url), 'utf8')
+const workspace = readFileSync(new URL('../src/components/WorkspacePane/index.jsx', import.meta.url), 'utf8')
+const workFoot = readFileSync(new URL('../src/components/WorkspacePane/WorkFoot.jsx', import.meta.url), 'utf8')
 
 test('new campaigns send one explicit immutable conversational model', () => {
   assert.match(api, /conversation_model: conversationModel/)
@@ -24,4 +26,12 @@ test('homepage shows both model choices and disables unavailable engines', () =>
 test('resume displays the stored model but exposes no mid-run switch', () => {
   assert.match(selector, /modelLabel\(item\.conversation_model\)/)
   assert.doesNotMatch(api, /updateConversationModel|setConversationModel/)
+})
+
+test('workspace provenance displays the immutable conversation model', () => {
+  assert.match(app, /conversationModel=\{currentConversationModel\}/)
+  assert.match(workspace, /conversationModel=\{conversationModel\}/)
+  assert.match(workFoot, /OpenAI · GPT-5\.4 mini/)
+  assert.match(workFoot, /GreenNode · MiniMax M2\.5/)
+  assert.doesNotMatch(workFoot, />\s*Minimax-M2\.5\s*</)
 })

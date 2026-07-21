@@ -7,6 +7,7 @@ outcomes: clarify, answer, or create a durable proposal.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import date
 import json
 import re
@@ -23,6 +24,30 @@ from handlers.freeform import _WORKSPACE_SUGGESTIONS, _build_update_summary
 from session import add_message, clear_pending_proposal, set_pending_proposal
 from time_context import campaign_now, campaign_today
 from workspace.service import approve_proposal, create_proposal, get_workspace
+
+
+StructuredRunner = Callable[
+    [list[dict], type[BaseModel], str, str, int],
+    Awaitable[tuple[BaseModel, int]],
+]
+
+
+async def _legacy_structured_runner(
+    messages: list[dict],
+    schema: type[BaseModel],
+    schema_name: str,
+    role: str,
+    max_tokens: int,
+) -> tuple[BaseModel, int]:
+    """Preserve the existing GreenNode/critic boundary as the default.
+
+    A sibling campaign engine may inject its own structured runner. The default
+    remains equivalent at the call boundary, so GreenNode's Brief Collector is
+    not redirected or coupled to OpenAI availability.
+    """
+    return await asyncio.to_thread(
+        structured, messages, schema, schema_name, role, max_tokens,
+    )
 
 
 class BriefDraft(BaseModel):
@@ -243,10 +268,12 @@ def _brief_delegation_messages(state: AgentState) -> list[dict]:
 
 async def _classify_brief_delegation(
     state: AgentState,
+    *,
+    structured_runner: StructuredRunner | None = None,
 ) -> tuple[BriefDelegationDecision | None, int]:
     try:
-        return await asyncio.to_thread(
-            structured,
+        runner = structured_runner or _legacy_structured_runner
+        return await runner(
             _brief_delegation_messages(state),
             BriefDelegationDecision,
             "brief_delegation_decision",
@@ -404,16 +431,30 @@ def _enforce_explicit_brief_fields(
     return turn
 
 
-async def generate_brief_turn(state: AgentState) -> tuple[BriefTurn, int]:
+async def generate_brief_turn(
+    state: AgentState,
+    *,
+    structured_runner: StructuredRunner | None = None,
+) -> tuple[BriefTurn, int]:
     is_question = _is_brief_question(state.get("user_message", ""))
     schema = BriefTurn if is_question else BriefIntakeTurn
     schema_name = "brief_turn" if is_question else "brief_intake_turn"
-    generator_call = asyncio.to_thread(
-        structured, _brief_messages(state), schema, schema_name, "generator", 1600,
+    runner = structured_runner or _legacy_structured_runner
+    generator_call = runner(
+        _brief_messages(state), schema, schema_name, "generator", 1600,
+    )
+    # Keep the legacy call signature unchanged for callers/tests that monkeypatch
+    # this classifier. Only the sibling OpenAI route passes an injected runner.
+    delegation_call = (
+        _classify_brief_delegation(state)
+        if structured_runner is None
+        else _classify_brief_delegation(
+            state, structured_runner=structured_runner,
+        )
     )
     (turn, tokens), (delegation, delegation_tokens) = await asyncio.gather(
         generator_call,
-        _classify_brief_delegation(state),
+        delegation_call,
     )
     # Normalize the narrower intake result and apply the server-owned
     # explicit-field policy before any proposal can be created.
@@ -436,8 +477,7 @@ async def generate_brief_turn(state: AgentState) -> tuple[BriefTurn, int]:
     # The provider asked for advisory values the user already supplied. Force
     # one schema-repaired proposal instead of repeating an unnecessary question.
     delegated = normalized.suggestion_fields
-    proposal, repair_tokens = await asyncio.to_thread(
-        structured,
+    proposal, repair_tokens = await runner(
         _brief_messages(state),
         BriefProposalTurn,
         "brief_proposal_turn",
@@ -491,14 +531,25 @@ def normalize_inferred_dates(
     return normalized
 
 
-async def brief_collector_node(state: AgentState) -> dict:
+async def brief_collector_node(
+    state: AgentState,
+    *,
+    structured_runner: StructuredRunner | None = None,
+    proposal_actor: str = "campaign_copilot",
+) -> dict:
     session_id = state["session_id"]
     await alog(session_id, "llm_call_start", {
         "handler": "brief_collector", "messages_count": len(state.get("messages", [])),
     })
     started = time.perf_counter()
     try:
-        turn, tokens = await generate_brief_turn(state)
+        turn, tokens = (
+            await generate_brief_turn(state)
+            if structured_runner is None
+            else await generate_brief_turn(
+                state, structured_runner=structured_runner,
+            )
+        )
     except StructuredOutputError as exc:
         await alog(session_id, "error", {
             "handler": "brief_collector", "error": str(exc)[:300],
@@ -572,7 +623,7 @@ async def brief_collector_node(state: AgentState) -> dict:
         "brief",
         value,
         base_revision=canonical["revision"],
-        actor="campaign_copilot",
+        actor=proposal_actor,
         reason=reason,
     )
     changes = {

@@ -131,7 +131,21 @@ async def test_live_faq_runs_function_call_round_trip(monkeypatch):
 async def test_mutation_creates_visible_proposal_without_applying(monkeypatch):
     import openai_campaign.engine as engine
     from session import get_pending_proposal
-    from workspace.service import get_workspace
+    from workspace.service import apply_mutation, get_workspace
+
+    workspace = await get_workspace("openai-proposal")
+    await apply_mutation(
+        "openai-proposal",
+        "brief",
+        {
+            "brand": "Original", "objective": "awareness", "kpi": "Reach",
+            "budget": 10, "startDate": "2026-08-20", "endDate": "2026-08-22",
+            "notes": "Food lovers",
+        },
+        base_revision=workspace["revision"],
+        actor="test",
+        idempotency_key="openai-existing-brief",
+    )
 
     decision = _decision(
         turn_type="workflow_action",
@@ -167,7 +181,8 @@ async def test_mutation_creates_visible_proposal_without_applying(monkeypatch):
 
     workspace = await get_workspace("openai-proposal")
     pending = await get_pending_proposal("openai-proposal")
-    assert workspace["revision"] == 0
+    assert workspace["revision"] == 1
+    assert workspace["artifacts"]["brief"]["value"]["brand"] == "Original"
     assert pending["field"] == "brief.brand"
     assert pending["value"] == "Acme"
     assert result.workspace_update is None
@@ -181,6 +196,21 @@ async def test_mutation_creates_visible_proposal_without_applying(monkeypatch):
 async def test_created_proposal_stays_visible_when_final_summary_fails(monkeypatch):
     import openai_campaign.engine as engine
     from session import get_pending_proposal
+    from workspace.service import apply_mutation, get_workspace
+
+    workspace = await get_workspace("openai-proposal-fallback")
+    await apply_mutation(
+        "openai-proposal-fallback",
+        "brief",
+        {
+            "brand": "Original", "objective": "awareness", "kpi": "Reach",
+            "budget": 10, "startDate": "2026-08-20", "endDate": "2026-08-22",
+            "notes": "Food lovers",
+        },
+        base_revision=workspace["revision"],
+        actor="test",
+        idempotency_key="openai-existing-brief-fallback",
+    )
 
     monkeypatch.setattr(engine, "decide_turn", AsyncMock(return_value=_decision(
         turn_type="workflow_action",
