@@ -19,7 +19,7 @@ else:
     from handlers.freeform import handle_freeform
 from handlers.report import handle_report_entry, handle_report_chat
 from handlers.email import handle_email_entry, handle_email_send
-from handlers.image_gen import handle_generate_image, get_remaining, AD_FORMATS
+from handlers.image_gen import handle_generate_image, get_quota_status, AD_FORMATS
 from handlers.screenshot import handle_screenshot, ALLOWED_DOMAINS
 
 agent_router = APIRouter()
@@ -603,7 +603,12 @@ async def chat(request: Request, req: ChatRequest) -> AgentResponse:
         # Step 5 (Report): route to report chat handler with context isolation
         if req.step == 5:
             active_tab = (req.formData or {}).get("activeReportTab", "daily_ops") if req.formData else "daily_ops"
-            return await handle_report_chat(req.message, sid, active_tab)
+            from identity import get_conversation_model_for_session
+            model_lock = await get_conversation_model_for_session(sid)
+            return await handle_report_chat(
+                req.message, sid, active_tab,
+                conversation_model=model_lock["conversation_model"],
+            )
 
         # Step 6 (Email): pass to email entry for freeform chat
         if req.step == 6:
@@ -1087,6 +1092,8 @@ class _AutopilotStartRequest(BaseModel):
     creative_source: str
     actor: str = "campaign_operator"
     idempotency_key: str = ""
+    creative_direction: str = ""
+    creative_asset_ids: list[str] = []
 
 
 class _AutopilotActionRequest(BaseModel):
@@ -1133,6 +1140,12 @@ def _require_autopilot_worker() -> None:
 async def autopilot_start(raw_request: Request, request: _AutopilotStartRequest):
     from autopilot.service import RunConflict, create_run
     await _assert_session_access(raw_request, request.session_id)
+    actor_identity = await _request_actor(raw_request)
+    if request.creative_asset_ids:
+        from creative_assets import get_assets
+        owned_assets = await get_assets(actor_identity, request.creative_asset_ids)
+        if len(owned_assets) != len(set(request.creative_asset_ids)):
+            raise HTTPException(status_code=404, detail="one or more creative assets were not found")
     _require_autopilot_worker()
     try:
         return await create_run(
@@ -1141,6 +1154,8 @@ async def autopilot_start(raw_request: Request, request: _AutopilotStartRequest)
             creative_source=request.creative_source,
             actor=request.actor,
             idempotency_key=request.idempotency_key,
+            creative_direction=request.creative_direction,
+            creative_asset_ids=request.creative_asset_ids,
         )
     except (KeyError, ValueError, RunConflict) as exc:
         raise _autopilot_error(exc) from exc
@@ -1270,26 +1285,142 @@ class GenerateImageRequest(BaseModel):
     brief: dict = {}
     format_id: str
     custom_prompt: str = ""
+    asset_ids: list[str] = []
+    prompt_spec: dict | None = None
+    idempotency_key: str = ""
+    quality: str = "medium"
+
+
+class CreativeAssetRequest(BaseModel):
+    session_id: str
+    name: str
+    kind: str = "style_reference"
+    use_instruction: str = ""
+    required: bool = False
+    data_url: str
+
+
+class CreativePromptRequest(BaseModel):
+    session_id: str
+    brief: dict = {}
+    format_id: str
+    asset_ids: list[str] = []
+    direction: str = ""
+
+
+class AudienceReachRequest(BaseModel):
+    session_id: str
+    selected_segment_ids: list[str] = []
+
+
+@agent_router.post("/audience/reach")
+async def audience_reach_route(request: Request, req: AudienceReachRequest):
+    """Return canonical, catalog-grounded unique reach for a DMP selection."""
+    await _assert_session_access(request, req.session_id)
+    from audience_reach import estimate_unique_reach
+    from tools.audience_library import get_all_segments
+
+    selected = {str(value).strip().casefold() for value in req.selected_segment_ids if str(value).strip()}
+    catalog = await get_all_segments(limit=500)
+    resolved: list[dict] = []
+    for segment in catalog:
+        identities = {
+            str(segment.get(key) or "").strip().casefold()
+            for key in ("segmentId", "_id", "code", "fullLabel", "name")
+        }
+        if selected.intersection(identities):
+            resolved.append(segment)
+    result = estimate_unique_reach(resolved)
+    resolved_ids = {
+        str(segment.get("segmentId") or segment.get("_id") or "").strip().casefold()
+        for segment in resolved
+    }
+    result["requested_segment_ids"] = req.selected_segment_ids
+    result["unresolved_segment_ids"] = [
+        value for value in req.selected_segment_ids
+        if str(value).strip().casefold() not in resolved_ids
+    ]
+    return result
 
 
 @agent_router.post("/generate-image")
 async def generate_image_route(request: Request, req: GenerateImageRequest):
-    """Generate an ad creative image via gpt-image-1."""
+    """Generate one quota-controlled ad creative via direct OpenAI GPT Image 2."""
     await _assert_session_access(request, req.session_id)
+    actor = await _request_actor(request)
+    from creative_assets import get_assets
+    assets = await get_assets(actor, req.asset_ids)
+    if len(assets) != len(set(req.asset_ids)):
+        raise HTTPException(status_code=404, detail="one or more creative assets were not found")
     return await handle_generate_image(
         session_id=req.session_id,
         brief=req.brief,
         format_id=req.format_id,
         custom_prompt=req.custom_prompt,
+        actor=actor,
+        assets=assets,
+        prompt_spec=req.prompt_spec,
+        idempotency_key=req.idempotency_key,
+        quality=req.quality,
     )
 
 
 @agent_router.get("/image-gen-status")
 async def image_gen_status_route(request: Request, session_id: str):
-    """Return remaining image generation quota for this session."""
+    """Return durable per-actor daily quota across every campaign flow."""
     await _assert_session_access(request, session_id)
-    remaining = get_remaining(session_id)
-    return {"remaining": remaining, "max": 10}
+    actor = await _request_actor(request)
+    return await get_quota_status(session_id, actor)
+
+
+@agent_router.post("/creative/assets", status_code=201)
+async def creative_asset_create(request: Request, req: CreativeAssetRequest):
+    await _assert_session_access(request, req.session_id)
+    actor = await _request_actor(request)
+    from creative_assets import create_asset
+    try:
+        return await create_asset(
+            actor, session_id=req.session_id, name=req.name, kind=req.kind,
+            use_instruction=req.use_instruction, required=req.required,
+            data_url=req.data_url,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@agent_router.get("/creative/assets")
+async def creative_asset_list(request: Request, session_id: str):
+    await _assert_session_access(request, session_id)
+    from creative_assets import list_assets
+    return {"assets": await list_assets(await _request_actor(request))}
+
+
+@agent_router.delete("/creative/assets/{asset_id}")
+async def creative_asset_delete(asset_id: str, request: Request, session_id: str):
+    await _assert_session_access(request, session_id)
+    from creative_assets import delete_asset
+    if not await delete_asset(await _request_actor(request), asset_id):
+        raise HTTPException(status_code=404, detail="creative asset not found")
+    return {"ok": True, "asset_id": asset_id}
+
+
+@agent_router.post("/creative/prompt-spec")
+async def creative_prompt_spec_route(request: Request, req: CreativePromptRequest):
+    await _assert_session_access(request, req.session_id)
+    actor = await _request_actor(request)
+    from creative_assets import get_assets
+    from creative_prompt import compose_prompt_spec
+    assets = await get_assets(actor, req.asset_ids)
+    if len(assets) != len(set(req.asset_ids)):
+        raise HTTPException(status_code=404, detail="one or more creative assets were not found")
+    try:
+        spec, provenance = await compose_prompt_spec(
+            req.session_id, brief=req.brief, format_id=req.format_id,
+            assets=assets, direction=req.direction,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"prompt_spec": spec, "provenance": provenance, "quota_charged": False}
 
 
 @agent_router.get("/image-gen-formats")

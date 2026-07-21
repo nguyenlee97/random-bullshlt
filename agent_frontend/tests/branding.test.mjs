@@ -158,8 +158,11 @@ test('Autopilot requires an explicit creative source and supports automatic gene
   assert.match(panel, /nguồn creative \(tải lên hoặc AI tự tạo\)/)
   assert.match(panel, /disabled=\{loading \|\| prerequisitesLoading\}/)
   assert.doesNotMatch(panel, /disabled=\{!briefReady \|\| !creativeSource/)
-  assert.match(panel, /startAutopilot\(policy, creativeSource, startKey\)/)
+  assert.match(panel, /startAutopilot\(policy, creativeSource, startKey, \{/)
+  assert.match(panel, /creative direction cho AI/)
+  assert.match(panel, /assetIds: \[\.\.\.creativeAssetIds\]/)
   assert.match(api, /creative_source: creativeSource/)
+  assert.match(api, /creative_direction: creativeInput\.direction/)
   assert.match(api, /autopilot-start:\$\{SESSION_ID\}:\$\{creativeSource\}:\$\{startKey/)
 })
 

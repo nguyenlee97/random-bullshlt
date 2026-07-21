@@ -21,7 +21,7 @@ async function launchReportGeneration(input) {
   if (!campaignId) throw new Error('campaignId required');
 
   const current = await getReportStatus(campaignId);
-  if (current.ready >= current.total) {
+  if (current.ready >= current.total && current.contractReady >= current.total) {
     return { status: 'already_ready', campaignId };
   }
   if (Object.values(current.types || {}).includes('generating')) {

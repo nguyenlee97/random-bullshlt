@@ -53,23 +53,31 @@ def _decision(**overrides):
 
 
 @pytest.mark.asyncio
-async def test_static_faq_answers_without_live_or_mutation_tools(monkeypatch):
+async def test_static_faq_is_grounded_without_live_or_mutation_tools(monkeypatch):
     import openai_campaign.engine as engine
 
     monkeypatch.setattr(engine, "decide_turn", AsyncMock(return_value=_decision()))
-    client = _Client([_response(text="Frequency cap giúp tránh lặp quảng cáo quá mức.")])
+    client = _Client([
+        _response(output=[{
+            "type": "function_call", "call_id": "call-kb",
+            "name": "search_ad_knowledge",
+            "arguments": json.dumps({"query": "frequency cap"}),
+        }]),
+        _response(text="Frequency cap giúp tránh lặp quảng cáo quá mức [ad-operations-faq, 2026-07-21.1]."),
+    ])
 
     result = await engine.handle_openai_freeform(
         "Frequency cap là gì?", 0, "openai-static-faq", client=client,
     )
 
     assert result.meta.model == "gpt-5.4-mini"
-    assert result.meta.tool == "openai_freeform_chat"
+    assert result.meta.tool == "search_ad_knowledge"
     assert "Frequency cap" in result.text
-    call = client.responses.calls[0]
-    assert call["store"] is False
-    assert call["tool_choice"] == "none"
-    assert all(tool["name"] != "propose_workspace_change" for tool in call["tools"])
+    first, final = client.responses.calls
+    assert first["store"] is False
+    assert first["tool_choice"] == "required"
+    assert final["tool_choice"] == "none"
+    assert all(tool["name"] != "propose_workspace_change" for tool in first["tools"])
 
 
 @pytest.mark.asyncio

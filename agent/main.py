@@ -18,12 +18,16 @@ async def _lifespan(_app):
     from identity import ensure_identity_indexes
     from zalo_auth import ensure_zalo_auth_indexes
     from zalo_channel import ensure_zalo_channel_indexes
+    from image_quota import ensure_indexes as ensure_image_quota_indexes
+    from creative_assets import ensure_indexes as ensure_creative_asset_indexes
     await ensure_account_indexes()
     await ensure_autopilot_indexes()
     await ensure_campaign_ownership_indexes()
     await ensure_identity_indexes()
     await ensure_zalo_auth_indexes()
     await ensure_zalo_channel_indexes()
+    await ensure_image_quota_indexes()
+    await ensure_creative_asset_indexes()
     if config.USE_RAG_AUDIENCE:
         from rag.runtime import start_prewarm
         await start_prewarm()

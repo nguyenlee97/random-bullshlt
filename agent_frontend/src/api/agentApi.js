@@ -2,7 +2,7 @@ import { fmt, generateId } from '@/lib/utils'
 import log from '@/lib/logger'
 import { normalizeDmpAttr } from '@/lib/audience'
 
-export { calcAudienceSize, normalizeDmpAttr } from '@/lib/audience'
+export { normalizeDmpAttr } from '@/lib/audience'
 
 // ─── Real Agent API client ────────────────────────────────────────────────────
 const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8080'
@@ -198,11 +198,8 @@ const DMP_FALLBACK = [
   { code: 'INT040', name: 'Ẩm thực & Nhà hàng', type: 'interest', category: 'Food', est_size: 4800000 },
 ]
 
-// ─── Calc audience size (union model: OR logic, selecting more = larger reach) ─
-// Sorts known sizes desc, applies 30% overlap discount per additional segment.
-// Segments with null/0 est_size are counted as "no constraint" (ignored in math).
-// Implemented in lib/audience.js and re-exported above so Guided and
-// Autopilot flows share one normalization and sizing contract.
+// Unique audience reach is calculated only by POST /api/agent/audience/reach.
+// The frontend keeps normalization helpers but owns no reach arithmetic.
 
 // ─── Generate mock campaigns from brief ──────────────────────────────────────
 function generateMockCampaigns(brief) {
@@ -1519,6 +1516,29 @@ export const AgentAPI = {
     }
   },
 
+  /** Server-owned unique reach; the browser never computes segment unions. */
+  async getAudienceReach(attrs = []) {
+    const selectedSegmentIds = attrs.map(item =>
+      item.segmentId || item.code || item._uid || item._id || item.fullLabel || item.name
+    ).filter(Boolean)
+    try {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/audience/reach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: SESSION_ID,
+          selected_segment_ids: selectedSegmentIds,
+        }),
+        signal: AbortSignal.timeout(15000),
+      })
+      if (!res.ok) return null
+      return await res.json()
+    } catch (e) {
+      console.warn('[getAudienceReach] failed:', e.message)
+      return null
+    }
+  },
+
   /**
    * Commit a workspace field directly to backend session (MongoDB).
    * Called when user clicks 'Đồng ý' proposal button or footer 'Đồng ý & Tiếp tục',
@@ -1643,7 +1663,7 @@ export const AgentAPI = {
     }
   },
 
-  async startAutopilot(approvalPolicy = 'critical_only', creativeSource, startKey = '') {
+  async startAutopilot(approvalPolicy = 'critical_only', creativeSource, startKey = '', creativeInput = {}) {
     try {
       const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs`, {
         method: 'POST',
@@ -1652,6 +1672,8 @@ export const AgentAPI = {
           session_id: SESSION_ID,
           approval_policy: approvalPolicy,
           creative_source: creativeSource,
+          creative_direction: creativeInput.direction || '',
+          creative_asset_ids: creativeInput.assetIds || [],
           actor: 'campaign_operator',
           idempotency_key: `autopilot-start:${SESSION_ID}:${creativeSource}:${startKey || 'initial'}`,
         }),
@@ -1915,12 +1937,12 @@ export const AgentAPI = {
   },
 
   /**
-   * Generate an ad image using gpt-image-1 via VNG Cloud.
+   * Generate an ad image using direct OpenAI gpt-image-2.
    * @param {Object} briefObj   - formState.brief
    * @param {string} formatId   - one of the AD_FORMATS ids
    * @returns {Promise<{ok, imageB64, formatId, width, height, remaining} | {ok: false, error}>}
    */
-  async generateAdImage(briefObj, formatId, customPrompt = '') {
+  async generateAdImage(briefObj, formatId, customPrompt = '', options = {}) {
     try {
       const res = await agentFetch(`${AGENT_URL}/api/agent/generate-image`, {
         method: 'POST',
@@ -1930,6 +1952,10 @@ export const AgentAPI = {
           brief: briefObj || {},
           format_id: formatId,
           custom_prompt: customPrompt || '',
+          asset_ids: options.assetIds || [],
+          prompt_spec: options.promptSpec || null,
+          quality: options.quality || 'medium',
+          idempotency_key: options.idempotencyKey || `guided:${SESSION_ID}:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
         }),
         signal: AbortSignal.timeout(180000),  // AI image gen — up to 3 min
       })
@@ -1943,7 +1969,7 @@ export const AgentAPI = {
 
   /**
    * Get remaining image generation quota for the current session.
-   * Returns { remaining: N, max: 10 }
+   * Returns the durable per-user/per-anonymous daily quota.
    */
   async getImageGenStatus() {
     try {
@@ -1951,11 +1977,55 @@ export const AgentAPI = {
         `${AGENT_URL}/api/agent/image-gen-status?session_id=${SESSION_ID}`,
         { signal: AbortSignal.timeout(5000) }
       )
-      if (!res.ok) return { remaining: 10, max: 10 }
+      if (!res.ok) return { remaining: 20, max: 20 }
       return await res.json()
     } catch {
-      return { remaining: 10, max: 10 }
+      return { remaining: 20, max: 20 }
     }
+  },
+
+  async listCreativeAssets() {
+    const res = await agentFetch(`${AGENT_URL}/api/agent/creative/assets?session_id=${SESSION_ID}`, {
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.assets || []
+  },
+
+  async createCreativeAsset({ name, kind, useInstruction, required, dataUrl }) {
+    const res = await agentFetch(`${AGENT_URL}/api/agent/creative/assets`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: SESSION_ID, name, kind,
+        use_instruction: useInstruction || '', required: Boolean(required),
+        data_url: dataUrl,
+      }),
+      signal: AbortSignal.timeout(45000),
+    })
+    if (!res.ok) throw await responseError(res, 'Không thể lưu reference asset.')
+    return res.json()
+  },
+
+  async deleteCreativeAsset(assetId) {
+    const res = await agentFetch(
+      `${AGENT_URL}/api/agent/creative/assets/${encodeURIComponent(assetId)}?session_id=${SESSION_ID}`,
+      { method: 'DELETE', signal: AbortSignal.timeout(10000) },
+    )
+    return res.ok
+  },
+
+  async composeCreativePrompt({ brief, formatId, assetIds, direction }) {
+    const res = await agentFetch(`${AGENT_URL}/api/agent/creative/prompt-spec`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: SESSION_ID, brief: brief || {}, format_id: formatId,
+        asset_ids: assetIds || [], direction: direction || '',
+      }),
+      signal: AbortSignal.timeout(90000),
+    })
+    if (!res.ok) throw await responseError(res, 'Không thể soạn prompt creative.')
+    return res.json()
   },
 
   /**

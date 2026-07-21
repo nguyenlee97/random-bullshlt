@@ -4,8 +4,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn, fmt } from '@/lib/utils'
-import { fetchDmpAttributes } from '@/api/agentApi'
-import { calcAudienceSize, dedupeDmpAttrs, enrichAudienceSelection, normalizeDmpAttr } from '@/lib/audience'
+import { AgentAPI, fetchDmpAttributes } from '@/api/agentApi'
+import { dedupeDmpAttrs, enrichAudienceSelection, normalizeDmpAttr } from '@/lib/audience'
 import { Users, Check, Search, Loader2, Sparkles, ChevronDown, ChevronUp, BrainCircuit } from 'lucide-react'
 import TargetingPanel from '@/components/TargetingPanel'
 
@@ -55,6 +55,7 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
   const [recoLoading, setRecoLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState(false)
+  const [reachLoading, setReachLoading] = useState(false)
 
   const objective = brief?.objective || 'awareness'
   const hasAudienceEstimate = Number(data.size || 0) > 0
@@ -79,6 +80,36 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
     )
     if (changed) onChange(enriched)
   }, [allAttrs, data, onChange])
+
+  const selectedKey = (data.attrs || []).map(getUid).filter(Boolean).sort().join('|')
+  useEffect(() => {
+    let cancelled = false
+    if (!selectedKey) {
+      if (data.size || data.sizeKnown || data.reach) {
+        onChange({ ...data, size: 0, sizeKnown: false, reach: null })
+      }
+      return () => { cancelled = true }
+    }
+    setReachLoading(true)
+    AgentAPI.getAudienceReach(data.attrs).then(reach => {
+      if (cancelled) return
+      setReachLoading(false)
+      if (!reach) {
+        onChange({ ...data, size: 0, sizeKnown: false, reach: { status: 'unavailable' } })
+        return
+      }
+      onChange({
+        ...data,
+        size: Number(reach.unique_reach || 0),
+        sizeKnown: reach.unique_reach != null,
+        reach,
+      })
+    })
+    return () => { cancelled = true }
+    // The stable segment identity is the only trigger; reach metadata updates
+    // must not recursively request the same estimate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey])
 
   // Use audience-entry recommendation from chat — no fallback to dmp-recommend.
   // Per design: audience-entry is the single source of truth for recommendations.
@@ -112,8 +143,7 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
     if (!uid) return
     const already = data.attrs.some(a => getUid(a) === uid)
     const newAttrs = already ? data.attrs.filter(a => getUid(a) !== uid) : [...data.attrs, attr]
-    const size = calcAudienceSize(newAttrs.map(a => ({ est_size: a.est_size || 0 })))
-    onChange({ ...data, attrs: newAttrs, size })
+    onChange({ ...data, attrs: newAttrs, size: 0, sizeKnown: false, reach: null })
   }
 
   // Full list excludes segments already shown in AI reco section
@@ -165,13 +195,15 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
           </div>
           <div className="flex-1">
             <p className={cn('text-2xl font-black', data.attrs.length > 0 ? 'text-brand-700' : 'text-muted-foreground')}>
-              {data.attrs.length > 0 && hasAudienceEstimate ? fmt(data.size) : '—'}
+              {reachLoading ? '…' : (data.attrs.length > 0 && hasAudienceEstimate ? fmt(data.size) : '—')}
             </p>
             <p className="text-xs text-muted-foreground">
               {data.attrs.length > 0
-                ? (hasAudienceEstimate
-                    ? `Audience size ước lượng · ${data.attrs.length} segments`
-                    : `${data.attrs.length} segments · catalog chưa cung cấp size`)
+                ? (reachLoading
+                    ? `Đang tính unique reach từ ${data.attrs.length} segments`
+                    : (hasAudienceEstimate
+                        ? `Unique reach ước lượng · ${data.attrs.length} segments · ${data.reach?.method || 'server'}`
+                        : `${data.attrs.length} segments · chưa thể tính reach`))
                 : 'Chọn ít nhất 1 segment để tính size'}
             </p>
           </div>

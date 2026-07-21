@@ -10,9 +10,12 @@
  */
 const AnalyticsRecord = require('../models/AnalyticsRecord');
 const ReportAnalysis = require('../models/ReportAnalysis');
+const { buildReportContract, validateAnalysisResult } = require('../lib/reportContract');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+// Report generation is a fixed specialist. It is independent of the campaign
+// conversation engine and cannot drift to the GreenNode model selection.
+const OPENAI_MODEL = 'gpt-5.4-mini';
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 
 // ─── Report types ────────────────────────────────────────────────────────────
@@ -180,6 +183,7 @@ OUTPUT FORMAT: Return JSON with key "records" containing the array.
 // ─── Generate analysis for one report type ───────────────────────────────────
 async function generateAnalysis(campaign, records, reportType) {
   const questions = QUESTIONS_MAP[reportType] || [];
+  const dataContract = buildReportContract(campaign, records);
   const questionList = questions.map(q => `- ${q.id}: "${q.question}" (${q.category})`).join('\n');
 
   // Summarize records for context
@@ -218,6 +222,9 @@ ${zoneSummary}
 
 REPORT TYPE: ${reportType.replace('_', ' ').toUpperCase()}
 
+AUTHORITATIVE EVIDENCE CONTRACT (the only allowed source of numbers and claims):
+${JSON.stringify(dataContract)}
+
 QUESTIONS TO ANSWER:
 ${questionList}
 
@@ -227,11 +234,12 @@ For each question, provide a structured analysis. Output JSON:
   "questions": [
     {
       "id": "question_id",
+      "findingIds": ["campaign_totals"],
       "answer": {
         "sections": [
           { "type": "summary", "text": "1-2 sentence summary in Vietnamese" },
           { "type": "metrics", "items": [
-            { "label": "Metric Name", "value": "formatted value", "trend": "up|down|stable", "delta": "+X%" }
+            { "metricId": "ctr", "label": "Metric Name", "value": "formatted value", "trend": "up|down|stable", "delta": "+X%", "timeframe": "YYYY-MM-DD..YYYY-MM-DD", "source": "synthetic_showcase" }
           ]},
           { "type": "insight", "level": "good|warning|bad", "text": "Key insight in Vietnamese" },
           { "type": "recommendation", "items": [
@@ -246,6 +254,11 @@ For each question, provide a structured analysis. Output JSON:
 RULES:
 - All text in Vietnamese
 - Use specific numbers from the data
+- Use only metric IDs and finding IDs present in AUTHORITATIVE EVIDENCE CONTRACT
+- Never present summed_daily_reach as unique campaign reach
+- State the synthetic showcase limitation in the overall summary and relevant answers
+- Do not claim causality, guaranteed results, or that a recommendation was applied
+- If evidence is unavailable, say it is unavailable; never construct a substitute metric
 - Be professional and actionable
 - Each answer should have 2-4 sections
 - Include at least one recommendation per answer`;
@@ -255,7 +268,8 @@ RULES:
     { role: 'user', content: prompt },
   ], { temperature: 0.6, max_completion_tokens: 8000 });
 
-  return result;
+  validateAnalysisResult(result, questions, dataContract);
+  return { ...result, dataContract };
 }
 
 // ─── Main: generate all reports for a campaign ───────────────────────────────
@@ -323,6 +337,7 @@ async function generateReports(campaign) {
         const answered = (result.questions || []).find(a => a.id === q.id);
         return {
           ...q,
+          findingIds: answered?.findingIds || [],
           answer: answered?.answer || { sections: [{ type: 'summary', text: 'Chưa có phân tích cho câu hỏi này.' }] },
         };
       });
@@ -334,6 +349,11 @@ async function generateReports(campaign) {
             status: 'ready',
             overall: result.overall || '',
             questions,
+            dataContract: result.dataContract,
+            provenance: {
+              provider: 'openai', model: OPENAI_MODEL,
+              schema: 'report-evidence-v1', source: 'synthetic_showcase',
+            },
             generatedAt: new Date(),
             error: '',
           },
@@ -363,10 +383,13 @@ async function getReportStatus(campaignId) {
   }
   const ready = Object.values(status).filter(s => s === 'ready').length;
   const errors = Object.values(status).filter(s => s === 'error').length;
-  return { campaignId, total: REPORT_TYPES.length, ready, errors, types: status };
+  const contractReady = docs.filter(doc => (
+    doc?.status === 'ready' && doc?.dataContract?.contractVersion === 'report-evidence-v1'
+  )).length;
+  return { campaignId, total: REPORT_TYPES.length, ready, errors, contractReady, types: status };
 }
 
 module.exports = {
   generateReports, getReportStatus, REPORT_TYPES, QUESTIONS_MAP,
-  buildOpenAIRequestBody,
+  buildOpenAIRequestBody, generateAnalysis,
 };

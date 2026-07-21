@@ -18,11 +18,18 @@ class RequestSizeLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # Named creative assets carry base64 image data. Keep the normal Agent
+        # limit tight while allowing only this owned, validated upload route to
+        # carry a 10 MiB source image plus JSON/base64 overhead.
+        request_limit = self.max_bytes
+        if scope.get("path") == "/api/agent/creative/assets":
+            request_limit = max(request_limit, 15 * 1024 * 1024)
+
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
         raw_length = headers.get(b"content-length", b"")
         try:
-            if raw_length and int(raw_length) > self.max_bytes:
-                await self._reject(scope, receive, send)
+            if raw_length and int(raw_length) > request_limit:
+                await self._reject(scope, receive, send, max_bytes=request_limit)
                 return
         except ValueError:
             await self._reject(scope, receive, send, "invalid content-length")
@@ -35,22 +42,23 @@ class RequestSizeLimitMiddleware:
             message = await receive()
             if message.get("type") == "http.request":
                 received += len(message.get("body", b""))
-                if received > self.max_bytes:
+                if received > request_limit:
                     raise _RequestTooLarge
             return message
 
         try:
             await self.app(scope, limited_receive, send)
         except _RequestTooLarge:
-            await self._reject(scope, receive, send)
+            await self._reject(scope, receive, send, max_bytes=request_limit)
 
-    async def _reject(self, scope, receive, send, detail: str | None = None):
+    async def _reject(self, scope, receive, send, detail: str | None = None, max_bytes: int | None = None):
+        limit = max_bytes or self.max_bytes
         response = JSONResponse(
             status_code=413,
             content={
                 "error": "payload_too_large",
                 "detail": detail or (
-                    f"Payload vượt giới hạn {self.max_bytes // 1024} KiB. "
+                    f"Payload vượt giới hạn {limit // 1024} KiB. "
                     "Vui lòng gửi metadata/URL thay vì dữ liệu file trong request agent."
                 ),
             },

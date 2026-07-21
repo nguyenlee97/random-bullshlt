@@ -38,18 +38,6 @@ export function dedupeDmpAttrs(attrs = []) {
   return unique
 }
 
-// Union model: selecting more segments increases reach while discounting overlap.
-export function calcAudienceSize(attrs = []) {
-  if (!attrs.length) return 0
-  const knownSizes = attrs.map(a => Number(a.est_size || 0)).filter(size => size > 0)
-  if (!knownSizes.length) return 0
-  knownSizes.sort((a, b) => b - a)
-  return Math.round(knownSizes.reduce(
-    (total, size, index) => total + size * Math.pow(0.7, index),
-    0,
-  ))
-}
-
 export function hasKnownAudienceSize(attrs = []) {
   return attrs.some(raw => {
     const attr = normalizeDmpAttr(raw)
@@ -63,14 +51,13 @@ export function normalizeAudienceSelection(value = {}, fallback = {}) {
     : (Array.isArray(fallback.attrs) ? fallback.attrs : [])
   const attrs = dedupeDmpAttrs(sourceAttrs)
   const explicitSize = Number(value.size || value.estimated_size || 0)
-  const calculatedSize = calcAudienceSize(attrs)
 
   return {
     ...fallback,
     ...value,
     attrs,
-    size: explicitSize > 0 ? explicitSize : calculatedSize,
-    sizeKnown: explicitSize > 0 || hasKnownAudienceSize(attrs),
+    size: explicitSize > 0 ? explicitSize : 0,
+    sizeKnown: explicitSize > 0 && value.reach?.status !== 'unavailable',
   }
 }
 
@@ -96,7 +83,7 @@ export function enrichAudienceSelection(value = {}, catalog = []) {
   return {
     ...value,
     attrs,
-    size: Number(value.size || 0) || calcAudienceSize(attrs),
-    sizeKnown: Number(value.size || 0) > 0 || hasKnownAudienceSize(attrs),
+    size: Number(value.size || 0),
+    sizeKnown: Boolean(value.sizeKnown && Number(value.size || 0) > 0),
   }
 }

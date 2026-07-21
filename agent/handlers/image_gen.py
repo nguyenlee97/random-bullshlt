@@ -1,20 +1,18 @@
-"""
-AI Image Generation handler — uses VNG Cloud gpt-image-1.
-Tracks per-session generation count (max 10).
-Builds a safe-zone prompt from the format catalog + campaign brief.
-"""
+"""Shared GPT Image 2 creative generation with durable actor quota."""
+import base64
 import hashlib
+import math
+import uuid
 import httpx
 from config import config
 from session import log_event
+from image_quota import actor_for_session, mark_ambiguous, release, reserve, status, succeed
+from openai_campaign.tracing import trace_responses_call
 
 # ─── Max generations per session ─────────────────────────────────────────────
-MAX_GENERATIONS = 10
-IMAGE_MODEL = "openai/gpt-image-1"
-PROMPT_VERSION = "image-gen-v1"
-
-# In-memory generation counter: { session_id: int }
-_gen_count: dict[str, int] = {}
+MAX_GENERATIONS = 20
+IMAGE_MODEL = "gpt-image-2"
+PROMPT_VERSION = "creative-prompt-v2"
 
 # ─── Ad format catalog (mirrors adFormats.js on the frontend) ─────────────────
 AD_FORMATS: dict[str, dict] = {
@@ -255,7 +253,7 @@ def _build_brief_text(brief: dict) -> str:
     return "\n".join(lines) if lines else "No brief provided."
 
 
-def _build_prompt(fmt: dict, brief: dict, custom_prompt: str = "") -> str:
+def _build_prompt_legacy(fmt: dict, brief: dict, custom_prompt: str = "") -> str:
     # Determine which of the 3 standard gpt-image-1 ratios this format maps to
     ratio = fmt["width"] / fmt["height"]
     if ratio > 1.2:
@@ -277,12 +275,12 @@ def _build_prompt(fmt: dict, brief: dict, custom_prompt: str = "") -> str:
     )
 
 
-def generation_provenance(brief: dict, format_id: str, custom_prompt: str = "") -> dict:
+def generation_provenance_legacy(brief: dict, format_id: str, custom_prompt: str = "") -> dict:
     """Return stable metadata for one generation request without calling MaaS."""
     fmt = AD_FORMATS.get(format_id)
     if not fmt:
         raise ValueError(f"Unknown format_id: {format_id}")
-    prompt = _build_prompt(fmt, brief, custom_prompt=custom_prompt)
+    prompt = _build_prompt_legacy(fmt, brief, custom_prompt=custom_prompt)
     return {
         "provider": "vngcloud_maas",
         "model": IMAGE_MODEL,
@@ -292,7 +290,7 @@ def generation_provenance(brief: dict, format_id: str, custom_prompt: str = "") 
 
 
 # ─── Handler ──────────────────────────────────────────────────────────────────
-async def handle_generate_image(session_id: str, brief: dict, format_id: str, custom_prompt: str = "") -> dict:
+async def _handle_generate_image_legacy(session_id: str, brief: dict, format_id: str, custom_prompt: str = "") -> dict:
     """
     Generate an ad image using gpt-image-1.
     Returns: {ok, imageB64, formatId, width, height, remaining} | {ok: False, error}
@@ -313,8 +311,8 @@ async def handle_generate_image(session_id: str, brief: dict, format_id: str, cu
         }
 
     # Build prompt
-    prompt = _build_prompt(fmt, brief, custom_prompt=custom_prompt)
-    provenance = generation_provenance(brief, format_id, custom_prompt)
+    prompt = _build_prompt_legacy(fmt, brief, custom_prompt=custom_prompt)
+    provenance = generation_provenance_legacy(brief, format_id, custom_prompt)
 
     # Call VNG Cloud image API
     api_key = config.AI_PLATFORM_API_KEY
@@ -376,6 +374,241 @@ async def handle_generate_image(session_id: str, brief: dict, format_id: str, cu
         return {"ok": False, "error": str(e)}
 
 
-def get_remaining(session_id: str) -> int:
+def _get_remaining_legacy(session_id: str) -> int:
     """Return how many generations are left for this session."""
     return max(0, MAX_GENERATIONS - _gen_count.get(session_id, 0))
+
+
+# ── GPT Image 2 implementation ──────────────────────────────────────────────
+
+def generation_size(fmt: dict) -> str:
+    """Closest valid GPT Image 2 proxy canvas for an exact final ad size."""
+    ratio = max(1 / 3, min(3.0, float(fmt["width"]) / float(fmt["height"])))
+    if ratio >= 1:
+        short = math.ceil(math.sqrt(655_360 / ratio) / 16) * 16
+        long = math.ceil(short * ratio / 16) * 16
+        width, height = long, short
+    else:
+        short = math.ceil(math.sqrt(655_360 * ratio) / 16) * 16
+        long = math.ceil(short / ratio / 16) * 16
+        width, height = short, long
+    return f"{min(width, 3840)}x{min(height, 3840)}"
+
+
+def _asset_instructions(assets: list[dict] | None) -> str:
+    if not assets:
+        return "No reference assets supplied. Do not invent a logo."
+    return "\n".join(
+        f"Reference image {index}: {asset.get('name') or 'unnamed'} "
+        f"[{asset.get('kind') or 'style_reference'}]. "
+        f"Use: {asset.get('use_instruction') or 'follow its visual identity'}. "
+        f"Required: {'yes' if asset.get('required') else 'no'}."
+        for index, asset in enumerate(assets, 1)
+    )
+
+
+def _build_prompt(
+    fmt: dict, brief: dict, custom_prompt: str = "", *,
+    assets: list[dict] | None = None, prompt_spec: dict | None = None,
+) -> str:
+    proxy_size = generation_size(fmt)
+    target_ratio = float(fmt["width"]) / float(fmt["height"])
+    spec = prompt_spec or {}
+    direction = custom_prompt.strip() or str(spec.get("creative_direction") or "").strip()
+    required_text = spec.get("required_text") or []
+    forbidden = spec.get("forbidden_elements") or []
+    return f"""You are producing one premium digital advertising visual.
+
+CAMPAIGN
+{_build_brief_text(brief)}
+Objective: {brief.get('objective') or 'awareness'}
+Audience context: {brief.get('audience_summary') or brief.get('notes') or 'broad campaign audience'}
+
+PLACEMENT CONTRACT
+Format: {fmt['label']}
+Final delivery: exactly {fmt['width']}x{fmt['height']} pixels ({target_ratio:.3f}:1).
+Generation proxy: {proxy_size}. The server will center-crop and resize this proxy to the exact final delivery.
+Keep every required subject, product, face, logo position, and meaningful visual inside the final crop-safe center.
+{fmt['layoutDescription']}
+{fmt['safeZoneConstraint']}
+
+NAMED REFERENCE ASSETS
+{_asset_instructions(assets)}
+
+CREATIVE DIRECTION
+{direction or 'Clean, contemporary Vietnamese digital advertising; one clear visual idea.'}
+Primary promise: {spec.get('primary_promise') or brief.get('notes') or 'communicate the campaign benefit visually'}
+CTA intent: {spec.get('cta') or 'clear next action, without tiny text'}
+Required text concepts: {', '.join(required_text) if required_text else 'brand name only when it can be rendered clearly'}
+Forbidden: {', '.join(forbidden) if forbidden else 'invented offers, invented claims, placeholder logos, unreadable small print'}
+
+QUALITY RULES
+- Fill the entire proxy canvas with a crop-safe composition appropriate to this exact ad format.
+- Use supplied named references according to their names and use instructions; preserve required logo/product identity.
+- Do not add unrequested prices, discounts, legal claims, URLs, or extra words.
+- Prefer short, legible messaging and strong hierarchy. Avoid dense paragraphs.
+- Treat the outer crop area as background extension only; critical content must survive the exact final crop.
+""".strip()
+
+
+def generation_provenance(
+    brief: dict, format_id: str, custom_prompt: str = "", *,
+    assets: list[dict] | None = None, prompt_spec: dict | None = None,
+) -> dict:
+    fmt = AD_FORMATS.get(format_id)
+    if not fmt:
+        raise ValueError(f"Unknown format_id: {format_id}")
+    prompt = _build_prompt(
+        fmt, brief, custom_prompt=custom_prompt, assets=assets, prompt_spec=prompt_spec,
+    )
+    return {
+        "provider": "openai", "model": config.OPENAI_IMAGE_MODEL or IMAGE_MODEL,
+        "promptVersion": PROMPT_VERSION,
+        "promptFingerprint": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+        "generationSize": generation_size(fmt),
+        "finalSize": f"{fmt['width']}x{fmt['height']}",
+    }
+
+
+async def _reference_files(assets: list[dict]) -> list[tuple[str, bytes, str]]:
+    files: list[tuple[str, bytes, str]] = []
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+        for index, asset in enumerate(assets[:8]):
+            url = str(asset.get("url") or "").strip()
+            if not url:
+                continue
+            response = await client.get(url)
+            response.raise_for_status()
+            if len(response.content) > 10 * 1024 * 1024:
+                raise ValueError(f"Reference asset too large: {asset.get('name') or index + 1}")
+            mime = response.headers.get("content-type", "image/png").split(";")[0]
+            files.append((asset.get("filename") or f"reference-{index + 1}.png", response.content, mime))
+    return files
+
+
+async def handle_generate_image(
+    session_id: str, brief: dict, format_id: str, custom_prompt: str = "", *,
+    actor: dict | None = None, assets: list[dict] | None = None,
+    prompt_spec: dict | None = None, idempotency_key: str = "",
+    quality: str | None = None,
+) -> dict:
+    fmt = AD_FORMATS.get(format_id)
+    if not fmt:
+        return {"ok": False, "error": f"Unknown format_id: {format_id}"}
+    if not config.OPENAI_IMAGE_ENABLED or not config.OPENAI_API_KEY:
+        return {"ok": False, "error": "OpenAI image generation is unavailable", "remaining": None}
+
+    actor = actor or await actor_for_session(session_id)
+    job_id = (idempotency_key or f"img_{uuid.uuid4().hex}").strip()
+    references = list(assets or [])
+    selected_quality = quality if quality in {"low", "medium", "high"} else config.OPENAI_IMAGE_QUALITY
+    provenance = generation_provenance(
+        brief, format_id, custom_prompt, assets=references, prompt_spec=prompt_spec,
+    )
+    reservation = await reserve(actor, job_id, session_id=session_id, metadata={
+        "format_id": format_id, "quality": selected_quality, **provenance,
+    })
+    if not reservation.get("ok"):
+        await log_event(session_id, "image_gen_limit", {"format_id": format_id, "job_id": job_id})
+        return {"ok": False, "error": "Đã đạt giới hạn 20 ảnh trong ngày", "remaining": 0, "quota": reservation}
+    if reservation.get("duplicate"):
+        current = await status(actor)
+        return {
+            "ok": False,
+            "error": "Yêu cầu này đã được xử lý hoặc đang chờ đối soát; hệ thống không tự động tính thêm lượt.",
+            "remaining": current["remaining"], "jobId": job_id,
+            "jobStatus": reservation.get("status"),
+        }
+
+    prompt = _build_prompt(
+        fmt, brief, custom_prompt=custom_prompt, assets=references, prompt_spec=prompt_spec,
+    )
+    images_url = "https://api.openai.com/v1/images/edits" if references else "https://api.openai.com/v1/images/generations"
+    try:
+        async with httpx.AsyncClient(timeout=config.OPENAI_IMAGE_TIMEOUT_SECONDS) as client:
+            headers = {"Authorization": f"Bearer {config.OPENAI_API_KEY}"}
+            fields = {
+                "model": config.OPENAI_IMAGE_MODEL, "prompt": prompt, "n": 1,
+                "quality": selected_quality, "size": generation_size(fmt),
+                "output_format": "png", "moderation": "auto",
+            }
+            if references:
+                inputs = await _reference_files(references)
+                multipart = [("image[]", (name, payload, mime)) for name, payload, mime in inputs]
+                if not multipart:
+                    raise ValueError("Named assets did not contain a readable image URL")
+                call = lambda: client.post(images_url, headers=headers, data=fields, files=multipart)
+            else:
+                call = lambda: client.post(
+                    images_url, headers={**headers, "Content-Type": "application/json"}, json=fields,
+                )
+            response = await trace_responses_call(
+                name="openai.image.generate" if not references else "openai.image.edit",
+                session_id=session_id, model=config.OPENAI_IMAGE_MODEL,
+                request={
+                    **fields, "prompt": prompt,
+                    "named_assets": [{
+                        "asset_id": item.get("asset_id"), "name": item.get("name"),
+                        "kind": item.get("kind"), "required": item.get("required"),
+                    } for item in references],
+                },
+                metadata={"specialist": "creative_image", "job_id": job_id, "format_id": format_id},
+                model_parameters={"quality": selected_quality, "size": generation_size(fmt)},
+                call=call,
+            )
+
+        request_id = response.headers.get("x-request-id")
+        if response.status_code != 200:
+            body = response.text[:500]
+            await log_event(session_id, "image_gen_error", {
+                "status": response.status_code, "body": body,
+                "job_id": job_id, "request_id": request_id,
+            })
+            if response.status_code in {408, 409, 429} or response.status_code >= 500:
+                await mark_ambiguous(job_id, f"OpenAI HTTP {response.status_code}")
+            else:
+                await release(job_id, f"OpenAI rejected request with HTTP {response.status_code}")
+            return {"ok": False, "error": f"OpenAI image error {response.status_code}: {body}", "jobId": job_id}
+
+        data = response.json()
+        image_b64 = (data.get("data") or [{}])[0].get("b64_json") or ""
+        if not image_b64:
+            await release(job_id, "OpenAI response contained no image")
+            return {"ok": False, "error": "OpenAI returned no image data", "jobId": job_id}
+        try:
+            base64.b64decode(image_b64, validate=True)
+        except Exception:
+            await release(job_id, "OpenAI response contained invalid base64")
+            return {"ok": False, "error": "OpenAI returned invalid image data", "jobId": job_id}
+
+        await succeed(job_id, {
+            "request_id": request_id, "usage": data.get("usage"),
+            "bytes": len(image_b64) * 3 // 4,
+        })
+        quota = await status(actor)
+        await log_event(session_id, "image_gen_success", {
+            "format_id": format_id, "job_id": job_id,
+            "remaining": quota["remaining"], "model": config.OPENAI_IMAGE_MODEL,
+            "request_id": request_id,
+        })
+        return {
+            "ok": True, "imageB64": image_b64, "formatId": format_id,
+            "width": fmt["width"], "height": fmt["height"],
+            "remaining": quota["remaining"], "quota": quota,
+            "jobId": job_id, "requestId": request_id, **provenance,
+        }
+    except httpx.TimeoutException:
+        await mark_ambiguous(job_id, "OpenAI request timed out after dispatch")
+        return {
+            "ok": False,
+            "error": "Yêu cầu hết thời gian; lượt đang được giữ để đối soát, không tự động thử lại.",
+            "jobId": job_id,
+        }
+    except Exception as exc:
+        await release(job_id, f"local failure before confirmed image: {type(exc).__name__}")
+        await log_event(session_id, "image_gen_exception", {"error": str(exc), "job_id": job_id})
+        return {"ok": False, "error": str(exc), "jobId": job_id}
+
+
+async def get_quota_status(session_id: str, actor: dict | None = None) -> dict:
+    return await status(actor or await actor_for_session(session_id))

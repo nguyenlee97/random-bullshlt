@@ -671,7 +671,7 @@ async def test_ai_creative_source_generates_without_manual_upload(monkeypatch):
         "formatId": "zuma-box",
         "source": "ai_generated",
         "generation": {
-            "model": "openai/gpt-image-1",
+            "model": "gpt-image-2",
             "promptFingerprint": "abc",
             "idempotencyKey": "autopilot:run-ai:zuma-box:variant-0:plan-r2:brief-r1",
         },
@@ -700,7 +700,7 @@ async def test_ai_creative_source_generates_without_manual_upload(monkeypatch):
         "files": [generated], "uploaded": True, "source": "ai_generate",
         "formatPlanRevision": 2,
     }
-    assert result.evidence[0]["models"] == ["openai/gpt-image-1"]
+    assert result.evidence[0]["models"] == ["gpt-image-2"]
 
 
 @pytest.mark.asyncio

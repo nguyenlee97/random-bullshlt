@@ -8,6 +8,10 @@ from PIL import Image
 import autopilot.creative_generation as generation
 
 
+async def _async_value(value):
+    return value
+
+
 def _image_b64(size=(16, 16)) -> str:
     output = BytesIO()
     Image.new("RGB", size, color=(0, 104, 255)).save(output, format="PNG")
@@ -29,12 +33,12 @@ class _Response:
 async def test_generate_creative_resizes_uploads_and_records_provenance(monkeypatch):
     calls = {"generate": 0, "post": None}
 
-    async def fake_generate(session_id, brief, format_id):
+    async def fake_generate(session_id, brief, format_id, *args, **kwargs):
         calls["generate"] += 1
         return {
             "ok": True, "imageB64": _image_b64(), "formatId": format_id,
-            "width": 300, "height": 250, "provider": "vngcloud_maas",
-            "model": "openai/gpt-image-1", "promptVersion": "image-gen-v1",
+            "width": 300, "height": 250, "provider": "openai",
+            "model": "gpt-image-2", "promptVersion": "creative-prompt-v2",
             "promptFingerprint": "prompt-sha",
         }
 
@@ -66,6 +70,14 @@ async def test_generate_creative_resizes_uploads_and_records_provenance(monkeypa
             })
 
     monkeypatch.setattr(generation, "handle_generate_image", fake_generate)
+    monkeypatch.setattr(generation, "actor_for_session", lambda *_args: _async_value({"anonymous_id": "test"}))
+    monkeypatch.setattr(generation, "get_assets", lambda *_args: _async_value([]))
+    monkeypatch.setattr(generation, "compose_prompt_spec", lambda *_args, **_kwargs: _async_value(({
+        "creative_direction": "blue", "primary_promise": "benefit", "cta": "learn more", "quality": "medium",
+    }, {"model": "gpt-5.4-mini"})))
+    monkeypatch.setattr(generation, "inspect_generated_creative", lambda *_args, **_kwargs: _async_value(({
+        "acceptable": True, "confidence": "high",
+    }, {"model": "gpt-5.4-nano"})))
     monkeypatch.setattr(generation, "get_workspace", fake_workspace)
     monkeypatch.setattr(generation.httpx, "AsyncClient", FakeClient)
     monkeypatch.setattr(generation.config, "BACKEND_URL", "http://backend:3000")
@@ -114,6 +126,8 @@ async def test_generate_creative_recovers_uploaded_asset_without_regeneration(mo
             return _Response(200, headers={"content-length": "2048"})
 
     monkeypatch.setattr(generation, "handle_generate_image", forbidden_generate)
+    monkeypatch.setattr(generation, "actor_for_session", lambda *_args: _async_value({"anonymous_id": "test"}))
+    monkeypatch.setattr(generation, "get_assets", lambda *_args: _async_value([]))
     monkeypatch.setattr(generation, "get_workspace", fake_workspace)
     monkeypatch.setattr(generation.httpx, "AsyncClient", FakeClient)
     monkeypatch.setattr(generation.config, "BACKEND_URL", "http://backend:3000")

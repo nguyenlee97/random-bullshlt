@@ -230,6 +230,8 @@ async def create_run(
     creative_source: str = "upload",
     actor: str = "campaign_operator",
     idempotency_key: str = "",
+    creative_direction: str = "",
+    creative_asset_ids: list[str] | None = None,
 ) -> dict:
     if approval_policy not in APPROVAL_POLICIES:
         raise ValueError("unsupported approval_policy")
@@ -277,6 +279,8 @@ async def create_run(
         "plan_revision": 1, "status": "queued",
         "approval_policy": approval_policy, "started_by": actor,
         "creative_source": creative_source,
+        "creative_direction": " ".join(str(creative_direction or "").split())[:1200],
+        "creative_asset_ids": list(dict.fromkeys(creative_asset_ids or []))[:8],
         "conversation_id": model_lock.get("conversation_id"),
         "conversation_model": model_lock["conversation_model"],
         "conversation_model_version": model_lock["conversation_model_version"],

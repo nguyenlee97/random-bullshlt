@@ -61,9 +61,14 @@ function AudienceSizeBlock({ block }) {
           <p className="text-2xl font-black text-brand-700">{sizeKnown ? fmt(block.size) : '—'}</p>
           <p className="text-xs text-brand-600 font-medium">
             {sizeKnown
-              ? (block.size_source === 'modeled_estimate' ? 'người dùng · ước lượng mô hình' : 'người dùng ước lượng')
-              : 'catalog chưa cung cấp size'} · {block.count ?? block.breakdown?.length ?? 0} attributes
+              ? `unique reach ước lượng · ${block.confidence || 'medium'} confidence`
+              : 'chưa thể tính unique reach'} · {block.count ?? block.breakdown?.length ?? 0} attributes
           </p>
+          {block.range && (
+            <p className="text-[10px] text-brand-600 mt-0.5">
+              Khoảng {fmt(block.range.low)}–{fmt(block.range.high)} · universe tối đa {fmt(block.universe)}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

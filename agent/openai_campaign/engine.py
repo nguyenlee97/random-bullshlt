@@ -110,6 +110,10 @@ def _requires_live_tool(decision: TurnDecision) -> bool:
     )
 
 
+def _requires_read_tool(decision: TurnDecision) -> bool:
+    return bool(decision.turn_type in {"faq", "mixed"})
+
+
 async def _persist_reply(session_id: str, message: str, reply: str) -> None:
     await add_message(session_id, "user", message)
     await add_message(session_id, "assistant", reply)
@@ -209,6 +213,7 @@ async def _run_answer_tool_loop(
 ) -> tuple[str, dict | None, list[str], str | None]:
     proposal_needed = _needs_proposal(decision)
     live_tool_needed = _requires_live_tool(decision)
+    read_tool_needed = _requires_read_tool(decision)
     tool_definitions = responses_tools(allow_mutation=proposal_needed)
     context = {
         "turn_decision": decision.model_dump(mode="json"),
@@ -228,7 +233,7 @@ async def _run_answer_tool_loop(
     proposal_ui: dict | None = None
     used_tools: list[str] = []
     last_response_id: str | None = None
-    force_first_tool = proposal_needed or live_tool_needed
+    force_first_tool = proposal_needed or live_tool_needed or read_tool_needed
 
     max_rounds = max(1, config.OPENAI_CAMPAIGN_MAX_TOOL_ROUNDS)
     total_tool_calls = 0
@@ -266,6 +271,7 @@ async def _run_answer_tool_loop(
                     "round_index": round_index,
                     "proposal_needed": proposal_needed,
                     "live_tool_needed": live_tool_needed,
+                    "read_tool_needed": read_tool_needed,
                 },
                 model_parameters={
                     "reasoning_effort": config.OPENAI_CAMPAIGN_REASONING_EFFORT,

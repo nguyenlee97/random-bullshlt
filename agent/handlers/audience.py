@@ -17,6 +17,7 @@ from prompts.audience import (
 from tools.targeting_options import get_targeting_options
 from tools.audience_library import get_all_segments
 from tools.audience_provenance import catalog_source
+from audience_reach import audience_selection, estimate_unique_reach
 
 
 class _TargetingReason(BaseModel):
@@ -32,19 +33,8 @@ class _TargetingSelection(BaseModel):
 
 
 def _calc_audience_size(attrs: list[dict]) -> int:
-    """Union model: sort by size desc, 30% overlap discount per additional segment."""
-    sizes = []
-    for a in attrs:
-        s_min = a.get("sizeMin") or 0
-        s_max = a.get("sizeMax") or 0
-        avg = (s_min + s_max) // 2 if (s_min and s_max) else (s_min or s_max)
-        if avg > 0:
-            sizes.append(avg)
-    if not sizes:
-        return 0
-    sizes.sort(reverse=True)
-    total = sum(s * (0.7 ** i) for i, s in enumerate(sizes))
-    return round(total)
+    """Compatibility wrapper around the one canonical server estimator."""
+    return estimate_unique_reach(attrs)["unique_reach"] or 0
 
 
 def _has_known_audience_size(attrs: list[dict]) -> bool:
@@ -152,14 +142,16 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
         )
 
     # ── Calculate audience size ───────────────────────────────────────────────
-    total_size = _calc_audience_size(attrs)
-    size_known = _has_known_audience_size(attrs)
+    selection = audience_selection(attrs)
+    total_size = selection["size"]
+    size_known = selection["sizeKnown"]
+    reach = selection["reach"]
 
     # ── Store in session ──────────────────────────────────────────────────────
     await update_form_state(
         session_id,
         "segment",
-        {"attrs": attrs, "size": total_size, "sizeKnown": size_known},
+        selection,
     )
     if segment.targeting:
         # Targeting is a separate canonical artifact. Persist it independently
@@ -183,7 +175,7 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
         notes=brief.get("notes", "(trống)"),
         segments_json=segments_json,
         audience_size_status=(
-            f"{total_size:,} người (ước lượng sau union discount)"
+            f"{total_size:,} người (ước lượng unique reach, {reach['confidence']} confidence)"
             if size_known
             else "Chưa biết — catalog không cung cấp size cho các segment đã chọn"
         ),
@@ -222,6 +214,11 @@ async def handle_audience(segment: SegmentData, session_id: str) -> AgentRespons
             "type": "audience_size",
             "size": total_size,
             "size_known": size_known,
+            "range": reach.get("range"),
+            "method": reach.get("method"),
+            "confidence": reach.get("confidence"),
+            "universe": reach.get("universe"),
+            "catalog_version": reach.get("catalog_version"),
             "size_source": (
                 "modeled_estimate"
                 if any(a.get("sizeSource") == "modeled_estimate" for a in attrs)
@@ -508,17 +505,16 @@ async def _grounded_audience_entry(session_id: str, brief: dict) -> dict:
             item.get("reason", ""),
         ] for item in enriched_dmp],
     })
-    audience_size = _calc_audience_size(enriched_dmp)
-    audience_size_known = _has_known_audience_size(enriched_dmp)
+    selection = audience_selection(enriched_dmp)
+    audience_size = selection["size"]
+    audience_size_known = selection["sizeKnown"]
     blocks.append({
         "type": "workspace_proposal",
         "changes": {
             "field": "segment",
             "value": {
-                "attrs": enriched_dmp,
+                **selection,
                 "targeting": targeting,
-                "size": audience_size,
-                "sizeKnown": audience_size_known,
             },
             "reason": (
                 f"AI gợi ý {len(enriched_dmp)} segment catalog-grounded "

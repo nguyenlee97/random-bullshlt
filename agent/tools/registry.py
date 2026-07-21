@@ -129,7 +129,7 @@ TOOL_DEFINITIONS = [
 
 _STEP_EXPLANATIONS = {
     "brief":    "Bước Brief: Anh/chị điền brand, objective (awareness/consideration/conversion/retention), KPI, ngân sách, thời gian và ghi chú. Em phân tích và đề xuất audience phù hợp.",
-    "audience": "Bước Audience: Chọn DMP segments (310+ segments). Em tính audience size theo mô hình union (OR logic) với 30% overlap discount. Anh/Chị có thể tìm theo từ khoá hoặc để em gợi ý.",
+    "audience": "Bước Audience: Chọn DMP segments (310+ segments). Server trả unique reach ước lượng theo range catalog, có confidence và luôn giới hạn trong universe 60 triệu. Anh/Chị có thể tìm theo từ khoá hoặc để em gợi ý.",
     "creative": "Bước Creative: Upload hình/video. Em kiểm tra format (PNG/JPG/MP4), kích thước (≥300px), dung lượng (≤10MB).",
     "setup":    "Bước Setup 3 giai đoạn: (1) Em gợi ý top zone theo objective/KPI, (2) gán creative vào zone, (3) tạo order với tất cả zones đã chọn.",
     "result":   "Bước Kết quả: Hiện tổng kết order đã tạo — trạng thái, ngân sách, liên kết quản lý và test site.",

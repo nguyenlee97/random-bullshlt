@@ -51,12 +51,12 @@ User ─── Chat ──► Agent (FastAPI + GreenNode MaaS)
 | Capability | Detail |
 |---|---|
 | **Conversational campaign setup** | Step-by-step guided chat, with auto-advance on confirmation |
-| **AI creative generation** | Calls OpenAI gpt-image-1 with per-format safe-zone prompts |
+| **AI creative generation** | Direct OpenAI GPT Image 2 with named assets, exact-format safe zones and a durable 20-output daily actor quota |
 | **AI analytics (6 tabs)** | Daily Ops, Awareness, Consideration, Conversion, Retention, Executive |
 | **PDF report generation** | Server-side via pdfkit — no headless browser required |
 | **Email delivery** | Resend API — PDF + optional CSV/JSON raw data |
 | **Real-time polling** | Frontend polls report status every 3s with progress indicator |
-| **GreenNode MaaS** | LLM inference via minimax-m2.5 on GreenNode AI Platform |
+| **Conversation engines** | Independent, immutable per-run GreenNode MiniMax or OpenAI GPT-5.4-mini components; no cross-provider fallback |
 
 ---
 
@@ -96,12 +96,12 @@ User ─── Chat ──► Agent (FastAPI + GreenNode MaaS)
 | Layer | Technology |
 |---|---|
 | **Agent runtime** | FastAPI · Python 3.11 · Uvicorn |
-| **LLM** | GreenNode MaaS — minimax/minimax-m2.5 (OpenAI-compatible) |
+| **Campaign LLMs** | Independent GreenNode MiniMax and OpenAI GPT-5.4-mini components, locked per conversation |
 | **Session memory** | MongoDB (Motor async driver) |
-| **AI report generation** | OpenAI gpt-4o-mini (6-tab analytical Q&A) |
+| **AI report generation** | Fixed OpenAI GPT-5.4-mini specialist with report-evidence-v1 metric contracts |
 | **PDF generation** | pdfkit (server-side, no puppeteer) |
 | **Email delivery** | Resend API |
-| **Image generation** | OpenAI gpt-image-1 |
+| **Image generation** | Direct OpenAI GPT Image 2; GPT-5.4-nano visual QA |
 | **Frontend** | React 18 · Vite · Recharts · Tailwind |
 | **Ad platform** | AdsPilot (Express + MongoDB) |
 | **Deployment** | GreenNode AgentBase Custom Agent Runtime |

@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
-  calcAudienceSize,
   dedupeDmpAttrs,
   enrichAudienceSelection,
   hasKnownAudienceSize,
@@ -27,7 +26,7 @@ test('normalizes raw Autopilot audience segments for the guided picker', () => {
   assert.equal(normalized._id, 'mongo-id')
 })
 
-test('recalculates missing Autopilot audience size from normalized segments', () => {
+test('does not fabricate missing Autopilot audience size in the browser', () => {
   const audience = normalizeAudienceSelection({
     attrs: [
       { segmentId: 'A', fullLabel: 'A', sizeMin: 1000, sizeMax: 1000 },
@@ -36,8 +35,8 @@ test('recalculates missing Autopilot audience size from normalized segments', ()
   })
 
   assert.deepEqual(audience.attrs.map(attr => attr._uid), ['A', 'B'])
-  assert.equal(audience.size, calcAudienceSize(audience.attrs))
-  assert.equal(audience.size, 1350)
+  assert.equal(audience.size, 0)
+  assert.equal(audience.sizeKnown, false)
 })
 
 test('enriches an older Autopilot selection from the current catalog', () => {
@@ -49,7 +48,7 @@ test('enriches an older Autopilot selection from the current catalog', () => {
   assert.equal(audience.attrs[0]._uid, 'INT158')
   assert.equal(audience.attrs[0].reason, 'Relevant')
   assert.equal(audience.attrs[0].est_size, 2000)
-  assert.equal(audience.size, 2000)
+  assert.equal(audience.size, 0)
 })
 
 test('deduplicates legacy and provider recommendations by stable catalog ID', () => {

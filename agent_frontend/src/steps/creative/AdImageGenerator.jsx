@@ -146,11 +146,18 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
   const [error, setError]                       = useState('')
   const [generatedImages, setGeneratedImages]   = useState([])
   const [selectedIds, setSelectedIds]           = useState(new Set())
-  const [remaining, setRemaining]               = useState(10)
+  const [remaining, setRemaining]               = useState(20)
   const [briefExpanded, setBriefExpanded]       = useState(false)
   const [lightboxImg, setLightboxImg]           = useState(null)
   const [customPrompt, setCustomPrompt]         = useState('')
   const [promptExpanded, setPromptExpanded]     = useState(false)
+  const [assets, setAssets]                     = useState([])
+  const [selectedAssetIds, setSelectedAssetIds] = useState(new Set())
+  const [assetDraft, setAssetDraft]             = useState({ name: '', kind: 'logo', useInstruction: '', required: true })
+  const [assetUploading, setAssetUploading]      = useState(false)
+  const [promptSpec, setPromptSpec]              = useState(null)
+  const [composingPrompt, setComposingPrompt]    = useState(false)
+  const [quotaConfirmed, setQuotaConfirmed]      = useState(false)
 
   // Pending crop: raw response waiting for user crop action
   // { b64, formatId, width, height }
@@ -158,7 +165,8 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
 
   // Fetch initial quota
   useEffect(() => {
-    AgentAPI.getImageGenStatus().then(s => setRemaining(s.remaining ?? 10))
+    AgentAPI.getImageGenStatus().then(s => setRemaining(s.remaining ?? 20))
+    AgentAPI.listCreativeAssets().then(setAssets)
   }, [])
 
   const handleGenerate = useCallback(async () => {
@@ -166,7 +174,9 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
     setGenerating(true)
     setError('')
 
-    const result = await AgentAPI.generateAdImage(brief, selectedFormatId, customPrompt)
+    const result = await AgentAPI.generateAdImage(brief, selectedFormatId, customPrompt, {
+      assetIds: [...selectedAssetIds], promptSpec, quality: promptSpec?.quality || 'medium',
+    })
 
     if (!result.ok) {
       setError(result.error || 'Tạo ảnh thất bại — hãy thử lại')
@@ -183,12 +193,75 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       formatId: selectedFormatId,
       width:    result.width,
       height:   result.height,
+      generation: {
+        provider: result.provider,
+        model: result.model,
+        promptVersion: result.promptVersion,
+        promptFingerprint: result.promptFingerprint,
+        generationSize: result.generationSize,
+        finalSize: result.finalSize,
+        jobId: result.jobId,
+        requestId: result.requestId,
+        assetIds: [...selectedAssetIds],
+      },
     })
+    setQuotaConfirmed(false)
     setGenerating(false)
-  }, [selectedFormatId, generating, remaining, brief, customPrompt])
+  }, [selectedFormatId, generating, remaining, brief, customPrompt, selectedAssetIds, promptSpec])
+
+  const handleFormatSelect = useCallback((formatId) => {
+    setSelectedFormatId(formatId)
+    setPromptSpec(null)
+  }, [])
+
+  const handleAssetFile = useCallback(async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!assetDraft.name.trim()) {
+      setError('Hãy đặt tên cho asset trước khi tải ảnh lên.')
+      return
+    }
+    setAssetUploading(true)
+    setError('')
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const asset = await AgentAPI.createCreativeAsset({ ...assetDraft, dataUrl })
+      setAssets(prev => [asset, ...prev])
+      setSelectedAssetIds(prev => new Set([...prev, asset.asset_id]))
+      setAssetDraft({ name: '', kind: 'logo', useInstruction: '', required: true })
+      setPromptSpec(null)
+    } catch (uploadError) {
+      setError(uploadError.message || 'Không thể lưu reference asset.')
+    } finally {
+      setAssetUploading(false)
+    }
+  }, [assetDraft])
+
+  const handleComposePrompt = useCallback(async () => {
+    if (!selectedFormatId || composingPrompt) return
+    setComposingPrompt(true)
+    setError('')
+    try {
+      const result = await AgentAPI.composeCreativePrompt({
+        brief, formatId: selectedFormatId, assetIds: [...selectedAssetIds], direction: customPrompt,
+      })
+      setPromptSpec(result.prompt_spec)
+      setPromptExpanded(true)
+    } catch (composeError) {
+      setError(composeError.message || 'Không thể soạn prompt creative.')
+    } finally {
+      setComposingPrompt(false)
+    }
+  }, [brief, selectedFormatId, selectedAssetIds, customPrompt, composingPrompt])
 
   // ── After crop modal resolves ─────────────────────────────────────────────
-  const finishImage = useCallback((croppedDataUrl, fmtId, w, h) => {
+  const finishImage = useCallback((croppedDataUrl, fmtId, w, h, generation = null) => {
     const timestamp = Date.now()
     const newImg = {
       id: `ai-${fmtId}-${timestamp}`,
@@ -200,6 +273,7 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       height: h,
       formatId: fmtId,
       aiGenerated: true,
+      generation,
     }
     setGeneratedImages(prev => [newImg, ...prev])
     setPendingCrop(null)
@@ -208,13 +282,13 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
   const handleCropConfirm = useCallback((croppedDataUrl) => {
     if (!pendingCrop) return
     const fmt = AD_FORMATS_MAP[pendingCrop.formatId]
-    finishImage(croppedDataUrl, pendingCrop.formatId, fmt?.width ?? pendingCrop.width, fmt?.height ?? pendingCrop.height)
+    finishImage(croppedDataUrl, pendingCrop.formatId, fmt?.width ?? pendingCrop.width, fmt?.height ?? pendingCrop.height, pendingCrop.generation)
   }, [pendingCrop, finishImage])
 
   const handleScale = useCallback((scaledDataUrl) => {
     if (!pendingCrop) return
     const fmt = AD_FORMATS_MAP[pendingCrop.formatId]
-    finishImage(scaledDataUrl, pendingCrop.formatId, fmt?.width ?? pendingCrop.width, fmt?.height ?? pendingCrop.height)
+    finishImage(scaledDataUrl, pendingCrop.formatId, fmt?.width ?? pendingCrop.width, fmt?.height ?? pendingCrop.height, pendingCrop.generation)
   }, [pendingCrop, finishImage])
 
   const handleCropCancel = useCallback(() => {
@@ -285,9 +359,9 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       <div className={cn('flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold', quotaColor)}>
         <div className="flex items-center gap-1.5">
           <Wand2 className="w-3.5 h-3.5" />
-          <span>AI Tạo Ảnh — Beta</span>
+          <span>OpenAI Creative Studio · GPT Image 2</span>
         </div>
-        <span>{remaining}/10 lượt còn lại</span>
+        <span>{remaining}/20 lượt hôm nay</span>
       </div>
 
       {/* Brief preview (collapsed by default) */}
@@ -345,10 +419,55 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
               key={fmt.id}
               fmt={fmt}
               selected={selectedFormatId === fmt.id}
-              onClick={setSelectedFormatId}
+              onClick={handleFormatSelect}
             />
           ))}
         </div>
+      </div>
+
+      {/* Named brand/reference assets */}
+      <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3 space-y-3" data-testid="creative-asset-pack">
+        <div>
+          <p className="text-xs font-bold text-sky-800">Brand & reference assets</p>
+          <p className="text-[10px] text-sky-700 mt-0.5">Đặt tên cho logo, sản phẩm hoặc ảnh tham khảo và mô tả chính xác cách dùng trong creative.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <input value={assetDraft.name} onChange={event => setAssetDraft(current => ({ ...current, name: event.target.value }))}
+            placeholder="Tên asset, ví dụ Logo Hutao" className="col-span-2 text-xs border rounded-lg px-2.5 py-2 bg-white" />
+          <select value={assetDraft.kind} onChange={event => setAssetDraft(current => ({ ...current, kind: event.target.value }))}
+            className="text-xs border rounded-lg px-2.5 py-2 bg-white">
+            <option value="logo">Logo</option><option value="product">Product</option>
+            <option value="packshot">Packshot</option><option value="character">Character</option>
+            <option value="style_reference">Style reference</option><option value="background">Background</option>
+            <option value="legal">Legal artwork</option>
+          </select>
+          <label className="flex items-center gap-2 text-[11px] text-sky-800 px-2">
+            <input type="checkbox" checked={assetDraft.required}
+              onChange={event => setAssetDraft(current => ({ ...current, required: event.target.checked }))} />
+            Bắt buộc xuất hiện
+          </label>
+          <input value={assetDraft.useInstruction}
+            onChange={event => setAssetDraft(current => ({ ...current, useInstruction: event.target.value }))}
+            placeholder="Cách dùng: logo ở góc trái, giữ nguyên màu…" className="col-span-2 text-xs border rounded-lg px-2.5 py-2 bg-white" />
+          <label className={cn('col-span-2 flex items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs font-semibold cursor-pointer', assetUploading ? 'opacity-60' : 'bg-white hover:border-sky-400 text-sky-700')}>
+            {assetUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+            {assetUploading ? 'Đang lưu asset…' : 'Chọn ảnh và thêm asset'}
+            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={assetUploading} onChange={handleAssetFile} />
+          </label>
+        </div>
+        {assets.length > 0 && <div className="space-y-1.5">{assets.map(asset => {
+          const selected = selectedAssetIds.has(asset.asset_id)
+          return <div key={asset.asset_id} className="flex items-center gap-2 rounded-lg border bg-white p-2">
+            <button className={cn('w-4 h-4 rounded border flex items-center justify-center', selected && 'bg-sky-600 border-sky-600')}
+              onClick={() => setSelectedAssetIds(previous => { const next = new Set(previous); next.has(asset.asset_id) ? next.delete(asset.asset_id) : next.add(asset.asset_id); setPromptSpec(null); return next })}>
+              {selected && <CheckCircle2 className="w-3 h-3 text-white" />}
+            </button>
+            <img src={asset.url} alt={asset.name} className="w-9 h-9 rounded object-cover border" />
+            <div className="min-w-0 flex-1"><p className="text-[11px] font-semibold truncate">{asset.name} · {asset.kind}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{asset.use_instruction || 'Không có hướng dẫn riêng'}</p></div>
+            {asset.required && <Badge className="text-[9px]">Required</Badge>}
+          </div>
+        })}</div>}
       </div>
 
       {/* Custom prompt */}
@@ -375,7 +494,7 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
             <textarea
               id="custom-prompt-input"
               value={customPrompt}
-              onChange={e => setCustomPrompt(e.target.value)}
+              onChange={e => { setCustomPrompt(e.target.value); setPromptSpec(null) }}
               placeholder="Ví dụ: minimalist design, pastel blue tones, no text overlay..."
               rows={3}
               className="w-full text-xs border border-border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 placeholder:text-muted-foreground/60"
@@ -392,6 +511,18 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
         )}
       </div>
 
+      <Button variant="outline" className="w-full gap-2" onClick={handleComposePrompt}
+        disabled={!selectedFormatId || composingPrompt} id="btn-compose-creative-prompt">
+        {composingPrompt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+        {promptSpec ? 'Tạo lại prompt spec' : 'AI soạn prompt theo format & assets'}
+      </Button>
+      {promptSpec && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-[11px] text-emerald-900" data-testid="creative-prompt-spec">
+        <p className="font-bold">Prompt spec đã sẵn sàng · {promptSpec.target_width}×{promptSpec.target_height}</p>
+        <p className="mt-1"><strong>Direction:</strong> {promptSpec.creative_direction}</p>
+        <p className="mt-1"><strong>Promise:</strong> {promptSpec.primary_promise}</p>
+        <p className="mt-1"><strong>CTA:</strong> {promptSpec.cta}</p>
+      </div>}
+
       {/* Error */}
       {error && (
         <div className="flex items-center gap-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700">
@@ -401,9 +532,14 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       )}
 
       {/* Generate button */}
+      <label className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3 text-[11px] text-violet-900">
+        <input type="checkbox" className="mt-0.5" checked={quotaConfirmed}
+          onChange={event => setQuotaConfirmed(event.target.checked)} disabled={generating || remaining <= 0} />
+        <span>Tôi xác nhận tạo 1 output sẽ dùng <strong>1 trong 20 lượt/ngày</strong> của tài khoản hoặc thiết bị này. Soạn prompt không dùng quota.</span>
+      </label>
       <Button
         onClick={handleGenerate}
-        disabled={!selectedFormatId || generating || remaining <= 0}
+        disabled={!selectedFormatId || !quotaConfirmed || generating || remaining <= 0}
         className="w-full gap-2"
         id="btn-ai-generate"
       >
@@ -415,7 +551,7 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
         ) : remaining <= 0 ? (
           <>
             <AlertCircle className="w-4 h-4" />
-            Hết lượt tạo ảnh (10/10)
+            Hết lượt tạo ảnh hôm nay (20/20)
           </>
         ) : (
           <>

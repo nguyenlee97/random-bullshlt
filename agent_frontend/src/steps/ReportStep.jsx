@@ -916,6 +916,33 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
         </Card>
       )}
 
+      {currentAnalysis?.dataContract && (
+        <details className="mb-3 rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700" data-testid="report-evidence-contract">
+          <summary className="cursor-pointer font-bold text-slate-900">
+            Nguồn số liệu, công thức & giới hạn · {currentAnalysis.dataContract.contractVersion}
+          </summary>
+          <div className="mt-3 space-y-3">
+            <p className="font-semibold text-amber-700">{currentAnalysis.dataContract.syntheticLabel}</p>
+            <p>
+              <strong>Thời gian:</strong> {currentAnalysis.dataContract.timeframe?.start || 'N/A'} → {currentAnalysis.dataContract.timeframe?.end || 'N/A'}
+              {' · '}<strong>Nguồn:</strong> {currentAnalysis.dataContract.source}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {Object.entries(currentAnalysis.dataContract.metricDefinitions || {}).map(([metricId, metric]) => (
+                <div key={metricId} className="rounded-lg border border-slate-100 bg-slate-50 p-2">
+                  <p className="font-bold">{metric.label} <code className="text-[9px] text-slate-500">{metricId}</code></p>
+                  <p className="mt-0.5 text-slate-600">{metric.formula}</p>
+                  {metric.limitation && <p className="mt-0.5 text-amber-700">{metric.limitation}</p>}
+                </div>
+              ))}
+            </div>
+            <ul className="list-disc space-y-1 pl-4 text-slate-600">
+              {(currentAnalysis.dataContract.limitations || []).map((item, index) => <li key={index}>{item}</li>)}
+            </ul>
+          </div>
+        </details>
+      )}
+
       {/* KPI Scorecard */}
       <KPIScorecard records={records} />
 

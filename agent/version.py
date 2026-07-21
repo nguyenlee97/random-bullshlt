@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-21.12"
+BUILD_VERSION = "2026-07-21.13"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -30,10 +30,10 @@ BUILD_FEATURES = [
     "report-order-fetch",             # report-entry fetches real order from backend API for zones
     "report-zero-data-guard",         # regenerates if existing records are all zeros
     "report-debug-endpoint",          # GET /api/reports/debug/:campaignId for diagnostics
-    "image-gen",                      # POST /api/agent/generate-image via gpt-image-1
+    "image-gen",                      # shared direct OpenAI GPT Image 2 service
     "image-gen-safe-zone",            # per-format safe-zone prompt constraints for correct crop
     "image-gen-canvas-crop",          # frontend canvas crop+resize to exact pixel dimensions
-    "image-gen-quota",                # 10-image per-session limit tracked server-side
+    "image-gen-quota",                # durable 20-output daily actor quota
     "image-gen-lightbox",             # click-to-zoom lightbox in AI image gallery
     "image-gen-brief-preview",        # collapsible brief+audience preview in generator UI
     "email-step",                     # Step 6: PDF generation + Resend email delivery
@@ -87,6 +87,10 @@ BUILD_FEATURES = [
     "durable-campaign-autopilot",       # persisted runs/tasks, leases, review, pause/resume/cancel
     "autopilot-creative-source",         # explicit upload or autonomous AI-generation run policy
     "autopilot-idempotent-image-gen",    # exact-size asset provenance + storage recovery checkpoint
+    "np2-canonical-audience-reach",       # one server reach contract across Agent flows and UI
+    "np3-openai-creative-studio",         # named assets, prompt composer, GPT Image 2 and nano VLM
+    "np4-semantic-faq-coordinator",       # structured FAQ/action planning plus grounded read tools
+    "np5-report-evidence-contract",       # traceable metrics and semantic evidence-cited report Q&A
     "autopilot-lease-heartbeat",         # long provider calls retain durable worker ownership
     "advertising-agent-blue-ui",        # Zalo-inspired original blue identity + two-mode selector
     "switchable-mode-canvases",          # Guided/Autopilot tabs with durable desktop/mobile state

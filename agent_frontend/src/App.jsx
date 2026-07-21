@@ -473,13 +473,6 @@ export default function App() {
       const existingUids = new Set(existing.map(a => a._uid || a.code))
       const toAdd = matchedSegments.filter(a => !existingUids.has(a._uid || a.code))
       const merged = [...existing, ...toAdd]
-      const sizes = merged.map(a => a.est_size || 0)
-      const size = sizes.filter(s => s > 0).length
-        ? (() => {
-            const known = sizes.filter(s => s > 0).sort((a, b) => b - a)
-            let t = 0; known.forEach((s, i) => { t += s * Math.pow(0.7, i) }); return Math.round(t)
-          })()
-        : 0
       const normalizedTargeting = {}
       for (const [k, v] of Object.entries(targetingMap)) {
         normalizedTargeting[k.toLowerCase()] = Array.isArray(v) ? v : [v]
@@ -489,7 +482,9 @@ export default function App() {
         segment: {
           ...prev.segment,
           attrs: merged,
-          size,
+          size: 0,
+          sizeKnown: false,
+          reach: null,
           targeting: { ...(prev.segment?.targeting || {}), ...normalizedTargeting },
         },
       }

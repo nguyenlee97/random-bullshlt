@@ -25,6 +25,7 @@ from session import (
 from tools.audience_library import get_all_segments
 from tools.audience_provenance import catalog_source
 from tools.targeting_options import get_targeting_options
+from audience_reach import audience_selection, estimate_unique_reach
 
 
 class _BriefAnalysis(BaseModel):
@@ -110,15 +111,7 @@ bịa giá trị ngoài catalog.
 
 
 def _calc_audience_size(attrs: list[dict]) -> int:
-    sizes: list[int] = []
-    for item in attrs:
-        low = int(item.get("sizeMin") or 0)
-        high = int(item.get("sizeMax") or 0)
-        average = (low + high) // 2 if low and high else (low or high)
-        if average > 0:
-            sizes.append(average)
-    sizes.sort(reverse=True)
-    return round(sum(size * (0.7 ** index) for index, size in enumerate(sizes)))
+    return estimate_unique_reach(attrs)["unique_reach"] or 0
 
 
 def _has_known_audience_size(attrs: list[dict]) -> bool:
@@ -301,11 +294,10 @@ async def handle_openai_audience(
             meta=ResponseMeta(tool="audience_validate", model="none", step=1),
         )
 
-    total_size = _calc_audience_size(attrs)
-    size_known = _has_known_audience_size(attrs)
-    await update_form_state(session_id, "segment", {
-        "attrs": attrs, "size": total_size, "sizeKnown": size_known,
-    })
+    selection = audience_selection(attrs)
+    total_size = selection["size"]
+    size_known = selection["sizeKnown"]
+    await update_form_state(session_id, "segment", selection)
     if segment.targeting:
         await update_form_state(session_id, "targeting", segment.targeting)
     session = await get_or_create_session(session_id)
@@ -317,7 +309,8 @@ async def handle_openai_audience(
             "type": item.get("type", ""),
         } for item in attrs],
         "audience_size": total_size if size_known else None,
-        "audience_size_method": "discounted_union" if size_known else "unknown",
+        "audience_reach": selection["reach"],
+        "audience_size_method": selection["reach"]["method"],
     }
     try:
         output, provenance = await generate_structured(
@@ -358,6 +351,11 @@ async def handle_openai_audience(
         {
             "type": "audience_size", "size": total_size,
             "size_known": size_known,
+            "range": selection["reach"].get("range"),
+            "method": selection["reach"].get("method"),
+            "confidence": selection["reach"].get("confidence"),
+            "universe": selection["reach"].get("universe"),
+            "catalog_version": selection["reach"].get("catalog_version"),
             "size_source": "modeled_estimate" if any(
                 item.get("sizeSource") == "modeled_estimate" for item in attrs
             ) else "catalog",
@@ -612,15 +610,15 @@ async def _grounded_audience_entry(
             item.get("sizeRaw") or "—", item.get("reason", ""),
         ] for item in enriched],
     })
-    audience_size = _calc_audience_size(enriched)
-    size_known = _has_known_audience_size(enriched)
+    selection = audience_selection(enriched)
+    audience_size = selection["size"]
+    size_known = selection["sizeKnown"]
     blocks.append({
         "type": "workspace_proposal",
         "changes": {
             "field": "segment",
             "value": {
-                "attrs": enriched, "targeting": targeting,
-                "size": audience_size, "sizeKnown": size_known,
+                **selection, "targeting": targeting,
             },
             "reason": (
                 f"OpenAI gợi ý {len(enriched)} segment catalog-grounded "

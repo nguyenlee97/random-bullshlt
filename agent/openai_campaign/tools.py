@@ -10,13 +10,24 @@ from copy import deepcopy
 import json
 from typing import Any
 
+from audience_reach import estimate_unique_reach
+from openai_campaign.knowledge import search_ad_knowledge
 from session import set_pending_proposal
+from tools.audience_library import get_all_segments, search_audience
+from tools.order_api import fetch_zone_conflicts
 from tools.registry import execute_tool
+from tools.zone_catalog import get_all_zones
 from workspace.intent import InvalidWorkspaceIntent, resolve_legacy_update
 from workspace.service import create_proposal, get_workspace
 
 
 READ_TOOL_NAMES = {
+    "search_ad_knowledge",
+    "search_audience_catalog",
+    "get_audience_reach",
+    "get_zone_details",
+    "get_zone_availability",
+    "compare_zones",
     "get_zone_list",
     "search_zones",
     "get_audience_list",
@@ -39,6 +50,101 @@ def _nullable_string(description: str, *, enum: list[str] | None = None) -> dict
 
 
 OPENAI_TOOL_DEFINITIONS = [
+    {
+        "type": "function",
+        "name": "search_ad_knowledge",
+        "description": (
+            "Search the versioned Advertising Agent knowledge base for campaign "
+            "setup, metric definitions, workflow policy and product terminology."
+        ),
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The user's knowledge question."},
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "search_audience_catalog",
+        "description": "Search current authoritative DMP segments by topic or name.",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Audience topic or segment name."},
+                "type": _nullable_string("Optional DMP segment type.", enum=["Behavior", "Interest"]),
+            },
+            "required": ["query", "type"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "get_audience_reach",
+        "description": (
+            "Calculate canonical deduplicated unique reach for concrete current "
+            "DMP segment IDs. Do not pass invented IDs or topic words."
+        ),
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "segment_ids": {
+                    "type": "array", "items": {"type": "string"},
+                    "description": "Authoritative segment IDs returned by catalog search.",
+                },
+            },
+            "required": ["segment_ids"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "get_zone_details",
+        "description": "Read current catalog details for one authoritative ad-zone ID.",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {"zone_id": {"type": "string"}},
+            "required": ["zone_id"], "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "get_zone_availability",
+        "description": "Check live booking conflicts for zone IDs and an exact date range.",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "zone_ids": {"type": "array", "items": {"type": "string"}},
+                "start_date": {"type": "string", "description": "YYYY-MM-DD"},
+                "end_date": {"type": "string", "description": "YYYY-MM-DD"},
+            },
+            "required": ["zone_ids", "start_date", "end_date"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "compare_zones",
+        "description": "Compare current catalog metrics and live availability for 2-8 zone IDs.",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "zone_ids": {"type": "array", "items": {"type": "string"}},
+                "start_date": _nullable_string("Optional campaign start date YYYY-MM-DD."),
+                "end_date": _nullable_string("Optional campaign end date YYYY-MM-DD."),
+            },
+            "required": ["zone_ids", "start_date", "end_date"],
+            "additionalProperties": False,
+        },
+    },
     {
         "type": "function",
         "name": "get_zone_list",
@@ -212,6 +318,76 @@ def _brief_from_workspace(workspace: dict | None) -> dict:
     return brief if isinstance(brief, dict) else {}
 
 
+def _segment_id(segment: dict) -> str:
+    return str(segment.get("segmentId") or segment.get("_id") or segment.get("code") or "")
+
+
+def _zone_view(zone: dict) -> dict:
+    return {
+        key: zone.get(key) for key in (
+            "id", "channel", "format", "size", "reach", "vi", "ctr",
+            "cpm", "obj", "siteId", "siteUrl",
+        )
+    }
+
+
+async def _execute_read_tool(name: str, args: dict) -> dict:
+    if name == "search_ad_knowledge":
+        return search_ad_knowledge(str(args.get("query") or ""))
+    if name == "search_audience_catalog":
+        segments = await search_audience(
+            str(args.get("query") or ""), type_filter=args.get("type"), limit=15,
+        )
+        return {
+            "catalog": "dmp_attributes", "catalog_freshness": "live_query",
+            "segments": [{
+                "segment_id": _segment_id(item),
+                "name": item.get("fullLabel") or item.get("name"),
+                "type": item.get("type"), "category": item.get("category"),
+                "size_min": item.get("sizeMin"), "size_max": item.get("sizeMax"),
+                "size_updated_at": item.get("sizeEstimatedAt"),
+                "size_version": item.get("sizeEstimateVersion"),
+            } for item in segments],
+            "no_result": not segments,
+        }
+    if name == "get_audience_reach":
+        requested = list(dict.fromkeys(str(item) for item in args.get("segment_ids") or []))[:50]
+        catalog = await get_all_segments(limit=1000)
+        by_id = {_segment_id(item): item for item in catalog if _segment_id(item)}
+        resolved = [by_id[item] for item in requested if item in by_id]
+        result = estimate_unique_reach(resolved)
+        result["requested_segment_ids"] = requested
+        result["unresolved_segment_ids"] = [item for item in requested if item not in by_id]
+        return result
+    if name in {"get_zone_details", "get_zone_availability", "compare_zones"}:
+        zones = await get_all_zones()
+        zone_map = {str(item.get("id")): item for item in zones if item.get("id")}
+        if name == "get_zone_details":
+            zone_id = str(args.get("zone_id") or "")
+            return {
+                "zone": _zone_view(zone_map[zone_id]) if zone_id in zone_map else None,
+                "catalog_freshness": "live_query", "unresolved_zone_ids": [] if zone_id in zone_map else [zone_id],
+            }
+        requested = list(dict.fromkeys(str(item) for item in args.get("zone_ids") or []))[:8]
+        start_date = str(args.get("start_date") or "")
+        end_date = str(args.get("end_date") or "")
+        conflicts = await fetch_zone_conflicts(start_date, end_date) if start_date and end_date else {}
+        entries = [{
+            **_zone_view(zone_map[item]),
+            "availability": "booked" if item in conflicts else (
+                "available" if start_date and end_date else "unknown_dates_required"
+            ),
+            "conflict": conflicts.get(item),
+        } for item in requested if item in zone_map]
+        return {
+            "zones": entries, "start_date": start_date or None, "end_date": end_date or None,
+            "catalog_freshness": "live_query",
+            "availability_freshness": "live_query" if start_date and end_date else "not_queried",
+            "unresolved_zone_ids": [item for item in requested if item not in zone_map],
+        }
+    raise ValueError(f"Unknown OpenAI read tool: {name}")
+
+
 def _step_for_field(field: str) -> int:
     if field == "brief" or field.startswith("brief."):
         return 0
@@ -283,7 +459,13 @@ async def execute_openai_tool(
             brief = _brief_from_workspace(workspace)
             safe_args["start_date"] = safe_args.get("start_date") or brief.get("startDate")
             safe_args["end_date"] = safe_args.get("end_date") or brief.get("endDate")
-        result = await execute_tool(name, safe_args)
+        if name in {
+            "search_ad_knowledge", "search_audience_catalog", "get_audience_reach",
+            "get_zone_details", "get_zone_availability", "compare_zones",
+        }:
+            result = await _execute_read_tool(name, safe_args)
+        else:
+            result = await execute_tool(name, safe_args)
         return {"output": _bounded_json(result), "ui": None, "mutated": False}
 
     if name != MUTATION_TOOL_NAME:

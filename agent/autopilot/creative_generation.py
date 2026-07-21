@@ -11,6 +11,10 @@ from PIL import Image, ImageOps
 
 from config import config
 from handlers.image_gen import AD_FORMATS, generation_provenance, handle_generate_image
+from creative_assets import get_assets
+from creative_prompt import compose_prompt_spec
+from image_quota import actor_for_session
+from creative_vlm import inspect_generated_creative
 from workspace.service import get_workspace
 
 
@@ -93,7 +97,12 @@ async def generate_creative(
     digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:24]
     filename = f"creative_ai_{digest}.png"
     stored_url = f"{config.BACKEND_URL.rstrip('/')}/uploads/{filename}"
-    provenance = generation_provenance(brief, format_id)
+    actor = await actor_for_session(run["session_id"])
+    assets = await get_assets(actor, run.get("creative_asset_ids") or [])
+    provenance = generation_provenance(
+        brief, format_id, run.get("creative_direction") or "",
+        assets=assets,
+    )
 
     # The deterministic storage path is also a durable generation checkpoint.
     # A worker crash after upload but before workspace commit can therefore
@@ -128,7 +137,20 @@ async def generate_creative(
             },
         }
 
-    generated = await handle_generate_image(run["session_id"], brief, format_id)
+    prompt_spec, prompt_provenance = await compose_prompt_spec(
+        run["session_id"], brief=brief, format_id=format_id,
+        assets=assets, direction=run.get("creative_direction") or "",
+    )
+    provenance = generation_provenance(
+        brief, format_id, run.get("creative_direction") or "",
+        assets=assets, prompt_spec=prompt_spec,
+    )
+    generated = await handle_generate_image(
+        run["session_id"], brief, format_id,
+        run.get("creative_direction") or "", actor=actor, assets=assets,
+        prompt_spec=prompt_spec, idempotency_key=idempotency_key,
+        quality=prompt_spec.get("quality", "medium"),
+    )
     if not generated.get("ok"):
         raise RuntimeError(
             "AI creative generation failed: " + str(generated.get("error") or "unknown error")
@@ -137,6 +159,21 @@ async def generate_creative(
     width = int(generated["width"])
     height = int(generated["height"])
     png_b64 = _fit_png(generated["imageB64"], width, height)
+    try:
+        vlm_verdict, vlm_provenance = await inspect_generated_creative(
+            run["session_id"], image_b64=png_b64, brief=brief,
+            format_contract={
+                "format_id": format_id, "width": width, "height": height,
+                "intended_zone_ids": list(intended_zone_ids or []),
+            },
+            prompt_spec=prompt_spec, assets=assets,
+        )
+    except Exception as exc:
+        vlm_verdict = {
+            "acceptable": False, "confidence": "low",
+            "review_notes": [f"VLM acceptance check unavailable: {type(exc).__name__}"],
+        }
+        vlm_provenance = {"provider": "openai", "model": config.OPENAI_VLM_MODEL, "error": type(exc).__name__}
     upload_url = f"{config.BACKEND_URL.rstrip('/')}/api/creative/upload-base64"
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
@@ -164,10 +201,16 @@ async def generate_creative(
 
     generation = {
         "idempotencyKey": idempotency_key,
-        "provider": generated.get("provider", "vngcloud_maas"),
-        "model": generated.get("model", "openai/gpt-image-1"),
-        "promptVersion": generated.get("promptVersion", "image-gen-v1"),
+        "provider": generated.get("provider", "openai"),
+        "model": generated.get("model", "gpt-image-2"),
+        "promptVersion": generated.get("promptVersion", "creative-prompt-v2"),
         "promptFingerprint": generated.get("promptFingerprint", ""),
+        "promptSpec": prompt_spec,
+        "promptComposer": prompt_provenance,
+        "assetIds": [item.get("asset_id") for item in assets],
+        "vlmVerdict": vlm_verdict,
+        "vlmProvenance": vlm_provenance,
+        "exactDimensionsVerified": True,
         "formatId": format_id,
         "variant": variant,
         "briefRevision": brief_revision,

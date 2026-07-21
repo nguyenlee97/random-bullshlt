@@ -141,6 +141,11 @@ export default function AutopilotPanel({
 }) {
   const [policy, setPolicy] = useState('critical_only')
   const [creativeSource, setCreativeSource] = useState(null)
+  const [creativeDirection, setCreativeDirection] = useState('')
+  const [creativeAssets, setCreativeAssets] = useState([])
+  const [creativeAssetIds, setCreativeAssetIds] = useState(new Set())
+  const [assetName, setAssetName] = useState('')
+  const [assetUploading, setAssetUploading] = useState(false)
   const [run, setRun] = useState(initialRun)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -157,6 +162,36 @@ export default function AutopilotPanel({
   useEffect(() => {
     setRun(initialRun || null)
   }, [initialRun?.run_id])
+
+  useEffect(() => {
+    AgentAPI.listCreativeAssets().then(setCreativeAssets)
+  }, [])
+
+  const uploadAutopilotAsset = useCallback(async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !assetName.trim()) {
+      setError('Hãy đặt tên asset trước khi chọn ảnh.')
+      return
+    }
+    setAssetUploading(true)
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file)
+      })
+      const asset = await AgentAPI.createCreativeAsset({
+        name: assetName, kind: 'style_reference', useInstruction: creativeDirection,
+        required: true, dataUrl,
+      })
+      setCreativeAssets(previous => [asset, ...previous])
+      setCreativeAssetIds(previous => new Set([...previous, asset.asset_id]))
+      setAssetName('')
+    } catch (uploadError) {
+      setError(uploadError.message)
+    } finally {
+      setAssetUploading(false)
+    }
+  }, [assetName, creativeDirection])
 
   useEffect(() => {
     if (canonicalWorkspace) {
@@ -237,8 +272,13 @@ export default function AutopilotPanel({
       if (!creativeSource) {
         throw new Error('Hãy chọn tải creative lên hoặc để AI tự tạo trước khi bắt đầu.')
       }
+      if (creativeSource === 'ai_generate' && !creativeDirection.trim()) {
+        throw new Error('Hãy mô tả creative direction trước khi để Autopilot tạo ảnh.')
+      }
       const startKey = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const created = await AgentAPI.startAutopilot(policy, creativeSource, startKey)
+      const created = await AgentAPI.startAutopilot(policy, creativeSource, startKey, {
+        direction: creativeDirection, assetIds: [...creativeAssetIds],
+      })
       if (!created?.run_id) throw new Error(created?.detail || 'Không thể khởi động Campaign Autopilot.')
       setRun(created)
     } catch (err) {
@@ -390,6 +430,7 @@ export default function AutopilotPanel({
   const startBlockers = [
     !briefReady ? 'brief đã duyệt và hợp lệ' : null,
     !creativeSource ? 'nguồn creative (tải lên hoặc AI tự tạo)' : null,
+    creativeSource === 'ai_generate' && !creativeDirection.trim() ? 'creative direction cho AI' : null,
   ].filter(Boolean)
   const retryAction = waiting?.result?.review_action === 'retry'
   const briefRetry = retryAction && waiting?.key === 'validate_brief'
@@ -526,6 +567,30 @@ export default function AutopilotPanel({
               </button>
             </div>
           </div>
+
+          {creativeSource === 'ai_generate' && <div className="rounded-2xl border border-sky-200 bg-sky-50/50 p-4 space-y-3" data-testid="autopilot-creative-intake">
+            <div><p className="text-sm font-black text-slate-900">Creative direction & assets cho Autopilot</p>
+              <p className="mt-1 text-xs text-slate-500">Thông tin này được khóa vào run; Agent tự soạn prompt riêng cho từng format.</p></div>
+            <textarea value={creativeDirection} onChange={event => setCreativeDirection(event.target.value)} rows={3}
+              placeholder="Ví dụ: trẻ trung, màu đỏ thương hiệu, logo ở góc trái, tô bún bò là hero visual, không tự thêm giá…"
+              className="w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs" />
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input value={assetName} onChange={event => setAssetName(event.target.value)} placeholder="Tên asset: Logo Hutao / Tô bún bò…"
+                className="rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs" />
+              <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-sky-700 px-4 py-2 text-xs font-bold text-white">
+                {assetUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                Thêm ảnh<input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={assetUploading} onChange={uploadAutopilotAsset} />
+              </label>
+            </div>
+            {creativeAssets.length > 0 && <div className="flex flex-wrap gap-2">{creativeAssets.map(asset => {
+              const selected = creativeAssetIds.has(asset.asset_id)
+              return <button type="button" key={asset.asset_id} onClick={() => setCreativeAssetIds(previous => {
+                const next = new Set(previous); next.has(asset.asset_id) ? next.delete(asset.asset_id) : next.add(asset.asset_id); return next
+              })} className={`rounded-full border px-3 py-1.5 text-[11px] font-bold ${selected ? 'border-sky-500 bg-sky-100 text-sky-800' : 'border-slate-200 bg-white text-slate-600'}`}>
+                {selected ? '✓ ' : ''}{asset.name} · {asset.kind}
+              </button>
+            })}</div>}
+          </div>}
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div data-demo="autopilot-policy" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">

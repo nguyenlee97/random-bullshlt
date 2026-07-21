@@ -266,6 +266,7 @@ async def handle_report_chat(
     message: str,
     session_id: str,
     active_report_tab: str = "all",
+    conversation_model: str | None = None,
 ) -> AgentResponse:
     """
     Handle freeform chat within the Report step.
@@ -343,7 +344,58 @@ async def handle_report_chat(
             meta=ResponseMeta(tool="report_chat", model="none", step=5),
         )
 
-    # ── Cross-analysis question matching ────────────────────────────────────────
+    # OpenAI-locked conversations use semantic, evidence-cited report Q&A.
+    # GreenNode conversations retain their existing independent report matcher.
+    from campaign_models import OPENAI_GPT_5_4_MINI
+    if conversation_model == OPENAI_GPT_5_4_MINI:
+        try:
+            from openai_campaign.report_qa import answer_report_question
+
+            answer, provenance = await answer_report_question(
+                session_id=session_id, message=message,
+                preferred_type=preferred_type, analyses=all_analyses,
+                history=session.get("history") or [],
+            )
+            citations = [
+                *[f"finding:{item}" for item in answer.finding_ids],
+                *[f"metric:{item}" for item in answer.metric_ids],
+            ]
+            source_text = (
+                "Nguồn: " + ", ".join(citations)
+                if citations else "Nguồn: report-evidence-v1"
+            )
+            blocks = [{
+                "type": "report_analysis",
+                "title": f"Phân tích — {answer.report_type.replace('_', ' ').title()}",
+                "sections": [
+                    {"type": "summary", "text": answer.answer},
+                    {"type": "limitation", "text": source_text + ". Dữ liệu mô phỏng (showcase)."},
+                ],
+            }]
+            await add_message(session_id, "user", message)
+            await add_message(session_id, "assistant", answer.answer)
+            return AgentResponse(
+                text=answer.answer, blocks=blocks,
+                suggestions=answer.suggestions,
+                meta=ResponseMeta(
+                    tool="report_semantic_qa", model=provenance["model"], step=5,
+                ),
+            )
+        except Exception as exc:
+            await log_event(session_id, "error", {
+                "handler": "report_semantic_qa", "error": str(exc),
+                "state_changed": False,
+            })
+            return AgentResponse(
+                text=(
+                    "Em chưa thể trả lời an toàn từ report-evidence-v1 ở lượt này. "
+                    "Các số liệu hiện có vẫn giữ nguyên; anh/chị thử lại sau khi báo cáo hoàn tất nhé."
+                ),
+                blocks=[],
+                meta=ResponseMeta(tool="report_semantic_qa_unavailable", model="gpt-5.4-mini", step=5),
+            )
+
+    # ── GreenNode report matcher (independent legacy component) ───────────────
     # Score every question across all 6 analyses, prefer preferred_type on tie
     msg_lower = message.lower().strip()
     msg_words = set(msg_lower.split())

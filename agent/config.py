@@ -76,6 +76,15 @@ class Config:
     OPENAI_CAMPAIGN_MAX_TOOL_CALLS: int = int(
         os.getenv("OPENAI_CAMPAIGN_MAX_TOOL_CALLS", "4")
     )
+    OPENAI_IMAGE_ENABLED: bool = (
+        os.getenv("OPENAI_IMAGE_ENABLED", "true").lower() == "true"
+    )
+    OPENAI_IMAGE_MODEL: str = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
+    OPENAI_IMAGE_QUALITY: str = os.getenv("OPENAI_IMAGE_QUALITY", "medium")
+    OPENAI_IMAGE_TIMEOUT_SECONDS: float = float(
+        os.getenv("OPENAI_IMAGE_TIMEOUT_SECONDS", "180")
+    )
+    OPENAI_VLM_MODEL: str = os.getenv("OPENAI_VLM_MODEL", "gpt-5.4-nano")
     DEFAULT_CONVERSATION_MODEL: str = os.getenv(
         "DEFAULT_CONVERSATION_MODEL", "greennode_minimax"
     )

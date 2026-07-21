@@ -445,12 +445,12 @@ async def _resolve_audience(intent: WorkspaceIntent, workspace: dict) -> tuple[s
         raise InvalidWorkspaceIntent(str(exc) + suffix) from exc
 
     final_raw = _apply_collection_operation(current, selected, intent.operation, keys)
-    from handlers.audience import _calc_audience_size, _normalize_dmp_attr
+    from handlers.audience import _normalize_dmp_attr
+    from audience_reach import audience_selection
     attrs = [_normalize_dmp_attr(item) for item in final_raw]
     final = {
         **current_value,
-        "attrs": attrs,
-        "size": _calc_audience_size(attrs),
+        **audience_selection(attrs),
     }
     return "segment", final, intent.reason.strip()
 
