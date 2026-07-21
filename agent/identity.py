@@ -16,6 +16,12 @@ import uuid
 
 from pymongo import ReturnDocument
 
+from campaign_models import (
+    LEGACY_CONVERSATION_MODEL,
+    conversation_model_version,
+    locked_model_fields,
+    normalize_conversation_model,
+)
 from config import config
 
 
@@ -243,6 +249,11 @@ def _public_conversation(doc: dict, actor: dict | str) -> dict:
     result.pop("anonymous_id", None)
     result.pop("owner_user_id", None)
     result.pop("claimed_from_anonymous_id", None)
+    # Existing documents predate selectable models. Expose an explicit legacy
+    # value on reads; the dispatch lookup persists it before the next LLM turn.
+    result.setdefault("conversation_model", LEGACY_CONVERSATION_MODEL)
+    result.setdefault("conversation_model_locked_at", doc.get("created_at"))
+    result.setdefault("conversation_model_version", "legacy_unspecified")
     return result
 
 
@@ -270,10 +281,14 @@ async def require_session_access(actor: dict | str | None, session_id: str) -> d
 
 
 async def create_conversation(
-    actor: dict | str, *, title: str = "", experience_mode: str | None = None
+    actor: dict | str, *, title: str = "", experience_mode: str | None = None,
+    conversation_model: str | None = None,
 ) -> dict:
     if experience_mode not in {None, "guided", "autopilot"}:
         raise ValueError("experience_mode must be guided or autopilot")
+    selected_model = normalize_conversation_model(
+        conversation_model, allow_legacy_default=True,
+    )
     _, conversations = await _collections()
     conversation_id = f"conv_{uuid.uuid4().hex}"
     now = _now()
@@ -293,6 +308,7 @@ async def create_conversation(
         "title": clean_title or "Chiến dịch mới",
         "title_source": "user" if clean_title else "default",
         "experience_mode": experience_mode,
+        **locked_model_fields(selected_model, locked_at=now),
         "created_at": now,
         "updated_at": now,
         "last_message_at": None,
@@ -325,6 +341,57 @@ async def conversation_record_for_session(session_id: str) -> dict | None:
         ),
         None,
     )
+
+
+async def get_conversation_model_for_session(session_id: str) -> dict:
+    """Return and migration-persist the immutable model lock for one session.
+
+    Legacy evaluator sessions may have no owned conversation record; they keep
+    the old GreenNode behavior without manufacturing an owner document.
+    """
+    doc = await conversation_record_for_session(session_id)
+    if not doc:
+        return {
+            "conversation_model": LEGACY_CONVERSATION_MODEL,
+            "conversation_model_version": conversation_model_version(
+                LEGACY_CONVERSATION_MODEL
+            ),
+            "conversation_model_locked_at": None,
+            "legacy_session": True,
+        }
+    if doc.get("conversation_model"):
+        return {
+            "conversation_model": normalize_conversation_model(
+                doc["conversation_model"]
+            ),
+            "conversation_model_version": (
+                doc.get("conversation_model_version")
+                or conversation_model_version(doc["conversation_model"])
+            ),
+            "conversation_model_locked_at": (
+                doc.get("conversation_model_locked_at") or doc.get("created_at")
+            ),
+            "conversation_id": doc.get("conversation_id"),
+            "legacy_session": False,
+        }
+
+    fields = locked_model_fields(
+        LEGACY_CONVERSATION_MODEL,
+        locked_at=doc.get("created_at") or _now(),
+    )
+    _, conversations = await _collections()
+    if conversations is not None:
+        await conversations.update_one(
+            {"_id": doc["_id"], "conversation_model": {"$exists": False}},
+            {"$set": fields},
+        )
+    else:
+        doc.update(fields)
+    return {
+        **fields,
+        "conversation_id": doc.get("conversation_id"),
+        "legacy_session": True,
+    }
 
 
 async def list_conversations(actor: dict | str, *, include_archived: bool = False) -> list[dict]:

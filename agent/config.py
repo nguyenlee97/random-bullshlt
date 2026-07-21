@@ -46,6 +46,39 @@ class Config:
     LLM_FALLBACK_BASE_URL: str = os.getenv("LLM_FALLBACK_BASE_URL", "")
     LLM_FALLBACK_API_KEY: str = os.getenv("LLM_FALLBACK_API_KEY", "")
     LLM_FALLBACK_MODEL: str = os.getenv("LLM_FALLBACK_MODEL", "")
+    # The existing GreenNode campaign flow and the new OpenAI flow are
+    # independently selectable. Availability flags are explicit so a revoked
+    # key can remain visible as temporarily unavailable without being removed.
+    GREENNODE_CAMPAIGN_ENABLED: bool = (
+        os.getenv("GREENNODE_CAMPAIGN_ENABLED", "true").lower() == "true"
+    )
+    OPENAI_CAMPAIGN_ENABLED: bool = (
+        os.getenv("OPENAI_CAMPAIGN_ENABLED", "false").lower() == "true"
+    )
+    OPENAI_CAMPAIGN_MODEL: str = os.getenv(
+        "OPENAI_CAMPAIGN_MODEL", "gpt-5.4-mini"
+    )
+    OPENAI_CAMPAIGN_REASONING_EFFORT: str = os.getenv(
+        "OPENAI_CAMPAIGN_REASONING_EFFORT", "low"
+    )
+    OPENAI_CAMPAIGN_MAX_OUTPUT_TOKENS: int = int(
+        os.getenv("OPENAI_CAMPAIGN_MAX_OUTPUT_TOKENS", "2000")
+    )
+    OPENAI_CAMPAIGN_TIMEOUT_SECONDS: float = float(
+        os.getenv("OPENAI_CAMPAIGN_TIMEOUT_SECONDS", "45")
+    )
+    OPENAI_CAMPAIGN_MAX_RETRIES: int = int(
+        os.getenv("OPENAI_CAMPAIGN_MAX_RETRIES", "1")
+    )
+    OPENAI_CAMPAIGN_MAX_TOOL_ROUNDS: int = int(
+        os.getenv("OPENAI_CAMPAIGN_MAX_TOOL_ROUNDS", "4")
+    )
+    OPENAI_CAMPAIGN_MAX_TOOL_CALLS: int = int(
+        os.getenv("OPENAI_CAMPAIGN_MAX_TOOL_CALLS", "4")
+    )
+    DEFAULT_CONVERSATION_MODEL: str = os.getenv(
+        "DEFAULT_CONVERSATION_MODEL", "greennode_minimax"
+    )
 
     # ── VPS Backend API ───────────────────────────────────────────────────────
     BACKEND_URL: str = os.getenv("BACKEND_URL", "https://api.pawgrammers.io.vn")
@@ -168,6 +201,11 @@ class Config:
         os.getenv("ZALO_OPENAI_ENABLED", "false").lower() == "true"
     )
     ZALO_CHAT_MODEL: str = os.getenv("ZALO_CHAT_MODEL", "gpt-5.4-mini")
+    # New Zalo-created campaign runs use this explicit channel policy instead
+    # of inheriting DEFAULT_CONVERSATION_MODEL. Existing runs keep their lock.
+    ZALO_AUTOPILOT_CONVERSATION_MODEL: str = os.getenv(
+        "ZALO_AUTOPILOT_CONVERSATION_MODEL", "greennode_minimax"
+    )
     ZALO_CHAT_REASONING_EFFORT: str = os.getenv(
         "ZALO_CHAT_REASONING_EFFORT", "low"
     )

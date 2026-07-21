@@ -2,6 +2,7 @@ import {
   Archive, ArrowLeft, ArrowRight, Bot, Check, Clock3, History, Loader2,
   LogIn, Play, Route, Save, ShieldCheck, Sparkles, Trash2, Zap,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import AccountMenu from '@/components/AccountMenu'
 import ZaloOACompanion from '@/components/ZaloOACompanion'
 
@@ -24,7 +25,12 @@ const modes = [
   },
 ]
 
+const EMPTY_MODEL_CATALOG = { models: [], default_model: null }
+
 const modeLabel = mode => mode === 'autopilot' ? 'Campaign Autopilot' : 'Campaign Copilot'
+const modelLabel = model => model === 'openai_gpt_5_4_mini'
+  ? 'OpenAI · GPT-5.4 mini'
+  : 'GreenNode · MiniMax M2.5'
 
 const runStatus = status => ({
   queued: ['Đang chờ', 'bg-slate-100 text-slate-700'],
@@ -48,11 +54,28 @@ const formatTime = value => {
 
 export default function ExperienceSelector({
   onSelect, busy, error, conversations = [], historyLoading = false,
+  modelCatalog = EMPTY_MODEL_CATALOG,
   historyError = '', onResume, onArchive, onDelete, onDeleteAll, onClaim,
   identity, identityBusy, onLogin, onLogout, onLoadSessions, onRevokeSession,
   onLinkZalo, onOpenZaloOA, onUnlinkZaloOA,
   onOpenDemo, onBackToLanding,
 }) {
+  const modelOptions = Array.isArray(modelCatalog?.models) ? modelCatalog.models : []
+  const [selectedModel, setSelectedModel] = useState('')
+
+  useEffect(() => {
+    const available = modelOptions.filter(item => item.available)
+    const preferred = available.find(item => item.id === modelCatalog?.default_model)
+      || available[0]
+    if (!modelOptions.some(item => item.id === selectedModel && item.available)) {
+      setSelectedModel(preferred?.id || '')
+    }
+  }, [modelCatalog?.default_model, modelOptions, selectedModel])
+
+  const selectedModelReady = modelOptions.some(
+    item => item.id === selectedModel && item.available,
+  )
+
   return (
     <main className="h-screen h-[100dvh] overflow-y-auto overscroll-contain bg-[#eef4fb] px-4 py-5 sm:px-8 sm:py-8">
       <div className="mx-auto max-w-6xl rounded-[28px] border border-white/80 bg-white/60 p-4 shadow-[0_30px_100px_rgba(22,70,130,0.10)] backdrop-blur-xl sm:p-7 lg:p-9">
@@ -118,6 +141,51 @@ export default function ExperienceSelector({
             <p className="hidden max-w-sm text-right text-xs leading-5 text-slate-500 md:block">Guided tour sẽ hướng dẫn trực tiếp trên giao diện thật và dừng trước mọi hành động launch.</p>
           </div>
 
+          <fieldset className="mt-5 rounded-2xl border border-slate-200 bg-white/80 p-4" data-testid="conversation-model-selector">
+            <legend className="px-1 text-xs font-black uppercase tracking-[0.14em] text-slate-700">
+              Model cho campaign mới
+            </legend>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Model được khóa khi campaign được tạo. Muốn đổi model, bạn cần tạo campaign mới.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {modelOptions.map(model => (
+                <label
+                  key={model.id}
+                  className={`flex items-start gap-3 rounded-xl border p-3 ${
+                    model.available
+                      ? 'cursor-pointer border-slate-200 bg-white hover:border-brand-300'
+                      : 'cursor-not-allowed border-slate-200 bg-slate-50 opacity-70'
+                  } ${selectedModel === model.id ? 'ring-2 ring-brand-400' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="conversation-model"
+                    value={model.id}
+                    checked={selectedModel === model.id}
+                    disabled={!model.available || busy}
+                    onChange={() => setSelectedModel(model.id)}
+                    className="mt-1"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black text-slate-900">{model.label}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">{model.description}</span>
+                    {!model.available && (
+                      <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                        {model.status === 'coming_soon' ? 'Đang hoàn thiện' : 'Tạm thời chưa sẵn sàng'}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              ))}
+              {modelOptions.length === 0 && (
+                <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+                  Chưa tải được trạng thái model. Vui lòng thử lại sau.
+                </p>
+              )}
+            </div>
+          </fieldset>
+
           <div className="mt-5 grid gap-5 md:grid-cols-2">
             {modes.map(mode => {
               const Icon = mode.icon
@@ -146,7 +214,7 @@ export default function ExperienceSelector({
                     ))}
                   </ul>
                   <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <button type="button" disabled={busy} onClick={() => onSelect(mode.id)} aria-label={`Bắt đầu ${mode.title}: ${mode.description}`} className="inline-flex min-h-14 items-center justify-between gap-3 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,104,255,0.22)] hover:bg-brand-600 disabled:cursor-wait disabled:opacity-60">
+                    <button type="button" disabled={busy || !selectedModelReady} onClick={() => onSelect(mode.id, selectedModel)} aria-label={`Bắt đầu ${mode.title}: ${mode.description}`} className="inline-flex min-h-14 items-center justify-between gap-3 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(0,104,255,0.22)] hover:bg-brand-600 disabled:cursor-wait disabled:opacity-60">
                       <span className="text-left">Mở {mode.id === 'guided' ? 'Copilot workspace' : 'Autopilot workspace'}</span><ArrowRight className="h-5 w-5 shrink-0" />
                     </button>
                     <button type="button" onClick={() => onOpenDemo(mode.id === 'guided' ? 'copilot' : 'autopilot')} className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700" aria-label={`Xem demo ${mode.title}`}>
@@ -204,6 +272,7 @@ export default function ExperienceSelector({
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
                       <span className="rounded-full bg-brand-50 px-2 py-0.5 font-bold text-brand-700">{modeLabel(item.experience_mode)}</span>
+                      <span className="rounded-full bg-violet-50 px-2 py-0.5 font-bold text-violet-700">{modelLabel(item.conversation_model)}</span>
                       <span className={`rounded-full px-2 py-0.5 font-bold ${item.ownership === 'account' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                         {item.ownership === 'account' ? 'Tài khoản' : 'Trên thiết bị'}
                       </span>

@@ -64,9 +64,32 @@ def _read_only_context(workspace: dict, run: dict) -> dict:
     }
 
 
+async def _answer_greennode_autopilot_question(
+    *, session_id: str, message: str, context: dict, system: str, user: str,
+) -> tuple[str, dict]:
+    del session_id, message, context
+    from llm import simple_generate
+
+    text = await asyncio.to_thread(simple_generate, system, user)
+    return text, {"provider": "greennode"}
+
+
+async def _answer_openai_autopilot_question(
+    *, session_id: str, message: str, context: dict, system: str, user: str,
+) -> tuple[str, dict]:
+    del system, user
+    from openai_campaign.autopilot import answer_openai_autopilot_question
+
+    return await answer_openai_autopilot_question(
+        session_id=session_id,
+        message=message,
+        context=context,
+    )
+
+
 async def _recorded_response(
     session_id: str, message: str, text: str, *, tool: str, step: int,
-    suggestions: list | None = None,
+    suggestions: list | None = None, model: str = "none",
 ) -> AgentResponse:
     await add_message(session_id, "user", message)
     await add_message(session_id, "assistant", text)
@@ -74,7 +97,7 @@ async def _recorded_response(
         text=text,
         blocks=[],
         suggestions=suggestions or [],
-        meta=ResponseMeta(tool=tool, model="none", step=step),
+        meta=ResponseMeta(tool=tool, model=model, step=step),
     )
 
 
@@ -167,10 +190,36 @@ async def route_autopilot_chat(
             "Nếu dữ liệu là forecast hoặc synthetic thì phải nói rõ đó là ước tính/mô phỏng. Trả lời ngắn, cụ thể."
         )
         user = f"ARTIFACT JSON:\n{json.dumps(context, ensure_ascii=False, default=str)[:24000]}\n\nCÂU HỎI:\n{message}"
+        from campaign_engines.dispatcher import dispatch_autopilot
+        from campaign_models import LEGACY_CONVERSATION_MODEL
+
+        conversation_model = run.get("conversation_model") or LEGACY_CONVERSATION_MODEL
         try:
-            from llm import simple_generate
-            text = await asyncio.to_thread(simple_generate, system, user)
-        except Exception:
+            text, provenance = await dispatch_autopilot(
+                conversation_model,
+                greennode_handler=_answer_greennode_autopilot_question,
+                openai_handler=_answer_openai_autopilot_question,
+                session_id=session_id,
+                message=message,
+                context=context,
+                system=system,
+                user=user,
+            )
+            answer_model = str(
+                provenance.get("model")
+                or run.get("conversation_model_version")
+                or conversation_model
+            )
+        except Exception as exc:
+            from agent_logger import alog
+
+            await alog(session_id, "error", {
+                "handler": "autopilot_readonly_qa",
+                "conversation_model": conversation_model,
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:300],
+                "cross_provider_fallback": False,
+            })
             brief = _artifact(workspace, "brief") or {}
             order = _artifact(workspace, "order") or {}
             order = order.get("order", order) if isinstance(order, dict) else {}
@@ -179,9 +228,10 @@ async def route_autopilot_chat(
                 f"Order: {order.get('id') or order.get('_id') or 'chưa có'} · "
                 f"trạng thái giao quảng cáo: {order.get('status') or 'chưa xác định'}."
             )
+            answer_model = str(run.get("conversation_model_version") or conversation_model)
         return await _recorded_response(
             session_id, message, text,
-            tool="autopilot_readonly_qa", step=step,
+            tool="autopilot_readonly_qa", step=step, model=answer_model,
         )
 
     return None

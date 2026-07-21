@@ -782,11 +782,17 @@ async function fetchConversation(conversationId) {
   return { ...context, ui_messages: conversationMessages(context) }
 }
 
-async function createOwnedConversation({ title = '', experienceMode = null } = {}) {
+async function createOwnedConversation({
+  title = '', experienceMode = null, conversationModel = null,
+} = {}) {
   const response = await agentFetch(`${AGENT_URL}/api/agent/conversations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, experience_mode: experienceMode }),
+    body: JSON.stringify({
+      title,
+      experience_mode: experienceMode,
+      conversation_model: conversationModel,
+    }),
     signal: AbortSignal.timeout(5000),
   })
   if (!response.ok) throw new Error('Không thể tạo chiến dịch mới.')
@@ -1258,6 +1264,14 @@ export const AgentAPI = {
       console.warn('[listConversations] failed:', error.message)
       return []
     }
+  },
+
+  async listConversationModels() {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/conversation-models`, {
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) throw await responseError(response, 'Unable to load model catalog.')
+    return response.json()
   },
 
   async resumeConversation(conversationId) {

@@ -127,6 +127,10 @@ export default function App() {
   const [pendingDemoMode, setPendingDemoMode] = useState('')
   const [autoStartDemoMode, setAutoStartDemoMode] = useState('')
   const [experienceMode, setExperienceMode] = useState(null)
+  const [currentConversationModel, setCurrentConversationModel] = useState(null)
+  const [conversationModelCatalog, setConversationModelCatalog] = useState({
+    models: [], default_model: null,
+  })
   const [modeSelectionBusy, setModeSelectionBusy] = useState(false)
   const [modeSelectionError, setModeSelectionError] = useState('')
   const [autopilotSummary, setAutopilotSummary] = useState(null)
@@ -559,8 +563,14 @@ export default function App() {
           window.history.replaceState({}, '', `${AGENT_PATH}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`)
         }
         setHistoryLoading(true)
-        const history = await AgentAPI.listConversations()
+        const [history, modelCatalog] = await Promise.all([
+          AgentAPI.listConversations(),
+          AgentAPI.listConversationModels().catch(() => ({
+            models: [], default_model: null,
+          })),
+        ])
         setConversationHistory(history)
+        setConversationModelCatalog(modelCatalog)
         // Zalo OA deep links carry only the public conversation ID. Ownership
         // is still resolved from HttpOnly/anonymous cookies by the Agent API.
         const requestedConversation = authParams.get('conversation')
@@ -1029,6 +1039,7 @@ export default function App() {
         : false
     }
     setExperienceMode(mode)
+    setCurrentConversationModel(context.conversation_model || 'greennode_minimax')
     setActiveTab(mode === 'autopilot' ? 'autopilot' : mode === 'guided' ? 'workspace' : 'chat')
     setHasUserStarted(Boolean(mode))
     bootedRef.current = (context.ui_messages || []).length > 0
@@ -1052,7 +1063,10 @@ export default function App() {
   }, [applyConversationContext, identityReady])
 
   const handleReset = useCallback(async () => {
-    const context = await newChat({ experienceMode })
+    const context = await newChat({
+      experienceMode,
+      conversationModel: currentConversationModel,
+    })
     if (!context) return false
     applyConversationContext({ ...context, ui_messages: [] })
     if (experienceMode) {
@@ -1067,7 +1081,7 @@ export default function App() {
       bootedRef.current = false
     }
     return true
-  }, [applyConversationContext, experienceMode, hydrateCanonicalWorkspace, newChat])
+  }, [applyConversationContext, currentConversationModel, experienceMode, hydrateCanonicalWorkspace, newChat])
 
   const handleNewChat = useCallback(() => {
     resetLocalCampaign()
@@ -1076,6 +1090,7 @@ export default function App() {
     setRestoredAutopilotRun(null)
     setAutopilotSummary(null)
     setExperienceMode(null)
+    setCurrentConversationModel(null)
     setActiveTab('chat')
     setHasUserStarted(false)
     bootedRef.current = false
@@ -1173,12 +1188,15 @@ export default function App() {
     }
   }, [claimBusy, claimTarget])
 
-  const startCampaign = useCallback(async (mode) => {
+  const startCampaign = useCallback(async (mode, conversationModel) => {
     setModeSelectionBusy(true)
     setModeSelectionError('')
     try {
       if (window.location.pathname !== AGENT_PATH) window.history.replaceState({}, '', AGENT_PATH)
-      const context = await newChat({ experienceMode: mode })
+      const context = await newChat({
+        experienceMode: mode,
+        conversationModel,
+      })
       if (!context) throw new Error('Không thể tạo campaign mới.')
       applyConversationContext({ ...context, ui_messages: [] })
       const result = await AgentAPI.setWorkspacePreferences(
@@ -1205,10 +1223,20 @@ export default function App() {
   const startGuidedDemo = useCallback(async (requestedMode) => {
     const demoMode = requestedMode === 'autopilot' ? 'autopilot' : 'copilot'
     setAutoStartDemoMode(demoMode === 'copilot' ? 'copilot-tour' : 'autopilot')
-    const started = await startCampaign(demoMode === 'autopilot' ? 'autopilot' : 'guided')
+    const model = conversationModelCatalog.default_model
+      || conversationModelCatalog.models.find(item => item.available)?.id
+    if (!model) {
+      setModeSelectionError('Không có model campaign nào đang sẵn sàng.')
+      setAutoStartDemoMode('')
+      return false
+    }
+    const started = await startCampaign(
+      demoMode === 'autopilot' ? 'autopilot' : 'guided',
+      model,
+    )
     if (!started) setAutoStartDemoMode('')
     return started
-  }, [startCampaign])
+  }, [conversationModelCatalog, startCampaign])
 
   useEffect(() => {
     if (!pendingDemoMode || showPublicLanding || !identityReady || identityError || experienceMode || modeSelectionBusy) return
@@ -1678,6 +1706,7 @@ export default function App() {
       <>
         <ExperienceSelector
           onSelect={startCampaign}
+          modelCatalog={conversationModelCatalog}
           busy={modeSelectionBusy}
           error={modeSelectionError}
           conversations={conversationHistory}

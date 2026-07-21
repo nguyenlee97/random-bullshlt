@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-20.12"
+BUILD_VERSION = "2026-07-21.4"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -178,4 +178,15 @@ BUILD_FEATURES = [
     "non-scrollable-workspace-shell",        # outer app clips overflow; only child panes may own scroll state
     "advertising-agent-mascot",              # generated robot identity anchors the public hero and brand lockup
     "glass-brand-command-bar",               # compact live-signal navigation replaces the sparse top divider
+    "conversation-model-lock",                # one immutable campaign provider is selected per run
+    "openai-campaign-engine-foundation",       # isolated OpenAI engine boundary, catalogued but not enabled
+    "openai-semantic-turn-router",             # typed FAQ/action/mixed/clarification planning
+    "openai-responses-tool-loop",              # bounded strict Responses API function execution
+    "openai-durable-workspace-proposals",       # validated mutations remain pending until semantic approval
+    "openai-guided-provider-routing",           # model-backed Guided entries honor the immutable run model
+    "openai-guided-model-purity",               # OpenAI Brief/Audience/RAG never call GreenNode inference
+    "openai-autopilot-model-propagation",        # workers, retries and resume use the persisted run model
+    "openai-autopilot-model-purity",             # OpenAI audience/Q&A never call GreenNode inference
+    "zalo-autopilot-model-policy",               # Zalo-created runs use an explicit channel model policy
+    "openai-campaign-engine-ready",               # OpenAI becomes selectable only when configured server-side
 ]

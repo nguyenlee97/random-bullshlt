@@ -79,6 +79,7 @@ async def _assert_proposal_access(request: Request, proposal_id: str) -> dict:
 class _ConversationCreateRequest(BaseModel):
     title: str = ""
     experience_mode: str | None = None
+    conversation_model: str | None = None
 
 
 class _ConversationDeleteAllRequest(BaseModel):
@@ -313,13 +314,40 @@ async def conversations_list(request: Request, include_archived: bool = False):
     }
 
 
+@agent_router.get("/conversation-models")
+async def conversation_models_list():
+    from campaign_models import conversation_model_catalog
+
+    return conversation_model_catalog()
+
+
 @agent_router.post("/conversations", status_code=201)
 async def conversations_create(request: Request, body: _ConversationCreateRequest):
+    from campaign_models import (
+        conversation_model_is_available,
+        normalize_conversation_model,
+    )
     from identity import create_conversation
     actor = await _request_actor(request)
+    selected_model = normalize_conversation_model(
+        body.conversation_model, allow_legacy_default=True,
+    )
+    # Old clients and internal channel callers retain the explicit legacy
+    # default. A browser that makes a model selection may only create a run on
+    # a ready component; there is never availability-driven fallback.
+    if body.conversation_model and not conversation_model_is_available(selected_model):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "conversation_model_unavailable",
+                "conversation_model": selected_model,
+                "message": "The selected conversation model is temporarily unavailable.",
+            },
+        )
     return await create_conversation(
         actor, title=body.title,
         experience_mode=body.experience_mode,
+        conversation_model=selected_model,
     )
 
 
@@ -509,11 +537,33 @@ async def chat(request: Request, req: ChatRequest) -> AgentResponse:
         fd = req.formData
 
         if req.step == 0 and fd.brief:
-            return await handle_brief(fd.brief, sid)
+            from campaign_engines.dispatcher import dispatch_guided
+            from identity import get_conversation_model_for_session
+            from openai_campaign.guided import handle_openai_brief
+
+            model_lock = await get_conversation_model_for_session(sid)
+            return await dispatch_guided(
+                model_lock["conversation_model"],
+                greennode_handler=handle_brief,
+                openai_handler=handle_openai_brief,
+                brief=fd.brief,
+                session_id=sid,
+            )
 
         # Step order: 0=brief, 1=audience, 2=creative, 3=setup, 4=result
         if req.step == 1 and fd.segment:
-            return await handle_audience(fd.segment, sid)
+            from campaign_engines.dispatcher import dispatch_guided
+            from identity import get_conversation_model_for_session
+            from openai_campaign.guided import handle_openai_audience
+
+            model_lock = await get_conversation_model_for_session(sid)
+            return await dispatch_guided(
+                model_lock["conversation_model"],
+                greennode_handler=handle_audience,
+                openai_handler=handle_openai_audience,
+                segment=fd.segment,
+                session_id=sid,
+            )
 
         if req.step == 2 and fd.creative:
             return await handle_creative(fd.creative, sid)
@@ -559,10 +609,16 @@ async def chat(request: Request, req: ChatRequest) -> AgentResponse:
         if req.step == 6:
             return await handle_email_entry(sid)
 
-        return await handle_freeform(
-            req.message,
-            req.step,
-            sid,
+        from campaign_engines.dispatcher import dispatch_freeform
+        from identity import get_conversation_model_for_session
+
+        model_lock = await get_conversation_model_for_session(sid)
+        return await dispatch_freeform(
+            model_lock["conversation_model"],
+            greennode_handler=handle_freeform,
+            message=req.message,
+            step=req.step,
+            session_id=sid,
             workspace=req.workspace,
             workspace_revision=req.workspace_revision,
             confirmed_steps=req.confirmed_steps,
@@ -642,7 +698,17 @@ async def creative_intel_override(request: Request, req: _OverrideRequest):
 async def dmp_recommend(request: Request, session_id: str = "default"):
     """AI picks top DMP segments based on brief + real segment data."""
     await _assert_session_access(request, session_id)
-    return await handle_dmp_recommend(session_id)
+    from campaign_engines.dispatcher import dispatch_guided
+    from identity import get_conversation_model_for_session
+    from openai_campaign.guided import handle_openai_dmp_recommend
+
+    model_lock = await get_conversation_model_for_session(session_id)
+    return await dispatch_guided(
+        model_lock["conversation_model"],
+        greennode_handler=handle_dmp_recommend,
+        openai_handler=handle_openai_dmp_recommend,
+        session_id=session_id,
+    )
 
 
 @agent_router.get("/zones-recommend")
@@ -669,7 +735,18 @@ async def audience_entry(request: Request, session_id: str = "default", brief_hi
             hint = _j.loads(brief_hint)
         except Exception:
             pass
-    return await handle_audience_entry(session_id, brief_hint=hint)
+    from campaign_engines.dispatcher import dispatch_guided
+    from identity import get_conversation_model_for_session
+    from openai_campaign.guided import handle_openai_audience_entry
+
+    model_lock = await get_conversation_model_for_session(session_id)
+    return await dispatch_guided(
+        model_lock["conversation_model"],
+        greennode_handler=handle_audience_entry,
+        openai_handler=handle_openai_audience_entry,
+        session_id=session_id,
+        brief_hint=hint,
+    )
 
 
 @agent_router.get("/setup-entry")

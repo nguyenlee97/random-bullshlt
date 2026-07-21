@@ -191,7 +191,21 @@ async def _hybrid_search(queries: list[str], limit: int) -> list[dict]:
     return _rank_merged(merged)
 
 
-async def recommend_rag(session_id: str, brief: dict) -> dict:
+async def recommend_rag(
+    session_id: str,
+    brief: dict,
+    *,
+    selector=None,
+    query_rewriter=None,
+    provider: str = "greennode",
+    use_reranker: bool | None = None,
+) -> dict:
+    """Recommend catalog segments with optional provider-owned model stages.
+
+    The default arguments preserve the existing GreenNode pipeline exactly.
+    An independent engine can inject its own query rewriter and selector so the
+    shared deterministic retrieval/rerank stages never choose its provider.
+    """
     t0 = time.time()
     if not await ensure_index(session_id):
         raise RagUnavailable("qdrant index unavailable")
@@ -202,8 +216,11 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
     stage_t0 = time.time()
     queries = [_raw_query(brief)]
     if config.RAG_QUERY_REWRITE:
-        from rag.query_rewrite import rewrite
-        rewritten = await rewrite(brief)
+        if query_rewriter is not None:
+            rewritten = await query_rewriter(brief)
+        else:
+            from rag.query_rewrite import rewrite
+            rewritten = await rewrite(brief)
         queries.extend(q for q in rewritten if q and q not in queries)
     rewrite_s = time.time() - stage_t0
     RAG_STAGE_SECONDS.labels(stage="rewrite").observe(rewrite_s)
@@ -223,7 +240,8 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
     # 3. rerank (graceful skip → keep RRF order)
     brief_text = " | ".join(str(brief.get(k) or "") for k in ("brand", "objective", "kpi", "notes"))
     stage_t0 = time.time()
-    if config.RAG_USE_RERANK:
+    rerank_enabled = config.RAG_USE_RERANK if use_reranker is None else use_reranker
+    if rerank_enabled:
         order = await rerank_docs(brief_text, [c["_text"] for c in candidates])
     else:
         RAG_RERANK.labels(outcome="disabled").inc()
@@ -254,7 +272,10 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
         segments_json=json.dumps(labels, ensure_ascii=False),
     )
     stage_t0 = time.time()
-    recs, selector = await _select(prompt)
+    if selector is not None:
+        recs, selector_name = await selector(prompt)
+    else:
+        recs, selector_name = await _select(prompt)
     generation_s = time.time() - stage_t0
     RAG_STAGE_SECONDS.labels(stage="generate").observe(generation_s)
 
@@ -318,8 +339,9 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
     await alog(session_id, "info", {
         "rag": "recommend_done", "queries": queries, "candidates": len(candidates),
         "rewrite_enabled": config.RAG_QUERY_REWRITE,
-        "rerank_enabled": config.RAG_USE_RERANK,
-        "selector": selector,
+        "rerank_enabled": rerank_enabled,
+        "selector": selector_name,
+        "provider": provider,
         "reranked": bool(order), "returned": len(enriched),
         "dropped_hallucinated": dropped,
         "dropped_duplicates": duplicates_dropped,
@@ -333,8 +355,9 @@ async def recommend_rag(session_id: str, brief: dict) -> dict:
             "rag": {"queries": queries, "candidates": len(candidates),
                     "catalog_segments": catalog_segments,
                     "rewrite_enabled": config.RAG_QUERY_REWRITE,
-                    "rerank_enabled": config.RAG_USE_RERANK,
-                    "selector": selector,
+                    "rerank_enabled": rerank_enabled,
+                    "selector": selector_name,
+                    "provider": provider,
                     "guard_rejected": guard_rejected,
                     "dropped_duplicates": duplicates_dropped,
                     "reranked": bool(order),

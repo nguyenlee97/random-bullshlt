@@ -137,6 +137,11 @@ def reset_session_col(monkeypatch):
     except ImportError:
         pass
     try:
+        from openai_campaign import client as openai_campaign_client
+        openai_campaign_client.reset_for_test()
+    except ImportError:
+        pass
+    try:
         import zalo_sessions
         zalo_sessions.reset_zalo_sessions_for_test()
         monkeypatch.setattr(

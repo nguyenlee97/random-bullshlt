@@ -246,6 +246,8 @@ async def create_run(
         idempotency_key=f"{key}:preferences",
     )
     workspace = await get_workspace(session_id)
+    from identity import get_conversation_model_for_session
+    model_lock = await get_conversation_model_for_session(session_id)
     run_id = f"run_{uuid.uuid4().hex}"
     request_id = get_request_id()
     trace_id = request_id if request_id != "-" else f"trace_{uuid.uuid4().hex[:16]}"
@@ -257,6 +259,9 @@ async def create_run(
         "plan_revision": 1, "status": "queued",
         "approval_policy": approval_policy, "started_by": actor,
         "creative_source": creative_source,
+        "conversation_id": model_lock.get("conversation_id"),
+        "conversation_model": model_lock["conversation_model"],
+        "conversation_model_version": model_lock["conversation_model_version"],
         "idempotency_key": key, "cancel_requested": False,
         "pause_requested": False, "current_task_id": None,
         "created_at": now, "updated_at": now,
@@ -279,8 +284,46 @@ async def create_run(
             _mem_tasks.update({task["task_id"]: task for task in task_docs})
     await _emit(run_id, "run_created", {
         "approval_policy": approval_policy, "creative_source": creative_source,
+        "conversation_model": model_lock["conversation_model"],
     })
     return await get_run(run_id)
+
+
+async def _ensure_run_model_lock(run: dict, runs) -> dict:
+    """Persist the immutable model on runs created before model selection.
+
+    A pre-migration run inherits its owning conversation once. If that
+    conversation is also legacy, the identity boundary resolves the explicit
+    GreenNode legacy value. Later retries and resumes read only this run lock.
+    """
+    from campaign_models import conversation_model_version, normalize_conversation_model
+
+    updates: dict[str, Any] = {}
+    stored_model = run.get("conversation_model")
+    if stored_model:
+        normalized = normalize_conversation_model(stored_model)
+        if normalized != stored_model:
+            updates["conversation_model"] = normalized
+        if not run.get("conversation_model_version"):
+            updates["conversation_model_version"] = conversation_model_version(normalized)
+    else:
+        from identity import get_conversation_model_for_session
+
+        lock = await get_conversation_model_for_session(run["session_id"])
+        updates.update({
+            "conversation_id": run.get("conversation_id") or lock.get("conversation_id"),
+            "conversation_model": lock["conversation_model"],
+            "conversation_model_version": lock["conversation_model_version"],
+            "conversation_model_migrated_at": _now(),
+        })
+
+    if not updates:
+        return run
+    if runs is not None:
+        await runs.update_one({"_id": run["_id"]}, {"$set": updates})
+    else:
+        _mem_runs[run["run_id"]].update(updates)
+    return {**run, **updates}
 
 
 async def get_run(run_id: str) -> dict:
@@ -294,6 +337,7 @@ async def get_run(run_id: str) -> dict:
     task_docs.sort(key=_task_order_key)
     if not run:
         raise KeyError(f"run not found: {run_id}")
+    run = await _ensure_run_model_lock(run, runs)
     public_run = _public(run)
     # Runs created before trace IDs were persisted still get a stable fallback.
     public_run.setdefault("trace_id", public_run["run_id"])

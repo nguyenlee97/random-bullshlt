@@ -215,7 +215,11 @@ async def _generate_strategy(run: dict, workspace: dict) -> CapabilityResult:
 
 
 async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
+    from campaign_engines.dispatcher import dispatch_autopilot
+    from campaign_models import LEGACY_CONVERSATION_MODEL
     from handlers.audience import handle_dmp_recommend
+    from openai_campaign.autopilot import recommend_openai_autopilot_audience
+
     brief = dict(_artifact(workspace, "brief", {}))
     strategy = _artifact(workspace, "strategy", {})
     selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
@@ -227,7 +231,14 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
     brief["notes"] = " ".join(
         item for item in (str(brief.get("notes") or "").strip(), strategy_signal) if item
     )
-    recommendation = await handle_dmp_recommend(run["session_id"], brief_override=brief)
+    conversation_model = run.get("conversation_model") or LEGACY_CONVERSATION_MODEL
+    recommendation = await dispatch_autopilot(
+        conversation_model,
+        greennode_handler=handle_dmp_recommend,
+        openai_handler=recommend_openai_autopilot_audience,
+        session_id=run["session_id"],
+        brief_override=brief,
+    )
     attrs = recommendation.get("recommendations") or []
     if not attrs:
         raise RuntimeError("audience retrieval returned no catalog-backed segments")
@@ -252,6 +263,10 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
             "ids": [item.get("_id") for item in attrs if item.get("_id")],
         }, {
             "type": "audience_pipeline",
+            "conversation_model": conversation_model,
+            "conversation_model_version": run.get("conversation_model_version"),
+            "provider": (recommendation.get("provenance") or {}).get("provider"),
+            "provider_model": (recommendation.get("provenance") or {}).get("model"),
             "retrieval_candidates": diagnostics.get("candidates", recommendation.get("total_segments", 0)),
             "rerank_enabled": bool(diagnostics.get("rerank_enabled")),
             "reranked": bool(diagnostics.get("reranked")),

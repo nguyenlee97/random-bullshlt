@@ -778,12 +778,26 @@ async def _extract_brief(
 
 async def _start_autopilot(thread: dict, brief: dict, mode: str) -> dict:
     from autopilot.service import create_run
+    from campaign_models import (
+        conversation_model_is_available,
+        normalize_conversation_model,
+    )
     from identity import create_conversation, set_conversation_title_for_session
     from workspace.service import apply_mutation, get_workspace
 
     actor = _thread_actor(thread)
+    channel_model = normalize_conversation_model(
+        config.ZALO_AUTOPILOT_CONVERSATION_MODEL
+    )
+    if not conversation_model_is_available(channel_model):
+        raise RuntimeError(
+            "Zalo Autopilot conversation model is currently unavailable"
+        )
     conversation = await create_conversation(
-        actor, title=brief["brand"], experience_mode="autopilot",
+        actor,
+        title=brief["brand"],
+        experience_mode="autopilot",
+        conversation_model=channel_model,
     )
     workspace = await get_workspace(conversation["session_id"])
     await apply_mutation(
