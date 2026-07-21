@@ -3,10 +3,15 @@ from __future__ import annotations
 
 from datetime import date
 import re
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field, ValidationError
 
 from config import config
 from graph.nodes.brief_collector import (
+    AdvisoryBriefField,
+    BriefDraft,
+    MissingBriefField,
     StructuredOutputError,
     brief_collector_node,
 )
@@ -24,6 +29,47 @@ _OPENAI_YEARLESS_DATE_RULE = (
     "ngày của năm hiện tại đã kết thúc. Quy tắc này thay thế mọi chỉ dẫn trước đó "
     "yêu cầu startDate không được sớm hơn hôm nay."
 )
+
+
+class _OpenAIBriefTurnTransport(BaseModel):
+    """Provider transport without domain cross-field validators.
+
+    Responses structured parsing validates the Pydantic class before returning
+    control to us. GPT can legitimately choose ``ask_clarification`` while also
+    serializing the partial draft it used to reason. The strict domain schema
+    must still reject that draft as a proposal, but the transport first needs
+    to let us discard it instead of failing the whole turn.
+    """
+
+    action: Literal["ask_clarification", "propose_brief", "answer"]
+    message: str = Field(min_length=1, max_length=4000)
+    brief: BriefDraft | None = None
+    reason: str = Field(default="", max_length=1000)
+    missing_fields: list[MissingBriefField] = Field(default_factory=list, max_length=7)
+    suggestion_fields: list[AdvisoryBriefField] = Field(default_factory=list, max_length=3)
+
+    model_config = {"extra": "forbid"}
+
+
+class _OpenAIBriefIntakeTransport(_OpenAIBriefTurnTransport):
+    action: Literal["ask_clarification", "propose_brief"]
+
+
+class _OpenAIBriefProposalTransport(_OpenAIBriefTurnTransport):
+    action: Literal["propose_brief"]
+
+
+# Preserve the schema names in OpenAI traces and test doubles. The classes stay
+# private to this component and do not replace the shared GreenNode schemas.
+_OpenAIBriefTurnTransport.__name__ = "BriefTurn"
+_OpenAIBriefIntakeTransport.__name__ = "BriefIntakeTurn"
+_OpenAIBriefProposalTransport.__name__ = "BriefProposalTurn"
+
+_OPENAI_BRIEF_TRANSPORTS = {
+    "brief_turn": _OpenAIBriefTurnTransport,
+    "brief_intake_turn": _OpenAIBriefIntakeTransport,
+    "brief_proposal_turn": _OpenAIBriefProposalTransport,
+}
 
 
 def _date_in_year(value: date, year: int) -> date:
@@ -91,12 +137,13 @@ async def _openai_structured_runner(
     if input_items and input_items[0].get("role") == "system":
         instructions = str(input_items.pop(0).get("content") or "")
     instructions += _OPENAI_YEARLESS_DATE_RULE
+    transport_schema = _OPENAI_BRIEF_TRANSPORTS.get(schema_name, schema)
     try:
         parsed, provenance = await generate_structured(
             session_id=session_id,
             instructions=instructions,
             input_data=input_items,
-            schema=schema,
+            schema=transport_schema,
             schema_name=schema_name,
             max_output_tokens=max_tokens,
             client=client,
@@ -105,12 +152,24 @@ async def _openai_structured_runner(
         raise StructuredOutputError(
             f"{schema_name} OpenAI structured call failed: {str(exc)[:200]}"
         ) from exc
-    if getattr(parsed, "brief", None) is not None:
+    if schema_name in _OPENAI_BRIEF_TRANSPORTS:
         parsed_data = parsed.model_dump()
-        parsed_data["brief"] = normalize_openai_yearless_dates(
-            parsed_data["brief"], input_items,
-        )
-        parsed = schema.model_validate(parsed_data)
+        if parsed_data.get("action") != "propose_brief":
+            # A clarification may expose the model's working draft, but it is
+            # neither user-approved nor eligible to become canonical state.
+            parsed_data["brief"] = None
+        elif parsed_data.get("brief") is not None:
+            parsed_data["brief"] = normalize_openai_yearless_dates(
+                parsed_data["brief"], input_items,
+            )
+        if parsed_data.get("action") != "ask_clarification":
+            parsed_data["missing_fields"] = []
+        try:
+            parsed = schema.model_validate(parsed_data)
+        except ValidationError as exc:
+            raise StructuredOutputError(
+                f"{schema_name} invalid after OpenAI transport normalization: {exc}"
+            ) from exc
     return parsed, int(provenance.get("total_tokens") or 0)
 
 

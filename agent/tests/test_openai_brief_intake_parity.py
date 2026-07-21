@@ -14,6 +14,8 @@ class _SchemaResponses:
         self.calls.append(kwargs)
         schema_name = kwargs["text_format"].__name__
         value = self.values[schema_name]
+        if isinstance(value, dict):
+            value = kwargs["text_format"].model_validate(value)
         return SimpleNamespace(
             id=f"resp_{schema_name}",
             output_parsed=value,
@@ -141,6 +143,63 @@ async def test_exact_bun_bo_message_asks_for_missing_fields_without_partial_prop
         "BriefIntakeTurn", "BriefDelegationDecision",
     }
     assert all(call["store"] is False for call in client.responses.calls)
+
+
+@pytest.mark.asyncio
+async def test_openai_clarification_discards_provider_working_brief_without_failing(
+    monkeypatch,
+):
+    """Regression for the exact invalid combination observed in production."""
+    import graph.nodes.brief_collector as collector
+    import openai_campaign.engine as engine
+    from graph.nodes.brief_collector import BriefDelegationDecision
+    from session import get_pending_proposal
+
+    forbidden = AsyncMock(side_effect=AssertionError("GreenNode structured call"))
+    monkeypatch.setattr(collector, "structured", forbidden)
+    monkeypatch.setattr(
+        engine, "decide_turn", AsyncMock(return_value=_update_brief_decision()),
+    )
+    client = _Client({
+        "BriefIntakeTurn": {
+            "action": "ask_clarification",
+            "message": "Cần bổ sung Brief.",
+            # GPT exposed a complete working draft even though it correctly
+            # chose clarification. This must never become a proposal.
+            "brief": {
+                "brand": "Bún Bò Hutao",
+                "objective": "awareness",
+                "kpi": "Reach",
+                "budget": 50,
+                "startDate": "2026-07-20",
+                "endDate": "2026-07-22",
+                "notes": "Người yêu thích ẩm thực",
+            },
+            "missing_fields": ["objective", "kpi", "notes"],
+        },
+        "BriefDelegationDecision": BriefDelegationDecision(
+            mode="none", provided_fields=[], delegated_fields=[],
+        ),
+    })
+
+    result = await engine.handle_openai_freeform(
+        "bán bún bò, brand Bún Bò Hutao, budget 50 triệu, "
+        "ngày 20/7 chạy tới 22/7",
+        0,
+        "openai-autopilot-bun-bo-clarification",
+        client=client,
+    )
+
+    assert result.meta.tool == "freeform_chat"
+    assert "Mục tiêu campaign" in result.text
+    assert "KPI mong muốn" in result.text
+    assert "Đối tượng mục tiêu" in result.text
+    assert "Thương hiệu" not in result.text
+    assert "ngân sách" not in result.text.lower()
+    assert await get_pending_proposal(
+        "openai-autopilot-bun-bo-clarification"
+    ) is None
+    forbidden.assert_not_awaited()
 
 
 @pytest.mark.asyncio
