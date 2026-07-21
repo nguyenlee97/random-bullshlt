@@ -15,6 +15,7 @@ from autopilot.service import (
     get_run,
     reconcile_active_runs,
     renew_task_lease,
+    task_commit_id,
 )
 from config import config
 from workspace.service import commit_artifact_result, get_task_context
@@ -53,6 +54,7 @@ async def _process(task: dict) -> None:
     try:
         if task.get("artifact"):
             context = await get_task_context(run["session_id"], task["artifact"])
+        commit_task_id = task_commit_id(task)
         output = await execute(task, run)
         needs_review = output.force_review or _needs_review(task, run["approval_policy"])
         pending_artifact = None
@@ -62,13 +64,14 @@ async def _process(task: dict) -> None:
                 "value": output.value,
                 "input_revisions": context["input_revisions"],
                 "base_artifact_revision": context["artifact_revision"],
+                "commit_task_id": commit_task_id,
             }
             # A result that needs approval remains outside canonical workspace
             # until a human/policy review commits it.
             if not needs_review:
                 await commit_artifact_result(
                     run["session_id"], task["artifact"], output.value,
-                    task_id=task["task_id"],
+                    task_id=commit_task_id,
                     input_revisions=context["input_revisions"],
                     base_artifact_revision=context["artifact_revision"],
                     actor="autopilot_worker",

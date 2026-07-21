@@ -729,6 +729,54 @@ async def test_worker_commits_auto_approved_artifact(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_replanned_worker_replaces_its_own_stale_artifact(monkeypatch):
+    await _seed("worker-replan-generation")
+    run = await service.create_run(
+        "worker-replan-generation", approval_policy="auto_build_draft",
+        idempotency_key="worker-replan-generation",
+    )
+    strategy_id = f"{run['run_id']}:generate_strategy"
+    strategy_task = service._mem_tasks[strategy_id]
+    strategy_task.update(status="running", lease_owner="worker", attempts=1)
+
+    outputs = iter((
+        CapabilityResult(value={"selected": "balanced"}),
+        CapabilityResult(value={"selected": "quality_first"}),
+    ))
+
+    async def fake_execute(_task, _run):
+        return next(outputs)
+
+    monkeypatch.setattr(worker, "execute", fake_execute)
+    await worker._process(dict(strategy_task))
+    first = await get_workspace("worker-replan-generation")
+    assert first["artifacts"]["strategy"]["value"] == {"selected": "balanced"}
+
+    await apply_mutation(
+        "worker-replan-generation", "brief", {**BRIEF, "budget": 75},
+        base_revision=first["revision"], actor="campaign_operator",
+        idempotency_key="worker-replan-generation:brief-edit",
+    )
+    replanned = await service.reconcile_workspace_changes(run["run_id"])
+    reset_task = next(
+        task for task in replanned["run"]["tasks"]
+        if task["task_id"] == strategy_id
+    )
+    assert reset_task["replan_workspace_revision"] > 0
+    service._mem_tasks[strategy_id].update(
+        status="running", lease_owner="worker", attempts=1,
+    )
+
+    await worker._process(dict(service._mem_tasks[strategy_id]))
+    second = await get_workspace("worker-replan-generation")
+    assert second["artifacts"]["strategy"]["status"] == "approved"
+    assert second["artifacts"]["strategy"]["value"] == {
+        "selected": "quality_first"
+    }
+    assert second["artifacts"]["strategy"]["revision"] > first["revision"]
+
+
+@pytest.mark.asyncio
 async def test_reviewed_artifact_is_not_committed_before_approval(monkeypatch):
     await _seed("worker-review")
     run = await service.create_run(

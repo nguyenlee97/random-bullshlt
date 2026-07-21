@@ -103,6 +103,24 @@ class RunConflict(Exception):
     pass
 
 
+def task_commit_id(task: dict) -> str:
+    """Return an idempotency key scoped to one task execution generation.
+
+    Task IDs stay stable so the UI and durable plan can follow a task across
+    replans. Workspace result commits cannot use that stable ID alone: a task
+    rerun after an operator edit must be allowed to replace its now-stale
+    artifact. Retries inside the same generation intentionally keep the same
+    key so a worker crash after commit remains idempotent.
+    """
+    replan_revision = task.get("replan_workspace_revision")
+    generation = (
+        f"workspace-{int(replan_revision)}"
+        if isinstance(replan_revision, int)
+        else "initial"
+    )
+    return f"{task['task_id']}:{generation}"
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -947,7 +965,7 @@ async def review_task(
         pending = task["pending_artifact"]
         await commit_artifact_result(
             pending["session_id"], pending["artifact"], pending["value"],
-            task_id=task_id,
+            task_id=pending.get("commit_task_id") or task_id,
             input_revisions=pending["input_revisions"],
             base_artifact_revision=pending["base_artifact_revision"],
             actor="autopilot_review",
