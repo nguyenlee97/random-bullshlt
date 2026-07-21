@@ -123,7 +123,10 @@ def _trace_to_langfuse(
     each LLM call gets its own trace record in Langfuse, rather than nesting all
     calls from one HTTP request under a single shared OTel context/trace.
     """
-    if _langfuse is None:
+    if _langfuse is None or (
+        os.getenv("PYTEST_CURRENT_TEST")
+        and os.getenv("LANGFUSE_TRACE_TESTS", "false").lower() != "true"
+    ):
         return
     try:
         usage = getattr(resp, "usage", None)

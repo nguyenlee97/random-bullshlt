@@ -12,6 +12,12 @@ from openai_campaign.decision import _workspace_summary, decide_turn
 from openai_campaign.prompts import ANSWER_TOOL_INSTRUCTIONS
 from openai_campaign.schemas import TurnDecision
 from openai_campaign.telemetry import record_completion, record_decision
+from openai_campaign.tracing import (
+    trace_openai_turn,
+    trace_responses_call,
+    trace_tool_call,
+    update_turn_output,
+)
 from openai_campaign.tools import (
     MUTATION_TOOL_NAME,
     allowed_capabilities,
@@ -234,21 +240,55 @@ async def _run_answer_tool_loop(
         else:
             tool_choice = "none"
 
+        remaining_tool_calls = max(
+            1, config.OPENAI_CAMPAIGN_MAX_TOOL_CALLS - total_tool_calls,
+        )
+        request = {
+            "model": config.OPENAI_CAMPAIGN_MODEL,
+            "instructions": instructions,
+            "input": input_items,
+            "tools": tool_definitions,
+            "tool_choice": tool_choice,
+            "parallel_tool_calls": False,
+            "max_tool_calls": remaining_tool_calls,
+            "reasoning": {"effort": config.OPENAI_CAMPAIGN_REASONING_EFFORT},
+            "max_output_tokens": config.OPENAI_CAMPAIGN_MAX_OUTPUT_TOKENS,
+            "store": False,
+            "safety_identifier": safety_identifier(session_id),
+        }
         try:
-            response = await client.responses.create(
+            response = await trace_responses_call(
+                name="openai.answer_tool_round",
+                session_id=session_id,
                 model=config.OPENAI_CAMPAIGN_MODEL,
-                instructions=instructions,
-                input=input_items,
-                tools=tool_definitions,
-                tool_choice=tool_choice,
-                parallel_tool_calls=False,
-                max_tool_calls=max(
-                    1, config.OPENAI_CAMPAIGN_MAX_TOOL_CALLS - total_tool_calls,
+                request=request,
+                metadata={
+                    "round_index": round_index,
+                    "proposal_needed": proposal_needed,
+                    "live_tool_needed": live_tool_needed,
+                },
+                model_parameters={
+                    "reasoning_effort": config.OPENAI_CAMPAIGN_REASONING_EFFORT,
+                    "max_output_tokens": config.OPENAI_CAMPAIGN_MAX_OUTPUT_TOKENS,
+                    "tool_choice": str(tool_choice),
+                    "max_tool_calls": remaining_tool_calls,
+                    "store": False,
+                },
+                call=lambda: client.responses.create(
+                    model=config.OPENAI_CAMPAIGN_MODEL,
+                    instructions=instructions,
+                    input=input_items,
+                    tools=tool_definitions,
+                    tool_choice=tool_choice,
+                    parallel_tool_calls=False,
+                    max_tool_calls=remaining_tool_calls,
+                    reasoning={
+                        "effort": config.OPENAI_CAMPAIGN_REASONING_EFFORT,
+                    },
+                    max_output_tokens=config.OPENAI_CAMPAIGN_MAX_OUTPUT_TOKENS,
+                    store=False,
+                    safety_identifier=safety_identifier(session_id),
                 ),
-                reasoning={"effort": config.OPENAI_CAMPAIGN_REASONING_EFFORT},
-                max_output_tokens=config.OPENAI_CAMPAIGN_MAX_OUTPUT_TOKENS,
-                store=False,
-                safety_identifier=safety_identifier(session_id),
             )
         except Exception:
             # A validated proposal may already exist after an earlier round.
@@ -282,13 +322,18 @@ async def _run_answer_tool_loop(
             used_tools.append(name)
             try:
                 args = json.loads(str(_item_value(call, "arguments") or "{}"))
-                execution = await execute_openai_tool(
-                    name,
-                    args,
+                execution = await trace_tool_call(
                     session_id=session_id,
-                    message=message,
-                    workspace=workspace,
-                    confirmed_steps=confirmed_steps,
+                    name=name,
+                    arguments=args,
+                    call=lambda: execute_openai_tool(
+                        name,
+                        args,
+                        session_id=session_id,
+                        message=message,
+                        workspace=workspace,
+                        confirmed_steps=confirmed_steps,
+                    ),
                 )
                 output = execution["output"]
                 if execution.get("ui"):
@@ -313,7 +358,7 @@ async def _run_answer_tool_loop(
     return "", proposal_ui, used_tools, last_response_id
 
 
-async def handle_openai_freeform(
+async def _handle_openai_freeform_impl(
     message: str,
     step: int,
     session_id: str,
@@ -464,3 +509,34 @@ async def handle_openai_freeform(
                 step=step,
             ),
         )
+
+
+async def handle_openai_freeform(
+    message: str,
+    step: int,
+    session_id: str,
+    workspace: dict | None = None,
+    workspace_revision: int | None = None,
+    confirmed_steps: list[int] | None = None,
+    workspace_events: list[str] | None = None,
+    client: Any | None = None,
+) -> AgentResponse:
+    """Trace and execute one OpenAI-only Copilot turn."""
+    async with trace_openai_turn(
+        session_id=session_id,
+        message=message,
+        step=step,
+        workspace=workspace,
+    ) as observation:
+        response = await _handle_openai_freeform_impl(
+            message,
+            step,
+            session_id,
+            workspace=workspace,
+            workspace_revision=workspace_revision,
+            confirmed_steps=confirmed_steps,
+            workspace_events=workspace_events,
+            client=client,
+        )
+        update_turn_output(observation, response)
+        return response

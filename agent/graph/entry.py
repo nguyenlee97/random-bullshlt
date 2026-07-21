@@ -65,6 +65,11 @@ def _langfuse_config(session_id: str, request_id: str, mode: str) -> dict:
     """Graph config incl. Langfuse callback when tracing is active."""
     cfg: dict = {"configurable": {"thread_id": session_id}}
     import os
+    if (
+        os.getenv("PYTEST_CURRENT_TEST")
+        and os.getenv("LANGFUSE_TRACE_TESTS", "false").lower() != "true"
+    ):
+        return cfg
     if os.getenv("LANGFUSE_PUBLIC_KEY"):
         try:
             from langfuse.langchain import CallbackHandler

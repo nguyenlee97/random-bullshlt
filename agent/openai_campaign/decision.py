@@ -7,6 +7,7 @@ from config import config
 from openai_campaign.client import get_client, safety_identifier
 from openai_campaign.prompts import TURN_DECISION_INSTRUCTIONS
 from openai_campaign.schemas import TurnDecision
+from openai_campaign.tracing import trace_responses_call
 
 
 def _bounded_history(history: list[dict]) -> list[dict]:
@@ -88,15 +89,39 @@ async def decide_turn(
         "allowed_capabilities": allowed_capabilities,
     }
     api = client or get_client()
-    response = await api.responses.parse(
+    input_data = json.dumps(payload, ensure_ascii=False)
+    max_output_tokens = min(config.OPENAI_CAMPAIGN_MAX_OUTPUT_TOKENS, 1000)
+    request = {
+        "model": config.OPENAI_CAMPAIGN_MODEL,
+        "instructions": TURN_DECISION_INSTRUCTIONS,
+        "input": input_data,
+        "text_format": TurnDecision.model_json_schema(),
+        "reasoning": {"effort": config.OPENAI_CAMPAIGN_REASONING_EFFORT},
+        "max_output_tokens": max_output_tokens,
+        "store": False,
+        "safety_identifier": safety_identifier(session_id),
+    }
+    response = await trace_responses_call(
+        name="openai.turn_decision",
+        session_id=session_id,
         model=config.OPENAI_CAMPAIGN_MODEL,
-        instructions=TURN_DECISION_INSTRUCTIONS,
-        input=json.dumps(payload, ensure_ascii=False),
-        text_format=TurnDecision,
-        reasoning={"effort": config.OPENAI_CAMPAIGN_REASONING_EFFORT},
-        max_output_tokens=min(config.OPENAI_CAMPAIGN_MAX_OUTPUT_TOKENS, 1000),
-        store=False,
-        safety_identifier=safety_identifier(session_id),
+        request=request,
+        metadata={"schema": "turn_decision", "step": step},
+        model_parameters={
+            "reasoning_effort": config.OPENAI_CAMPAIGN_REASONING_EFFORT,
+            "max_output_tokens": max_output_tokens,
+            "store": False,
+        },
+        call=lambda: api.responses.parse(
+            model=config.OPENAI_CAMPAIGN_MODEL,
+            instructions=TURN_DECISION_INSTRUCTIONS,
+            input=input_data,
+            text_format=TurnDecision,
+            reasoning={"effort": config.OPENAI_CAMPAIGN_REASONING_EFFORT},
+            max_output_tokens=max_output_tokens,
+            store=False,
+            safety_identifier=safety_identifier(session_id),
+        ),
     )
     if response.output_parsed is None:
         raise RuntimeError("OpenAI returned no semantic turn decision")
