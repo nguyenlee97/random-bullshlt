@@ -622,6 +622,47 @@ async def test_upload_creative_source_accepts_same_ratio_at_different_pixels():
 
 
 @pytest.mark.asyncio
+async def test_ai_source_accepts_reviewed_operator_replacement(monkeypatch):
+    import autopilot.creative_generation as creative_generation
+
+    async def must_not_generate(*_args, **_kwargs):
+        raise AssertionError("reviewed operator replacement must bypass image generation")
+
+    monkeypatch.setattr(creative_generation, "generate_creatives", must_not_generate)
+    uploaded = {
+        "url": "https://cdn.example/operator.png",
+        "name": "operator.png",
+        "width": 300,
+        "height": 250,
+        "analysisStatus": "approved_override",
+        "analysisId": "ci_operator",
+    }
+    workspace = {"artifacts": {
+        "brief": {"revision": 1, "value": BRIEF},
+        "creative_format_plan": {"revision": 2, "value": {
+            "formats": [{
+                "format_id": "zuma-box", "width": 300, "height": 250,
+                "zone_ids": ["ZONE-A"],
+            }],
+        }},
+        "creative": {"value": {"files": [uploaded], "uploaded": True}},
+    }}
+
+    result = await _prepare_creatives(
+        {"run_id": "run-ai-repair", "session_id": "ai-repair",
+         "creative_source": "ai_generate"},
+        workspace,
+    )
+
+    assert result.force_review is False
+    assert result.externally_committed is True
+    assert result.value["files"] == [uploaded]
+    assert result.value["source"] == "operator_upload_override"
+    assert result.evidence[0]["source"] == "operator_upload_override"
+    assert result.evidence[1]["covered"] == 1
+
+
+@pytest.mark.asyncio
 async def test_ai_creative_source_generates_without_manual_upload(monkeypatch):
     import autopilot.creative_generation as creative_generation
 

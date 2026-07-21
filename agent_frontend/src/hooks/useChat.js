@@ -308,6 +308,7 @@ export function useChat({
     if (busy) return { response: null, shouldAdvance: false }
     const silent = options.silent === true
     const markApproved = options.markApproved !== false
+    const persistReadyCreative = options.persistReadyCreative === true
     setBusy(true)
     if (!silent) startThinking()
 
@@ -340,8 +341,19 @@ export function useChat({
         try {
           const currentFiles = stepData.creative?.files || []
           if (creativeReviewState(currentFiles) === 'ready') {
+            // Guided mode reaches this state only after the authoritative
+            // creative input has already been committed. The Autopilot repair
+            // editor is different: a manual verdict can make its local file
+            // ready while the waiting prepare_creatives task still references
+            // the earlier proposal. Persisting the reviewed file set creates a
+            // creative revision, allowing Autopilot to recheck that input gate.
+            if (persistReadyCreative) {
+              response = await AgentAPI.approveCreative(stepData.creative)
+              shouldAdvance = responseAllowsAdvance(response)
+              if (!shouldAdvance) break
+            }
             if (markApproved) await AgentAPI.confirmWorkflowStep(2)
-            response = {
+            response = response || {
               id: generateId(),
               role: 'assistant',
               content: '✅ Kết quả phân tích creative đã được xác nhận. Mời Anh/Chị tiếp tục sang Setup Camp.',

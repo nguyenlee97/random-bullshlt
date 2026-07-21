@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-21.10"
+BUILD_VERSION = "2026-07-21.11"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -194,4 +194,5 @@ BUILD_FEATURES = [
     "openai-typed-brief-intake",                  # initial Copilot briefs collect all supplied fields through OpenAI
     "conversation-model-workspace-provenance",   # workspace footer names the immutable provider selected for the run
     "openai-langfuse-turn-tracing",              # complete OpenAI prompts, responses, tools and errors share one turn trace
+    "autopilot-reviewed-creative-repair",        # approved uploads supersede a failed AI-generation proposal
 ]

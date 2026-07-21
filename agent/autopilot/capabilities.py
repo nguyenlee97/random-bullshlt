@@ -415,8 +415,24 @@ async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
     creative = _artifact(workspace, "creative", {})
     files = creative.get("files", []) if isinstance(creative, dict) else []
     source = run.get("creative_source", "upload")
+    operator_replacement = (
+        source == "ai_generate"
+        and bool(files)
+        and all(
+            file.get("source") != "ai_generated"
+            and file.get("analysisStatus") in {"auto_approved", "approved_override"}
+            for file in files
+        )
+    )
+    resolved_source = "operator_upload_override" if operator_replacement else "upload"
 
-    if source == "upload":
+    # A run keeps its original creative-source policy, but an operator may
+    # repair a failed generation task by uploading and approving real files.
+    # Those reviewed canonical files supersede the failed generation proposal;
+    # they must be coverage-checked instead of sending the provider request
+    # again. Unreviewed uploads and genuine ai_generated assets stay on the
+    # original generation path.
+    if source == "upload" or operator_replacement:
         if files:
             from tools.creative_match import match_file_to_format
 
@@ -455,7 +471,8 @@ async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
                 )
                 return CapabilityResult(
                     value={
-                        **creative, "source": "upload", "formatCoverage": coverage,
+                        **creative, "source": resolved_source,
+                        "formatCoverage": coverage,
                         "reason": "creative_format_coverage_gap",
                         "message": (
                             "Creative chưa phủ mọi format đã lập kế hoạch: "
@@ -463,7 +480,7 @@ async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
                         ),
                     },
                     evidence=[
-                        {"type": "creative_source", "source": "upload",
+                        {"type": "creative_source", "source": resolved_source,
                          "count": len(files), "reused": True},
                         {"type": "creative_format_coverage", **coverage},
                     ],
@@ -471,9 +488,12 @@ async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
                     force_review=True,
                 )
             return CapabilityResult(
-                value=creative,
+                value=(
+                    {**creative, "source": resolved_source}
+                    if operator_replacement else creative
+                ),
                 evidence=[
-                    {"type": "creative_source", "source": "upload",
+                    {"type": "creative_source", "source": resolved_source,
                      "count": len(files), "reused": True},
                     {"type": "creative_format_coverage", **coverage},
                 ],

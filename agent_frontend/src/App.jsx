@@ -953,6 +953,7 @@ export default function App() {
     const result = await approveStep(editingStep, data, {
       silent: true,
       markApproved: false,
+      persistReadyCreative: editingStep === 2,
     })
     if (result?.shouldAdvance) {
       autopilotEditorArtifactRef.current = null
