@@ -11,6 +11,18 @@ from tools.creative_match import auto_assign
 from tools.order_api import create_order
 from tools.zone_catalog import get_zone_map
 from config import config
+from time_context import campaign_today
+
+
+def initial_order_status(start_date: str, *, today=None) -> str:
+    """Return the initial lifecycle state using the campaign's UTC+7 clock."""
+    from datetime import date
+
+    try:
+        start = date.fromisoformat(str(start_date)[:10])
+    except (TypeError, ValueError):
+        return "pending"
+    return "active" if start <= (today or campaign_today()) else "pending"
 
 
 async def handle_setup(setup: SetupData, session_id: str) -> AgentResponse:
@@ -388,13 +400,8 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
     # ── Build single order payload ────────────────────────────────────────────
     total_budget_vnd = brief.get("budget", 0) * 1_000_000
 
-    # Auto-activate if campaign start date is today or already past
-    from datetime import date as _date
-    try:
-        start = _date.fromisoformat(brief.get("startDate", "")[:10])
-        order_status = "active" if start <= _date.today() else "pending"
-    except Exception:
-        order_status = "pending"
+    # Auto-activate if campaign start date is today or already past.
+    order_status = initial_order_status(brief.get("startDate", ""))
 
     payload = {
         "brand": brief.get("brand", "Brand"),

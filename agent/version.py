@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-21.8"
+BUILD_VERSION = "2026-07-21.9"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -98,6 +98,7 @@ BUILD_FEATURES = [
     "autopilot-guided-entry-isolation", # Guided proactive messages never leak into Autopilot
     "typed-brief-collector",             # complete recommendations always become durable proposals
     "authoritative-campaign-clock",      # yearless dates grounded to Asia/Ho_Chi_Minh server time
+    "openai-in-progress-date-window",    # yearless OpenAI ranges stay current while their end date has not passed
     "nonblocking-llm-io",                # slow providers no longer freeze workspace polling
     "brief-budget-unit-normalization",   # raw VND from providers is normalized to workspace millions
     "external-qa-contract-hardening",    # independent cases continue and validation labels inventory honestly

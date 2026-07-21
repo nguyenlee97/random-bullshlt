@@ -11,6 +11,23 @@ import pytest
 from models import BriefData, CreativeData, CreativeFile, SegmentData, SetupData
 
 
+@pytest.mark.parametrize(
+    ("start_date", "expected"),
+    [
+        ("2026-07-20", "active"),
+        ("2026-07-21", "active"),
+        ("2026-07-22", "pending"),
+        ("not-a-date", "pending"),
+    ],
+)
+def test_initial_order_status_uses_campaign_date(start_date, expected):
+    from handlers.setup import initial_order_status
+
+    assert initial_order_status(
+        start_date, today=date(2026, 7, 21),
+    ) == expected
+
+
 @pytest.mark.asyncio
 async def test_campaign_form_flow_persists_state_and_creates_one_guarded_order(monkeypatch):
     import handlers.audience as audience_handler
