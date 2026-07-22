@@ -129,6 +129,11 @@ async def _handle_pending_decision(
 ) -> AgentResponse | None:
     if decision.workflow_action not in {"approve", "reject", "defer"}:
         return None
+    # Defer is only a disposition of an existing proposal. If a planner ever
+    # emits it without one, let the normal answer/tool loop handle the turn
+    # instead of claiming that a newly requested proposal does not exist.
+    if decision.workflow_action == "defer" and not pending:
+        return None
     if not pending:
         reply = (
             "Hiện không có đề xuất nào đang chờ duyệt. Anh/chị hãy yêu cầu "

@@ -278,6 +278,68 @@ async def test_mutation_creates_visible_proposal_without_applying(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_new_later_approval_request_creates_audience_proposal_when_none_pending(monkeypatch):
+    import openai_campaign.engine as engine
+    from session import get_pending_proposal
+    from workspace.service import get_workspace
+
+    session_id = "openai-create-later-audience"
+    decision = _decision(
+        turn_type="mixed",
+        user_goal="Explain overlap and create a two-audience proposal for later approval",
+        subrequests=[
+            {
+                "kind": "question", "description": "Explain audience overlap",
+                "requires_live_data": False, "requested_capability": "",
+            },
+            {
+                "kind": "mutation", "description": "Propose both audiences",
+                "requires_live_data": False, "requested_capability": "select_audience",
+            },
+        ],
+        faq_scope="none",
+        workflow_action="select_audience",
+        would_mutate_workspace=True,
+    )
+    monkeypatch.setattr(engine, "decide_turn", AsyncMock(return_value=decision))
+    client = _Client([
+        _response(output=[{
+            "type": "function_call", "call_id": "call-audience-proposal",
+            "name": "propose_workspace_change",
+            "arguments": json.dumps({
+                "field": "segment",
+                "value_json": json.dumps({"attrs": ["INT131", "INT130"]}),
+                "reason": "Create both audience selections for later confirmation",
+            }),
+        }]),
+        _response(text=(
+            "Hai nhóm có overlap vừa phải. Em đã tạo đề xuất chọn cả hai, "
+            "nhưng chưa áp dụng và đang chờ xác nhận."
+        )),
+    ])
+
+    result = await engine.handle_openai_freeform(
+        "Hai nhóm đó có bị overlap nhiều không? Hãy giải thích ngắn gọn, đồng "
+        "thời tạo đề xuất chọn cả hai cho campaign, nhưng chưa áp dụng cho tới "
+        "khi tôi xác nhận.",
+        1,
+        session_id,
+        client=client,
+    )
+
+    pending = await get_pending_proposal(session_id)
+    unchanged = await get_workspace(session_id)
+    assert pending["field"] == "segment"
+    assert [item["segmentId"] for item in pending["value"]["attrs"]] == [
+        "INT131", "INT130",
+    ]
+    assert unchanged["revision"] == 0
+    assert unchanged["artifacts"]["audience"]["status"] == "missing"
+    assert result.blocks[0]["type"] == "workspace_proposal"
+    assert result.workspace_update is None
+
+
+@pytest.mark.asyncio
 async def test_created_proposal_stays_visible_when_final_summary_fails(monkeypatch):
     import openai_campaign.engine as engine
     from session import get_pending_proposal

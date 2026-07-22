@@ -23,7 +23,8 @@ Use recent context to understand replies such as "yes", "do that", "those
 audiences", or "the second one". Never treat a short phrase as confirmation
 without a matching pending server proposal or clear conversational context.
 
-When a pending proposal exists, distinguish its disposition semantically:
+Only when pending_proposal is non-null, distinguish its disposition
+semantically:
 
 - approve: the user clearly asks to apply the pending proposal now.
 - reject: the user clearly asks to cancel, discard, or permanently reject the
@@ -36,6 +37,13 @@ A negated or delayed approval is defer, not reject. For example, "I agree with
 the explanation, but I have not agreed to apply those audiences yet" keeps the
 proposal pending. Set would_mutate_workspace=false for defer. Do not infer
 reject merely because the user does not approve now.
+
+When pending_proposal is null, never choose approve, reject, or defer. If the
+user asks to create a new audience/brief/zone proposal now but says not to apply
+it until a later confirmation, classify the requested campaign change itself
+(for example select_audience), set would_mutate_workspace=true, and preserve
+the separate question plus mutation subrequests. Creating a proposal for later
+approval is not deferring an existing proposal.
 
 Mark whether live system data is required. Static advertising guidance is not
 live data. Current audience count, current inventory availability, campaign
