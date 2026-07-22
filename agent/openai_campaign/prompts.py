@@ -23,6 +23,20 @@ Use recent context to understand replies such as "yes", "do that", "those
 audiences", or "the second one". Never treat a short phrase as confirmation
 without a matching pending server proposal or clear conversational context.
 
+When a pending proposal exists, distinguish its disposition semantically:
+
+- approve: the user clearly asks to apply the pending proposal now.
+- reject: the user clearly asks to cancel, discard, or permanently reject the
+  pending proposal.
+- defer: the user wants to wait, is not ready to apply it, agrees only with an
+  explanation, or explicitly withholds approval while keeping the proposal
+  available for later confirmation.
+
+A negated or delayed approval is defer, not reject. For example, "I agree with
+the explanation, but I have not agreed to apply those audiences yet" keeps the
+proposal pending. Set would_mutate_workspace=false for defer. Do not infer
+reject merely because the user does not approve now.
+
 Mark whether live system data is required. Static advertising guidance is not
 live data. Current audience count, current inventory availability, campaign
 status, and current report values are live data.

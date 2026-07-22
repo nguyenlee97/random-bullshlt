@@ -223,6 +223,7 @@ async def test_complete_openai_intake_creates_one_atomic_whole_brief_proposal(
         engine, "decide_turn", AsyncMock(return_value=_update_brief_decision()),
     )
     monkeypatch.setattr(openai_brief, "campaign_today", lambda: date(2026, 7, 21))
+    monkeypatch.setattr(collector, "campaign_today", lambda: date(2026, 7, 21))
     client = _Client({
         "BriefIntakeTurn": BriefIntakeTurn(
             action="propose_brief",

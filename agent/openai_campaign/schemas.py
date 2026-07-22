@@ -13,6 +13,7 @@ FAQScope = Literal[
 WorkflowAction = Literal[
     "approve",
     "reject",
+    "defer",
     "update_brief",
     "select_audience",
     "generate_creative",

@@ -370,6 +370,104 @@ async def test_semantic_approval_applies_only_existing_pending_proposal(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_negated_approval_defers_then_later_applies_same_audience_proposal(monkeypatch):
+    import openai_campaign.engine as engine
+    from session import get_pending_proposal, set_pending_proposal
+    from workspace.service import create_proposal, get_workspace
+
+    session_id = "openai-defer-audience"
+    audience = {
+        "attrs": [
+            {
+                "_id": "catalog-coffee", "segmentId": "INT131",
+                "fullLabel": "Coffee (food & drink)",
+            },
+            {
+                "_id": "catalog-beverages", "segmentId": "INT130",
+                "fullLabel": "Beverages (food & drink)",
+            },
+        ],
+        "reach": {
+            "unique_reach": 6_900_219,
+            "range": {"min": 6_057_100, "max": 7_739_889},
+            "method": "calibrated_estimate",
+        },
+    }
+    workspace = await get_workspace(session_id)
+    proposal = await create_proposal(
+        session_id,
+        "segment",
+        audience,
+        base_revision=workspace["revision"],
+        actor="test",
+        reason="Select the two catalog-grounded audiences",
+    )
+    await set_pending_proposal(session_id, {
+        "field": "segment",
+        "value": audience,
+        "proposal_id": proposal["proposal_id"],
+    })
+    defer = _decision(
+        turn_type="workflow_action",
+        user_goal="Keep the proposal pending; do not apply it yet",
+        subrequests=[{
+            "kind": "mutation", "description": "Defer the pending proposal",
+            "requires_live_data": False, "requested_capability": "defer",
+        }],
+        faq_scope="none",
+        workflow_action="defer",
+        would_mutate_workspace=False,
+    )
+    approve = _decision(
+        turn_type="workflow_action",
+        user_goal="Apply the pending audience proposal now",
+        subrequests=[{
+            "kind": "mutation", "description": "Approve the pending proposal",
+            "requires_live_data": False, "requested_capability": "approve",
+        }],
+        faq_scope="none",
+        workflow_action="approve",
+        would_mutate_workspace=True,
+    )
+    monkeypatch.setattr(
+        engine, "decide_turn", AsyncMock(side_effect=[defer, approve]),
+    )
+    client = _Client([])
+
+    deferred = await engine.handle_openai_freeform(
+        "Tôi đồng ý với phần giải thích, nhưng chưa đồng ý áp dụng hai audience đó.",
+        1,
+        session_id,
+        client=client,
+    )
+
+    pending = await get_pending_proposal(session_id)
+    unchanged = await get_workspace(session_id)
+    assert deferred.meta.tool == "workspace_deferred"
+    assert "vẫn được giữ ở trạng thái chờ" in deferred.text
+    assert pending["proposal_id"] == proposal["proposal_id"]
+    assert unchanged["revision"] == 0
+    assert unchanged["artifacts"]["audience"]["status"] == "missing"
+    assert unchanged["artifacts"]["audience"]["value"] is None
+
+    applied = await engine.handle_openai_freeform(
+        "Xác nhận áp dụng đúng đề xuất audience đang chờ.",
+        1,
+        session_id,
+        client=client,
+    )
+
+    updated = await get_workspace(session_id)
+    selected = updated["artifacts"]["audience"]["value"]
+    assert updated["revision"] == 1
+    assert [item["segmentId"] for item in selected["attrs"]] == ["INT131", "INT130"]
+    assert applied.meta.tool == "workspace_confirmed"
+    assert applied.workspace_update["proposal_id"] == proposal["proposal_id"]
+    assert await get_pending_proposal(session_id) is None
+    assert client.responses.calls == []
+
+
+@pytest.mark.asyncio
 async def test_low_confidence_turn_never_calls_answer_or_tools(monkeypatch):
     import openai_campaign.engine as engine
 

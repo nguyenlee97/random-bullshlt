@@ -127,7 +127,7 @@ async def _handle_pending_decision(
     message: str,
     step: int,
 ) -> AgentResponse | None:
-    if decision.workflow_action not in {"approve", "reject"}:
+    if decision.workflow_action not in {"approve", "reject", "defer"}:
         return None
     if not pending:
         reply = (
@@ -148,6 +148,22 @@ async def _handle_pending_decision(
     proposal_id = pending.get("proposal_id")
     field = str(pending.get("field") or "")
     value = pending.get("value")
+    if decision.workflow_action == "defer":
+        reply = (
+            f"Đề xuất cho `{field}` vẫn được giữ ở trạng thái chờ. "
+            "Workspace chưa bị thay đổi; anh/chị có thể xác nhận áp dụng hoặc "
+            "hủy đề xuất ở lượt sau."
+        )
+        await _persist_reply(session_id, message, reply)
+        return AgentResponse(
+            text=reply,
+            blocks=[{"type": "info", "text": reply}],
+            meta=ResponseMeta(
+                tool="workspace_deferred",
+                model=config.OPENAI_CAMPAIGN_MODEL,
+                step=step,
+            ),
+        )
     if decision.workflow_action == "reject":
         if proposal_id:
             from workspace.service import reject_proposal
