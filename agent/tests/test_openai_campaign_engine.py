@@ -136,6 +136,83 @@ async def test_live_faq_runs_function_call_round_trip(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_multi_topic_audience_lookup_is_read_only_and_uses_separate_queries(monkeypatch):
+    import openai_campaign.engine as engine
+    import openai_campaign.tools as openai_tools
+    from session import get_pending_proposal
+
+    decision = _decision(
+        faq_scope="catalog_discovery",
+        subrequests=[{
+            "kind": "read",
+            "description": "Find coffee, beverage and office-worker audiences",
+            "requires_live_data": True,
+            "requested_capability": "search_audience_catalog",
+        }],
+    )
+    monkeypatch.setattr(engine, "decide_turn", AsyncMock(return_value=decision))
+
+    async def catalog_search(query, *, type_filter, limit):
+        rows = {
+            "coffee": [{
+                "segmentId": "INT131", "fullLabel": "Coffee (food & drink)",
+                "type": "Interest", "sizeMin": 147_000_000, "sizeMax": 165_000_000,
+                "sizeEstimatedAt": "2026-07-21T00:00:00Z",
+            }],
+            "beverages": [{
+                "segmentId": "INT130", "fullLabel": "Beverages (food & drink)",
+                "type": "Interest", "sizeMin": 120_000_000, "sizeMax": 140_000_000,
+                "sizeEstimatedAt": "2026-07-21T00:00:00Z",
+            }],
+            "office workers": [],
+        }
+        return rows[query]
+
+    monkeypatch.setattr(openai_tools, "search_audience", catalog_search)
+    client = _Client([
+        _response(output=[{
+            "type": "function_call", "call_id": "call-audiences",
+            "name": "search_audience_catalog",
+            "arguments": json.dumps({
+                "queries": ["coffee", "beverages", "office workers"],
+                "type": None,
+            }),
+        }]),
+        _response(text=(
+            "Tìm thấy INT131 và INT130; catalog chưa có nhóm khớp trực tiếp "
+            "với office workers. Em chưa chọn nhóm nào."
+        )),
+    ])
+
+    result = await engine.handle_openai_freeform(
+        "Bây giờ tìm giúp tôi các audience hiện có liên quan tới cà phê, đồ uống "
+        "và dân văn phòng. Cho tôi ID, khoảng size và độ mới dữ liệu, nhưng vẫn "
+        "chưa chọn nhóm nào.",
+        1,
+        "openai-multi-topic-audience",
+        client=client,
+    )
+
+    assert result.meta.tool == "search_audience_catalog"
+    assert "INT131" in result.text and "INT130" in result.text
+    assert await get_pending_proposal("openai-multi-topic-audience") is None
+    assert all(
+        tool["name"] != "propose_workspace_change"
+        for tool in client.responses.calls[0]["tools"]
+    )
+    final_input = client.responses.calls[1]["input"]
+    tool_output = next(
+        json.loads(item["output"])
+        for item in final_input
+        if item.get("type") == "function_call_output"
+    )
+    assert [item["query"] for item in tool_output["query_results"]] == [
+        "coffee", "beverages", "office workers",
+    ]
+    assert tool_output["unmatched_queries"] == ["office workers"]
+
+
+@pytest.mark.asyncio
 async def test_mutation_creates_visible_proposal_without_applying(monkeypatch):
     import openai_campaign.engine as engine
     from session import get_pending_proposal

@@ -6,6 +6,7 @@ GreenNode model client.
 """
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 import json
 from typing import Any
@@ -70,15 +71,31 @@ OPENAI_TOOL_DEFINITIONS = [
     {
         "type": "function",
         "name": "search_audience_catalog",
-        "description": "Search current authoritative DMP segments by topic or name.",
+        "description": (
+            "Search current authoritative DMP segments for one or more audience "
+            "topics. For a multi-topic request, put each distinct concept in a "
+            "separate query instead of joining them into one phrase."
+        ),
         "strict": True,
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Audience topic or segment name."},
+                "queries": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "maxItems": 6,
+                    "description": (
+                        "One concise English catalog search phrase per user "
+                        "concept. Translate Vietnamese concepts for the primarily "
+                        "English catalog; for example: ['coffee', 'beverages', "
+                        "'office workers']. Never combine independent concepts "
+                        "into one query."
+                    ),
+                },
                 "type": _nullable_string("Optional DMP segment type.", enum=["Behavior", "Interest"]),
             },
-            "required": ["query", "type"],
+            "required": ["queries", "type"],
             "additionalProperties": False,
         },
     },
@@ -335,11 +352,42 @@ async def _execute_read_tool(name: str, args: dict) -> dict:
     if name == "search_ad_knowledge":
         return search_ad_knowledge(str(args.get("query") or ""))
     if name == "search_audience_catalog":
-        segments = await search_audience(
-            str(args.get("query") or ""), type_filter=args.get("type"), limit=15,
-        )
+        queries = list(dict.fromkeys(
+            str(item).strip()
+            for item in args.get("queries") or []
+            if str(item).strip()
+        ))[:6]
+        if not queries:
+            raise ValueError("At least one audience catalog query is required")
+
+        # Each query is one semantic concept chosen by the model. Search them
+        # independently because the DMP API treats q as one regex phrase, then
+        # merge authoritative rows without changing the current selection.
+        result_sets = await asyncio.gather(*(
+            search_audience(query, type_filter=args.get("type"), limit=10)
+            for query in queries
+        ))
+        merged: dict[str, dict] = {}
+        matched_queries: dict[str, list[str]] = {}
+        query_results: list[dict] = []
+        for query, items in zip(queries, result_sets):
+            ids: list[str] = []
+            for item in items:
+                identity = _segment_id(item)
+                if not identity:
+                    continue
+                ids.append(identity)
+                merged.setdefault(identity, item)
+                matched_queries.setdefault(identity, []).append(query)
+            query_results.append({"query": query, "segment_ids": ids})
+
+        segments = list(merged.values())[:30]
         return {
             "catalog": "dmp_attributes", "catalog_freshness": "live_query",
+            "query_results": query_results,
+            "unmatched_queries": [
+                item["query"] for item in query_results if not item["segment_ids"]
+            ],
             "segments": [{
                 "segment_id": _segment_id(item),
                 "name": item.get("fullLabel") or item.get("name"),
@@ -347,6 +395,7 @@ async def _execute_read_tool(name: str, args: dict) -> dict:
                 "size_min": item.get("sizeMin"), "size_max": item.get("sizeMax"),
                 "size_updated_at": item.get("sizeEstimatedAt"),
                 "size_version": item.get("sizeEstimateVersion"),
+                "matched_queries": matched_queries.get(_segment_id(item), []),
             } for item in segments],
             "no_result": not segments,
         }
