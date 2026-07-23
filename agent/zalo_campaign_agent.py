@@ -944,7 +944,7 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
         response_parts: list[str | dict] = [text, *result.media_parts]
     except Exception:
         text = (
-            "Tr\u1ee3 l\u00fd h\u1ed9i tho\u1ea1i \u0111ang t\u1ea1m th\u1eddi kh\u00f4ng k\u1ebft n\u1ed1i \u0111\u01b0\u1ee3c v\u1edbi OpenAI. "
+            "Tr\u1ee3 l\u00fd h\u1ed9i tho\u1ea1i \u0111ang t\u1ea1m th\u1eddi kh\u00f4ng ph\u1ea3n h\u1ed3i. "
             "Kh\u00f4ng c\u00f3 thao t\u00e1c hay thay \u0111\u1ed5i chi\u1ebfn d\u1ecbch n\u00e0o \u0111\u01b0\u1ee3c th\u1ef1c hi\u1ec7n; vui l\u00f2ng th\u1eed l\u1ea1i sau \u00edt ph\u00fat."
         )
         response_parts = [text]
@@ -1002,7 +1002,7 @@ async def _handle_channel_event_legacy(event: dict) -> list[str | dict]:
         )
     except Exception:
         text = (
-            "Trợ lý hội thoại đang tạm thời không kết nối được với OpenAI. "
+            "Trợ lý hội thoại đang tạm thời không phản hồi. "
             "Không có thao tác hay thay đổi chiến dịch nào được thực hiện; vui lòng thử lại sau ít phút."
         )
         await add_message(thread["session_id"], "assistant", text)

@@ -162,7 +162,7 @@ async def test_openai_planner_failure_fails_closed_without_campaign_mutation(mon
         "text": "tạm dừng chiến dịch này",
     })
 
-    assert "không kết nối được với OpenAI" in response[0]
+    assert "đang tạm thời không phản hồi" in response[0]
     assert "Không có thao tác" in response[0]
     mutation.assert_not_awaited()
 

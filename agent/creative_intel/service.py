@@ -521,7 +521,7 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
             if contains_prompt_injection(vlm.ocr_text):
                 reasons.append("Phát hiện câu lệnh đáng ngờ trong nội dung OCR")
             if vlm.confidence < config.VLM_CONFIDENCE_THRESHOLD:
-                reasons.append(f"Độ tin cậy VLM thấp ({vlm.confidence:.2f})")
+                reasons.append(f"Độ tin cậy phân tích thấp ({vlm.confidence:.2f})")
             if vlm.brief_match_score <= 2:
                 reasons.append(f"Creative không khớp brief ({vlm.brief_match_score}/5)")
             VLM_CALLS.labels(model=route["model"], outcome="success").inc()
