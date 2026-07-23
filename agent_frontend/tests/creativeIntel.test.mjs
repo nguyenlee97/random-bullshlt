@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import {
   creativeReviewState,
   defaultPlacementSelection,
+  isRetryableCreativeAnalysisFailure,
   mergeCreativeVerdicts,
 } from '../src/lib/creativeIntel.js'
 
@@ -15,6 +16,25 @@ test('creative review separates analysis completion from operator confirmation',
     { analysisStatus: 'auto_approved' },
     { analysisStatus: 'approved_override' },
   ]), 'ready')
+})
+
+test('only failed VLM infrastructure verdicts are eligible for re-analysis', () => {
+  assert.equal(isRetryableCreativeAnalysisFailure({
+    analysisStatus: 'needs_review',
+    reviewReasons: ['VLM lỗi — cần duyệt thủ công (model not found)'],
+  }), true)
+  assert.equal(isRetryableCreativeAnalysisFailure({
+    analysisStatus: 'needs_review',
+    vlmError: { provider: 'openai', type: 'APIError' },
+  }), true)
+  assert.equal(isRetryableCreativeAnalysisFailure({
+    analysisStatus: 'needs_review',
+    reviewReasons: ['Cờ an toàn: alcohol'],
+  }), false)
+  assert.equal(isRetryableCreativeAnalysisFailure({
+    analysisStatus: 'approved_override',
+    vlmError: { provider: 'openai', type: 'APIError' },
+  }), false)
 })
 
 test('hydrates queued creative files with canonical terminal verdicts', () => {
@@ -29,6 +49,10 @@ test('hydrates queued creative files with canonical terminal verdicts', () => {
       status: 'needs_review',
       effective_status: 'approved_override',
       deterministic: { width: 1200, height: 628 },
+      vlm_error: { provider: 'openai', type: 'APIError' },
+      vlm_provider: 'openai',
+      vlm_model: 'gpt-5.4-mini',
+      vlm_route_key: 'openai:gpt-5.4-mini',
       override: { approved: true },
     }],
   })
@@ -36,6 +60,10 @@ test('hydrates queued creative files with canonical terminal verdicts', () => {
   assert.equal(merged.files[0].analysisStatus, 'approved_override')
   assert.equal(merged.files[0].analysisId, 'ci-1')
   assert.equal(merged.files[0].width, 1200)
+  assert.equal(merged.files[0].vlmError.type, 'APIError')
+  assert.equal(merged.files[0].vlmProvider, 'openai')
+  assert.equal(merged.files[0].vlmModel, 'gpt-5.4-mini')
+  assert.equal(merged.files[0].vlmRouteKey, 'openai:gpt-5.4-mini')
 })
 
 test('recovers older canonical snapshots that captured a transient commit status', () => {

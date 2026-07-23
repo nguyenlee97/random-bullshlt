@@ -1,6 +1,7 @@
 import { fmt, generateId } from '@/lib/utils'
 import log from '@/lib/logger'
 import { normalizeDmpAttr } from '@/lib/audience'
+import { isRetryableCreativeAnalysisFailure } from '@/lib/creativeIntel'
 
 export { normalizeDmpAttr } from '@/lib/audience'
 
@@ -934,6 +935,10 @@ function mergeCreativeIntel(files, docs) {
       reviewReasons: doc.review_reasons || [],
       deterministic,
       vlm: doc.vlm || {},
+      vlmError: doc.vlm_error || null,
+      vlmProvider: doc.vlm_provider || '',
+      vlmModel: doc.vlm_model || '',
+      vlmRouteKey: doc.vlm_route_key || '',
       override: doc.override || {},
       width: deterministic.width || file.width,
       height: deterministic.height || file.height,
@@ -969,9 +974,11 @@ export async function prepareCreativeFiles(files, onProgress = () => {}) {
   // verdicts. Creating a new batch here would erase the visible review state
   // and send the operator back to "Đang chờ phân tích".
   prepared = mergeCreativeIntel(prepared, await getCreativeIntel())
-  if (prepared.length && prepared.every(file =>
+  const allTerminal = prepared.length && prepared.every(file =>
     ['auto_approved', 'needs_review', 'approved_override'].includes(file.analysisStatus)
-  )) {
+  )
+  const hasRetryableFailure = prepared.some(isRetryableCreativeAnalysisFailure)
+  if (allTerminal && !hasRetryableFailure) {
     onProgress(prepared)
     return prepared
   }
