@@ -40,6 +40,10 @@ async def ensure_indexes() -> None:
     if collection is None:
         return
     await collection.create_index([("actor_key", 1), ("created_at", -1)], name="creative_assets_owner")
+    await collection.create_index(
+        [("actor_key", 1), ("session_id", 1), ("created_at", -1)],
+        name="creative_assets_owner_session",
+    )
     await collection.create_index("sha256", name="creative_assets_hash")
     await collection.create_index("expires_at", expireAfterSeconds=0, name="creative_assets_retention")
 
@@ -133,19 +137,25 @@ def _owner_keys(actor: dict) -> list[str]:
     return [primary, *linked]
 
 
-async def list_assets(actor: dict) -> list[dict]:
+async def list_assets(actor: dict, session_id: str) -> list[dict]:
     keys = _owner_keys(actor)
     collection = await _collection()
     if collection is None:
-        docs = [item for item in _mem_assets.values() if item.get("actor_key") in keys and item.get("lifecycle") == "active"]
+        docs = [
+            item for item in _mem_assets.values()
+            if item.get("actor_key") in keys
+            and item.get("session_id") == session_id
+            and item.get("lifecycle") == "active"
+        ]
     else:
         docs = await collection.find({
-            "actor_key": {"$in": keys}, "lifecycle": "active",
+            "actor_key": {"$in": keys}, "session_id": session_id,
+            "lifecycle": "active",
         }).sort("created_at", -1).to_list(length=100)
     return [_public(item) for item in docs]
 
 
-async def get_assets(actor: dict, asset_ids: list[str]) -> list[dict]:
+async def get_assets(actor: dict, asset_ids: list[str], session_id: str) -> list[dict]:
     requested = list(dict.fromkeys(str(value) for value in asset_ids if value))
     if not requested:
         return []
@@ -155,28 +165,37 @@ async def get_assets(actor: dict, asset_ids: list[str]) -> list[dict]:
         docs = [
             _mem_assets[value] for value in requested
             if value in _mem_assets and _mem_assets[value].get("actor_key") in keys
+            and _mem_assets[value].get("session_id") == session_id
             and _mem_assets[value].get("lifecycle") == "active"
         ]
     else:
         docs = await collection.find({
-            "_id": {"$in": requested}, "actor_key": {"$in": keys}, "lifecycle": "active",
+            "_id": {"$in": requested}, "actor_key": {"$in": keys},
+            "session_id": session_id, "lifecycle": "active",
         }).to_list(length=100)
     by_id = {item["asset_id"]: item for item in docs}
     return [_public(by_id[value]) for value in requested if value in by_id]
 
 
-async def delete_asset(actor: dict, asset_id: str) -> bool:
+async def delete_asset(actor: dict, asset_id: str, session_id: str) -> bool:
     keys = _owner_keys(actor)
     collection = await _collection()
     now = _now()
     if collection is None:
         doc = _mem_assets.get(asset_id)
-        if not doc or doc.get("actor_key") not in keys:
+        if (
+            not doc
+            or doc.get("actor_key") not in keys
+            or doc.get("session_id") != session_id
+        ):
             return False
         doc.update(lifecycle="deleted", updated_at=now)
         return True
     result = await collection.update_one(
-        {"_id": asset_id, "actor_key": {"$in": keys}, "lifecycle": "active"},
+        {
+            "_id": asset_id, "actor_key": {"$in": keys},
+            "session_id": session_id, "lifecycle": "active",
+        },
         {"$set": {"lifecycle": "deleted", "updated_at": now}},
     )
     return result.modified_count == 1

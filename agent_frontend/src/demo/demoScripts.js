@@ -466,7 +466,7 @@ export function buildStage2Steps(brief) {
       target: '#btn-ai-generate',
       position: 'top',
       title: '🎨 Bảng điều khiển AI Tạo Ảnh',
-      text: 'Panel AI có **3 phần chính**:\n① **Chọn định dạng** — kích thước & tỉ lệ ảnh đầu ra\n② **Prompt tuỳ chỉnh** — hướng dẫn thêm về phong cách, màu sắc (tùy chọn)\n③ **Tạo ảnh** — AI sinh ảnh theo brief + prompt, kết quả hiện ngay bên dưới',
+      text: 'Panel AI có **5 phần chính**:\n① **Chọn định dạng** — kích thước & tỉ lệ ảnh đầu ra\n② **Reference assets** — logo, sản phẩm và hướng dẫn sử dụng\n③ **Creative direction & prompt spec** — AI kết hợp brief, format và assets\n④ **Quota 20 output/ngày** — hiển thị lượt còn lại và yêu cầu xác nhận\n⑤ **Tạo ảnh** — GPT Image 2 sinh ảnh, kết quả hiện ngay bên dưới',
     },
 
     // ── Explain the format picker ───────────────────────────────────────────
@@ -489,6 +489,15 @@ export function buildStage2Steps(brief) {
         text: 'Đang chọn định dạng **Display Box** cho ví dụ này...',
       },
       delay: 400,
+    },
+
+    // ── Introduce conversation-scoped reference assets ─────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="creative-reference-assets"]',
+      position: 'left',
+      title: '🏷️ Brand & reference assets',
+      text: 'Tại đây bạn có thể thêm **logo, packshot, sản phẩm, nhân vật hoặc ảnh tham khảo** cho creative.\n\nMỗi asset có:\n- **Tên riêng** để nhắc lại trong creative direction\n- **Loại asset**\n- Hướng dẫn **cách sử dụng**\n- Quy tắc **Bắt buộc xuất hiện**\n\nAsset chỉ thuộc **cuộc trò chuyện hiện tại**; chat mới sẽ có bộ asset riêng, không lẫn dữ liệu của campaign khác.',
     },
 
     // ── Open custom prompt accordion ─────────────────────────────────────
@@ -519,6 +528,67 @@ export function buildStage2Steps(brief) {
       charDelay: 14,
       title: '⌨️ Nhập Prompt tùy chỉnh',
       text: 'Đang nhập yêu cầu sáng tạo...\n\nPrompt này hướng AI tập trung vào **hình ảnh thương hiệu** rõ nét, tối giản chữ và phù hợp với đối tượng mục tiêu đã xác định ở bước Audience.',
+    },
+
+    // ── Compose a structured prompt from format, assets and direction ───────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#btn-compose-creative-prompt',
+      position: 'top',
+      title: '🪄 AI soạn prompt theo format & assets',
+      text: 'Sau khi chọn format, thêm asset (nếu có) và mô tả creative direction, nút này sẽ tạo **prompt spec có cấu trúc** cho đúng kích thước quảng cáo.\n\nBước soạn prompt **không dùng lượt tạo ảnh**.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '#btn-compose-creative-prompt',
+      tooltip: {
+        target: '#btn-compose-creative-prompt',
+        position: 'top',
+        title: '⏳ Đang soạn prompt spec...',
+        text: 'AI đang kết hợp brief, audience, format, creative direction và các reference assets của cuộc trò chuyện này.',
+      },
+      delay: 300,
+    },
+    {
+      type: 'WAIT_FOR_SELECTOR',
+      target: '[data-testid="creative-prompt-spec"]',
+      timeout: 90000,
+      title: '⏳ Đang chờ prompt spec...',
+      text: 'Bước này chỉ chuẩn bị prompt cho creative và không trừ quota hình ảnh.',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-testid="creative-prompt-spec"]',
+      position: 'left',
+      title: '✅ Prompt spec đã sẵn sàng',
+      text: 'Bạn có thể review **direction, promise, CTA và kích thước đích** trước khi tạo ảnh. Prompt spec này sẽ được gửi cùng reference assets đã chọn sang GPT Image 2.',
+    },
+
+    // ── Explain and accept the shared daily image quota ─────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="image-quota-counter"]',
+      position: 'left',
+      title: '📊 Quota tạo ảnh hằng ngày',
+      text: 'GPT Image 2 có giới hạn chung **20 output mỗi ngày** cho từng tài khoản hoặc người dùng ẩn danh, dùng chung giữa Copilot và Autopilot.\n\nBộ đếm này cho biết số lượt còn lại hôm nay.',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="image-quota-consent"]',
+      position: 'left',
+      title: '☑️ Xác nhận trước khi dùng quota',
+      text: 'Mỗi lần tạo **1 output** sẽ dùng 1 trong 20 lượt/ngày. Bạn phải xác nhận quy tắc này trước khi nút tạo ảnh được mở khóa.\n\nSoạn prompt ở bước trước không dùng quota.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '#image-quota-checkbox',
+      tooltip: {
+        target: '[data-demo="image-quota-consent"]',
+        position: 'left',
+        title: '✅ Đã xác nhận quota',
+        text: 'Walkthrough đã đánh dấu xác nhận. Nút **Tạo ảnh AI** bây giờ có thể được sử dụng.',
+      },
+      delay: 300,
     },
 
     // ── Click generate ─────────────────────────────────────────────────────

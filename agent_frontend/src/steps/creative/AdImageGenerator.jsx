@@ -356,7 +356,10 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       )}
 
       {/* Quota counter */}
-      <div className={cn('flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold', quotaColor)}>
+      <div
+        className={cn('flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold', quotaColor)}
+        data-demo="image-quota-counter"
+      >
         <div className="flex items-center gap-1.5">
           <Wand2 className="w-3.5 h-3.5" />
           <span>OpenAI Creative Studio · GPT Image 2</span>
@@ -426,7 +429,11 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       </div>
 
       {/* Named brand/reference assets */}
-      <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3 space-y-3" data-testid="creative-asset-pack">
+      <div
+        className="rounded-xl border border-sky-200 bg-sky-50/40 p-3 space-y-3"
+        data-testid="creative-asset-pack"
+        data-demo="creative-reference-assets"
+      >
         <div>
           <p className="text-xs font-bold text-sky-800">Brand & reference assets</p>
           <p className="text-[10px] text-sky-700 mt-0.5">Đặt tên cho logo, sản phẩm hoặc ảnh tham khảo và mô tả chính xác cách dùng trong creative.</p>
@@ -532,8 +539,11 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       )}
 
       {/* Generate button */}
-      <label className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3 text-[11px] text-violet-900">
-        <input type="checkbox" className="mt-0.5" checked={quotaConfirmed}
+      <label
+        className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3 text-[11px] text-violet-900"
+        data-demo="image-quota-consent"
+      >
+        <input id="image-quota-checkbox" type="checkbox" className="mt-0.5" checked={quotaConfirmed}
           onChange={event => setQuotaConfirmed(event.target.checked)} disabled={generating || remaining <= 0} />
         <span>Tôi xác nhận tạo 1 output sẽ dùng <strong>1 trong 20 lượt/ngày</strong> của tài khoản hoặc thiết bị này. Soạn prompt không dùng quota.</span>
       </label>

@@ -12,6 +12,7 @@ const scripts = read('../src/demo/demoScripts.js')
 const app = read('../src/App.jsx')
 const home = read('../src/components/ExperienceSelector.jsx')
 const autopilot = read('../src/components/AutopilotPanel.jsx')
+const imageGenerator = read('../src/steps/creative/AdImageGenerator.jsx')
 const docs = read('../public/tech-docs.html')
 const styles = read('../src/index.css')
 
@@ -81,6 +82,26 @@ test('Copilot demo is restored as a spotlight tour over the real interface', () 
   assert.match(app, /window\.scrollTo\(\{ top: 0, left: 0, behavior: 'auto' \}\)/)
   assert.match(app, /appShellRef\.current\?\.scrollTo\(\{ top: 0, left: 0, behavior: 'auto' \}\)/)
   assert.match(app, /ref=\{appShellRef\} className="fixed inset-0 flex h-screen flex-col overflow-clip/)
+})
+
+test('Copilot creative walkthrough teaches assets, prompt composition, and quota consent', () => {
+  for (const target of [
+    'creative-reference-assets',
+    'image-quota-counter',
+    'image-quota-consent',
+  ]) {
+    assert.match(imageGenerator, new RegExp(`data-demo="${target}"`))
+    assert.match(scripts, new RegExp(`data-demo="${target}"`))
+  }
+  assert.match(imageGenerator, /id="image-quota-checkbox"/)
+  assert.match(scripts, /target: '#btn-compose-creative-prompt'/)
+  assert.match(scripts, /target: '\[data-testid="creative-prompt-spec"\]'/)
+  assert.match(scripts, /target: '#image-quota-checkbox'/)
+
+  const consentIndex = scripts.indexOf("target: '#image-quota-checkbox'")
+  const generateIndex = scripts.indexOf("target: '#btn-ai-generate'", consentIndex)
+  assert.ok(consentIndex >= 0)
+  assert.ok(generateIndex > consentIndex)
 })
 
 test('every live walkthrough uses yesterday through seven days later', () => {

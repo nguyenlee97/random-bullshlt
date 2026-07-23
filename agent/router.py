@@ -1151,7 +1151,9 @@ async def autopilot_start(raw_request: Request, request: _AutopilotStartRequest)
     actor_identity = await _request_actor(raw_request)
     if request.creative_asset_ids:
         from creative_assets import get_assets
-        owned_assets = await get_assets(actor_identity, request.creative_asset_ids)
+        owned_assets = await get_assets(
+            actor_identity, request.creative_asset_ids, request.session_id,
+        )
         if len(owned_assets) != len(set(request.creative_asset_ids)):
             raise HTTPException(status_code=404, detail="one or more creative assets were not found")
     _require_autopilot_worker()
@@ -1357,7 +1359,7 @@ async def generate_image_route(request: Request, req: GenerateImageRequest):
     await _assert_session_access(request, req.session_id)
     actor = await _request_actor(request)
     from creative_assets import get_assets
-    assets = await get_assets(actor, req.asset_ids)
+    assets = await get_assets(actor, req.asset_ids, req.session_id)
     if len(assets) != len(set(req.asset_ids)):
         raise HTTPException(status_code=404, detail="one or more creative assets were not found")
     return await handle_generate_image(
@@ -1400,14 +1402,18 @@ async def creative_asset_create(request: Request, req: CreativeAssetRequest):
 async def creative_asset_list(request: Request, session_id: str):
     await _assert_session_access(request, session_id)
     from creative_assets import list_assets
-    return {"assets": await list_assets(await _request_actor(request))}
+    return {
+        "assets": await list_assets(await _request_actor(request), session_id),
+    }
 
 
 @agent_router.delete("/creative/assets/{asset_id}")
 async def creative_asset_delete(asset_id: str, request: Request, session_id: str):
     await _assert_session_access(request, session_id)
     from creative_assets import delete_asset
-    if not await delete_asset(await _request_actor(request), asset_id):
+    if not await delete_asset(
+        await _request_actor(request), asset_id, session_id,
+    ):
         raise HTTPException(status_code=404, detail="creative asset not found")
     return {"ok": True, "asset_id": asset_id}
 
@@ -1418,7 +1424,7 @@ async def creative_prompt_spec_route(request: Request, req: CreativePromptReques
     actor = await _request_actor(request)
     from creative_assets import get_assets
     from creative_prompt import compose_prompt_spec
-    assets = await get_assets(actor, req.asset_ids)
+    assets = await get_assets(actor, req.asset_ids, req.session_id)
     if len(assets) != len(set(req.asset_ids)):
         raise HTTPException(status_code=404, detail="one or more creative assets were not found")
     try:
