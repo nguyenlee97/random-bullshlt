@@ -59,6 +59,18 @@ function scrollIntoView(selector) {
   }
 }
 
+function currentCreativeReviewState() {
+  return document
+    .querySelector('[data-demo="creative-review-state"]')
+    ?.getAttribute('data-review-state') || ''
+}
+
+function isCreativeReviewTerminal() {
+  return document
+    .querySelector('[data-demo="creative-review-state"]')
+    ?.getAttribute('data-review-terminal') === 'true'
+}
+
 // ─── Helper: which mobile pane ('chat' | 'workspace') a step needs ────────────
 // On desktop both panes are always visible, so this is only used to drive the
 // mobile TabBar. Detection order:
@@ -88,6 +100,7 @@ function resolvePaneForStep(step) {
     case 'TYPE_AND_SEND':
       return 'chat'
     case 'WAIT_FOR_SELECTOR':
+    case 'WAIT_FOR_CREATIVE_REVIEW':
     case 'INJECT_DEMO_CREATIVES':
     case 'SELECT_RECO_ZONES':
     case 'ASSIGN_CREATIVES':
@@ -210,6 +223,17 @@ export function DemoProvider({
     if (!step) return
 
     log.step(`DemoEngine: executing step ${idx} type=${step.type}`)
+
+    // Skip manual-review-only steps when analysis already auto-approved every
+    // creative. This branches the walkthrough without changing either model
+    // provider's underlying campaign workflow.
+    if (
+      step.whenReviewState
+      && currentCreativeReviewState() !== step.whenReviewState
+    ) {
+      setStepIdx(prev => prev + 1)
+      return
+    }
 
     // Mobile: ensure the pane this step acts on is visible before clicking/typing.
     // No-op on desktop and when already on the right tab.
@@ -459,6 +483,50 @@ export function DemoProvider({
         // Extra settle time so the element is fully rendered
         await new Promise(r => setTimeout(r, 700))
         setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'WAIT_FOR_CREATIVE_REVIEW': {
+        setIsWaiting(true)
+        const {
+          reviewState,
+          reviewStates = reviewState ? [reviewState] : ['ready', 'blocked'],
+          timeout: reviewTimeout = 120000,
+        } = step
+        const startedAt = Date.now()
+
+        const reachedTerminalState = await new Promise((resolve) => {
+          const poll = () => {
+            const state = currentCreativeReviewState()
+            if (isCreativeReviewTerminal() && reviewStates.includes(state)) {
+              resolve(true)
+            } else if (Date.now() - startedAt > reviewTimeout) {
+              log.error(
+                `DemoEngine: WAIT_FOR_CREATIVE_REVIEW timeout; `
+                + `expected=${reviewStates.join(',')} actual=${state || 'missing'}`,
+              )
+              resolve(false)
+            } else {
+              setTimeout(poll, 300)
+            }
+          }
+          poll()
+        })
+
+        setIsWaiting(false)
+        if (!reachedTerminalState) {
+          setPopup({
+            title: 'Phân tích creative chưa hoàn tất',
+            text: 'Walkthrough đã dừng để không đi tiếp khi kết quả Creative Intelligence chưa sẵn sàng. Hãy kiểm tra trạng thái phân tích trong workspace rồi thử lại walkthrough.',
+            buttons: [
+              { label: 'Dừng walkthrough và kiểm tra', variant: 'primary', action: 'skip' },
+            ],
+          })
+          return
+        }
+
+        await new Promise(r => setTimeout(r, 500))
         setStepIdx(prev => prev + 1)
         return
       }

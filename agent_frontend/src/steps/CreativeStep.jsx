@@ -7,6 +7,7 @@ import { Upload, FileText, X, ZoomIn, CheckCircle2, AlertCircle, Sparkles, Wand2
 import AdImageGenerator from './creative/AdImageGenerator'
 import { overrideCreative } from '@/api/agentApi'
 import { inferIntendedFormat, matchPlannedFormat } from '@/lib/creativeCompatibility'
+import { creativeReviewState, TERMINAL_CREATIVE_STATUSES } from '@/lib/creativeIntel'
 
 function fmtSize(bytes) {
   if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
@@ -408,7 +409,17 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
   }
 
   return (
-    <div className="space-y-4">
+    <div
+      className="space-y-4"
+      data-demo="creative-review-state"
+      data-review-state={creativeReviewState(files)}
+      data-review-terminal={
+        files.length > 0
+        && files.every(file => TERMINAL_CREATIVE_STATUSES.has(file.analysisStatus))
+          ? 'true'
+          : 'false'
+      }
+    >
       {formatPlan?.formats?.length > 0 && (
         <Card className="border-brand-200 bg-brand-50/70">
           <CardContent className="py-3">
@@ -479,7 +490,10 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
                 </button>
               </div>
               {reviewFiles.length > 0 && (
-                <Card className="mb-3 border-amber-300 bg-amber-50">
+                <Card
+                  className="mb-3 border-amber-300 bg-amber-50"
+                  data-demo="creative-manual-review"
+                >
                   <CardContent className="space-y-2 py-3">
                     <div>
                       <p className="text-xs font-bold text-amber-900">
@@ -491,12 +505,14 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <input
+                        id="creative-manual-review-reason"
                         value={bulkOverrideReason}
                         onChange={event => setBulkOverrideReason(event.target.value)}
                         placeholder="Ví dụ: Đã kiểm tra thủ công nội dung và thương hiệu"
                         className="min-w-0 flex-1 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs outline-none focus:border-amber-500"
                       />
                       <button
+                        id="creative-manual-review-approve"
                         type="button"
                         onClick={approveAllForManualReview}
                         disabled={bulkOverriding}

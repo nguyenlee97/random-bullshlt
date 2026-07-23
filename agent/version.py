@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-23.8"
+BUILD_VERSION = "2026-07-23.9"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -36,6 +36,7 @@ BUILD_FEATURES = [
     "image-gen-quota",                # durable 20-output daily actor quota
     "creative-assets-conversation-scope", # reference assets cannot leak across chats
     "creative-walkthrough-image-quota",   # walkthrough teaches assets, prompt spec and quota consent
+    "creative-walkthrough-review-gate",  # walkthrough waits for analysis/manual review before Setup
     "image-gen-lightbox",             # click-to-zoom lightbox in AI image gallery
     "image-gen-brief-preview",        # collapsible brief+audience preview in generator UI
     "email-step",                     # Step 6: PDF generation + Resend email delivery

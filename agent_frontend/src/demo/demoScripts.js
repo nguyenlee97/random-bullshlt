@@ -719,13 +719,13 @@ export function buildStage2Steps(brief) {
       ms: 400,
     },
 
-    // ── Highlight approve button ──────────────────────────────────────────────
+    // ── Analyze creative, then wait for the real terminal review state ───────
     {
       type: 'HIGHLIGHT_EL',
       target: '[data-demo="approve-btn"]',
       position: 'top',
-      title: '✅ Creative đã sẵn sàng!',
-      text: 'Creative workspace giờ có đầy đủ: **Box 300×250** (vừa tạo bằng AI) và **8 định dạng** được chuẩn bị sẵn cho tất cả vị trí quảng cáo. 🎉\n\nỞ bước Setup, AI sẽ gợi ý các vị trí quảng cáo còn trống — và chúng ta đã có creative phù hợp cho mọi vị trí được đề xuất!\n\nNhấn **Đồng ý & Tiếp tục** để xác nhận và chuyển sang bước **Setup Campaign**.',
+      title: '🔎 Phân tích Creative Intelligence',
+      text: 'Creative đã được thêm vào workspace, nhưng chưa được phép đi tiếp ngay. Nhấn **Phân tích creative** để hệ thống kiểm tra từng ảnh, rồi walkthrough sẽ chờ đến khi tất cả creative có kết quả cuối cùng.\n\nBước này chỉ chạy phân tích; nó **chưa xác nhận chuyển sang Setup**.',
     },
     {
       type: 'CLICK_EL',
@@ -733,8 +733,69 @@ export function buildStage2Steps(brief) {
       tooltip: {
         target: '[data-demo="approve-btn"]',
         position: 'top',
-        title: '⏳ Xác nhận Creative...',
-        text: 'Đang xác nhận creative và chuyển sang bước Setup...',
+        title: '⏳ Đang phân tích creative...',
+        text: 'Creative Intelligence đang xử lý từng ảnh. Walkthrough sẽ chờ kết quả thay vì chạy trước sang Setup.',
+      },
+    },
+    {
+      type: 'WAIT_FOR_CREATIVE_REVIEW',
+      reviewStates: ['ready', 'blocked'],
+      timeout: 120000,
+      title: '⏳ Chờ kết quả Creative Intelligence...',
+      text: 'Hệ thống đang chờ tất cả creative hoàn tất phân tích. Nếu có ảnh cần con người xem lại, walkthrough sẽ hướng dẫn bước phê duyệt thủ công.',
+    },
+
+    // ── Conditional manual-review branch ─────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="creative-manual-review"]',
+      whenReviewState: 'blocked',
+      position: 'top',
+      title: '⚠️ Creative cần duyệt thủ công',
+      text: 'Ít nhất một creative cần con người kiểm tra. Hãy đọc bằng chứng phân tích, nhập lý do phê duyệt, rồi xác nhận thủ công. Walkthrough sẽ không bỏ qua hàng rào an toàn này.',
+    },
+    {
+      type: 'TYPE_INPUT',
+      target: '#creative-manual-review-reason',
+      whenReviewState: 'blocked',
+      inputText: 'Đã kiểm tra thủ công nội dung, thương hiệu và chấp nhận sử dụng trong demo.',
+      charDelay: 12,
+    },
+    {
+      type: 'CLICK_EL',
+      target: '#creative-manual-review-approve',
+      whenReviewState: 'blocked',
+      tooltip: {
+        target: '#creative-manual-review-approve',
+        position: 'top',
+        title: '⏳ Ghi nhận phê duyệt thủ công...',
+        text: 'Đang lưu lý do phê duyệt cho các creative cần xem lại.',
+      },
+    },
+    {
+      type: 'WAIT_FOR_CREATIVE_REVIEW',
+      reviewStates: ['ready'],
+      timeout: 60000,
+      title: '⏳ Chờ creative sẵn sàng...',
+      text: 'Walkthrough chỉ tiếp tục khi mọi creative đã được tự động duyệt hoặc có phê duyệt thủ công hợp lệ.',
+    },
+
+    // ── Explicit operator confirmation after review ─────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="approve-btn"]',
+      position: 'top',
+      title: '✅ Phân tích hoàn tất — tiếp tục sang Setup',
+      text: 'Tất cả creative đã có kết quả hợp lệ. Bây giờ nút đổi thành **Xác nhận & sang Setup**.\n\nĐây là lần bấm thứ hai, dành riêng cho quyết định của người vận hành sau khi đã xem kết quả phân tích.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '[data-demo="approve-btn"]',
+      tooltip: {
+        target: '[data-demo="approve-btn"]',
+        position: 'top',
+        title: '⏳ Xác nhận kết quả creative...',
+        text: 'Đang xác nhận kết quả đã duyệt và chuyển sang bước Setup Campaign.',
       },
     },
 

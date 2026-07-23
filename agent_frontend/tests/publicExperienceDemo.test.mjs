@@ -13,6 +13,7 @@ const app = read('../src/App.jsx')
 const home = read('../src/components/ExperienceSelector.jsx')
 const autopilot = read('../src/components/AutopilotPanel.jsx')
 const imageGenerator = read('../src/steps/creative/AdImageGenerator.jsx')
+const creativeStep = read('../src/steps/CreativeStep.jsx')
 const docs = read('../public/tech-docs.html')
 const styles = read('../src/index.css')
 
@@ -102,6 +103,38 @@ test('Copilot creative walkthrough teaches assets, prompt composition, and quota
   const generateIndex = scripts.indexOf("target: '#btn-ai-generate'", consentIndex)
   assert.ok(consentIndex >= 0)
   assert.ok(generateIndex > consentIndex)
+})
+
+test('Copilot creative walkthrough waits for analysis and handles manual review before Setup', () => {
+  for (const marker of [
+    'data-demo="creative-review-state"',
+    'data-review-terminal=',
+    'data-demo="creative-manual-review"',
+    'id="creative-manual-review-reason"',
+    'id="creative-manual-review-approve"',
+  ]) {
+    assert.match(creativeStep, new RegExp(marker))
+  }
+
+  assert.match(engine, /case 'WAIT_FOR_CREATIVE_REVIEW'/)
+  assert.match(engine, /step\.whenReviewState/)
+  assert.match(engine, /currentCreativeReviewState/)
+  assert.match(engine, /isCreativeReviewTerminal\(\) && reviewStates\.includes\(state\)/)
+  assert.match(scripts, /whenReviewState: 'blocked'/)
+
+  const analyzeIndex = scripts.indexOf("title: '🔎 Phân tích Creative Intelligence'")
+  const terminalWaitIndex = scripts.indexOf("type: 'WAIT_FOR_CREATIVE_REVIEW'", analyzeIndex)
+  const manualReasonIndex = scripts.indexOf("target: '#creative-manual-review-reason'", terminalWaitIndex)
+  const readyWaitIndex = scripts.indexOf("reviewStates: ['ready']", manualReasonIndex)
+  const confirmIndex = scripts.indexOf("title: '✅ Phân tích hoàn tất — tiếp tục sang Setup'", readyWaitIndex)
+  const setupIndex = scripts.indexOf("metaTool: 'setup_entry'", confirmIndex)
+
+  assert.ok(analyzeIndex >= 0)
+  assert.ok(terminalWaitIndex > analyzeIndex)
+  assert.ok(manualReasonIndex > terminalWaitIndex)
+  assert.ok(readyWaitIndex > manualReasonIndex)
+  assert.ok(confirmIndex > readyWaitIndex)
+  assert.ok(setupIndex > confirmIndex)
 })
 
 test('every live walkthrough uses yesterday through seven days later', () => {
