@@ -596,17 +596,25 @@ async def chat(request: Request, req: ChatRequest) -> AgentResponse:
         # locked while executing, decision-only at review gates, and read-only
         # after the run has ended.
         from autopilot.chat import route_autopilot_chat
-        autopilot_response = await route_autopilot_chat(req.message, sid, req.step)
+        active_report_tab = (
+            (req.formData or {}).get("activeReportTab", "daily_ops")
+            if req.formData else "daily_ops"
+        )
+        autopilot_response = await route_autopilot_chat(
+            req.message,
+            sid,
+            req.step,
+            active_report_tab=active_report_tab,
+        )
         if autopilot_response is not None:
             return autopilot_response
 
         # Step 5 (Report): route to report chat handler with context isolation
         if req.step == 5:
-            active_tab = (req.formData or {}).get("activeReportTab", "daily_ops") if req.formData else "daily_ops"
             from identity import get_conversation_model_for_session
             model_lock = await get_conversation_model_for_session(sid)
             return await handle_report_chat(
-                req.message, sid, active_tab,
+                req.message, sid, active_report_tab,
                 conversation_model=model_lock["conversation_model"],
             )
 

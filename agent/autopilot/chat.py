@@ -157,6 +157,7 @@ async def _recorded_response(
 
 async def route_autopilot_chat(
     message: str, session_id: str, step: int,
+    active_report_tab: str = "daily_ops",
 ) -> AgentResponse | None:
     """Intercept chat only when this session is an Autopilot campaign/run."""
     from autopilot.service import get_latest_run, review_task
@@ -274,10 +275,20 @@ async def route_autopilot_chat(
         )
 
     if status in TERMINAL:
-        # A completed Autopilot campaign uses the same isolated analytics Q&A
-        # handler as Copilot while the Report module is active.
-        if status == "completed" and step == 5:
-            return None
+        # A completed Autopilot campaign uses the same evidence-cited report
+        # analyst as Copilot. Resume can restore an older UI step even though
+        # the durable report artifact already exists, so artifact state wins.
+        if status == "completed" and (
+            step == 5 or _artifact(workspace, "report") is not None
+        ):
+            from handlers.report import handle_report_chat
+
+            return await handle_report_chat(
+                message,
+                session_id,
+                active_report_tab,
+                conversation_model=run.get("conversation_model"),
+            )
         context = _read_only_context(workspace, run)
         try:
             text, answer_model = await _answer_run_question(

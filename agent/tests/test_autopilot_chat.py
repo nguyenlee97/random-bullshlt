@@ -100,17 +100,40 @@ async def test_waiting_review_records_only_explicit_decision(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_completed_autopilot_yields_step5_to_shared_report_chat(monkeypatch):
+async def test_completed_autopilot_uses_shared_report_chat_even_with_stale_step(monkeypatch):
+    from unittest.mock import AsyncMock
+
     import autopilot.service as service
+    import handlers.report as report_handler
     import workspace.service as workspace_service
 
     async def fake_workspace(session_id):
-        return {"experience_mode": "autopilot", "artifacts": {}}
+        return {
+            "experience_mode": "autopilot",
+            "artifacts": {"report": {"value": {"kind": "setup_report"}}},
+        }
 
     async def fake_run(session_id):
-        return {"run_id": "run-report", "status": "completed", "tasks": []}
+        return {
+            "run_id": "run-report",
+            "status": "completed",
+            "conversation_model": "openai_gpt_5_4_mini",
+            "tasks": [],
+        }
 
     monkeypatch.setattr(workspace_service, "get_workspace", fake_workspace)
     monkeypatch.setattr(service, "get_latest_run", fake_run)
+    shared_report = AsyncMock(return_value="shared-report-response")
+    monkeypatch.setattr(report_handler, "handle_report_chat", shared_report)
 
-    assert await route_autopilot_chat("Tóm tắt CTR", "session-report", 5) is None
+    result = await route_autopilot_chat(
+        "Tóm tắt CTR", "session-report", 4, active_report_tab="conversion",
+    )
+
+    assert result == "shared-report-response"
+    shared_report.assert_awaited_once_with(
+        "Tóm tắt CTR",
+        "session-report",
+        "conversion",
+        conversation_model="openai_gpt_5_4_mini",
+    )
