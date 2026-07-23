@@ -2,6 +2,8 @@
 import subprocess
 from datetime import timedelta
 from io import BytesIO
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from PIL import Image
@@ -305,3 +307,198 @@ def test_vlm_copy_is_resized_without_touching_deterministic_source():
     with Image.open(BytesIO(prepared)) as image:
         assert max(image.size) == 768
     assert mime == "image/jpeg"
+
+
+@pytest.mark.asyncio
+async def test_upload_vlm_route_uses_openai_component_for_openai_conversation(monkeypatch):
+    import creative_intel.openai_vlm as openai_vlm
+    import creative_intel.service as service
+    import creative_intel.vlm as greennode_vlm
+    import identity
+    from campaign_models import OPENAI_GPT_5_4_MINI
+
+    async def openai_lock(_session_id):
+        return {"conversation_model": OPENAI_GPT_5_4_MINI}
+
+    expected = SimpleNamespace(model_dump=lambda: {"provider": "openai"})
+    openai_analyze = AsyncMock(return_value=(
+        expected, {"provider": "openai", "model": "gpt-5.4-mini"},
+    ))
+    monkeypatch.setattr(identity, "get_conversation_model_for_session", openai_lock)
+    monkeypatch.setattr(service.config, "OPENAI_VLM_MODEL", "gpt-5.4-mini")
+    monkeypatch.setattr(openai_vlm, "analyze_image", openai_analyze)
+    monkeypatch.setattr(
+        greennode_vlm, "analyze_image_sync",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("GreenNode VLM must not run for OpenAI conversation")
+        ),
+    )
+
+    route = await service._vlm_route_for_session("openai-upload")
+    result, provenance = await service._run_vlm_for_route(
+        route,
+        session_id="openai-upload",
+        image_bytes=b"image",
+        mime_type="image/png",
+        brief={"brand": "Acme"},
+    )
+
+    assert route == {
+        "provider": "openai",
+        "model": "gpt-5.4-mini",
+        "key": "openai:gpt-5.4-mini",
+    }
+    assert result is expected
+    assert provenance["provider"] == "openai"
+    openai_analyze.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_upload_vlm_route_preserves_greennode_component(monkeypatch):
+    import creative_intel.openai_vlm as openai_vlm
+    import creative_intel.service as service
+    import creative_intel.vlm as greennode_vlm
+    import identity
+    from campaign_models import GREENNODE_MINIMAX
+
+    async def greennode_lock(_session_id):
+        return {"conversation_model": GREENNODE_MINIMAX}
+
+    expected = SimpleNamespace(model_dump=lambda: {"provider": "greennode"})
+    greennode_calls = []
+
+    def greennode_analyze(*args):
+        greennode_calls.append(args)
+        return expected
+
+    monkeypatch.setattr(identity, "get_conversation_model_for_session", greennode_lock)
+    monkeypatch.setattr(service.config, "VLM_MODEL", "qwen/qwen3-5-27b")
+    monkeypatch.setattr(greennode_vlm, "analyze_image_sync", greennode_analyze)
+    monkeypatch.setattr(
+        openai_vlm, "analyze_image",
+        AsyncMock(side_effect=AssertionError(
+            "OpenAI VLM must not run for GreenNode conversation"
+        )),
+    )
+
+    route = await service._vlm_route_for_session("greennode-upload")
+    result, provenance = await service._run_vlm_for_route(
+        route,
+        session_id="greennode-upload",
+        image_bytes=b"image",
+        mime_type="image/png",
+        brief={"brand": "Acme"},
+    )
+
+    assert route == {
+        "provider": "greennode",
+        "model": "qwen/qwen3-5-27b",
+        "key": "greennode:qwen/qwen3-5-27b",
+    }
+    assert result is expected
+    assert provenance == {
+        "provider": "greennode", "model": "qwen/qwen3-5-27b",
+    }
+    assert len(greennode_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_provider_change_requeues_only_failed_vlm_verdict(monkeypatch):
+    import creative_intel.service as service
+    import workspace.service as workspace_service
+
+    async def no_mongo():
+        return None
+
+    async def openai_route(_session_id):
+        return {
+            "provider": "openai", "model": "gpt-5.4-mini",
+            "key": "openai:gpt-5.4-mini",
+        }
+
+    async def task_context(_session_id, _artifact):
+        return {
+            "input_revisions": {"creative": 1},
+            "artifact_revision": 0,
+        }
+
+    monkeypatch.setattr(service, "_col", no_mongo)
+    monkeypatch.setattr(service, "_vlm_route_for_session", openai_route)
+    monkeypatch.setattr(workspace_service, "get_task_context", task_context)
+    service._mem.clear()
+    url = "http://localhost:3000/uploads/retry.png"
+    analysis_id = service._key("route-retry", url)
+    service._mem[analysis_id] = {
+        "_id": analysis_id,
+        "session_id": "route-retry",
+        "url": url,
+        "status": "needs_review",
+        "review_reasons": [
+            "VLM lỗi — cần duyệt thủ công (requested model not found)",
+        ],
+        "vlm_route_key": "greennode:qwen/qwen3-5-27b",
+        "completed_at": service._now(),
+        "created_at": service._now(),
+        "updated_at": service._now(),
+    }
+
+    jobs = await service.enqueue_analysis("route-retry", [{
+        "id": "file-1", "name": "retry.png", "type": "image/png",
+        "url": url,
+    }])
+
+    assert jobs[0]["status"] == "queued"
+    assert jobs[0]["vlm_provider"] == "openai"
+    assert jobs[0]["vlm_model"] == "gpt-5.4-mini"
+    assert jobs[0]["vlm_route_key"] == "openai:gpt-5.4-mini"
+    assert "review_reasons" not in jobs[0]
+    assert "completed_at" not in jobs[0]
+
+
+@pytest.mark.asyncio
+async def test_openai_upload_vlm_uses_mini_and_structured_image_input(monkeypatch):
+    import creative_intel.openai_vlm as openai_vlm
+
+    parsed = openai_vlm.CreativeVLMResult(
+        ocr_text=["QA Creative"],
+        brand_guess="QA",
+        subject_desc="Banner quảng cáo",
+        is_skin_takeover=False,
+        safety=openai_vlm.SafetyFlags(
+            nsfw=False, alcohol=False, gambling=False,
+            political=False, medical=False,
+        ),
+        brief_match_score=5,
+        brief_match_reasons=["Đúng thương hiệu"],
+        confidence=0.95,
+    )
+    response = SimpleNamespace(
+        id="resp-vlm", output_parsed=parsed,
+        usage=SimpleNamespace(input_tokens=10, output_tokens=20, total_tokens=30),
+    )
+    fake_client = SimpleNamespace(
+        responses=SimpleNamespace(parse=AsyncMock(return_value=response)),
+    )
+    monkeypatch.setattr(openai_vlm, "get_client", lambda: fake_client)
+    monkeypatch.setattr(openai_vlm.config, "OPENAI_VLM_MODEL", "gpt-5.4-mini")
+    source = BytesIO()
+    Image.new("RGB", (1200, 628), color="white").save(source, format="PNG")
+
+    result, provenance = await openai_vlm.analyze_image(
+        "openai-vlm-test", source.getvalue(), "image/png", {"brand": "QA"},
+    )
+
+    call = fake_client.responses.parse.await_args.kwargs
+    image_part = call["input"][0]["content"][1]
+    assert call["model"] == "gpt-5.4-mini"
+    assert call["store"] is False
+    assert image_part["type"] == "input_image"
+    assert image_part["image_url"].startswith("data:image/jpeg;base64,")
+    assert result.brand_guess == "QA"
+    assert provenance["provider"] == "openai"
+    assert provenance["model"] == "gpt-5.4-mini"
+    assert provenance["response_id"] == "resp-vlm"
+    assert provenance["duration_ms"] >= 0
+    assert provenance["input_tokens"] == 10
+    assert provenance["output_tokens"] == 20
+    assert provenance["total_tokens"] == 30

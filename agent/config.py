@@ -84,7 +84,7 @@ class Config:
     OPENAI_IMAGE_TIMEOUT_SECONDS: float = float(
         os.getenv("OPENAI_IMAGE_TIMEOUT_SECONDS", "180")
     )
-    OPENAI_VLM_MODEL: str = os.getenv("OPENAI_VLM_MODEL", "gpt-5.4-nano")
+    OPENAI_VLM_MODEL: str = os.getenv("OPENAI_VLM_MODEL", "gpt-5.4-mini")
     DEFAULT_CONVERSATION_MODEL: str = os.getenv(
         "DEFAULT_CONVERSATION_MODEL", "greennode_minimax"
     )

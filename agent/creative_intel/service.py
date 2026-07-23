@@ -40,6 +40,56 @@ def _fetch_url(url: str) -> str:
     return url
 
 
+async def _vlm_route_for_session(session_id: str) -> dict[str, str]:
+    """Resolve VLM provider from the conversation's immutable model lock."""
+    from campaign_models import OPENAI_GPT_5_4_MINI
+    from identity import get_conversation_model_for_session
+
+    lock = await get_conversation_model_for_session(session_id)
+    if lock["conversation_model"] == OPENAI_GPT_5_4_MINI:
+        provider = "openai"
+        model = config.OPENAI_VLM_MODEL
+    else:
+        provider = "greennode"
+        model = config.VLM_MODEL
+    return {
+        "provider": provider,
+        "model": model,
+        "key": f"{provider}:{model or 'disabled'}",
+    }
+
+
+def _has_retryable_vlm_failure(doc: dict) -> bool:
+    if doc.get("vlm_error"):
+        return True
+    return any(
+        str(reason).startswith("VLM lỗi")
+        for reason in doc.get("review_reasons") or []
+    )
+
+
+async def _run_vlm_for_route(
+    route: dict[str, str], *, session_id: str, image_bytes: bytes,
+    mime_type: str, brief: dict,
+):
+    if route["provider"] == "openai":
+        from creative_intel.openai_vlm import analyze_image
+
+        return await analyze_image(
+            session_id, image_bytes, mime_type, brief,
+        )
+
+    from creative_intel.vlm import analyze_image_sync
+
+    vlm = await asyncio.to_thread(
+        analyze_image_sync, image_bytes, mime_type, brief,
+    )
+    return vlm, {
+        "provider": "greennode",
+        "model": route["model"],
+    }
+
+
 def effective_status(doc: dict) -> str:
     workspace_status = doc.get("workspace_status")
     if workspace_status == "stale":
@@ -123,12 +173,14 @@ async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
     from workspace.service import get_task_context
 
     task_context = await get_task_context(session_id, "creative_verdict")
+    vlm_route = await _vlm_route_for_session(session_id)
     urls = sorted((file.get("url") or "").strip() for file in files or [] if file.get("url"))
     batch_seed = json.dumps({
         "session_id": session_id,
         "urls": urls,
         "creative_revision": task_context["input_revisions"].get("creative", 0),
         "verdict_revision": task_context["artifact_revision"],
+        "vlm_route_key": vlm_route["key"],
     }, sort_keys=True)
     batch_id = f"cib_{hashlib.sha256(batch_seed.encode()).hexdigest()[:24]}"
     jobs: list[dict] = []
@@ -138,7 +190,18 @@ async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
             continue
         analysis_id = _key(session_id, url)
         existing = await _get(analysis_id)
-        if existing and existing.get("status") in TERMINAL_STATUSES:
+        retry_for_route_change = bool(
+            existing
+            and existing.get("status") == "needs_review"
+            and not (existing.get("override") or {}).get("approved")
+            and _has_retryable_vlm_failure(existing)
+            and existing.get("vlm_route_key") != vlm_route["key"]
+        )
+        if (
+            existing
+            and existing.get("status") in TERMINAL_STATUSES
+            and not retry_for_route_change
+        ):
             existing.update({
                 "file_id": file.get("id", existing.get("file_id", "")),
                 "format_id": file.get("formatId", existing.get("format_id", "")),
@@ -170,10 +233,19 @@ async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
             "batch_id": batch_id,
             "task_context": task_context,
             "workspace_status": "pending",
+            "vlm_provider": vlm_route["provider"],
+            "vlm_model": vlm_route["model"],
+            "vlm_route_key": vlm_route["key"],
             "attempts": (existing or {}).get("attempts", 0),
             "created_at": created_at,
             "updated_at": _now(),
         }
+        if retry_for_route_change:
+            for key in (
+                "completed_at", "review_reasons", "vlm", "vlm_error",
+                "vlm_provenance", "override",
+            ):
+                doc.pop(key, None)
         await _save(doc)
         jobs.append(_public(doc))
     await _commit_batch_if_complete(session_id, batch_id)
@@ -408,9 +480,15 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
             "Video đã trích xuất metadata nhưng cần người duyệt nội dung trước khi chạy"
         )
 
-    result: dict[str, Any] = {"deterministic": deterministic}
+    route = await _vlm_route_for_session(doc["session_id"])
+    result: dict[str, Any] = {
+        "deterministic": deterministic,
+        "vlm_provider": route["provider"],
+        "vlm_model": route["model"],
+        "vlm_route_key": route["key"],
+    }
     if (
-        config.VLM_MODEL
+        route["model"]
         and not is_video
         and not deterministic.get("fetch_error")
         and not deterministic.get("decode_error")
@@ -422,18 +500,19 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
             async with httpx.AsyncClient(timeout=config.CREATIVE_ANALYSIS_TIMEOUT_SECONDS) as client:
                 response = await client.get(url)
                 response.raise_for_status()
-            from creative_intel.vlm import analyze_image_sync
             from session import get_or_create_session
 
             session = await get_or_create_session(doc["session_id"])
             brief = session.get("form_state", {}).get("brief", {}) or {}
-            vlm = await asyncio.to_thread(
-                analyze_image_sync,
-                response.content,
-                doc.get("mime_type") or "image/png",
-                brief,
+            vlm, provenance = await _run_vlm_for_route(
+                route,
+                session_id=doc["session_id"],
+                image_bytes=response.content,
+                mime_type=doc.get("mime_type") or "image/png",
+                brief=brief,
             )
             result["vlm"] = vlm.model_dump()
+            result["vlm_provenance"] = provenance
             from creative_intel.policy import contains_prompt_injection
 
             flags = [flag for flag, value in vlm.safety.model_dump().items() if value]
@@ -445,12 +524,18 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
                 reasons.append(f"Độ tin cậy VLM thấp ({vlm.confidence:.2f})")
             if vlm.brief_match_score <= 2:
                 reasons.append(f"Creative không khớp brief ({vlm.brief_match_score}/5)")
-            VLM_CALLS.labels(model=config.VLM_MODEL, outcome="success").inc()
+            VLM_CALLS.labels(model=route["model"], outcome="success").inc()
         except Exception as exc:
-            VLM_CALLS.labels(model=config.VLM_MODEL, outcome="error").inc()
+            VLM_CALLS.labels(model=route["model"], outcome="error").inc()
+            result["vlm_error"] = {
+                "provider": route["provider"],
+                "model": route["model"],
+                "type": type(exc).__name__,
+                "message": str(exc)[:300],
+            }
             reasons.append(f"VLM lỗi — cần duyệt thủ công ({str(exc)[:80]})")
         finally:
-            VLM_SECONDS.labels(model=config.VLM_MODEL).observe(
+            VLM_SECONDS.labels(model=route["model"]).observe(
                 asyncio.get_running_loop().time() - started
             )
 
