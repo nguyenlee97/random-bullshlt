@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-23.14"
+BUILD_VERSION = "2026-07-23.15"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -42,6 +42,7 @@ BUILD_FEATURES = [
     "autopilot-dual-creative-walkthrough", # randomly exercises uploaded or automatically prepared creatives
     "provider-neutral-campaign-ux",        # provider details stay at homepage selection only
     "autopilot-creative-placement-recovery", # crop/scale or generate missing formats without restarting run
+    "autopilot-review-dock-layout",    # readable stacked review message and actions at narrow workspace widths
     "image-gen-lightbox",             # click-to-zoom lightbox in AI image gallery
     "image-gen-brief-preview",        # collapsible brief+audience preview in generator UI
     "email-step",                     # Step 6: PDF generation + Resend email delivery

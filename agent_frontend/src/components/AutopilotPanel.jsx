@@ -1016,19 +1016,27 @@ export default function AutopilotPanel({
           )}
 
           {waiting && (
-            <div className="sticky bottom-2 z-10 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50/95 p-3 shadow-[0_12px_36px_rgba(120,80,0,0.18)] backdrop-blur-md sm:flex-row sm:items-center">
-              <ShieldCheck className="h-5 w-5 shrink-0 text-amber-700" />
-              <div className="flex-1">
-                <p className="text-xs font-bold text-amber-900">Cần bạn review: {TASK_LABELS[waiting.key]}</p>
-                <p className="mt-0.5 text-xs text-amber-800">{waitingMessage}</p>
-                <a href="#autopilot-review-artifact" className="mt-1 inline-block text-[11px] font-bold text-amber-900 underline underline-offset-2">Xem nội dung cần review ngay phía trên</a>
-                {briefRetry && !retryReady && (
-                  <p className="mt-1 text-[11px] font-semibold text-amber-900">
-                    {pendingBrief ? 'Duyệt hoặc hủy đề xuất Brief trong Chat trước.' : `Sửa Brief trước khi kiểm tra lại: ${briefErrors.join(', ')}.`}
-                  </p>
-                )}
+            <div
+              data-demo="autopilot-review-dock"
+              className="sticky bottom-2 z-10 rounded-2xl border border-amber-300 bg-amber-50/95 p-4 shadow-[0_12px_36px_rgba(120,80,0,0.18)] backdrop-blur-md"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white text-amber-700 shadow-sm">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-700">Cần bạn review</p>
+                  <p className="mt-0.5 text-sm font-black leading-5 text-amber-950">{TASK_LABELS[waiting.key]}</p>
+                  <p className="mt-1 max-w-3xl text-xs leading-5 text-amber-800">{waitingMessage}</p>
+                  <a href="#autopilot-review-artifact" className="mt-1.5 inline-flex text-[11px] font-bold text-amber-900 underline underline-offset-2">Xem nội dung cần review ngay phía trên</a>
+                  {briefRetry && !retryReady && (
+                    <p className="mt-1 text-[11px] font-semibold text-amber-900">
+                      {pendingBrief ? 'Duyệt hoặc hủy đề xuất Brief trong Chat trước.' : `Sửa Brief trước khi kiểm tra lại: ${briefErrors.join(', ')}.`}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-amber-200 pt-3 sm:pl-12">
                 {briefRetry && pendingBrief && <button onClick={onOpenChat} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Chat để duyệt</button>}
                 {waitingEdits.map(edit => edit.action && (
                   <button
