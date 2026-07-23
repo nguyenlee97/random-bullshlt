@@ -611,7 +611,7 @@ export default function AutopilotPanel({
               </div>
               {policy === 'critical_only' && (
                 <p className="mt-3 rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-2 text-[11px] leading-5 text-brand-800">
-                  Agent sẽ dừng tại: Tìm audience → Thiết lập targeting → Xếp hạng placement → Gán creative → Duyệt launch. Creative có rủi ro sẽ luôn dừng để review.
+                  Agent sẽ dừng tại: Tìm audience → Thiết lập targeting → Đề xuất placement sơ bộ → Gán creative → Duyệt launch. Creative có rủi ro sẽ luôn dừng để review.
                 </p>
               )}
             </div>

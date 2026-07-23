@@ -236,7 +236,7 @@ def test_critical_policy_stops_at_the_five_operator_checkpoints():
     expected = {
         "retrieve_audience",
         "derive_targeting",
-        "rank_placements",
+        "plan_placement_intent",
         "assign_creatives",
         "launch_approval",
     }
