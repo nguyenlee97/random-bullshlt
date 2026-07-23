@@ -1087,6 +1087,158 @@ async def select_placement_intent(
     return await get_run(run_id)
 
 
+async def generate_missing_creative_formats(
+    run_id: str,
+    format_ids: list[str] | None = None,
+    *,
+    actor: str = "campaign_operator",
+    reason: str = "",
+) -> dict:
+    """Generate exact-size repair assets for a recoverable creative mismatch.
+
+    This is an explicit operator recovery action. It does not change the run's
+    original creative-source choice: generated assets are merged into the
+    canonical creative artifact, then normal workspace reconciliation reruns
+    Creative Intelligence and placement compatibility.
+    """
+    run = await get_run(run_id)
+    if run["status"] in RUN_TERMINAL:
+        raise RunConflict("creative recovery cannot change a terminal run")
+    if any(
+        task["key"] == "create_order" and task["status"] == "succeeded"
+        for task in run["tasks"]
+    ):
+        raise RunConflict("creative recovery cannot run after order creation")
+
+    waiting = next(
+        (task for task in run["tasks"] if task["status"] == "waiting_review"),
+        None,
+    )
+    allowed_waiting_tasks = {"prepare_creatives", "rank_placements"}
+    if not waiting or waiting.get("key") not in allowed_waiting_tasks:
+        raise RunConflict(
+            "creative recovery is available only at a creative compatibility review"
+        )
+
+    workspace = await get_workspace(run["session_id"])
+    artifacts = workspace.get("artifacts", {})
+    format_plan = deepcopy(
+        artifacts.get("creative_format_plan", {}).get("value") or {}
+    )
+    planned = list(format_plan.get("formats") or [])
+    if not planned:
+        raise RunConflict("creative recovery has no planned formats")
+
+    creative = deepcopy(artifacts.get("creative", {}).get("value") or {})
+    files = list(creative.get("files") or [])
+    from tools.creative_match import match_file_to_format
+
+    missing = [
+        item for item in planned
+        if not any(match_file_to_format(file, item).get("matched") for file in files)
+    ]
+    requested = list(dict.fromkeys(
+        str(value).strip() for value in (format_ids or []) if str(value).strip()
+    ))
+    planned_by_id = {
+        str(item.get("format_id")): item
+        for item in planned if item.get("format_id")
+    }
+    unknown = [value for value in requested if value not in planned_by_id]
+    if unknown:
+        raise ValueError(
+            "format is not in the current creative plan: " + ", ".join(unknown)
+        )
+    missing_ids = {str(item.get("format_id")) for item in missing}
+    selected = [
+        item for item in missing
+        if not requested or str(item.get("format_id")) in requested
+    ]
+    if requested and not selected:
+        return {
+            "ok": True,
+            "generated_count": 0,
+            "failed_formats": [],
+            "already_covered": requested,
+            "run": run,
+        }
+    if len(selected) > config.AUTOPILOT_MAX_GENERATED_ASSETS:
+        selected = selected[:config.AUTOPILOT_MAX_GENERATED_ASSETS]
+
+    from autopilot.creative_generation import generate_creatives
+
+    generated, failures = await generate_creatives(
+        run,
+        workspace,
+        {**format_plan, "formats": selected},
+        concurrency=config.AUTOPILOT_CREATIVE_GENERATION_CONCURRENCY,
+    )
+    if not generated:
+        return {
+            "ok": False,
+            "generated_count": 0,
+            "failed_formats": [
+                item.get("format_id") for item in failures
+            ],
+            "message": (
+                "Chưa thể tạo creative cho các format còn thiếu. "
+                "Bạn có thể crop/scale ảnh hiện có hoặc thử lại."
+            ),
+            "run": await get_run(run_id),
+        }
+
+    merged_by_id = {
+        str(file.get("id") or file.get("_id") or file.get("url") or index): file
+        for index, file in enumerate(files)
+    }
+    for file in generated:
+        key = str(file.get("id") or file.get("url"))
+        merged_by_id[key] = file
+    merged_files = list(merged_by_id.values())
+
+    from workspace.service import apply_mutation
+
+    generated_ids = sorted(
+        str((file.get("generation") or {}).get("idempotencyKey") or file.get("id"))
+        for file in generated
+    )
+    await apply_mutation(
+        run["session_id"],
+        "creative",
+        {
+            **creative,
+            "files": merged_files,
+            "uploaded": True,
+            "source": "mixed_recovery",
+        },
+        base_revision=workspace["revision"],
+        actor=actor,
+        reason=reason.strip() or (
+            "Operator requested exact-format creative generation during placement recovery"
+        ),
+        idempotency_key=(
+            f"{run_id}:creative-recovery:r{workspace['revision']}:"
+            + "|".join(generated_ids)
+        ),
+    )
+    reconciliation = await reconcile_workspace_changes(run_id)
+    await _emit(run_id, "creative_recovery_generated", {
+        "actor": actor,
+        "generated_count": len(generated),
+        "format_ids": [file.get("formatId") for file in generated],
+        "failed_formats": [item.get("format_id") for item in failures],
+        "requested_missing_formats": sorted(missing_ids),
+    })
+    return {
+        "ok": True,
+        "generated_count": len(generated),
+        "generated_format_ids": [file.get("formatId") for file in generated],
+        "failed_formats": [item.get("format_id") for item in failures],
+        "workspace_revision": reconciliation["run"].get("workspace_revision"),
+        "run": await get_run(run_id),
+    }
+
+
 async def select_strategy(
     run_id: str,
     option_id: str,

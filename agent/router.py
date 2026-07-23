@@ -1121,6 +1121,10 @@ class _AutopilotPlacementRequest(_AutopilotActionRequest):
     zone_ids: list[str]
 
 
+class _AutopilotCreativeRecoveryRequest(_AutopilotActionRequest):
+    format_ids: list[str] = []
+
+
 def _autopilot_error(exc: Exception) -> HTTPException:
     from autopilot.service import RunConflict
     if isinstance(exc, KeyError):
@@ -1255,6 +1259,26 @@ async def autopilot_select_placement_intent(
         await _assert_run_access(raw_request, run_id)
         return await select_placement_intent(
             run_id, request.zone_ids, actor=request.actor, reason=request.reason,
+        )
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.post("/autopilot/runs/{run_id}/creative-recovery/generate")
+async def autopilot_generate_creative_recovery(
+    run_id: str,
+    raw_request: Request,
+    request: _AutopilotCreativeRecoveryRequest,
+):
+    from autopilot.service import RunConflict, generate_missing_creative_formats
+    try:
+        await _assert_run_access(raw_request, run_id)
+        _require_autopilot_worker()
+        return await generate_missing_creative_formats(
+            run_id,
+            request.format_ids,
+            actor=request.actor,
+            reason=request.reason,
         )
     except (KeyError, ValueError, RunConflict) as exc:
         raise _autopilot_error(exc) from exc

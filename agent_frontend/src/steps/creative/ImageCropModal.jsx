@@ -19,6 +19,9 @@ import { cn } from '@/lib/utils'
 export default function ImageCropModal({ src, targetW, targetH, label, onConfirm, onScale, onCancel }) {
   const containerRef = useRef(null)
   const imgRef       = useRef(null)
+  const imageSrc = /^(data:|https?:|blob:)/i.test(String(src || ''))
+    ? src
+    : `data:image/png;base64,${src}`
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 })
   const [display,    setDisplay]    = useState({ w: 0, h: 0, offsetX: 0, offsetY: 0 })
 
@@ -156,8 +159,8 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH)
       onConfirm(canvas.toDataURL('image/png'))
     }
-    img.src = `data:image/png;base64,${src}`
-  }, [box, imgNatural, display, targetW, targetH, src, onConfirm])
+    img.src = imageSrc
+  }, [box, imgNatural, display, targetW, targetH, imageSrc, onConfirm])
 
   // ── Handle scale-stretch ──────────────────────────────────────────────────────
   const handleScale = useCallback(() => {
@@ -170,10 +173,10 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
       ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, targetW, targetH)
       onScale(canvas.toDataURL('image/png'))
     }
-    img.src = `data:image/png;base64,${src}`
-  }, [src, targetW, targetH, onScale])
+    img.src = imageSrc
+  }, [imageSrc, targetW, targetH, onScale])
 
-  const dataUrl = `data:image/png;base64,${src}`
+  const dataUrl = imageSrc
 
   // ── Handle window resize ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -215,7 +218,7 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
             <img
               ref={imgRef}
               src={dataUrl}
-              alt="Generated"
+              alt="Creative cần crop"
               onLoad={handleImgLoad}
               className="block select-none pointer-events-none"
               style={{ width: display.w, height: display.h }}
@@ -301,7 +304,7 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
             id="btn-crop-scale"
           >
             <Maximize2 className="w-3.5 h-3.5" />
-            Giữ nguyên & Scale
+            Scale toàn ảnh (có thể méo)
           </Button>
         </div>
       </div>

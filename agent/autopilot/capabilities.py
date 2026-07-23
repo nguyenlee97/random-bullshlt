@@ -672,7 +672,7 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
 
 async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
     from creative_intel.service import get_intel
-    from tools.creative_match import enrich_files_with_intel
+    from tools.creative_match import enrich_files_with_intel, match_file_to_format
     from tools.order_api import fetch_zone_conflicts
     from tools.zone_ranker import rank_zones
     brief = _artifact(workspace, "brief", {})
@@ -698,11 +698,16 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
         "exact_size", "strong_ratio", "same_ratio", "acceptable_ratio",
         "skin_match",
     }
-    available = [
+    ranked_candidates = [
         zone for zone in ranked
-        if (not candidate_ids or zone["id"] in candidate_ids)
-        and not conflicts.get(zone["id"])
-        and zone.get("match_mode") in compatible_modes
+        if not candidate_ids or zone["id"] in candidate_ids
+    ]
+    unconflicted_candidates = [
+        zone for zone in ranked_candidates if not conflicts.get(zone["id"])
+    ]
+    available = [
+        zone for zone in unconflicted_candidates
+        if zone.get("match_mode") in compatible_modes
     ]
     strategy = _artifact(workspace, "strategy", {})
     selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
@@ -725,15 +730,77 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
         )
     available = available[:6]
     if not available:
+        format_plan = _artifact(workspace, "creative_format_plan", {})
+        planned_formats = list(format_plan.get("formats") or []) \
+            if isinstance(format_plan, dict) else []
+        missing_formats = [
+            {
+                "format_id": item.get("format_id"),
+                "width": item.get("width"),
+                "height": item.get("height"),
+                "intended_format": item.get("intended_format"),
+                "zone_ids": item.get("zone_ids") or [],
+            }
+            for item in planned_formats
+            if not any(match_file_to_format(file, item).get("matched") for file in files)
+        ]
+        target_formats = missing_formats or [
+            {
+                "format_id": item.get("format_id"),
+                "width": item.get("width"),
+                "height": item.get("height"),
+                "intended_format": item.get("intended_format"),
+                "zone_ids": item.get("zone_ids") or [],
+            }
+            for item in planned_formats
+        ]
+        image_files = [
+            file for file in files
+            if str(file.get("type") or file.get("mimeType") or "").startswith("image/")
+        ]
+        inventory_blocked = not unconflicted_candidates
+        message = (
+            "Các placement trong shortlist hiện không còn trống. "
+            "Hãy cập nhật shortlist hoặc thời gian chạy rồi kiểm tra lại."
+            if inventory_blocked else
+            "Creative hiện tại chưa đúng tỷ lệ/định dạng của placement đang trống. "
+            "Bạn có thể crop/scale ảnh hiện có hoặc tạo asset đúng các format còn thiếu."
+        )
         return CapabilityResult(
             value={
                 "selectedZoneIds": [], "zones": [], "phase": "zones",
-                "reason": "no_compatible_placements", "review_action": "retry",
-                "message": "Chưa có placement trống tương thích với kích thước/định dạng creative.",
+                "reason": (
+                    "no_available_placements"
+                    if inventory_blocked else "no_compatible_placements"
+                ),
+                "review_action": "retry",
+                "message": message,
+                "recovery": {
+                    "kind": (
+                        "inventory_unavailable"
+                        if inventory_blocked else "creative_format_mismatch"
+                    ),
+                    "can_adapt_existing": bool(image_files) and bool(target_formats),
+                    "can_generate_missing": bool(target_formats) and not inventory_blocked,
+                    "existing_image_count": len(image_files),
+                    "target_formats": target_formats,
+                    "recommended_action": (
+                        "update_inventory"
+                        if inventory_blocked else
+                        "adapt_existing" if image_files else "generate_missing"
+                    ),
+                },
             },
             evidence=[{
                 "type": "creative_placement_compatibility", "passed": False,
-                "ranked": len(ranked), "conflicts": len(conflicts),
+                "ranked": len(ranked),
+                "shortlist_candidates": len(ranked_candidates),
+                "unconflicted_candidates": len(unconflicted_candidates),
+                "compatible_candidates": 0,
+                "conflicts": len(conflicts),
+                "missing_format_ids": [
+                    item.get("format_id") for item in target_formats
+                ],
             }],
             force_review=True,
         )

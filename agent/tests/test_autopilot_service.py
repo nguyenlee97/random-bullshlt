@@ -1165,12 +1165,119 @@ async def test_no_compatible_placement_requests_new_creative(monkeypatch):
     monkeypatch.setattr(order_api, "fetch_zone_conflicts", no_conflicts)
     workspace = {"artifacts": {
         "brief": {"value": BRIEF},
-        "creative": {"value": {"files": [{"name": "bad.png"}]}},
+        "creative": {"value": {"files": [{
+            "name": "bad.png", "type": "image/png",
+            "width": 700, "height": 700,
+        }]}},
+        "creative_format_plan": {"value": {"formats": [{
+            "format_id": "znews-masthead-1160x250",
+            "width": 1160, "height": 250, "zone_ids": ["BAD"],
+        }]}},
     }}
     result = await _rank_placements({"session_id": "incompatible"}, workspace)
     assert result.force_review is True
     assert result.value["reason"] == "no_compatible_placements"
     assert result.value["review_action"] == "retry"
+    assert result.value["recovery"] == {
+        "kind": "creative_format_mismatch",
+        "can_adapt_existing": True,
+        "can_generate_missing": True,
+        "existing_image_count": 1,
+        "target_formats": [{
+            "format_id": "znews-masthead-1160x250",
+            "width": 1160,
+            "height": 250,
+            "intended_format": None,
+            "zone_ids": ["BAD"],
+        }],
+        "recommended_action": "adapt_existing",
+    }
+    assert "crop/scale" in result.value["message"]
+
+
+@pytest.mark.asyncio
+async def test_creative_recovery_generates_missing_formats_and_replans(monkeypatch):
+    import autopilot.creative_generation as creative_generation
+    import workspace.service as workspace_service
+
+    run = {
+        "run_id": "run-repair",
+        "session_id": "repair-session",
+        "status": "waiting_review",
+        "tasks": [
+            {"key": "rank_placements", "status": "waiting_review"},
+            {"key": "create_order", "status": "pending"},
+        ],
+    }
+    workspace = {
+        "revision": 7,
+        "artifacts": {
+            "creative": {"value": {"files": [{
+                "id": "source", "name": "square.png", "type": "image/png",
+                "width": 700, "height": 700,
+            }]}},
+            "creative_format_plan": {"value": {"formats": [{
+                "format_id": "znews-masthead-1160x250",
+                "width": 1160, "height": 250, "zone_ids": ["ZONE-A"],
+            }]}},
+        },
+    }
+    generated = {
+        "id": "generated",
+        "name": "masthead.png",
+        "url": "https://example.test/masthead.png",
+        "type": "image/png",
+        "width": 1160,
+        "height": 250,
+        "formatId": "znews-masthead-1160x250",
+        "generation": {"idempotencyKey": "repair-key"},
+    }
+    mutations = []
+    events = []
+
+    async def fake_get_run(_run_id):
+        return run
+
+    async def fake_get_workspace(_session_id):
+        return workspace
+
+    async def fake_generate(_run, _workspace, plan, **_kwargs):
+        assert [item["format_id"] for item in plan["formats"]] == [
+            "znews-masthead-1160x250"
+        ]
+        return [generated], []
+
+    async def fake_apply_mutation(session_id, field, value, **kwargs):
+        mutations.append((session_id, field, value, kwargs))
+        return {"ok": True, "workspace_revision": 8}
+
+    async def fake_reconcile(_run_id):
+        return {"changed": True, "run": {**run, "workspace_revision": 8}}
+
+    async def fake_emit(_run_id, event_type, data):
+        events.append((event_type, data))
+
+    monkeypatch.setattr(service, "get_run", fake_get_run)
+    monkeypatch.setattr(service, "get_workspace", fake_get_workspace)
+    monkeypatch.setattr(
+        creative_generation, "generate_creatives", fake_generate
+    )
+    monkeypatch.setattr(workspace_service, "apply_mutation", fake_apply_mutation)
+    monkeypatch.setattr(service, "reconcile_workspace_changes", fake_reconcile)
+    monkeypatch.setattr(service, "_emit", fake_emit)
+
+    result = await service.generate_missing_creative_formats(
+        "run-repair", ["znews-masthead-1160x250"]
+    )
+
+    assert result["ok"] is True
+    assert result["generated_count"] == 1
+    assert mutations[0][0:2] == ("repair-session", "creative")
+    assert [item["id"] for item in mutations[0][2]["files"]] == [
+        "source", "generated"
+    ]
+    assert mutations[0][2]["source"] == "mixed_recovery"
+    assert events[0][0] == "creative_recovery_generated"
 
 
 @pytest.mark.asyncio

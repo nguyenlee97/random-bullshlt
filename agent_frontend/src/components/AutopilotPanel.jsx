@@ -356,6 +356,31 @@ export default function AutopilotPanel({
     }
   }
 
+  const generateCreativeRecovery = async formatIds => {
+    if (!run?.run_id || loading) return
+    setLoading(true)
+    setError('')
+    try {
+      const result = await AgentAPI.generateAutopilotCreativeRecovery(
+        run.run_id,
+        formatIds,
+      )
+      if (!result?.ok) {
+        throw new Error(
+          result?.message
+          || result?.detail
+          || 'Chưa thể chuẩn bị creative cho format còn thiếu.',
+        )
+      }
+      if (result.run) setRun(result.run)
+      await loadPrerequisites()
+    } catch (generationError) {
+      setError(generationError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const orderedTasks = useMemo(() => [...(run?.tasks || [])].sort((left, right) => (
     (TASK_ORDER_INDEX[left.key] ?? TASK_ORDER.length) - (TASK_ORDER_INDEX[right.key] ?? TASK_ORDER.length)
   )), [run?.tasks])
@@ -433,6 +458,10 @@ export default function AutopilotPanel({
     creativeSource === 'ai_generate' && !creativeDirection.trim() ? 'creative direction cho AI' : null,
   ].filter(Boolean)
   const retryAction = waiting?.result?.review_action === 'retry'
+  const placementRecovery = waiting?.key === 'rank_placements'
+    ? waiting?.result?.recovery
+    : null
+  const recoveryFormats = placementRecovery?.target_formats || []
   const briefRetry = retryAction && waiting?.key === 'validate_brief'
   const retryReady = !briefRetry || (Boolean(canonicalBrief) && briefErrors.length === 0 && !pendingBrief)
   const waitingMessage = waiting?.result?.message
@@ -465,7 +494,27 @@ export default function AutopilotPanel({
             { label: 'Tải creative mới', action: onOpenCreative },
           ]
         : ['prepare_creatives', 'analyze_creatives', 'rank_placements'].includes(waiting?.key)
-          ? [{ label: waiting?.result?.reason === 'missing_creative' ? 'Tải creative lên' : 'Chỉnh hoặc thay creative', action: onOpenCreative }]
+          ? waiting?.key === 'rank_placements' && placementRecovery?.kind === 'creative_format_mismatch'
+            ? [
+                placementRecovery.can_adapt_existing
+                  ? { label: 'Crop/scale ảnh hiện có', action: onOpenCreative }
+                  : null,
+                placementRecovery.can_generate_missing
+                  ? {
+                      label: `Tạo ${recoveryFormats.length} asset đúng format`,
+                      action: () => generateCreativeRecovery(
+                        recoveryFormats.map(item => item.format_id).filter(Boolean),
+                      ),
+                    }
+                  : null,
+                { label: 'Tải creative khác', action: onOpenCreative },
+              ].filter(Boolean)
+            : [{
+                label: waiting?.result?.reason === 'missing_creative'
+                  ? 'Tải creative lên'
+                  : 'Chỉnh hoặc thay creative',
+                action: onOpenCreative,
+              }]
           : []
 
   useEffect(() => {

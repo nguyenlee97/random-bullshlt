@@ -1761,11 +1761,35 @@ export const AgentAPI = {
     }
   },
 
+  async generateAutopilotCreativeRecovery(runId, formatIds = []) {
+    try {
+      const res = await agentFetch(
+        `${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/creative-recovery/generate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            format_ids: formatIds,
+            actor: 'campaign_operator',
+            reason: 'Operator requested missing-format creative recovery',
+          }),
+          signal: AbortSignal.timeout(240000),
+        },
+      )
+      const data = await res.json().catch(() => ({}))
+      return res.ok
+        ? withRequestId(data, res)
+        : { ok: false, status: res.status, ...(data.detail || data) }
+    } catch (e) {
+      return { ok: false, detail: e.message }
+    }
+  },
+
   subscribeAutopilot(runId, onEvent) {
     if (typeof EventSource === 'undefined') return () => {}
     const source = new EventSource(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/events`)
     const handler = () => onEvent?.()
-    ;['run_created', 'task_started', 'task_completed', 'task_waiting_review', 'task_approved', 'task_rejected', 'task_retry_scheduled', 'task_failed', 'strategy_selected', 'placement_selection_updated', 'run_paused', 'run_resumed', 'run_cancelled'].forEach(type => source.addEventListener(type, handler))
+    ;['run_created', 'task_started', 'task_completed', 'task_waiting_review', 'task_approved', 'task_rejected', 'task_retry_scheduled', 'task_failed', 'strategy_selected', 'placement_selection_updated', 'creative_recovery_generated', 'run_paused', 'run_resumed', 'run_cancelled'].forEach(type => source.addEventListener(type, handler))
     source.onerror = () => source.close()
     return () => source.close()
   },

@@ -171,6 +171,49 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
   ) : <Empty>Chưa có placement để review.</Empty>
 }
 
+function PlacementRecoveryReview({ value }) {
+  const recovery = value.recovery || {}
+  const formats = recovery.target_formats || []
+  const inventoryBlocked = recovery.kind === 'inventory_unavailable'
+  return (
+    <div className="space-y-3">
+      <div className={`rounded-xl border px-3 py-3 ${inventoryBlocked ? 'border-amber-200 bg-amber-50' : 'border-brand-200 bg-brand-50'}`}>
+        <p className="text-xs font-black text-slate-900">
+          {inventoryBlocked
+            ? 'Shortlist placement cần được cập nhật'
+            : 'Có thể xử lý ngay mà không phải hủy run'}
+        </p>
+        <p className="mt-1 text-[11px] leading-5 text-slate-700">
+          {inventoryBlocked
+            ? 'Creative không phải blocker chính: inventory trong shortlist không còn trống. Hãy cập nhật placement hoặc thời gian chạy rồi kiểm tra lại.'
+            : `Creative hiện có chưa đúng tỷ lệ của placement đang trống. Hệ thống tìm thấy ${recovery.existing_image_count || 0} ảnh có thể dùng làm nguồn crop/scale, hoặc có thể chuẩn bị asset mới đúng format.`}
+        </p>
+      </div>
+      {!inventoryBlocked && formats.length > 0 && (
+        <div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+            Format cần bổ sung
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {formats.map((item, index) => (
+              <article key={item.format_id || index} className="rounded-xl border border-amber-200 bg-white px-3 py-2.5">
+                <p className="text-sm font-black text-slate-900">{item.width} × {item.height}px</p>
+                <p className="mt-1 truncate text-[10px] text-slate-500">{item.format_id || 'Format'}</p>
+                <p className="mt-1 text-[10px] font-bold text-amber-800">
+                  Phủ {(item.zone_ids || []).length || 1} placement
+                </p>
+              </article>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] leading-4 text-slate-500">
+            Crop giữ đúng tỷ lệ và cho phép chọn vùng ảnh. Scale giữ toàn bộ ảnh nhưng có thể làm biến dạng nội dung; luôn xem lại kết quả phân tích trước khi tiếp tục.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FormatReview({ value }) {
   const formats = value.formats || []
   return formats.length ? (
@@ -276,7 +319,12 @@ export default function AutopilotReview({ task, label, brief, formatPlan, select
   }
   else if (task.key === 'plan_creative_formats') { content = <FormatReview value={value} />; icon = <FileImage className="h-4 w-4" /> }
   else if (task.key === 'prepare_creatives') { content = <CreativeReview value={value} formatPlan={formatPlan} />; icon = <FileImage className="h-4 w-4" /> }
-  else if (task.key === 'rank_placements') { content = <PlacementReview value={value} final />; icon = <MapPin className="h-4 w-4" /> }
+  else if (task.key === 'rank_placements') {
+    content = value.recovery
+      ? <PlacementRecoveryReview value={value} />
+      : <PlacementReview value={value} final />
+    icon = <MapPin className="h-4 w-4" />
+  }
   else content = <GenericReview task={task} value={value} />
 
   return (
