@@ -1749,6 +1749,7 @@ export default function App() {
       onActiveChange={(active) => { isDemoActiveRef.current = active }}
       onPrepareLive={handleReset}
       experienceMode={experienceMode}
+      conversationModel={currentConversationModel}
       autoStart={autoStartDemoMode}
       onAutoStartConsumed={() => setAutoStartDemoMode('')}
     >

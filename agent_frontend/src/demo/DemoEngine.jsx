@@ -6,6 +6,11 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect } f
 import DemoOverlay from './DemoOverlay'
 import { STAGE1_STEPS, buildStage2Steps, pickRandomBrief, DEMO_AD_FORMAT_META, DEMO_NON_BOX_FORMAT_IDS, ZONE_FORMAT_MAP } from './demoScripts'
 import { AUTOPILOT_TOUR_STEPS } from './autopilotTour'
+import {
+  hasSeenOpenAIWalkthroughTool,
+  isOpenAIWalkthroughModel,
+  rememberOpenAIWalkthroughTool,
+} from './walkthroughMessageTracker'
 import log from '@/lib/logger'
 
 const DemoContext = createContext(null)
@@ -97,6 +102,7 @@ function resolvePaneForStep(step) {
 export function DemoProvider({
   children, busy, messages, onSendMessage, onApprove, onRequestTab, activeTab,
   onActiveChange, onPrepareLive, experienceMode = 'guided', autoStart = '', onAutoStartConsumed,
+  conversationModel = 'greennode_minimax',
 }) {
   const [phase, setPhase] = useState(PHASE.IDLE)
   const [stepIdx, setStepIdx] = useState(0)
@@ -108,6 +114,8 @@ export function DemoProvider({
   const eventCleanupRef = useRef(null)
   const busyRef = useRef(busy)
   const messagesRef = useRef(messages)
+  const conversationModelRef = useRef(conversationModel)
+  const openAISeenMetaToolsRef = useRef(new Set())
   const prevMsgCountRef = useRef(0)
   const tourModeRef = useRef(experienceMode === 'autopilot' ? 'autopilot' : 'copilot')
   // Refs for mobile tab control — read inside async step logic without stale closures
@@ -117,8 +125,30 @@ export function DemoProvider({
   // Keep refs fresh
   useEffect(() => { busyRef.current = busy }, [busy])
   useEffect(() => { messagesRef.current = messages }, [messages])
+  useEffect(() => {
+    conversationModelRef.current = conversationModel
+    if (!isOpenAIWalkthroughModel(conversationModel)) {
+      openAISeenMetaToolsRef.current.clear()
+    }
+  }, [conversationModel])
   useEffect(() => { onRequestTabRef.current = onRequestTab }, [onRequestTab])
   useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
+
+  // OpenAI audience/setup responses can finish while the walkthrough is still
+  // explaining the previous step. Record them from the beginning of the run so
+  // WAIT_FOR_MSG cannot miss an already-fired event. GreenNode intentionally
+  // keeps its established wait path unchanged.
+  useEffect(() => {
+    const handler = (event) => {
+      rememberOpenAIWalkthroughTool(
+        openAISeenMetaToolsRef.current,
+        conversationModelRef.current,
+        event,
+      )
+    }
+    window.addEventListener('agent:inject_message', handler)
+    return () => window.removeEventListener('agent:inject_message', handler)
+  }, [])
 
   const isActive = phase !== PHASE.IDLE && phase !== PHASE.COMPLETE
 
@@ -325,7 +355,11 @@ export function DemoProvider({
         const { metaTool, timeout = 30000 } = step
 
         // Check if the message already arrived (user was slow clicking Tiếp theo)
-        const alreadyArrived = messagesRef.current.some(
+        const alreadyArrived = hasSeenOpenAIWalkthroughTool(
+          openAISeenMetaToolsRef.current,
+          conversationModelRef.current,
+          metaTool,
+        ) || messagesRef.current.some(
           m => m.metadata?.tool === metaTool
         )
 
@@ -619,6 +653,7 @@ export function DemoProvider({
 
   const startDemo = useCallback((requestedMode) => {
     log.step('DemoEngine: startDemo')
+    openAISeenMetaToolsRef.current.clear()
 
     const mode = typeof requestedMode === 'string'
       ? requestedMode
@@ -661,6 +696,7 @@ export function DemoProvider({
 
   const stopDemo = useCallback(() => {
     log.step('DemoEngine: stopDemo')
+    openAISeenMetaToolsRef.current.clear()
     setPhase(PHASE.IDLE)
     setStepIdx(0)
     setSteps([])
@@ -718,6 +754,7 @@ export function DemoProvider({
     setSteps([])
     setStepIdx(0)
     setTargetRect(null)
+    openAISeenMetaToolsRef.current.clear()
     try {
       const prepared = await onPrepareLive?.()
       if (prepared === false) throw new Error('Không thể chuẩn bị campaign walkthrough.')
