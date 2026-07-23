@@ -9,6 +9,7 @@ import { AUTOPILOT_TOUR_STEPS } from './autopilotTour'
 import {
   hasSeenOpenAIWalkthroughTool,
   isOpenAIWalkthroughModel,
+  matchesWalkthroughMetaTool,
   rememberOpenAIWalkthroughTool,
 } from './walkthroughMessageTracker'
 import log from '@/lib/logger'
@@ -369,7 +370,13 @@ export function DemoProvider({
             let resolved = false
             const handler = (e) => {
               const tool = e.detail?.metadata?.tool
-              if (tool === metaTool && !resolved) {
+              if (
+                matchesWalkthroughMetaTool(
+                  conversationModelRef.current,
+                  tool,
+                  metaTool,
+                ) && !resolved
+              ) {
                 resolved = true
                 window.removeEventListener('agent:inject_message', handler)
                 resolve()

@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   hasSeenOpenAIWalkthroughTool,
+  matchesWalkthroughMetaTool,
   rememberOpenAIWalkthroughTool,
 } from '../src/demo/walkthroughMessageTracker.js'
 
@@ -12,11 +13,11 @@ test('OpenAI walkthrough remembers audience and setup messages that arrive befor
   const seen = new Set()
 
   assert.equal(
-    rememberOpenAIWalkthroughTool(seen, 'openai_gpt_5_4_mini', injected('audience_entry')),
+    rememberOpenAIWalkthroughTool(seen, 'openai_gpt_5_4_mini', injected('openai_audience_entry')),
     true,
   )
   assert.equal(
-    rememberOpenAIWalkthroughTool(seen, 'openai_gpt_5_4_mini', injected('setup_entry')),
+    rememberOpenAIWalkthroughTool(seen, 'openai_gpt_5_4_mini', injected('openai_setup_entry')),
     true,
   )
   assert.equal(
@@ -27,17 +28,33 @@ test('OpenAI walkthrough remembers audience and setup messages that arrive befor
     hasSeenOpenAIWalkthroughTool(seen, 'openai_gpt_5_4_mini', 'setup_entry'),
     true,
   )
+  assert.equal(
+    matchesWalkthroughMetaTool(
+      'openai_gpt_5_4_mini',
+      'openai_audience_entry',
+      'audience_entry',
+    ),
+    true,
+  )
 })
 
 test('GreenNode walkthrough does not use the OpenAI message history', () => {
   const seen = new Set()
 
   assert.equal(
-    rememberOpenAIWalkthroughTool(seen, 'greennode_minimax', injected('audience_entry')),
+    rememberOpenAIWalkthroughTool(seen, 'greennode_minimax', injected('openai_audience_entry')),
     false,
   )
   assert.equal(
     hasSeenOpenAIWalkthroughTool(seen, 'greennode_minimax', 'audience_entry'),
+    false,
+  )
+  assert.equal(
+    matchesWalkthroughMetaTool(
+      'greennode_minimax',
+      'openai_audience_entry',
+      'audience_entry',
+    ),
     false,
   )
   assert.deepEqual([...seen], [])
