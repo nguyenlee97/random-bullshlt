@@ -217,7 +217,7 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones, r
   }).length
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-demo="autopilot-creative-assignment-editor">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-xs">
         <button

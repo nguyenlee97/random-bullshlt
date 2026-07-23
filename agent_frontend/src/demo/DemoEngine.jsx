@@ -6,6 +6,7 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect } f
 import DemoOverlay from './DemoOverlay'
 import { STAGE1_STEPS, buildStage2Steps, pickRandomBrief, DEMO_AD_FORMAT_META, DEMO_NON_BOX_FORMAT_IDS, ZONE_FORMAT_MAP } from './demoScripts'
 import { AUTOPILOT_TOUR_STEPS } from './autopilotTour'
+import { buildAutopilotLiveSteps } from './autopilotWalkthrough'
 import {
   hasSeenOpenAIWalkthroughTool,
   isOpenAIWalkthroughModel,
@@ -106,6 +107,9 @@ function resolvePaneForStep(step) {
     case 'ASSIGN_CREATIVES':
     case 'EDIT_FIELD':
       return 'workspace'
+    case 'WAIT_FOR_AUTOPILOT_TASK':
+    case 'TRIM_AUTOPILOT_PLACEMENTS':
+      return 'autopilot'
     default:
       return null
   }
@@ -126,11 +130,13 @@ export function DemoProvider({
   const [popup, setPopup] = useState(null)
   const briefRef = useRef(null)
   const eventCleanupRef = useRef(null)
+  const onApproveRef = useRef(onApprove)
   const busyRef = useRef(busy)
   const messagesRef = useRef(messages)
   const conversationModelRef = useRef(conversationModel)
   const openAISeenMetaToolsRef = useRef(new Set())
   const prevMsgCountRef = useRef(0)
+  const autopilotWaitingTaskRef = useRef('')
   const tourModeRef = useRef(experienceMode === 'autopilot' ? 'autopilot' : 'copilot')
   // Refs for mobile tab control — read inside async step logic without stale closures
   const onRequestTabRef = useRef(onRequestTab)
@@ -138,6 +144,7 @@ export function DemoProvider({
 
   // Keep refs fresh
   useEffect(() => { busyRef.current = busy }, [busy])
+  useEffect(() => { onApproveRef.current = onApprove }, [onApprove])
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => {
     conversationModelRef.current = conversationModel
@@ -223,6 +230,14 @@ export function DemoProvider({
     if (!step) return
 
     log.step(`DemoEngine: executing step ${idx} type=${step.type}`)
+
+    if (
+      step.whenAutopilotTask
+      && autopilotWaitingTaskRef.current !== step.whenAutopilotTask
+    ) {
+      setStepIdx(prev => prev + 1)
+      return
+    }
 
     // Skip manual-review-only steps when analysis already auto-approved every
     // creative. This branches the walkthrough without changing either model
@@ -494,6 +509,118 @@ export function DemoProvider({
         return
       }
 
+      case 'APPLY_AUTOPILOT_BRIEF': {
+        setIsWaiting(true)
+        const proposalButton = document.querySelector(
+          '[data-demo="workspace-proposal-confirm"][data-workspace-field="brief"]',
+        )
+        if (proposalButton) {
+          proposalButton.click()
+        } else {
+          // Older OpenAI responses can hydrate the Brief directly without a
+          // proposal card. Reuse the real Guided approval callback as a
+          // compatibility fallback; GreenNode never enters this walkthrough.
+          await onApproveRef.current?.()
+        }
+        await new Promise(r => setTimeout(r, 800))
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'WAIT_FOR_AUTOPILOT_TASK': {
+        setIsWaiting(true)
+        const expected = new Set(step.taskKeys || [])
+        const timeout = step.timeout || 120000
+        const startedAt = Date.now()
+        const found = await new Promise(resolve => {
+          const poll = () => {
+            const canvas = document.querySelector('[data-demo="autopilot-canvas"]')
+            const taskKey = canvas?.getAttribute('data-autopilot-waiting-task') || ''
+            const status = canvas?.getAttribute('data-autopilot-status') || ''
+            if (expected.has(taskKey)) {
+              resolve(taskKey)
+            } else if (['failed', 'cancelled'].includes(status)) {
+              resolve('')
+            } else if (Date.now() - startedAt > timeout) {
+              log.error(`DemoEngine: WAIT_FOR_AUTOPILOT_TASK timeout for ${[...expected].join(',')}`)
+              resolve('')
+            } else {
+              setTimeout(poll, 500)
+            }
+          }
+          poll()
+        })
+        setIsWaiting(false)
+        if (!found) {
+          setPopup({
+            title: 'Autopilot chưa đến được checkpoint tiếp theo',
+            text: 'Walkthrough đã dừng an toàn vì run bị lỗi, bị hủy hoặc chưa hoàn tất trong thời gian chờ. Các artifact đã lưu vẫn được giữ lại để bạn kiểm tra.',
+            buttons: [
+              { label: 'Dừng walkthrough và kiểm tra run', variant: 'primary', action: 'skip' },
+            ],
+          })
+          return
+        }
+        autopilotWaitingTaskRef.current = found
+        await new Promise(r => setTimeout(r, 700))
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'TRIM_AUTOPILOT_AUDIENCE': {
+        setIsWaiting(true)
+        const keep = Math.max(1, Number(step.keep || 3))
+        const selected = [
+          ...document.querySelectorAll(
+            '[data-demo="autopilot-audience-option"][aria-pressed="true"]',
+          ),
+        ]
+        for (const option of selected.slice(keep).reverse()) {
+          option.click()
+          await new Promise(r => setTimeout(r, 120))
+        }
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'CHANGE_AUTOPILOT_TARGETING': {
+        setIsWaiting(true)
+        for (const dimension of step.dimensions || []) {
+          const option = document.querySelector(
+            `[data-demo="autopilot-targeting-option"][data-targeting-dimension="${dimension}"][aria-pressed="false"]`,
+          )
+          option?.click()
+          await new Promise(r => setTimeout(r, 180))
+        }
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
+      case 'TRIM_AUTOPILOT_PLACEMENTS': {
+        setIsWaiting(true)
+        const keep = Math.max(1, Number(step.keep || 2))
+        let selected = [
+          ...document.querySelectorAll(
+            '[data-demo="autopilot-placement-option"][aria-pressed="true"]',
+          ),
+        ]
+        while (selected.length > keep) {
+          selected[selected.length - 1].click()
+          await new Promise(r => setTimeout(r, 180))
+          selected = [
+            ...document.querySelectorAll(
+              '[data-demo="autopilot-placement-option"][aria-pressed="true"]',
+            ),
+          ]
+        }
+        setIsWaiting(false)
+        setStepIdx(prev => prev + 1)
+        return
+      }
+
       case 'WAIT_FOR_CREATIVE_REVIEW': {
         setIsWaiting(true)
         const {
@@ -701,12 +828,24 @@ export function DemoProvider({
     switch (phase) {
       case PHASE.STAGE1:
         if (tourModeRef.current === 'autopilot') {
+          if (isOpenAIWalkthroughModel(conversationModelRef.current)) {
+            setPhase(PHASE.CONFIRM_LIVE)
+            setPopup({
+              title: 'Tiếp tục với walkthrough Autopilot tương tác?',
+              text: 'Walkthrough sẽ tạo một **OpenAI Autopilot run thật** từ scenario brief, dừng ở năm checkpoint quan trọng và chỉnh Audience, targeting, placement cùng creative assignment.\n\nẢnh AI sẽ dùng quota thật. Walkthrough dừng trước nút tạo order.',
+              buttons: [
+                { label: 'Bắt đầu walkthrough', variant: 'primary', action: 'live' },
+                { label: 'Dừng tại tour giao diện', variant: 'ghost', action: 'skip' },
+              ],
+            })
+            break
+          }
           setPhase(PHASE.COMPLETE)
           setPopup({
             title: 'Tour Campaign Autopilot hoàn tất',
-            text: 'Bạn đã đi qua **brief, nguồn creative, policy review, chat và điểm bắt đầu durable run** ngay trên giao diện thật. Tour không khởi chạy run và không tạo order.',
+            text: 'Walkthrough tương tác hiện được mở trước cho **OpenAI GPT-5.4 mini**. Conversation GreenNode này chỉ chạy tour giao diện và không bị thay đổi; GreenNode walkthrough sẽ được triển khai riêng sau.',
             buttons: [
-              { label: 'Tự khám phá Autopilot', variant: 'primary', action: 'skip' },
+              { label: 'Đã hiểu', variant: 'primary', action: 'skip' },
             ],
           })
           break
@@ -722,8 +861,19 @@ export function DemoProvider({
         })
         break
       case PHASE.STAGE2:
-        setPhase(PHASE.COMPLETE)
-        setPopup(null)
+        if (tourModeRef.current === 'autopilot') {
+          setPhase(PHASE.COMPLETE)
+          setPopup({
+            title: 'Walkthrough Autopilot đã đến Duyệt launch',
+            text: 'Run thật đã đi qua Brief, Audience, targeting, 2 placement và creative assignment. Forecast cùng safety guard đã hoàn tất.\n\nWalkthrough dừng đúng ranh giới an toàn và **chưa tạo order**. Bạn có thể tự review rồi quyết định launch hoặc hủy run.',
+            buttons: [
+              { label: 'Tự review bản launch', variant: 'primary', action: 'skip' },
+            ],
+          })
+        } else {
+          setPhase(PHASE.COMPLETE)
+          setPopup(null)
+        }
         break
       default:
         setPhase(PHASE.IDLE)
@@ -779,6 +929,7 @@ export function DemoProvider({
   const stopDemo = useCallback(() => {
     log.step('DemoEngine: stopDemo')
     openAISeenMetaToolsRef.current.clear()
+    autopilotWaitingTaskRef.current = ''
     setPhase(PHASE.IDLE)
     setStepIdx(0)
     setSteps([])
@@ -843,7 +994,9 @@ export function DemoProvider({
       briefRef.current = pickRandomBrief()
       log.step(`DemoEngine: picked brief "${briefRef.current.id}"`)
       await new Promise(resolve => setTimeout(resolve, 350))
-      const s2 = buildStage2Steps(briefRef.current)
+      const s2 = tourModeRef.current === 'autopilot'
+        ? buildAutopilotLiveSteps(briefRef.current)
+        : buildStage2Steps(briefRef.current)
       setSteps(s2)
       setStepIdx(0)
       setPhase(PHASE.STAGE2)

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { authReturnTo, hasAgentIntent } from '../src/lib/publicExperience.js'
 import { AUTOPILOT_TOUR_STEPS } from '../src/demo/autopilotTour.js'
+import { buildAutopilotLiveSteps } from '../src/demo/autopilotWalkthrough.js'
 import { getDemoDateRange, pickRandomBrief } from '../src/demo/demoScripts.js'
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -12,6 +13,11 @@ const scripts = read('../src/demo/demoScripts.js')
 const app = read('../src/App.jsx')
 const home = read('../src/components/ExperienceSelector.jsx')
 const autopilot = read('../src/components/AutopilotPanel.jsx')
+const autopilotReview = read('../src/components/AutopilotReview.jsx')
+const audienceStep = read('../src/steps/AudienceStep.jsx')
+const targetingPanel = read('../src/components/TargetingPanel.jsx')
+const workspacePane = read('../src/components/WorkspacePane/index.jsx')
+const assignmentEditor = read('../src/steps/setup/CreativeAssignPhase.jsx')
 const imageGenerator = read('../src/steps/creative/AdImageGenerator.jsx')
 const creativeStep = read('../src/steps/CreativeStep.jsx')
 const docs = read('../public/tech-docs.html')
@@ -173,6 +179,59 @@ test('Autopilot guided tour maps every entry decision to the actual canvas', () 
   }
   assert.match(autopilot, /KPI \+ ghi chú audience\/thị trường/)
   assert.match(autopilot, /Upload khi đã có asset chính thức/)
+})
+
+test('OpenAI Autopilot walkthrough edits real review artifacts and stops before launch', () => {
+  const brief = pickRandomBrief(new Date(2026, 6, 23, 12, 0, 0))
+  const live = buildAutopilotLiveSteps(brief)
+  const types = live.map(step => step.type)
+
+  assert.ok(types.includes('APPLY_AUTOPILOT_BRIEF'))
+  assert.ok(types.includes('WAIT_FOR_AUTOPILOT_TASK'))
+  assert.ok(types.includes('TRIM_AUTOPILOT_AUDIENCE'))
+  assert.ok(types.includes('CHANGE_AUTOPILOT_TARGETING'))
+  assert.ok(types.includes('TRIM_AUTOPILOT_PLACEMENTS'))
+
+  const waits = live
+    .filter(step => step.type === 'WAIT_FOR_AUTOPILOT_TASK')
+    .flatMap(step => step.taskKeys)
+  for (const checkpoint of [
+    'retrieve_audience',
+    'derive_targeting',
+    'plan_placement_intent',
+    'assign_creatives',
+    'launch_approval',
+  ]) {
+    assert.ok(waits.includes(checkpoint), `missing ${checkpoint} checkpoint`)
+  }
+
+  assert.match(engine, /isOpenAIWalkthroughModel\(conversationModelRef\.current\)/)
+  assert.match(engine, /buildAutopilotLiveSteps/)
+  assert.match(engine, /whenAutopilotTask/)
+  assert.match(engine, /case 'WAIT_FOR_AUTOPILOT_TASK'/)
+  assert.match(engine, /case 'TRIM_AUTOPILOT_AUDIENCE'/)
+  assert.match(engine, /case 'CHANGE_AUTOPILOT_TARGETING'/)
+  assert.match(engine, /case 'TRIM_AUTOPILOT_PLACEMENTS'/)
+
+  assert.match(audienceStep, /data-demo="autopilot-audience-option"/)
+  assert.match(targetingPanel, /data-demo="autopilot-targeting-option"/)
+  assert.match(autopilotReview, /data-demo="autopilot-placement-option"/)
+  assert.match(workspacePane, /data-demo="autopilot-editor-save"/)
+  assert.match(assignmentEditor, /data-demo="autopilot-creative-assignment-editor"/)
+  assert.match(autopilot, /data-demo="autopilot-review-approve"/)
+
+  const launchWait = live.findIndex(
+    step => step.type === 'WAIT_FOR_AUTOPILOT_TASK' && step.taskKeys.includes('launch_approval'),
+  )
+  assert.ok(launchWait >= 0)
+  assert.equal(
+    live.slice(launchWait).some(
+      step => step.type === 'CLICK_EL'
+        && step.target?.includes('autopilot-review-approve')
+        && step.target?.includes('launch_approval'),
+    ),
+    false,
+  )
 })
 
 test('technical document removes part 10 and forces a reliable Agent navigation', () => {

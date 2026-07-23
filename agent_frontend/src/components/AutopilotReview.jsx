@@ -141,6 +141,7 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
           <button
             type="button"
             key={zone.id || index}
+            data-demo="autopilot-placement-option"
             disabled={!editable}
             aria-pressed={activeIds.has(zone.id)}
             onClick={() => toggle(zone.id)}
@@ -279,7 +280,13 @@ export default function AutopilotReview({ task, label, brief, formatPlan, select
   else content = <GenericReview task={task} value={value} />
 
   return (
-    <section id="autopilot-review-artifact" className="scroll-mt-24 rounded-2xl border-2 border-amber-300 bg-white p-4 shadow-sm" aria-labelledby="autopilot-review-title">
+    <section
+      id="autopilot-review-artifact"
+      data-demo="autopilot-review-artifact"
+      data-autopilot-task={task.key}
+      className="scroll-mt-24 rounded-2xl border-2 border-amber-300 bg-white p-4 shadow-sm"
+      aria-labelledby="autopilot-review-title"
+    >
       <div className="mb-3 flex items-start gap-2">
         <span className="mt-0.5 rounded-lg bg-amber-100 p-1.5 text-amber-800">{icon}</span>
         <div>

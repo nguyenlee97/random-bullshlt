@@ -15,6 +15,8 @@ function AttrCard({ attr, selected, onToggle, reason, isReco }) {
   const sel = selected
   return (
     <button onClick={() => onToggle(attr)}
+      data-demo="autopilot-audience-option"
+      aria-pressed={selected}
       className={cn('flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all duration-150 w-full',
         sel && 'border-brand-400 bg-brand-50 shadow-sm',
         !sel && isReco && 'border-amber-300 bg-amber-50/60 hover:border-amber-400',

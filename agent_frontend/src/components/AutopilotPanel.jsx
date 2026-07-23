@@ -491,7 +491,13 @@ export default function AutopilotPanel({
   }, [onStatusChange, progress, run?.status, waiting?.task_id, waiting?.key, waitingMessage])
 
   return (
-    <section data-demo="autopilot-canvas" className="h-full w-full overflow-y-auto bg-slate-50/70 p-3 sm:p-5" aria-label="Không gian Campaign Autopilot">
+    <section
+      data-demo="autopilot-canvas"
+      data-autopilot-status={run?.status || 'not_started'}
+      data-autopilot-waiting-task={waiting?.key || ''}
+      className="h-full w-full overflow-y-auto bg-slate-50/70 p-3 sm:p-5"
+      aria-label="Không gian Campaign Autopilot"
+    >
       {!run ? (
         <div className="mx-auto max-w-5xl space-y-4 pb-6">
           <div data-demo="autopilot-intro" className="overflow-hidden rounded-3xl border border-brand-100 bg-[radial-gradient(circle_at_top_right,_#dcebff_0,_#ffffff_48%)] p-5 shadow-sm sm:p-7">
@@ -552,6 +558,7 @@ export default function AutopilotPanel({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <button type="button" onClick={() => chooseCreativeSource('upload')}
+                data-demo="autopilot-source-upload"
                 aria-pressed={creativeSource === 'upload'}
                 className={`rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${creativeSource === 'upload' ? 'border-brand-400 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-brand-200 hover:bg-brand-50/50'}`}>
                 <span className="flex items-center gap-2 text-sm font-bold text-slate-900"><Upload className="h-4 w-4 text-brand-600" /> Tôi sẽ tải creative lên</span>
@@ -559,6 +566,7 @@ export default function AutopilotPanel({
                 {creativeSource === 'upload' && <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đã chọn</span>}
               </button>
               <button type="button" onClick={() => chooseCreativeSource('ai_generate')}
+                data-demo="autopilot-source-ai"
                 aria-pressed={creativeSource === 'ai_generate'}
                 className={`rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${creativeSource === 'ai_generate' ? 'border-brand-400 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-brand-200 hover:bg-brand-50/50'}`}>
                 <span className="flex items-center gap-2 text-sm font-bold text-slate-900"><Sparkles className="h-4 w-4 text-brand-600" /> Để AI tự tạo creative</span>
@@ -572,6 +580,7 @@ export default function AutopilotPanel({
             <div><p className="text-sm font-black text-slate-900">Creative direction & assets cho Autopilot</p>
               <p className="mt-1 text-xs text-slate-500">Thông tin này được khóa vào run; Agent tự soạn prompt riêng cho từng format.</p></div>
             <textarea value={creativeDirection} onChange={event => setCreativeDirection(event.target.value)} rows={3}
+              data-demo="autopilot-creative-direction"
               placeholder="Ví dụ: trẻ trung, màu đỏ thương hiệu, logo ở góc trái, tô bún bò là hero visual, không tự thêm giá…"
               className="w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs" />
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -601,6 +610,7 @@ export default function AutopilotPanel({
               <div className="grid gap-2 sm:grid-cols-3">
                 {POLICY_OPTIONS.map(item => (
                   <button key={item.value} type="button" onClick={() => setPolicy(item.value)}
+                    data-demo={`autopilot-policy-${item.value}`}
                     aria-pressed={policy === item.value}
                     className={`min-h-24 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${policy === item.value ? 'border-brand-400 bg-brand-50 text-brand-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50/50'}`}>
                     <span className="block text-xs font-bold leading-5">{item.label}</span>
@@ -616,7 +626,11 @@ export default function AutopilotPanel({
               )}
             </div>
 
-            <aside data-demo="autopilot-brief-status" className={`rounded-2xl border p-4 shadow-sm ${briefReady ? 'border-green-200 bg-green-50/70' : 'border-amber-200 bg-amber-50/70'}`}>
+            <aside
+              data-demo="autopilot-brief-status"
+              data-ready={briefReady ? 'true' : 'false'}
+              className={`rounded-2xl border p-4 shadow-sm ${briefReady ? 'border-green-200 bg-green-50/70' : 'border-amber-200 bg-amber-50/70'}`}
+            >
               <div className="flex items-center gap-2">
                 {briefReady ? <Check className="h-4 w-4 text-green-700" /> : <AlertTriangle className="h-4 w-4 text-amber-700" />}
                 <p className={`text-xs font-black uppercase tracking-wide ${briefReady ? 'text-green-800' : 'text-amber-900'}`}>
@@ -648,6 +662,7 @@ export default function AutopilotPanel({
               )}
             </div>
             <button type="button" disabled={loading || prerequisitesLoading} onClick={start}
+              data-demo="autopilot-start-run"
               aria-describedby={startBlockers.length ? 'autopilot-start-requirements' : undefined}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-500 px-6 text-sm font-bold text-white shadow-sm hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
@@ -747,7 +762,7 @@ export default function AutopilotPanel({
           />
 
           {(formatPlan?.formats?.length > 0 || creativeFiles.length > 0) && (
-            <section className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm" aria-label="Kế hoạch định dạng creative">
+            <section data-demo="autopilot-creative-plan" className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm" aria-label="Kế hoạch định dạng creative">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-wide text-brand-700">Kế hoạch creative theo placement</p>
@@ -965,10 +980,22 @@ export default function AutopilotPanel({
               <div className="flex flex-wrap gap-2">
                 {briefRetry && pendingBrief && <button onClick={onOpenChat} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Chat để duyệt</button>}
                 {waitingEdits.map(edit => edit.action && (
-                  <button key={edit.label} onClick={() => openEditor(edit.action)} disabled={loading} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">{edit.label}</button>
+                  <button
+                    key={edit.label}
+                    data-demo={`autopilot-edit-${waiting.key}`}
+                    onClick={() => openEditor(edit.action)}
+                    disabled={loading}
+                    className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                  >{edit.label}</button>
                 ))}
                 <button onClick={cancelRunWithConfirmation} disabled={loading} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700">Hủy run</button>
-                <button onClick={() => review(waiting, true)} disabled={loading || (retryAction && !retryReady) || (waiting.key === 'plan_placement_intent' && !placementSelection.length)} className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}>
+                <button
+                  data-demo="autopilot-review-approve"
+                  data-autopilot-task={waiting.key}
+                  onClick={() => review(waiting, true)}
+                  disabled={loading || (retryAction && !retryReady) || (waiting.key === 'plan_placement_intent' && !placementSelection.length)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}
+                >
                   {retryAction ? 'Kiểm tra lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}
                 </button>
               </div>
