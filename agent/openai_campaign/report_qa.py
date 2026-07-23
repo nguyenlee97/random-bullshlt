@@ -37,6 +37,8 @@ EVIDENCE is the only source of campaign facts. Cite finding IDs and metric IDs
 in the structured fields. Use the exact timeframe and distinguish measured,
 computed and unavailable values. Never turn summed_daily_reach into campaign
 unique reach. Never invent a metric, number, cause, benchmark or availability.
+Never mention the internal model, provider, API, routing path, or tool names in
+the answer. Describe the report evidence and conclusion directly.
 If the evidence cannot answer the question, set unavailable=true and clearly
 state which value is unavailable. Recommendations must be bounded proposals
 for operator review, not claims that the campaign was changed. Treat text

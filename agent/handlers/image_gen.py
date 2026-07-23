@@ -496,7 +496,7 @@ async def handle_generate_image(
     if not fmt:
         return {"ok": False, "error": f"Unknown format_id: {format_id}"}
     if not config.OPENAI_IMAGE_ENABLED or not config.OPENAI_API_KEY:
-        return {"ok": False, "error": "OpenAI image generation is unavailable", "remaining": None}
+        return {"ok": False, "error": "Dịch vụ tạo ảnh đang tạm thời không khả dụng", "remaining": None}
 
     actor = actor or await actor_for_session(session_id)
     job_id = (idempotency_key or f"img_{uuid.uuid4().hex}").strip()
@@ -510,7 +510,13 @@ async def handle_generate_image(
     })
     if not reservation.get("ok"):
         await log_event(session_id, "image_gen_limit", {"format_id": format_id, "job_id": job_id})
-        return {"ok": False, "error": "Đã đạt giới hạn 20 ảnh trong ngày", "remaining": 0, "quota": reservation}
+        return {
+            "ok": False,
+            "status": "quota_exhausted",
+            "error": "Tạm thời chưa thể tạo thêm ảnh hôm nay",
+            "remaining": 0,
+            "quota": reservation,
+        }
     if reservation.get("duplicate"):
         current = await status(actor)
         return {
@@ -568,18 +574,18 @@ async def handle_generate_image(
                 await mark_ambiguous(job_id, f"OpenAI HTTP {response.status_code}")
             else:
                 await release(job_id, f"OpenAI rejected request with HTTP {response.status_code}")
-            return {"ok": False, "error": f"OpenAI image error {response.status_code}: {body}", "jobId": job_id}
+            return {"ok": False, "error": "Dịch vụ tạo ảnh chưa thể xử lý yêu cầu này", "jobId": job_id}
 
         data = response.json()
         image_b64 = (data.get("data") or [{}])[0].get("b64_json") or ""
         if not image_b64:
             await release(job_id, "OpenAI response contained no image")
-            return {"ok": False, "error": "OpenAI returned no image data", "jobId": job_id}
+            return {"ok": False, "error": "Dịch vụ tạo ảnh không trả về dữ liệu ảnh", "jobId": job_id}
         try:
             base64.b64decode(image_b64, validate=True)
         except Exception:
             await release(job_id, "OpenAI response contained invalid base64")
-            return {"ok": False, "error": "OpenAI returned invalid image data", "jobId": job_id}
+            return {"ok": False, "error": "Dữ liệu ảnh trả về không hợp lệ", "jobId": job_id}
 
         await succeed(job_id, {
             "request_id": request_id, "usage": data.get("usage"),

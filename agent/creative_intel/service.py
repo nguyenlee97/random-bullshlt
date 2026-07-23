@@ -63,7 +63,7 @@ def _has_retryable_vlm_failure(doc: dict) -> bool:
     if doc.get("vlm_error"):
         return True
     return any(
-        str(reason).startswith("VLM lỗi")
+        str(reason).startswith("Phân tích hình ảnh gặp lỗi")
         for reason in doc.get("review_reasons") or []
     )
 
@@ -533,7 +533,7 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
                 "type": type(exc).__name__,
                 "message": str(exc)[:300],
             }
-            reasons.append(f"VLM lỗi — cần duyệt thủ công ({str(exc)[:80]})")
+            reasons.append("Phân tích hình ảnh gặp lỗi — cần duyệt thủ công")
         finally:
             VLM_SECONDS.labels(model=route["model"]).observe(
                 asyncio.get_running_loop().time() - started

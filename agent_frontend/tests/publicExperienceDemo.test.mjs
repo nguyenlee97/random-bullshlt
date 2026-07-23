@@ -91,24 +91,14 @@ test('Copilot demo is restored as a spotlight tour over the real interface', () 
   assert.match(app, /ref=\{appShellRef\} className="fixed inset-0 flex h-screen flex-col overflow-clip/)
 })
 
-test('Copilot creative walkthrough teaches assets, prompt composition, and quota consent', () => {
-  for (const target of [
-    'creative-reference-assets',
-    'image-quota-counter',
-    'image-quota-consent',
-  ]) {
-    assert.match(imageGenerator, new RegExp(`data-demo="${target}"`))
-    assert.match(scripts, new RegExp(`data-demo="${target}"`))
-  }
-  assert.match(imageGenerator, /id="image-quota-checkbox"/)
+test('Copilot creative walkthrough teaches assets and prompt composition without exposing provider or quota details', () => {
+  assert.match(imageGenerator, /data-demo="creative-reference-assets"/)
+  assert.match(scripts, /data-demo="creative-reference-assets"/)
   assert.match(scripts, /target: '#btn-compose-creative-prompt'/)
   assert.match(scripts, /target: '\[data-testid="creative-prompt-spec"\]'/)
-  assert.match(scripts, /target: '#image-quota-checkbox'/)
-
-  const consentIndex = scripts.indexOf("target: '#image-quota-checkbox'")
-  const generateIndex = scripts.indexOf("target: '#btn-ai-generate'", consentIndex)
-  assert.ok(consentIndex >= 0)
-  assert.ok(generateIndex > consentIndex)
+  assert.doesNotMatch(imageGenerator, /image-quota-counter|image-quota-consent|image-quota-checkbox|GPT Image|OpenAI Creative/)
+  assert.doesNotMatch(scripts, /image-quota-counter|image-quota-consent|image-quota-checkbox|GPT Image|quota/)
+  assert.match(imageGenerator, /disabled=\{!selectedFormatId \|\| generating\}/)
 })
 
 test('Copilot creative walkthrough waits for analysis and handles manual review before Setup', () => {
@@ -181,9 +171,9 @@ test('Autopilot guided tour maps every entry decision to the actual canvas', () 
   assert.match(autopilot, /Upload khi đã có asset chính thức/)
 })
 
-test('OpenAI Autopilot walkthrough edits real review artifacts and stops before launch', () => {
+test('Autopilot walkthrough explains internals, edits real review artifacts, and stops before launch', () => {
   const brief = pickRandomBrief(new Date(2026, 6, 23, 12, 0, 0))
-  const live = buildAutopilotLiveSteps(brief)
+  const live = buildAutopilotLiveSteps(brief, { creativeSource: 'ai_generate' })
   const types = live.map(step => step.type)
 
   assert.ok(types.includes('APPLY_AUTOPILOT_BRIEF'))
@@ -191,6 +181,13 @@ test('OpenAI Autopilot walkthrough edits real review artifacts and stops before 
   assert.ok(types.includes('TRIM_AUTOPILOT_AUDIENCE'))
   assert.ok(types.includes('CHANGE_AUTOPILOT_TARGETING'))
   assert.ok(types.includes('TRIM_AUTOPILOT_PLACEMENTS'))
+  assert.match(JSON.stringify(live), /Duyệt từng giai đoạn/)
+  assert.match(JSON.stringify(live), /human-in-the-loop/)
+  assert.match(JSON.stringify(live), /Tự xây dựng bản nháp/)
+  assert.match(JSON.stringify(live), /autopilot-plan-details/)
+  assert.match(JSON.stringify(live), /autopilot-strategy-calculation/)
+  assert.match(JSON.stringify(live), /autopilot-technical-details/)
+  assert.doesNotMatch(JSON.stringify(live), /OpenAI|GPT Image|quota|VLM/)
 
   const waits = live
     .filter(step => step.type === 'WAIT_FOR_AUTOPILOT_TASK')
@@ -219,6 +216,8 @@ test('OpenAI Autopilot walkthrough edits real review artifacts and stops before 
   assert.match(workspacePane, /data-demo="autopilot-editor-save"/)
   assert.match(assignmentEditor, /data-demo="autopilot-creative-assignment-editor"/)
   assert.match(autopilot, /data-demo="autopilot-review-approve"/)
+  assert.match(autopilot, /data-demo="autopilot-plan-details"/)
+  assert.match(autopilot, /data-demo="autopilot-technical-details"/)
 
   const launchWait = live.findIndex(
     step => step.type === 'WAIT_FOR_AUTOPILOT_TASK' && step.taskKeys.includes('launch_approval'),
@@ -232,6 +231,23 @@ test('OpenAI Autopilot walkthrough edits real review artifacts and stops before 
     ),
     false,
   )
+})
+
+test('Autopilot walkthrough can use every pre-generated scenario creative without image generation', () => {
+  const brief = pickRandomBrief(new Date(2026, 6, 23, 12, 0, 0))
+  const live = buildAutopilotLiveSteps(brief, { creativeSource: 'upload' })
+  const uploadChoice = live.find(step => step.target === '[data-demo="autopilot-source-upload"]')
+  const injection = live.find(step => step.type === 'INJECT_DEMO_CREATIVES')
+  const uploadedCheckpoint = live.find(
+    step => step.type === 'WAIT_FOR_AUTOPILOT_TASK' && step.taskKeys.includes('prepare_creatives'),
+  )
+
+  assert.ok(uploadChoice)
+  assert.equal(injection?.briefId, brief.id)
+  assert.ok(uploadedCheckpoint)
+  assert.ok(live.some(step => step.target === '#creative-drop-zone'))
+  assert.ok(live.some(step => step.type === 'WAIT_FOR_CREATIVE_REVIEW'))
+  assert.equal(live.some(step => step.target === '[data-demo="autopilot-source-ai"]'), false)
 })
 
 test('technical document removes part 10 and forces a reliable Agent navigation', () => {

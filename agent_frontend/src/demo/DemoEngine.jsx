@@ -832,7 +832,7 @@ export function DemoProvider({
             setPhase(PHASE.CONFIRM_LIVE)
             setPopup({
               title: 'Tiếp tục với walkthrough Autopilot tương tác?',
-              text: 'Walkthrough sẽ tạo một **OpenAI Autopilot run thật** từ scenario brief, dừng ở năm checkpoint quan trọng và chỉnh Audience, targeting, placement cùng creative assignment.\n\nẢnh AI sẽ dùng quota thật. Walkthrough dừng trước nút tạo order.',
+              text: 'Walkthrough sẽ tạo một **Autopilot run thật** từ scenario brief, giới thiệu cách đọc plan và evidence, rồi dừng ở năm checkpoint quan trọng để chỉnh Audience, targeting, placement cùng creative assignment.\n\nNguồn creative được chọn ngẫu nhiên giữa bộ file chuẩn bị trước và phương án tạo tự động. Walkthrough dừng trước nút tạo order.',
               buttons: [
                 { label: 'Bắt đầu walkthrough', variant: 'primary', action: 'live' },
                 { label: 'Dừng tại tour giao diện', variant: 'ghost', action: 'skip' },
@@ -843,7 +843,7 @@ export function DemoProvider({
           setPhase(PHASE.COMPLETE)
           setPopup({
             title: 'Tour Campaign Autopilot hoàn tất',
-            text: 'Walkthrough tương tác hiện được mở trước cho **OpenAI GPT-5.4 mini**. Conversation GreenNode này chỉ chạy tour giao diện và không bị thay đổi; GreenNode walkthrough sẽ được triển khai riêng sau.',
+            text: 'Bạn đã hoàn tất tour giao diện. Walkthrough tương tác chưa được bật cho cấu hình campaign này; bạn vẫn có thể bắt đầu và vận hành Autopilot trực tiếp từ workspace.',
             buttons: [
               { label: 'Đã hiểu', variant: 'primary', action: 'skip' },
             ],

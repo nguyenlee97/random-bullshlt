@@ -390,16 +390,16 @@ export function useChat({
               role: 'assistant',
               content: markApproved
                 ? `✅ Đã phân tích xong ${prepared.length} creative. Anh/Chị hãy đọc kết quả trong workspace, sau đó bấm “Xác nhận & sang Setup” khi đã sẵn sàng.`
-                : `✅ ${prepared.length} creative đã được phân tích và lưu an toàn.`,
+                : `✅ ${prepared.length} creative đã được phân tích. Anh/Chị hãy đọc kết quả, sau đó bấm “Lưu & quay lại Autopilot” khi đã sẵn sàng.`,
               blocks: [],
               timestamp: new Date().toISOString(),
               metadata: { tool: 'creative_approved', model: 'none', step: 2 },
               suggestions: [],
             }
-            // Guided mode always pauses so the operator can read the completed
-            // analysis. Autopilot artifact repair already uses this click as
-            // its explicit review/save boundary and may return to the run.
-            shouldAdvance = !markApproved
+            // Both modes pause after the first analysis pass so the operator
+            // can read an auto-approved result instead of being fast-forwarded.
+            // A second explicit confirmation persists the ready file set.
+            shouldAdvance = false
           }
         } catch (error) {
           shouldAdvance = false

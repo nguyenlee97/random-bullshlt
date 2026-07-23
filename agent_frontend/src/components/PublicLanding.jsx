@@ -7,7 +7,7 @@ import { useEffect, useRef } from 'react'
 
 const orbitNodes = [
   { label: 'Audience', meta: 'Intent matched', icon: Radar, className: 'campaign-node-a' },
-  { label: 'Creative', meta: 'VLM reviewed', icon: Image, className: 'campaign-node-b' },
+  { label: 'Creative', meta: 'Quality reviewed', icon: Image, className: 'campaign-node-b' },
   { label: 'Placement', meta: 'Inventory fit', icon: Target, className: 'campaign-node-c' },
   { label: 'Report', meta: 'Decision ready', icon: TrendingUp, className: 'campaign-node-d' },
 ]

@@ -20,7 +20,7 @@ export default function StrategySimulator({ value, busy, canSelect = true, selec
   if (!options.length) return null
 
   return (
-    <section className="mt-3 rounded-2xl border border-brand-200 bg-gradient-to-br from-white to-brand-50/60 p-3 sm:p-4" aria-labelledby="strategy-simulator-title">
+    <section data-demo="autopilot-strategy-simulator" className="mt-3 rounded-2xl border border-brand-200 bg-gradient-to-br from-white to-brand-50/60 p-3 sm:p-4" aria-labelledby="strategy-simulator-title">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-600">So sánh phương án</p>
@@ -84,7 +84,7 @@ export default function StrategySimulator({ value, busy, canSelect = true, selec
       </div>
 
       {value.calculation?.inputs && (
-        <details className="mt-3 rounded-xl border border-brand-100 bg-white/80 px-3 py-2 text-xs text-slate-600">
+        <details data-demo="autopilot-strategy-calculation" className="mt-3 rounded-xl border border-brand-100 bg-white/80 px-3 py-2 text-xs text-slate-600">
           <summary className="cursor-pointer font-bold text-slate-800">Số liệu này được tính như thế nào?</summary>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
             <p><span className="font-semibold text-slate-800">Đầu vào:</span> {money(value.calculation.inputs.budget_vnd)} · {value.calculation.inputs.duration_days} ngày · {value.calculation.inputs.objective}</p>

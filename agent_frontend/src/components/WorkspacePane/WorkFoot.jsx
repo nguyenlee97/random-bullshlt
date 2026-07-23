@@ -1,28 +1,20 @@
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { ChevronRight, ChevronLeft, Check, Loader2, Wrench, Cpu } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Check, Loader2, Wrench } from 'lucide-react'
 
-const modelLabel = model => model === 'openai_gpt_5_4_mini'
-  ? 'OpenAI · GPT-5.4 mini'
-  : 'GreenNode · MiniMax M2.5'
-
-export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canApprove, busy, onApprove, onBack, onNext, approveLabel = '', conversationModel = 'greennode_minimax' }) {
+export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canApprove, busy, onApprove, onBack, onNext, approveLabel = '' }) {
   const isDone = stepStatus === 'done'
   const isLast = stepIndex === totalSteps - 1
   // No model toggle needed — single backend model
 
   return (
     <div className="border-t border-border px-5 py-3 bg-white flex-shrink-0 flex items-center gap-3">
-      {/* Tool & model info */}
+      {/* Current workflow tool */}
       <div className="flex items-center gap-1.5 flex-1 min-w-0">
         <Badge variant="muted" className="gap-1 text-[10px] h-5">
           <Wrench className="w-2.5 h-2.5" />
           <span className="truncate max-w-[140px]">{step.tool}</span>
-        </Badge>
-        <Badge variant="model-qwen" className="gap-1 text-[10px] h-5 hidden sm:flex">
-          <Cpu className="w-2.5 h-2.5" />
-          {modelLabel(conversationModel)}
         </Badge>
       </div>
 

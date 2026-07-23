@@ -28,10 +28,8 @@ test('resume displays the stored model but exposes no mid-run switch', () => {
   assert.doesNotMatch(api, /updateConversationModel|setConversationModel/)
 })
 
-test('workspace provenance displays the immutable conversation model', () => {
-  assert.match(app, /conversationModel=\{currentConversationModel\}/)
-  assert.match(workspace, /conversationModel=\{conversationModel\}/)
-  assert.match(workFoot, /OpenAI · GPT-5\.4 mini/)
-  assert.match(workFoot, /GreenNode · MiniMax M2\.5/)
-  assert.doesNotMatch(workFoot, />\s*Minimax-M2\.5\s*</)
+test('workspace keeps model routing internal after the homepage choice', () => {
+  assert.doesNotMatch(workspace, /conversationModel=\{conversationModel\}/)
+  assert.doesNotMatch(workFoot, /OpenAI|GPT-5|GreenNode|MiniMax|conversationModel/)
+  assert.match(workFoot, /Current workflow tool/)
 })

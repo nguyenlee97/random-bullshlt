@@ -702,7 +702,7 @@ export default function AutopilotPanel({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+          <div data-demo="autopilot-execution-plan" className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-black uppercase tracking-wide text-slate-500">Tiến độ thực thi</p>
@@ -724,7 +724,7 @@ export default function AutopilotPanel({
                 </li>
               ))}
             </ol>
-            <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
+            <details data-demo="autopilot-plan-details" className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
               <summary className="cursor-pointer text-[11px] font-bold text-slate-700">Xem toàn bộ {orderedTasks.length} bước theo thứ tự</summary>
               <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {orderedTasks.map((task, index) => (
@@ -808,7 +808,9 @@ export default function AutopilotPanel({
                             </div>
                             <span className="rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-bold text-green-700">{taskByKey.analyze_creatives?.status === 'succeeded' ? 'Đã phân tích' : 'Đã tạo'}</span>
                           </div>
-                          <p className="mt-2 text-[10px] text-slate-500">Phủ {creativeCoverage[index]?.length || 0} placement · {file.generation?.model || 'file tải lên'}</p>
+                          <p className="mt-2 text-[10px] text-slate-500">
+                            Phủ {creativeCoverage[index]?.length || 0} placement · {file.aiGenerated || file.generation ? 'Creative được tạo tự động' : 'Creative tải lên'}
+                          </p>
                           {file.url && <a href={file.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-brand-700 hover:underline">Mở ảnh gốc <ExternalLink className="h-3 w-3" /></a>}
                         </div>
                       </article>
@@ -937,7 +939,7 @@ export default function AutopilotPanel({
               </div>
             )}
 
-            <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
+            <details data-demo="autopilot-technical-details" className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
               <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-bold text-slate-700">
                 <Activity className="h-4 w-4 text-brand-500" /> Chi tiết kỹ thuật
                 <span className="font-normal text-slate-500">trace · RAG/rerank · guard · idempotency</span>

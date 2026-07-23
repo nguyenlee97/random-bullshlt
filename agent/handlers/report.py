@@ -388,7 +388,7 @@ async def handle_report_chat(
             })
             return AgentResponse(
                 text=(
-                    "Em chưa thể trả lời an toàn từ report-evidence-v1 ở lượt này. "
+                    "Em chưa thể trả lời an toàn từ dữ liệu báo cáo hiện có ở lượt này. "
                     "Các số liệu hiện có vẫn giữ nguyên; anh/chị thử lại sau khi báo cáo hoàn tất nhé."
                 ),
                 blocks=[],

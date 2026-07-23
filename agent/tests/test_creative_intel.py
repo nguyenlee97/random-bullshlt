@@ -434,7 +434,7 @@ async def test_provider_change_requeues_only_failed_vlm_verdict(monkeypatch):
         "url": url,
         "status": "needs_review",
         "review_reasons": [
-            "VLM lỗi — cần duyệt thủ công (requested model not found)",
+            "Phân tích hình ảnh gặp lỗi — cần duyệt thủ công",
         ],
         "vlm_route_key": "greennode:qwen/qwen3-5-27b",
         "completed_at": service._now(),

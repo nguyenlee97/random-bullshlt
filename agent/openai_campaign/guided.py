@@ -621,7 +621,7 @@ async def _grounded_audience_entry(
                 **selection, "targeting": targeting,
             },
             "reason": (
-                f"OpenAI gợi ý {len(enriched)} segment catalog-grounded "
+                f"Agent gợi ý {len(enriched)} segment dựa trên catalog "
                 f"phù hợp với brief {brief.get('brand', '')}"
             ),
         },

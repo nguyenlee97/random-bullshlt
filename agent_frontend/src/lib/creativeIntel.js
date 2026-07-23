@@ -21,7 +21,7 @@ export function isRetryableCreativeAnalysisFailure(file = {}) {
   if (file.analysisStatus !== 'needs_review') return false
   if (file.vlmError) return true
   return (file.reviewReasons || []).some(reason => (
-    String(reason).trim().toLocaleLowerCase('vi').startsWith('vlm lỗi')
+    String(reason).trim().toLocaleLowerCase('vi').startsWith('phân tích hình ảnh gặp lỗi')
   ))
 }
 

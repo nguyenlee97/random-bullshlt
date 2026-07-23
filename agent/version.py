@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-23.11"
+BUILD_VERSION = "2026-07-23.12"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -35,10 +35,12 @@ BUILD_FEATURES = [
     "image-gen-canvas-crop",          # frontend canvas crop+resize to exact pixel dimensions
     "image-gen-quota",                # durable 20-output daily actor quota
     "creative-assets-conversation-scope", # reference assets cannot leak across chats
-    "creative-walkthrough-image-quota",   # walkthrough teaches assets, prompt spec and quota consent
+    "creative-walkthrough-assets-prompt", # walkthrough teaches assets and prompt composition without quota UI
     "creative-walkthrough-review-gate",  # walkthrough waits for analysis/manual review before Setup
     "creative-walkthrough-manual-review-auto-advance", # typing hands off to approval action
     "openai-autopilot-interactive-walkthrough", # real run edits audience, targeting, placements and assignments
+    "autopilot-dual-creative-walkthrough", # randomly exercises uploaded or automatically prepared creatives
+    "provider-neutral-campaign-ux",        # provider details stay at homepage selection only
     "image-gen-lightbox",             # click-to-zoom lightbox in AI image gallery
     "image-gen-brief-preview",        # collapsible brief+audience preview in generator UI
     "email-step",                     # Step 6: PDF generation + Resend email delivery

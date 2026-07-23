@@ -524,8 +524,8 @@ async def _handle_openai_freeform_impl(
             "state_changed": False,
         })
         reply = (
-            "Luồng OpenAI đang tạm thời không phản hồi. Campaign vẫn giữ nguyên "
-            "model đã chọn và không có dữ liệu nào bị thay đổi."
+            "Agent đang tạm thời không phản hồi. Campaign vẫn giữ nguyên trạng thái "
+            "hiện tại và không có dữ liệu nào bị thay đổi."
         )
         return AgentResponse(
             text=reply,

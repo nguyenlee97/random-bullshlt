@@ -21,7 +21,7 @@ test('creative review separates analysis completion from operator confirmation',
 test('only failed VLM infrastructure verdicts are eligible for re-analysis', () => {
   assert.equal(isRetryableCreativeAnalysisFailure({
     analysisStatus: 'needs_review',
-    reviewReasons: ['VLM lỗi — cần duyệt thủ công (model not found)'],
+    reviewReasons: ['Phân tích hình ảnh gặp lỗi — cần duyệt thủ công'],
   }), true)
   assert.equal(isRetryableCreativeAnalysisFailure({
     analysisStatus: 'needs_review',
