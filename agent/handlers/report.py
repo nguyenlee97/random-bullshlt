@@ -369,7 +369,7 @@ async def handle_report_chat(
                 "title": f"Phân tích — {answer.report_type.replace('_', ' ').title()}",
                 "sections": [
                     {"type": "summary", "text": answer.answer},
-                    {"type": "limitation", "text": source_text + ". Dữ liệu mô phỏng (showcase)."},
+                    {"type": "limitation", "text": source_text},
                 ],
             }]
             await add_message(session_id, "user", message)

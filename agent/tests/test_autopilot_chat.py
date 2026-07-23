@@ -7,6 +7,10 @@ def test_review_intent_requires_explicit_language_and_rejects_negation_first():
     assert review_intent("Đồng ý, tiếp tục") == "approve"
     assert review_intent("Tôi không đồng ý") == "reject"
     assert review_intent("Tại sao Agent chọn audience này?") == "question"
+    assert review_intent(
+        "Tôi đang hỏi để review, chưa phê duyệt creative."
+    ) == "question"
+    assert review_intent("Có nên phê duyệt bước này không?") == "question"
 
 
 @pytest.mark.asyncio
@@ -64,13 +68,30 @@ async def test_waiting_review_records_only_explicit_decision(monkeypatch):
         decisions.append(approved)
         return {"run_id": run_id}
 
+    async def fake_question(**kwargs):
+        assert kwargs["context"]["review_checkpoint"]["key"] == "launch_approval"
+        return "Order gồm audience, placement và creative hiện tại.", {
+            "provider": "greennode",
+            "model": "minimax-m2.5",
+        }
+
     monkeypatch.setattr(chat, "add_message", fake_add_message)
+    monkeypatch.setattr(chat, "_answer_greennode_autopilot_question", fake_question)
     monkeypatch.setattr(workspace_service, "get_workspace", fake_workspace)
     monkeypatch.setattr(service, "get_latest_run", fake_run)
     monkeypatch.setattr(service, "review_task", fake_review)
 
     question = await route_autopilot_chat("Order này gồm những gì?", "session-2", 3)
-    assert question.meta.tool == "autopilot_review_explain"
+    assert question.meta.tool == "autopilot_review_qa"
+    assert "chỉ là câu trả lời review" in question.text
+    assert decisions == []
+
+    deferred = await route_autopilot_chat(
+        "Kiểm tra logo giúp tôi, tôi đang hỏi để review, chưa phê duyệt creative.",
+        "session-2",
+        3,
+    )
+    assert deferred.meta.tool == "autopilot_review_qa"
     assert decisions == []
 
     approved = await route_autopilot_chat("Đồng ý, tiếp tục", "session-2", 3)

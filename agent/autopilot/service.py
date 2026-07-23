@@ -21,7 +21,13 @@ APPROVAL_POLICIES = {
 }
 RUN_TERMINAL = {"completed", "failed", "cancelled"}
 TASK_TERMINAL = {"succeeded", "failed", "cancelled", "skipped"}
-AUTOPILOT_WORKSPACE_ACTORS = {"autopilot_worker", "autopilot_review"}
+AUTOPILOT_WORKSPACE_ACTORS = {
+    "autopilot_worker",
+    "autopilot_review",
+    # Creative Intel commits the canonical VLM verdict asynchronously on
+    # behalf of the active Autopilot task. It is not an operator edit.
+    "creative_intel_worker",
+}
 
 # Workspace artifacts do not map one-to-one to plan outputs. Brief and creative
 # are user-owned inputs, while an externally corrected order must be verified
@@ -55,9 +61,9 @@ STANDARD_PLAN: tuple[dict[str, Any], ...] = (
     {"key": "generate_strategy", "capability": "generate_strategy_options",
      "deps": ["validate_brief"], "artifact": "strategy", "review": "stage"},
     {"key": "retrieve_audience", "capability": "retrieve_and_rank_audience",
-     "deps": ["generate_strategy"], "artifact": "audience", "review": "stage"},
+     "deps": ["generate_strategy"], "artifact": "audience", "review": "critical"},
     {"key": "derive_targeting", "capability": "derive_targeting_and_exclusions",
-     "deps": ["retrieve_audience"], "artifact": "targeting", "review": "stage"},
+     "deps": ["retrieve_audience"], "artifact": "targeting", "review": "critical"},
     {"key": "plan_placement_intent", "capability": "plan_placement_intent",
      "deps": ["derive_targeting"], "artifact": "placement_intent", "review": "stage"},
     {"key": "plan_creative_formats", "capability": "plan_creative_formats",
@@ -67,13 +73,13 @@ STANDARD_PLAN: tuple[dict[str, Any], ...] = (
      "deps": ["plan_creative_formats"], "artifact": "creative", "review": "none"},
     {"key": "analyze_creatives", "capability": "analyze_creatives",
      "deps": ["generate_strategy", "prepare_creatives"],
-     "artifact": "creative_verdict", "review": "critical"},
+     "artifact": "creative_verdict", "review": "stage"},
     {"key": "rank_placements", "capability": "rank_available_placements",
      "deps": ["plan_placement_intent", "analyze_creatives"],
-     "artifact": "placements", "review": "stage"},
+     "artifact": "placements", "review": "critical"},
     {"key": "assign_creatives", "capability": "assign_creatives_to_placements",
      "deps": ["analyze_creatives", "rank_placements"], "artifact": "assignments",
-     "review": "stage"},
+     "review": "critical"},
     {"key": "forecast", "capability": "forecast_reach_cost_and_risk",
      "deps": ["derive_targeting", "assign_creatives"], "artifact": "forecast",
      "review": "stage"},

@@ -13,7 +13,7 @@ import { defaultPlacementSelection, mergeCreativeVerdicts } from '@/lib/creative
 const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
 
 const POLICY_OPTIONS = [
-  { value: 'critical_only', label: 'Duyệt các bước quan trọng', note: 'Khuyến nghị' },
+  { value: 'critical_only', label: 'Duyệt các bước quan trọng', note: '5 checkpoint · Khuyến nghị' },
   { value: 'review_every_stage', label: 'Duyệt từng giai đoạn', note: 'Kiểm soát tối đa' },
   { value: 'auto_build_draft', label: 'Tự xây dựng bản nháp', note: 'Dừng trước launch' },
 ]
@@ -609,6 +609,11 @@ export default function AutopilotPanel({
                   </button>
                 ))}
               </div>
+              {policy === 'critical_only' && (
+                <p className="mt-3 rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-2 text-[11px] leading-5 text-brand-800">
+                  Agent sẽ dừng tại: Tìm audience → Thiết lập targeting → Xếp hạng placement → Gán creative → Duyệt launch. Creative có rủi ro sẽ luôn dừng để review.
+                </p>
+              )}
             </div>
 
             <aside data-demo="autopilot-brief-status" className={`rounded-2xl border p-4 shadow-sm ${briefReady ? 'border-green-200 bg-green-50/70' : 'border-amber-200 bg-amber-50/70'}`}>

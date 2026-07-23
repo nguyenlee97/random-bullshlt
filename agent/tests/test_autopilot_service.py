@@ -232,6 +232,39 @@ def test_valid_brief_is_not_a_redundant_strict_review_checkpoint():
     assert not service._needs_review(validate_spec, "review_every_stage")
 
 
+def test_critical_policy_stops_at_the_five_operator_checkpoints():
+    expected = {
+        "retrieve_audience",
+        "derive_targeting",
+        "rank_placements",
+        "assign_creatives",
+        "launch_approval",
+    }
+    actual = {
+        spec["key"]
+        for spec in service.STANDARD_PLAN
+        if service._needs_review(spec, "critical_only")
+    }
+    assert actual == expected
+
+
+def test_creative_intel_commit_is_internal_autopilot_work():
+    workspace = {
+        "events": [{
+            "revision": 2,
+            "artifact": "creative_verdict",
+            "actor": "creative_intel_worker",
+        }],
+        "artifacts": {
+            "creative_verdict": {
+                "revision": 2,
+                "updated_by": "creative_intel_worker",
+            },
+        },
+    }
+    assert service._external_workspace_changes(workspace, 1) == []
+
+
 @pytest.mark.asyncio
 async def test_auto_build_still_requires_launch_review():
     assert service._needs_review({"review": "launch"}, "auto_build_draft")

@@ -30,8 +30,24 @@ def _fold(text: str) -> str:
 
 
 def review_intent(message: str) -> str:
-    """Return approve/reject/question using only explicit decision language."""
+    """Return approve/reject/question at the human authorization boundary.
+
+    Mentioning approval while asking a question is not approval. Ambiguous,
+    deferred, or explicitly "not yet" language always remains read-only.
+    """
     folded = _fold(message)
+    deferred = re.search(
+        r"\b("
+        r"chua (dong y|xac nhan|chap nhan|duyet|phe duyet|quyet dinh)"
+        r"|dung (duyet|phe duyet|xac nhan)"
+        r"|khoan (duyet|phe duyet|xac nhan|tiep tuc)"
+        r"|chi (dang )?hoi|dang hoi|hoi de (review|kiem tra)"
+        r"|chua quyet dinh|not yet|do not approve|just asking"
+        r")\b",
+        folded,
+    )
+    if deferred or "?" in message:
+        return "question"
     reject = re.search(
         r"\b(khong dong y|khong chap nhan|khong duyet|tu choi|huy bo|huy)\b",
         folded,
@@ -51,8 +67,9 @@ def _artifact(workspace: dict, name: str) -> Any:
 
 def _read_only_context(workspace: dict, run: dict) -> dict:
     names = (
-        "brief", "strategy", "audience", "targeting", "placements",
-        "creative", "assignments", "forecast", "order", "report",
+        "brief", "strategy", "audience", "targeting", "placement_intent",
+        "creative_format_plan", "creative", "creative_verdict", "placements",
+        "assignments", "forecast", "order_draft", "order", "report",
     )
     return {
         "run": {
@@ -62,6 +79,43 @@ def _read_only_context(workspace: dict, run: dict) -> dict:
         },
         "artifacts": {name: _artifact(workspace, name) for name in names},
     }
+
+
+async def _answer_run_question(
+    *, session_id: str, message: str, context: dict, run: dict,
+) -> tuple[str, str]:
+    """Answer one read-only run/review question through the locked provider."""
+    system = (
+        "Bạn là trợ lý đọc kết quả và checkpoint của Campaign Autopilot. Chỉ trả lời bằng "
+        "tiếng Việt từ JSON artifact được cung cấp. Không gọi công cụ, không đề xuất hoặc "
+        "thực hiện thay đổi workspace, không xem câu hỏi là quyết định duyệt, không bịa số "
+        "liệu. Forecast phải được gọi rõ là ước tính. Trả lời trực tiếp, ngắn và cụ thể."
+    )
+    user = (
+        f"ARTIFACT JSON:\n"
+        f"{json.dumps(context, ensure_ascii=False, default=str)[:24000]}"
+        f"\n\nCÂU HỎI:\n{message}"
+    )
+    from campaign_engines.dispatcher import dispatch_autopilot
+    from campaign_models import LEGACY_CONVERSATION_MODEL
+
+    conversation_model = run.get("conversation_model") or LEGACY_CONVERSATION_MODEL
+    text, provenance = await dispatch_autopilot(
+        conversation_model,
+        greennode_handler=_answer_greennode_autopilot_question,
+        openai_handler=_answer_openai_autopilot_question,
+        session_id=session_id,
+        message=message,
+        context=context,
+        system=system,
+        user=user,
+    )
+    answer_model = str(
+        provenance.get("model")
+        or run.get("conversation_model_version")
+        or conversation_model
+    )
+    return text, answer_model
 
 
 async def _answer_greennode_autopilot_question(
@@ -133,17 +187,58 @@ async def route_autopilot_chat(
     if status == "waiting_review" and waiting:
         intent = review_intent(message)
         if intent == "question":
-            detail = (waiting.get("result") or {}).get("message") \
-                or "Agent cần bạn kiểm tra đầu ra hiện tại trước khi tiếp tục."
+            context = _read_only_context(workspace, run)
+            context["review_checkpoint"] = {
+                "task_id": waiting.get("task_id"),
+                "key": waiting.get("key"),
+                "title": waiting.get("title"),
+                "result": waiting.get("result"),
+                "evidence": waiting.get("evidence") or [],
+                "pending_artifact": (
+                    (waiting.get("pending_artifact") or {}).get("value")
+                ),
+            }
+            try:
+                text, answer_model = await _answer_run_question(
+                    session_id=session_id,
+                    message=message,
+                    context=context,
+                    run=run,
+                )
+                text = (
+                    f"{text}\n\n"
+                    "Đây chỉ là câu trả lời review; checkpoint vẫn đang chờ quyết định của bạn."
+                )
+            except Exception as exc:
+                from agent_logger import alog
+
+                await alog(session_id, "error", {
+                    "handler": "autopilot_review_qa",
+                    "conversation_model": run.get("conversation_model"),
+                    "error_type": type(exc).__name__,
+                    "error": str(exc)[:300],
+                    "cross_provider_fallback": False,
+                })
+                detail = (waiting.get("result") or {}).get("message") \
+                    or "Agent cần bạn kiểm tra đầu ra hiện tại trước khi tiếp tục."
+                text = (
+                    f"Autopilot đang chờ duyệt bước "
+                    f"“{waiting.get('title') or waiting.get('key')}”. {detail} "
+                    "Câu hỏi này chưa làm thay đổi trạng thái checkpoint."
+                )
+                answer_model = str(
+                    run.get("conversation_model_version")
+                    or run.get("conversation_model")
+                    or "none"
+                )
             return await _recorded_response(
                 session_id,
                 message,
-                f"Autopilot đang chờ duyệt bước “{waiting.get('title') or waiting.get('key')}”. "
-                f"{detail} Chat chỉ nhận quyết định rõ ràng ở thời điểm này; hãy chọn “Đồng ý, tiếp tục” "
-                "hoặc “Từ chối”. Nếu cần thay đổi, hãy từ chối rồi chỉnh dữ liệu trong form.",
-                tool="autopilot_review_explain",
+                text,
+                tool="autopilot_review_qa",
                 step=step,
                 suggestions=["Đồng ý, tiếp tục", "Từ chối"],
+                model=answer_model,
             )
 
         approved = intent == "approve"
@@ -184,38 +279,19 @@ async def route_autopilot_chat(
         if status == "completed" and step == 5:
             return None
         context = _read_only_context(workspace, run)
-        system = (
-            "Bạn là trợ lý đọc kết quả Campaign Autopilot. Chỉ trả lời bằng tiếng Việt từ JSON artifact "
-            "được cung cấp. Không gọi công cụ, không đề xuất hoặc thực hiện thay đổi workspace, không bịa số liệu. "
-            "Nếu dữ liệu là forecast hoặc synthetic thì phải nói rõ đó là ước tính/mô phỏng. Trả lời ngắn, cụ thể."
-        )
-        user = f"ARTIFACT JSON:\n{json.dumps(context, ensure_ascii=False, default=str)[:24000]}\n\nCÂU HỎI:\n{message}"
-        from campaign_engines.dispatcher import dispatch_autopilot
-        from campaign_models import LEGACY_CONVERSATION_MODEL
-
-        conversation_model = run.get("conversation_model") or LEGACY_CONVERSATION_MODEL
         try:
-            text, provenance = await dispatch_autopilot(
-                conversation_model,
-                greennode_handler=_answer_greennode_autopilot_question,
-                openai_handler=_answer_openai_autopilot_question,
+            text, answer_model = await _answer_run_question(
                 session_id=session_id,
                 message=message,
                 context=context,
-                system=system,
-                user=user,
-            )
-            answer_model = str(
-                provenance.get("model")
-                or run.get("conversation_model_version")
-                or conversation_model
+                run=run,
             )
         except Exception as exc:
             from agent_logger import alog
 
             await alog(session_id, "error", {
                 "handler": "autopilot_readonly_qa",
-                "conversation_model": conversation_model,
+                "conversation_model": run.get("conversation_model"),
                 "error_type": type(exc).__name__,
                 "error": str(exc)[:300],
                 "cross_provider_fallback": False,
@@ -228,7 +304,11 @@ async def route_autopilot_chat(
                 f"Order: {order.get('id') or order.get('_id') or 'chưa có'} · "
                 f"trạng thái giao quảng cáo: {order.get('status') or 'chưa xác định'}."
             )
-            answer_model = str(run.get("conversation_model_version") or conversation_model)
+            answer_model = str(
+                run.get("conversation_model_version")
+                or run.get("conversation_model")
+                or "none"
+            )
         return await _recorded_response(
             session_id, message, text,
             tool="autopilot_readonly_qa", step=step, model=answer_model,
