@@ -760,6 +760,7 @@ export function buildStage2Steps(brief) {
       whenReviewState: 'blocked',
       inputText: 'Đã kiểm tra thủ công nội dung, thương hiệu và chấp nhận sử dụng trong demo.',
       charDelay: 12,
+      autoAdvance: true,
     },
     {
       type: 'CLICK_EL',

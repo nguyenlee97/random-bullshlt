@@ -459,6 +459,13 @@ export function DemoProvider({
         } else {
           log.error(`DemoEngine: TYPE_INPUT target not found: ${step.target}`)
         }
+        if (step.autoAdvance && inputEl) {
+          // Let React commit the controlled input value before the next
+          // walkthrough action reads or clicks controls derived from it.
+          await new Promise(r => setTimeout(r, 250))
+          setStepIdx(prev => prev + 1)
+          return
+        }
         break
       }
 
