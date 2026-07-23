@@ -539,11 +539,11 @@ export default function App() {
 
   // Resolve only the anonymous identity on page load. A refresh intentionally
   // returns to the homepage; campaign context is restored only after the user
-  // explicitly selects an item from History.
-  useEffect(() => {
-    if (identityInitRef.current) return
-    identityInitRef.current = true
-    ;(async () => {
+  // explicitly selects an item from History. Extracted so the error screen can
+  // retry in place instead of reloading the whole page.
+  const bootstrapIdentity = useCallback(async () => {
+    setIdentityError('')
+    {
       try {
         await AgentAPI.initializeIdentity({ restoreCurrent: false })
         await account.refresh()
@@ -581,8 +581,19 @@ export default function App() {
         setHistoryLoading(false)
         setIdentityReady(true)
       }
-    })()
+    }
   }, [account.refresh])
+
+  useEffect(() => {
+    if (identityInitRef.current) return
+    identityInitRef.current = true
+    bootstrapIdentity()
+  }, [bootstrapIdentity])
+
+  const retryIdentityBootstrap = useCallback(() => {
+    setIdentityReady(false)
+    bootstrapIdentity()
+  }, [bootstrapIdentity])
 
   // Watch for new assistant messages while chat is compact (workspace expanded on mobile).
   // Uses ID comparison instead of messages.length — stopThinking() REPLACES the thinking
@@ -1691,7 +1702,10 @@ export default function App() {
         <div className="max-w-md rounded-2xl border border-red-200 bg-white p-6 text-center shadow-sm">
           <h1 className="font-bold text-slate-900">Không thể khôi phục dữ liệu</h1>
           <p className="mt-2 text-sm text-red-700">{identityError}</p>
-          <button onClick={() => window.location.reload()} className="mt-4 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white">Thử lại</button>
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <button onClick={retryIdentityBootstrap} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600">Thử lại</button>
+            <button onClick={returnToPublicLanding} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Về trang giới thiệu</button>
+          </div>
         </div>
       </div>
     )
