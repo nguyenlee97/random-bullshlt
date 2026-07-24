@@ -309,6 +309,7 @@ export function useChat({
     const silent = options.silent === true
     const markApproved = options.markApproved !== false
     const persistReadyCreative = options.persistReadyCreative === true
+    const completeReadyCreative = options.completeReadyCreative === true
     setBusy(true)
     if (!silent) startThinking()
 
@@ -383,6 +384,15 @@ export function useChat({
               suggestions: [],
             }
           } else {
+            if (completeReadyCreative) {
+              response = await AgentAPI.approveCreative({
+                ...(stepData.creative || {}),
+                files: prepared,
+                uploaded: prepared.length > 0,
+              })
+              shouldAdvance = responseAllowsAdvance(response)
+              break
+            }
             // The authoritative file set was committed before analysis.
             // Recommitting it now would invalidate the fresh verdict artifact.
             response = {

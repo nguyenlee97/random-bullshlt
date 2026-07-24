@@ -1414,6 +1414,8 @@ export const AgentAPI = {
         reviewReasons: file.reviewReasons, deterministic: file.deterministic,
         vlm: file.vlm, override: file.override, formatId: file.formatId,
         intendedFormat: file.intendedFormat,
+        source: file.source, derivedFromFileId: file.derivedFromFileId,
+        repairMethod: file.repairMethod,
       })),
     }
     const real = await callAgent({

@@ -67,7 +67,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
     switch (currentStep) {
       case 0: return <BriefStep data={formState.brief} onChange={v => updateFormSlice('brief', v)} isDone={isReadOnly} />
       case 1: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isReadOnly} brief={formState.brief} recoFromChat={recoFromChat} expandTargeting={autopilotMode && autopilotEditorArtifact === 'targeting'} />
-      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isReadOnly} brief={formState.brief} segment={formState.segment} formatPlan={creativeFormatPlan} autopilotMode={autopilotMode} />
+      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isReadOnly} brief={formState.brief} segment={formState.segment} formatPlan={creativeFormatPlan} autopilotMode={autopilotMode} onRepairSave={autopilotMode ? saveAutopilotEditor : undefined} />
       case 3: return (
         <SetupStep
           data={formState.setup}
@@ -112,9 +112,9 @@ const WorkspacePane = forwardRef(function WorkspacePane(
     }
   }
 
-  const saveAutopilotEditor = async () => {
+  const saveAutopilotEditor = async (creativeOverride = null) => {
     setAutopilotSaveMessage('')
-    const result = await onAutopilotSave?.()
+    const result = await onAutopilotSave?.(creativeOverride)
     if (!result?.shouldAdvance) {
       setAutopilotSaveMessage(
         String(result?.response?.content || 'Chưa thể lưu thay đổi. Kiểm tra thông tin trong form rồi thử lại.')

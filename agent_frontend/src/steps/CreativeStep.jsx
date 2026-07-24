@@ -296,7 +296,16 @@ function TabBar({ tab, setTab }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function CreativeStep({ data, onChange, isDone, brief, segment, formatPlan, autopilotMode = false }) {
+export default function CreativeStep({
+  data,
+  onChange,
+  isDone,
+  brief,
+  segment,
+  formatPlan,
+  autopilotMode = false,
+  onRepairSave,
+}) {
   const fileInputRef = useRef(null)
   const [lightboxFile, setLightboxFile] = useState(null)
   const [dragging, setDragging] = useState(false)
@@ -308,6 +317,8 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
   const [repairTarget, setRepairTarget] = useState(null)
   const [repairLoadingId, setRepairLoadingId] = useState('')
   const [repairError, setRepairError] = useState('')
+  const [repairSaving, setRepairSaving] = useState(false)
+  const [repairNotice, setRepairNotice] = useState('')
   const files = data.files || []
   const reviewFiles = files.filter(file => file.analysisStatus === 'needs_review')
   const missingFormats = useMemo(
@@ -442,8 +453,8 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
     }
   }
 
-  const finishFormatRepair = (dataUrl, method) => {
-    if (!repairTarget) return
+  const finishFormatRepair = async (dataUrl, method) => {
+    if (!repairTarget || repairSaving) return
     const { format, sourceFile } = repairTarget
     const timestamp = Date.now()
     const baseName = String(sourceFile.name || 'creative').replace(/\.[^.]+$/, '')
@@ -462,13 +473,47 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
       derivedFromFileId: sourceFile.id || sourceFile._id || '',
       repairMethod: method,
     }
-    onChange(prev => ({
-      ...prev,
-      files: [...(prev.files || []), adapted],
+    const nextCreative = {
+      ...data,
+      files: [
+        ...(data.files || []).filter(file => !(
+          (file.source === 'operator_adapted'
+            || String(file.id || '').startsWith('adapted-'))
+          && file.formatId === format.format_id
+        )),
+        adapted,
+      ],
       uploaded: true,
-    }))
+    }
+    onChange(nextCreative)
     setRepairTarget(null)
     setTab('upload')
+    setRepairError('')
+    setRepairNotice(
+      autopilotMode && onRepairSave
+        ? 'Đang tải, phân tích và lưu creative vào workspace…'
+        : `Đã thêm bản ${format.width}×${format.height}.`,
+    )
+    if (!autopilotMode || !onRepairSave) return
+
+    setRepairSaving(true)
+    try {
+      const result = await onRepairSave(nextCreative)
+      if (!result?.shouldAdvance) {
+        setRepairNotice('')
+        setRepairError(
+          String(
+            result?.response?.content
+            || 'Creative đã được lưu nhưng cần bạn kiểm tra kết quả phân tích trước khi tiếp tục.',
+          ).replaceAll('**', ''),
+        )
+      }
+    } catch (error) {
+      setRepairNotice('')
+      setRepairError(error.message || 'Không thể lưu creative đã crop vào workspace.')
+    } finally {
+      setRepairSaving(false)
+    }
   }
 
   if (isDone) {
@@ -614,7 +659,13 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
                 Creative hiện tại không phải ảnh có thể crop. Hãy tải ảnh khác hoặc quay lại Autopilot để chọn tạo asset đúng format.
               </p>
             )}
-            {repairError && <p className="text-[10px] font-semibold text-red-600">{repairError}</p>}
+            {repairNotice && (
+              <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-brand-700" role="status">
+                {repairSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {repairNotice}
+              </p>
+            )}
+            {repairError && <p className="text-[10px] font-semibold text-red-600" role="alert">{repairError}</p>}
           </CardContent>
         </Card>
       )}

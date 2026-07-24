@@ -869,11 +869,11 @@ export default function App() {
     }
   }, [currentStep, formState, approveStep, experienceMode])
 
-  const handleAutopilotEditorSave = useCallback(async () => {
+  const handleAutopilotEditorSave = useCallback(async (creativeOverride = null) => {
     const editingStep = currentStep
     const data = {
       brief: formState.brief,
-      creative: formState.creative,
+      creative: creativeOverride || formState.creative,
       attrs: formState.segment.attrs,
       size: formState.segment.size,
       targeting: formState.segment.targeting || {},
@@ -949,6 +949,7 @@ export default function App() {
       silent: true,
       markApproved: false,
       persistReadyCreative: editingStep === 2,
+      completeReadyCreative: editingStep === 2 && Boolean(creativeOverride),
     })
     if (result?.shouldAdvance) {
       autopilotEditorArtifactRef.current = null

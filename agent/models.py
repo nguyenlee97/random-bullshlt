@@ -36,6 +36,9 @@ class CreativeFile(BaseModel):
     override: dict = Field(default_factory=dict)
     formatId: str = Field(default="", max_length=100)
     intendedFormat: str = Field(default="", max_length=100)
+    source: str = Field(default="", max_length=100)
+    derivedFromFileId: str = Field(default="", max_length=200)
+    repairMethod: str = Field(default="", max_length=32)
 
 
 class CreativeData(BaseModel):
