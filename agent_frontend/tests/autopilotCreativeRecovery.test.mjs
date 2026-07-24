@@ -28,7 +28,10 @@ test('creative editor can derive an exact planned format from an uploaded image'
   assert.match(creative, /nearestRatioFile/)
   assert.match(creative, /operator_adapted/)
   assert.match(creative, /<ImageCropModal/)
-  assert.match(crop, /Scale toàn ảnh \(có thể méo\)/)
+  assert.match(crop, /Scale toàn ảnh/)
+  assert.match(crop, /hidden sm:inline.*\(có thể méo\)/)
+  assert.match(crop, /onPointerDown/)
+  assert.match(crop, /sm:flex-row/)
   assert.match(crop, /\^\(data:\|https\?:\|blob:\)/)
 })
 

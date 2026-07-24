@@ -1018,16 +1018,22 @@ export default function AutopilotPanel({
           {waiting && (
             <div
               data-demo="autopilot-review-dock"
-              className="sticky bottom-2 z-10 rounded-2xl border border-amber-300 bg-amber-50/95 p-4 shadow-[0_12px_36px_rgba(120,80,0,0.18)] backdrop-blur-md"
+              className="sticky bottom-2 z-10 rounded-2xl border border-amber-300 bg-amber-50/95 p-3 shadow-[0_12px_36px_rgba(120,80,0,0.18)] backdrop-blur-md max-sm:bottom-1 sm:p-4"
             >
               <div className="flex min-w-0 items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white text-amber-700 shadow-sm">
-                  <ShieldCheck className="h-5 w-5" />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white text-amber-700 shadow-sm sm:h-9 sm:w-9">
+                  <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-700">Cần bạn review</p>
                   <p className="mt-0.5 text-sm font-black leading-5 text-amber-950">{TASK_LABELS[waiting.key]}</p>
-                  <p className="mt-1 max-w-3xl text-xs leading-5 text-amber-800">{waitingMessage}</p>
+                  <p className="mt-1 hidden max-w-3xl text-xs leading-5 text-amber-800 sm:block">{waitingMessage}</p>
+                  <details className="mt-1 sm:hidden">
+                    <summary className="cursor-pointer text-[11px] font-bold text-amber-900 underline underline-offset-2">
+                      Hướng dẫn review
+                    </summary>
+                    <p className="mt-1.5 text-[11px] leading-4 text-amber-800">{waitingMessage}</p>
+                  </details>
                   <a href="#autopilot-review-artifact" className="mt-1.5 inline-flex text-[11px] font-bold text-amber-900 underline underline-offset-2">Xem nội dung cần review ngay phía trên</a>
                   {briefRetry && !retryReady && (
                     <p className="mt-1 text-[11px] font-semibold text-amber-900">
@@ -1036,24 +1042,24 @@ export default function AutopilotPanel({
                   )}
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-amber-200 pt-3 sm:pl-12">
-                {briefRetry && pendingBrief && <button onClick={onOpenChat} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Chat để duyệt</button>}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-amber-200 pt-2 sm:mt-3 sm:gap-2 sm:pl-12 sm:pt-3">
+                {briefRetry && pendingBrief && <button onClick={onOpenChat} className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 sm:min-w-0 sm:flex-none">Mở Chat để duyệt</button>}
                 {waitingEdits.map(edit => edit.action && (
                   <button
                     key={edit.label}
                     data-demo={`autopilot-edit-${waiting.key}`}
                     onClick={() => openEditor(edit.action)}
                     disabled={loading}
-                    className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                    className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 sm:min-w-0 sm:flex-none"
                   >{edit.label}</button>
                 ))}
-                <button onClick={cancelRunWithConfirmation} disabled={loading} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700">Hủy run</button>
+                <button onClick={cancelRunWithConfirmation} disabled={loading} className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:min-w-0 sm:flex-none">Hủy run</button>
                 <button
                   data-demo="autopilot-review-approve"
                   data-autopilot-task={waiting.key}
                   onClick={() => review(waiting, true)}
                   disabled={loading || (retryAction && !retryReady) || (waiting.key === 'plan_placement_intent' && !placementSelection.length)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}
+                  className={`min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 sm:min-w-0 sm:flex-none ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}
                 >
                   {retryAction ? 'Kiểm tra lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}
                 </button>

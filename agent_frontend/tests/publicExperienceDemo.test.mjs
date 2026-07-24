@@ -21,6 +21,8 @@ const workspacePane = read('../src/components/WorkspacePane/index.jsx')
 const assignmentEditor = read('../src/steps/setup/CreativeAssignPhase.jsx')
 const imageGenerator = read('../src/steps/creative/AdImageGenerator.jsx')
 const creativeStep = read('../src/steps/CreativeStep.jsx')
+const cropModal = read('../src/steps/creative/ImageCropModal.jsx')
+const topBar = read('../src/components/TopBar.jsx')
 const docs = read('../public/tech-docs.html')
 const styles = read('../src/index.css')
 
@@ -264,6 +266,30 @@ test('Autopilot demo lets users choose UI tour or interactive walkthrough immedi
     engine,
     /setSteps\(tourModeRef\.current === 'autopilot'[\s\S]*?\[\.\.\.AUTOPILOT_TOUR_STEPS\][\s\S]*?\[\.\.\.STAGE1_STEPS\]/,
   )
+})
+
+test('mobile tour guidance uses target-aware docking with manual move and collapse controls', () => {
+  assert.match(overlay, /data-demo="mobile-guide-box"/)
+  assert.match(overlay, /data-mobile-dock=\{resolvedDock\}/)
+  assert.match(overlay, /targetMidpoint < vh \/ 2 \? 'bottom' : 'top'/)
+  assert.match(overlay, /window\.visualViewport\?\.addEventListener\('resize'/)
+  assert.match(overlay, /ResizeObserver/)
+  assert.match(overlay, /Di chuyển hướng dẫn xuống dưới/)
+  assert.match(overlay, /Thu gọn hướng dẫn/)
+  assert.match(overlay, /max-h-\[36dvh\]/)
+  assert.doesNotMatch(overlay, /setPos\(\{ top: 10, left \}\)/)
+})
+
+test('narrow mobile workspaces keep header, crop actions, review dock, and artifact navigation reachable', () => {
+  assert.match(topBar, /px-2 sm:gap-3 sm:px-5/)
+  assert.match(topBar, /hidden min-\[400px\]:inline/)
+  assert.match(cropModal, /sm:flex-row/)
+  assert.match(cropModal, /onPointerDown/)
+  assert.match(cropModal, /window\.addEventListener\('pointermove'/)
+  assert.match(autopilot, /Hướng dẫn review/)
+  assert.match(autopilot, /hidden max-w-3xl text-xs leading-5 text-amber-800 sm:block/)
+  assert.match(workspacePane, /data-demo="artifact-nav-scroll"/)
+  assert.match(workspacePane, /bg-gradient-to-l from-slate-50/)
 })
 
 test('technical document removes part 10 and forces a reliable Agent navigation', () => {
