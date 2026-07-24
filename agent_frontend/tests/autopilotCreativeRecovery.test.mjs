@@ -36,9 +36,15 @@ test('crop or scale persists and completes the Autopilot recovery transaction', 
   assert.match(creative, /await onRepairSave\(nextCreative\)/)
   assert.match(creative, /Đang tải, phân tích và lưu creative vào workspace/)
   assert.match(workspacePane, /onRepairSave=\{autopilotMode \? saveAutopilotEditor/)
-  assert.match(app, /completeReadyCreative:\s*editingStep === 2 && Boolean\(creativeOverride\)/)
+  assert.match(app, /completeReadyCreative:\s*editingStep === 2 && hasCreativeOverride/)
   assert.match(
     chat,
     /if \(completeReadyCreative\) \{[\s\S]*?AgentAPI\.approveCreative\([\s\S]*?files:\s*prepared[\s\S]*?responseAllowsAdvance\(response\)/,
   )
+})
+
+test('Autopilot footer save never treats the React click event as creative data', () => {
+  assert.match(workspacePane, /onClick=\{\(\) => saveAutopilotEditor\(\)\}/)
+  assert.match(app, /const hasCreativeOverride = Boolean\([\s\S]*?Array\.isArray\(creativeOverride\.files\)/)
+  assert.match(app, /creative:\s*hasCreativeOverride \? creativeOverride : formState\.creative/)
 })

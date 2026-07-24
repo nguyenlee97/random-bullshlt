@@ -871,9 +871,14 @@ export default function App() {
 
   const handleAutopilotEditorSave = useCallback(async (creativeOverride = null) => {
     const editingStep = currentStep
+    const hasCreativeOverride = Boolean(
+      creativeOverride
+      && typeof creativeOverride === 'object'
+      && Array.isArray(creativeOverride.files)
+    )
     const data = {
       brief: formState.brief,
-      creative: creativeOverride || formState.creative,
+      creative: hasCreativeOverride ? creativeOverride : formState.creative,
       attrs: formState.segment.attrs,
       size: formState.segment.size,
       targeting: formState.segment.targeting || {},
@@ -949,7 +954,7 @@ export default function App() {
       silent: true,
       markApproved: false,
       persistReadyCreative: editingStep === 2,
-      completeReadyCreative: editingStep === 2 && Boolean(creativeOverride),
+      completeReadyCreative: editingStep === 2 && hasCreativeOverride,
     })
     if (result?.shouldAdvance) {
       autopilotEditorArtifactRef.current = null
