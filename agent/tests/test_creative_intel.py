@@ -461,12 +461,23 @@ async def test_openai_upload_vlm_uses_mini_and_structured_image_input(monkeypatc
 
     parsed = openai_vlm.CreativeVLMResult(
         ocr_text=["QA Creative"],
+        brand_visible=True,
         brand_guess="QA",
+        brand_evidence=["Visible QA wordmark"],
         subject_desc="Banner quảng cáo",
         is_skin_takeover=False,
         safety=openai_vlm.SafetyFlags(
             nsfw=False, alcohol=False, gambling=False,
             political=False, medical=False,
+        ),
+        brief_fit=openai_vlm.BriefFitSignals(
+            primary_subject_required=False,
+            primary_subject_matches=True,
+            visible_brand_matches=True,
+            objective_message_matches=True,
+            required_elements_match=True,
+            critical_mismatch=False,
+            contradictions=[],
         ),
         brief_match_score=5,
         brief_match_reasons=["Đúng thương hiệu"],
@@ -495,6 +506,7 @@ async def test_openai_upload_vlm_uses_mini_and_structured_image_input(monkeypatc
     assert image_part["type"] == "input_image"
     assert image_part["image_url"].startswith("data:image/jpeg;base64,")
     assert result.brand_guess == "QA"
+    assert result.brief_match_score == 5
     assert provenance["provider"] == "openai"
     assert provenance["model"] == "gpt-5.4-mini"
     assert provenance["response_id"] == "resp-vlm"
@@ -502,3 +514,162 @@ async def test_openai_upload_vlm_uses_mini_and_structured_image_input(monkeypatc
     assert provenance["input_tokens"] == 10
     assert provenance["output_tokens"] == 20
     assert provenance["total_tokens"] == 30
+    assert provenance["raw_brief_match_score"] == 5
+    assert provenance["derived_brief_match_score"] == 5
+
+
+@pytest.mark.asyncio
+async def test_openai_vlm_corrects_contradictory_high_brief_fit_score(monkeypatch):
+    import creative_intel.openai_vlm as openai_vlm
+
+    parsed = openai_vlm.CreativeVLMResult(
+        ocr_text=[],
+        brand_visible=False,
+        brand_guess="Bún Bò Hutao",
+        brand_evidence=[],
+        subject_desc=(
+            "A surreal wooden bat character; no food or bowl is visible."
+        ),
+        is_skin_takeover=False,
+        safety=openai_vlm.SafetyFlags(
+            nsfw=False, alcohol=False, gambling=False,
+            political=False, medical=False,
+        ),
+        brief_fit=openai_vlm.BriefFitSignals(
+            primary_subject_required=True,
+            primary_subject_matches=False,
+            visible_brand_matches=True,
+            objective_message_matches=False,
+            required_elements_match=False,
+            critical_mismatch=True,
+            contradictions=[
+                "No Vietnamese food or bowl is visible.",
+                "The surreal character is unrelated to the restaurant brief.",
+            ],
+        ),
+        brief_match_score=5,
+        brief_match_reasons=[
+            "The creative does not show Vietnamese food or a bowl of bún bò.",
+            "The image is unrelated to the food-awareness objective.",
+        ],
+        confidence=0.95,
+    )
+    response = SimpleNamespace(
+        id="resp-contradictory-vlm",
+        output_parsed=parsed,
+        usage=SimpleNamespace(
+            input_tokens=10, output_tokens=20, total_tokens=30,
+        ),
+    )
+    fake_client = SimpleNamespace(
+        responses=SimpleNamespace(parse=AsyncMock(return_value=response)),
+    )
+    monkeypatch.setattr(openai_vlm, "get_client", lambda: fake_client)
+    monkeypatch.setattr(
+        openai_vlm.config, "OPENAI_VLM_MODEL", "gpt-5.4-mini",
+    )
+    source = BytesIO()
+    Image.new("RGB", (1200, 628), color="white").save(
+        source, format="PNG",
+    )
+
+    result, provenance = await openai_vlm.analyze_image(
+        "openai-vlm-contradiction",
+        source.getvalue(),
+        "image/png",
+        {
+            "brand": "Bún Bò Hutao",
+            "objective": "awareness",
+            "notes": "Creative phải có cận cảnh món bún bò.",
+        },
+    )
+
+    assert result.brief_match_score == 1
+    assert result.brand_guess == ""
+    assert result.brief_fit.visible_brand_matches is False
+    assert provenance["raw_brief_match_score"] == 5
+    assert provenance["derived_brief_match_score"] == 1
+    call = fake_client.responses.parse.await_args.kwargs
+    assert "1=completely unrelated or contradictory" in call["instructions"]
+    assert "Campaign brief context is not visual evidence" in call["instructions"]
+
+
+@pytest.mark.asyncio
+async def test_critical_brief_mismatch_is_never_auto_approved(monkeypatch):
+    import creative_intel.analyzer as analyzer
+    import creative_intel.service as service
+    import session
+
+    async def deterministic_ok(*_args, **_kwargs):
+        return {
+            "kind": "image",
+            "width": 1200,
+            "height": 628,
+            "min_size_ok": True,
+        }
+
+    async def openai_route(_session_id):
+        return {
+            "provider": "openai",
+            "model": "gpt-5.4-mini",
+            "key": "openai:gpt-5.4-mini",
+        }
+
+    safety = SimpleNamespace(model_dump=lambda: {
+        "nsfw": False,
+        "alcohol": False,
+        "gambling": False,
+        "political": False,
+        "medical": False,
+    })
+    brief_fit = SimpleNamespace(critical_mismatch=True)
+    vlm = SimpleNamespace(
+        model_dump=lambda: {
+            "brief_match_score": 1,
+            "brief_fit": {"critical_mismatch": True},
+        },
+        safety=safety,
+        ocr_text=[],
+        confidence=0.95,
+        brief_fit=brief_fit,
+        brief_match_score=1,
+    )
+
+    async def fake_vlm(*_args, **_kwargs):
+        return vlm, {"provider": "openai", "model": "gpt-5.4-mini"}
+
+    async def fake_session(_session_id):
+        return {"form_state": {"brief": {"brand": "Bún Bò Hutao"}}}
+
+    class FakeResponse:
+        content = b"image"
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, _url):
+            return FakeResponse()
+
+    monkeypatch.setattr(analyzer, "analyze_url", deterministic_ok)
+    monkeypatch.setattr(service, "_vlm_route_for_session", openai_route)
+    monkeypatch.setattr(service, "_run_vlm_for_route", fake_vlm)
+    monkeypatch.setattr(service.httpx, "AsyncClient", lambda **_kwargs: FakeClient())
+    monkeypatch.setattr(session, "get_or_create_session", fake_session)
+
+    result = await service._analyze_job({
+        "session_id": "openai-critical-mismatch",
+        "name": "unrelated.png",
+        "mime_type": "image/png",
+        "url": "https://example.invalid/unrelated.png",
+    })
+
+    assert result["status"] == "needs_review"
+    assert "Creative mâu thuẫn nghiêm trọng với brief" in result["review_reasons"]
+    assert "Creative không khớp brief (1/5)" in result["review_reasons"]

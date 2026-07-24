@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-24.1"
+BUILD_VERSION = "2026-07-24.2"
 
 BUILD_FEATURES = [
     "system-logs",
@@ -213,6 +213,7 @@ BUILD_FEATURES = [
     "openai-deferred-proposal-disposition",      # not-yet approval keeps a proposal pending for later confirmation
     "provider-aware-creative-vlm",                # uploaded creative analysis follows the immutable campaign model lock
     "creative-vlm-failure-retry",                 # provider failures requeue while genuine review verdicts stay terminal
+    "openai-vlm-brief-fit-consistency",           # derive fit score from anchored visual evidence and gate critical mismatches
     "autopilot-critical-review-checkpoints",       # critical policy stops at audience, targeting, placement, creative assignment and launch
     "autopilot-review-question-safety",             # review questions never become approvals and receive artifact-grounded answers
     "report-once-only-showcase-disclosure",         # report model reasons on metrics without repeating UI-only showcase provenance
