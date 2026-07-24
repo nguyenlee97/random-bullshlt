@@ -23,7 +23,7 @@ def _schema(properties: dict, required: list[str]) -> dict:
 
 ZALO_TOOLS = [
     {"type": "function", "name": "list_campaigns",
-     "description": "List campaigns owned by this Zalo account. Use when the user asks what campaigns exist or when a campaign reference is unclear.",
+     "description": "List owned campaign summaries including status, objective, budget and dates. Use when the user asks what campaigns exist, compares campaigns, or when a campaign reference is unclear.",
      "strict": True, "parameters": _schema({
          "status": {"type": "string", "enum": ["all", "active", "paused"]},
      }, ["status"])},
@@ -105,6 +105,8 @@ def _safe_campaign(item: dict, index: int | None = None) -> dict:
     value = {
         "campaign_id": item.get("campaign_id"), "brand": order.get("brand"),
         "status": order.get("status"), "objective": order.get("objective"),
+        "budget": order.get("budget"), "start_date": order.get("startDate"),
+        "end_date": order.get("endDate"),
     }
     if index is not None:
         value["index"] = index

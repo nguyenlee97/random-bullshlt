@@ -148,8 +148,10 @@ async def test_openai_planner_failure_fails_closed_without_campaign_mutation(mon
 
     campaign = _campaign("ORD-SAFE", "Safe Campaign")
     mutation = AsyncMock()
+    log_error = AsyncMock()
     monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
     monkeypatch.setattr(agent, "owned_campaigns", AsyncMock(return_value=[campaign]))
+    monkeypatch.setattr(agent, "alog", log_error)
     monkeypatch.setattr(
         "zalo_openai.run_zalo_tool_turn",
         AsyncMock(side_effect=RuntimeError("provider down")),
@@ -165,6 +167,13 @@ async def test_openai_planner_failure_fails_closed_without_campaign_mutation(mon
     assert "đang tạm thời không phản hồi" in response[0]
     assert "Không có thao tác" in response[0]
     mutation.assert_not_awaited()
+    log_error.assert_awaited_once()
+    assert log_error.await_args.args[1] == "error"
+    assert log_error.await_args.args[2] == {
+        "handler": "zalo_tool_turn",
+        "error_type": "RuntimeError",
+        "error": "provider down",
+    }
 
 
 @pytest.mark.asyncio

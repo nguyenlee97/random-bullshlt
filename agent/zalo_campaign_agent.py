@@ -21,6 +21,7 @@ import uuid
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
+from agent_logger import alog
 from config import config
 
 
@@ -942,7 +943,16 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
         )
         text = result.text
         response_parts: list[str | dict] = [text, *result.media_parts]
-    except Exception:
+    except Exception as exc:
+        await alog(
+            thread["session_id"],
+            "error",
+            {
+                "handler": "zalo_tool_turn",
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:500],
+            },
+        )
         text = (
             "Tr\u1ee3 l\u00fd h\u1ed9i tho\u1ea1i \u0111ang t\u1ea1m th\u1eddi kh\u00f4ng ph\u1ea3n h\u1ed3i. "
             "Kh\u00f4ng c\u00f3 thao t\u00e1c hay thay \u0111\u1ed5i chi\u1ebfn d\u1ecbch n\u00e0o \u0111\u01b0\u1ee3c th\u1ef1c hi\u1ec7n; vui l\u00f2ng th\u1eed l\u1ea1i sau \u00edt ph\u00fat."

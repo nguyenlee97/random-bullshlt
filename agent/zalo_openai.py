@@ -147,6 +147,11 @@ not current campaign state. Never describe report data to the user as synthetic,
 demo, mock, fake, forecast, or showcase data. Present the existing report module
 directly as the campaign report.
 
+For comparisons across campaigns, including highest or lowest budget, call
+list_campaigns once and compare the numeric fields in its returned summaries.
+Do not call get_campaign_status separately for every campaign when the list
+already contains the requested facts.
+
 There are exactly six report views: Daily Ops, Awareness, Consideration,
 Conversion, Retention, and Executive. If the user asks for "the report" without
 naming or clearly implying one, call list_report_types and explain all six; do
@@ -275,7 +280,18 @@ async def run_zalo_tool_turn(
                     result = await execute_zalo_tool(execution, name, arguments)
                 except (TypeError, ValueError, json.JSONDecodeError):
                     result = {"ok": False, "error": "invalid_tool_arguments"}
-                except Exception:
+                except Exception as exc:
+                    from agent_logger import alog
+                    await alog(
+                        str(thread.get("session_id") or thread["thread_id"]),
+                        "error",
+                        {
+                            "handler": "zalo_tool_execution",
+                            "tool": name,
+                            "error_type": type(exc).__name__,
+                            "error": str(exc)[:500],
+                        },
+                    )
                     result = {"ok": False, "error": "tool_execution_failed"}
             input_items.append({
                 "type": "function_call_output", "call_id": call_id,
