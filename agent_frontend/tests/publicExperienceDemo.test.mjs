@@ -12,6 +12,7 @@ const engine = read('../src/demo/DemoEngine.jsx')
 const scripts = read('../src/demo/demoScripts.js')
 const app = read('../src/App.jsx')
 const home = read('../src/components/ExperienceSelector.jsx')
+const overlay = read('../src/demo/DemoOverlay.jsx')
 const autopilot = read('../src/components/AutopilotPanel.jsx')
 const autopilotReview = read('../src/components/AutopilotReview.jsx')
 const audienceStep = read('../src/steps/AudienceStep.jsx')
@@ -237,17 +238,32 @@ test('Autopilot walkthrough can use every pre-generated scenario creative withou
   const brief = pickRandomBrief(new Date(2026, 6, 23, 12, 0, 0))
   const live = buildAutopilotLiveSteps(brief, { creativeSource: 'upload' })
   const uploadChoice = live.find(step => step.target === '[data-demo="autopilot-source-upload"]')
-  const injection = live.find(step => step.type === 'INJECT_DEMO_CREATIVES')
+  const injections = live.filter(step => step.type === 'INJECT_DEMO_CREATIVES')
   const uploadedCheckpoint = live.find(
     step => step.type === 'WAIT_FOR_AUTOPILOT_TASK' && step.taskKeys.includes('prepare_creatives'),
   )
 
   assert.ok(uploadChoice)
-  assert.equal(injection?.briefId, brief.id)
+  assert.equal(injections.length, 2)
+  assert.ok(injections.every(step => step.briefId === brief.id))
+  assert.ok(injections.every(step => step.title && step.text))
   assert.ok(uploadedCheckpoint)
   assert.ok(live.some(step => step.target === '#creative-drop-zone'))
   assert.ok(live.some(step => step.type === 'WAIT_FOR_CREATIVE_REVIEW'))
   assert.equal(live.some(step => step.target === '[data-demo="autopilot-source-ai"]'), false)
+  assert.match(engine, /id: `demo-\$\{briefId\}-\$\{formatId\}`/)
+  assert.match(overlay, /Đang xử lý…/)
+  assert.match(overlay, /role="status"/)
+})
+
+test('Autopilot demo lets users choose UI tour or interactive walkthrough immediately', () => {
+  assert.match(engine, /title: 'Khởi động tour Campaign Autopilot'/)
+  assert.match(engine, /\{ label: 'Tour giao diện', variant: 'outline', action: 'tour' \}/)
+  assert.match(engine, /\{ label: 'Walkthrough tương tác', variant: 'primary', action: 'live' \}/)
+  assert.match(
+    engine,
+    /setSteps\(tourModeRef\.current === 'autopilot'[\s\S]*?\[\.\.\.AUTOPILOT_TOUR_STEPS\][\s\S]*?\[\.\.\.STAGE1_STEPS\]/,
+  )
 })
 
 test('technical document removes part 10 and forces a reliable Agent navigation', () => {

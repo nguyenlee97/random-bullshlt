@@ -691,7 +691,7 @@ export function DemoProvider({
               reader.readAsDataURL(blob)
             })
             creatives.push({
-              id: `demo-${briefId}-${formatId}-${Date.now()}`,
+              id: `demo-${briefId}-${formatId}`,
               name: `${formatId}.png`,
               type: 'image/png',
               size: blob.size,
@@ -893,10 +893,16 @@ export function DemoProvider({
     tourModeRef.current = mode === 'autopilot' ? 'autopilot' : 'copilot'
 
     if (tourModeRef.current === 'autopilot') {
-      setPopup(null)
-      setSteps([...AUTOPILOT_TOUR_STEPS])
-      setStepIdx(0)
-      setPhase(PHASE.STAGE1)
+      setPhase(PHASE.CONFIRM_START)
+      setPopup({
+        title: 'Khởi động tour Campaign Autopilot',
+        text: 'Chọn cách bạn muốn khám phá **ngay trên giao diện thật**:\n\n**Tour giao diện** — Spotlight các khu vực Brief, nguồn creative, chế độ kiểm soát và cách đọc tiến độ Autopilot.\n\n**Walkthrough tương tác** — Tạo một Autopilot run từ scenario brief, thao tác Audience, targeting, placement và creative, rồi dừng tại launch review.',
+        buttons: [
+          { label: 'Tour giao diện', variant: 'outline', action: 'tour' },
+          { label: 'Walkthrough tương tác', variant: 'primary', action: 'live' },
+          { label: 'Bỏ qua', variant: 'ghost', action: 'skip' },
+        ],
+      })
       return
     }
 
@@ -952,7 +958,9 @@ export function DemoProvider({
       case PHASE.CONFIRM_START: {
         if (action === 'tour') {
           // Stage 1 UI Tour
-          setSteps([...STAGE1_STEPS])
+          setSteps(tourModeRef.current === 'autopilot'
+            ? [...AUTOPILOT_TOUR_STEPS]
+            : [...STAGE1_STEPS])
           setStepIdx(0)
           setPhase(PHASE.STAGE1)
         } else if (action === 'live') {

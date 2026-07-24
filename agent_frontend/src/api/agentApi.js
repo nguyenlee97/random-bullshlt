@@ -974,6 +974,9 @@ export async function prepareCreativeFiles(files, onProgress = () => {}) {
   // verdicts. Creating a new batch here would erase the visible review state
   // and send the operator back to "Đang chờ phân tích".
   prepared = mergeCreativeIntel(prepared, await getCreativeIntel())
+  if (!prepared.length) {
+    throw new Error('Chưa có creative để phân tích. Hãy tải hoặc tạo ít nhất một creative rồi thử lại.')
+  }
   const allTerminal = prepared.length && prepared.every(file =>
     ['auto_approved', 'needs_review', 'approved_override'].includes(file.analysisStatus)
   )
@@ -1010,7 +1013,11 @@ export async function prepareCreativeFiles(files, onProgress = () => {}) {
     url: file.url,
   })))
   if (!(queued.jobs || []).length) {
-    throw new Error('Creative intelligence chưa được bật trên agent')
+    throw new Error(
+      queued.note === 'USE_VLM_CREATIVE=false'
+        ? 'Tính năng phân tích creative hiện chưa sẵn sàng'
+        : 'Không thể tạo tác vụ phân tích cho các creative đã chọn'
+    )
   }
   prepared = prepared.map(file => {
     const job = queued.jobs.find(item => item.url === file.url || item.name === file.name)

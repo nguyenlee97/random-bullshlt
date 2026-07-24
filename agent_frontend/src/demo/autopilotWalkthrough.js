@@ -22,6 +22,10 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
     {
       type: 'INJECT_DEMO_CREATIVES',
       briefId: brief.id,
+      target: '[data-demo="autopilot-source-upload"]',
+      position: 'bottom',
+      title: 'Đang nạp bộ creative có sẵn',
+      text: 'Walkthrough đang đọc và chuẩn bị toàn bộ ảnh của scenario. Hộp hướng dẫn sẽ giữ nguyên trên màn hình cho tới khi các file đã sẵn sàng.',
     },
     {
       type: 'TOOLTIP',
@@ -413,6 +417,14 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
           title: 'Mở Creative editor',
           text: 'Đang mở bộ creative của scenario và các format mà hai placement đã chọn cần sử dụng.',
         },
+      },
+      {
+        type: 'INJECT_DEMO_CREATIVES',
+        briefId: brief.id,
+        target: '#creative-drop-zone',
+        position: 'top',
+        title: 'Đang đồng bộ creative vào editor',
+        text: 'Walkthrough đang kiểm tra lại bộ ảnh của scenario sau khi mở editor. Bước này bảo đảm các file tạm không bị mất khi workspace vừa đồng bộ với campaign truth.',
       },
       {
         type: 'WAIT_FOR_SELECTOR',

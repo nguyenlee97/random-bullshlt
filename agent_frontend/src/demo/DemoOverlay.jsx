@@ -164,6 +164,12 @@ function TooltipBubble({
             <SkipForward className="w-3 h-3" />
             Bỏ qua
           </button>
+          {isWaiting && !showNext && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-bold text-brand-700" role="status">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Đang xử lý…
+            </span>
+          )}
           <div className="flex-1" />
           {/* Progress: dots on desktop, compact counter on mobile (dots get cramped) */}
           <div className="hidden md:flex gap-0.5">
