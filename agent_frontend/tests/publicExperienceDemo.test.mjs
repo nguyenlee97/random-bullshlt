@@ -277,6 +277,7 @@ test('mobile tour guidance uses target-aware docking with manual move and collap
   assert.match(overlay, /Di chuyển hướng dẫn xuống dưới/)
   assert.match(overlay, /Thu gọn hướng dẫn/)
   assert.match(overlay, /max-h-\[36dvh\]/)
+  assert.match(overlay, /!manualDock && targetRect && dock === 'bottom'/)
   assert.doesNotMatch(overlay, /setPos\(\{ top: 10, left \}\)/)
 })
 

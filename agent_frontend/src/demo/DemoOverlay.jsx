@@ -159,10 +159,10 @@ function TooltipBubble({
 
       // Prefer sitting next to the highlighted target when there is room.
       // Otherwise dock to the opposite viewport edge instead of covering it.
-      if (targetRect && dock === 'bottom') {
+      if (!manualDock && targetRect && dock === 'bottom') {
         const belowTarget = targetRect.bottom + gap
         if (belowTarget + tooltipSize.height <= viewportTop + vh - margin) top = belowTarget
-      } else if (targetRect && dock === 'top') {
+      } else if (!manualDock && targetRect && dock === 'top') {
         const aboveTarget = targetRect.top - gap - tooltipSize.height
         if (aboveTarget >= topEdge) top = aboveTarget
       }
