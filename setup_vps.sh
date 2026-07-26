@@ -78,7 +78,7 @@ PORT=3000
 MONGODB_URI=mongodb://localhost:27017/adspilot
 NODE_ENV=production
 PUBLIC_BASE_URL=https://api.pawgrammers.io.vn
-ALLOWED_ORIGINS=https://adspilot.pawgrammers.io.vn,https://analytics.pawgrammers.io.vn,https://znews-stg.pawgrammers.io.vn,https://baomoi-stg.pawgrammers.io.vn,https://zingmp3-stg.pawgrammers.io.vn
+ALLOWED_ORIGINS=https://adspilot.pawgrammers.io.vn,https://analytics.pawgrammers.io.vn,https://znews-stg.pawgrammers.io.vn,https://baomoi-stg.pawgrammers.io.vn,https://zingmp3-stg.pawgrammers.io.vn,https://smoney-stg.pawgrammers.io.vn,https://dicungcon-stg.pawgrammers.io.vn,https://zagoo-stg.pawgrammers.io.vn
 ENVEOF
 
 echo "Running database seed..."
@@ -219,6 +219,51 @@ server {
 }
 EOF
 
+# ── 6g. S-Money Replicate ─────────────────────────────────────────────────
+cat > "$NGINX_AVAIL/smoney-stg.pawgrammers.io.vn" << 'EOF'
+server {
+    listen 80;
+    server_name smoney-stg.pawgrammers.io.vn;
+
+    root  /var/www/smoney_replicate;
+    index index.html index.htm;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+EOF
+
+# ── 6h. Đi Cùng Con Replicate ─────────────────────────────────────────────
+cat > "$NGINX_AVAIL/dicungcon-stg.pawgrammers.io.vn" << 'EOF'
+server {
+    listen 80;
+    server_name dicungcon-stg.pawgrammers.io.vn;
+
+    root  /var/www/dicungcon_replicate;
+    index index.html index.htm;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+EOF
+
+# ── 6i. Zagoo Replicate ───────────────────────────────────────────────────
+cat > "$NGINX_AVAIL/zagoo-stg.pawgrammers.io.vn" << 'EOF'
+server {
+    listen 80;
+    server_name zagoo-stg.pawgrammers.io.vn;
+
+    root  /var/www/zagoo_replicate;
+    index index.html index.htm;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+EOF
+
 # Enable all sites
 for SITE in \
     api.pawgrammers.io.vn \
@@ -226,7 +271,10 @@ for SITE in \
     analytics.pawgrammers.io.vn \
     baomoi-stg.pawgrammers.io.vn \
     zingmp3-stg.pawgrammers.io.vn \
-    znews-stg.pawgrammers.io.vn; do
+    znews-stg.pawgrammers.io.vn \
+    smoney-stg.pawgrammers.io.vn \
+    dicungcon-stg.pawgrammers.io.vn \
+    zagoo-stg.pawgrammers.io.vn; do
     ln -sf "$NGINX_AVAIL/$SITE" "$NGINX_ENABLED/"
     echo "  ✔ Enabled: $SITE"
 done
@@ -249,6 +297,9 @@ certbot --nginx \
     -d znews-stg.pawgrammers.io.vn \
     -d baomoi-stg.pawgrammers.io.vn \
     -d zingmp3-stg.pawgrammers.io.vn \
+    -d smoney-stg.pawgrammers.io.vn \
+    -d dicungcon-stg.pawgrammers.io.vn \
+    -d zagoo-stg.pawgrammers.io.vn \
     --non-interactive --agree-tos -m admin@pawgrammers.io.vn \
     && echo "SSL certificates obtained." \
     || echo "SSL FAILED — check DNS propagation and retry: certbot --nginx -d <domain>"
@@ -268,6 +319,9 @@ echo "  Analytics FE   → https://analytics.pawgrammers.io.vn"
 echo "  Znews Test     → https://znews-stg.pawgrammers.io.vn"
 echo "  BaoMoi Test    → https://baomoi-stg.pawgrammers.io.vn"
 echo "  ZingMP3 Test   → https://zingmp3-stg.pawgrammers.io.vn"
+echo "  S-Money Test   → https://smoney-stg.pawgrammers.io.vn"
+echo "  Đi Cùng Con    → https://dicungcon-stg.pawgrammers.io.vn"
+echo "  Zagoo Test     → https://zagoo-stg.pawgrammers.io.vn"
 echo ""
 echo "  PM2 status: pm2 list"
 echo "  Backend logs: pm2 logs adspilot-api"

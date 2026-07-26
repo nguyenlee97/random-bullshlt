@@ -21,6 +21,27 @@ EXACT_FORMAT_BY_SIZE = {
     "1160x280": "zuma-baomoi-masthead",
     "2032x528": "zmp3-top-banner",
 }
+FORMAT_BY_CREATIVE_CONTRACT = {
+    "znews-category-masthead-v1": "znews-top-banner",
+    "baomoi-category-masthead-v1": "zuma-baomoi-masthead",
+    "category-background-v1": "znews-Background",
+    "znews-category-side-left-v1": "znews-side-banner",
+    "znews-category-side-right-v1": "znews-side-banner",
+    "baomoi-category-side-left-v1": "zuma-Left",
+    "baomoi-category-side-right-v1": "zuma-Right",
+    "display-box-300x250-v1": "zuma-box",
+    "display-halfpage-300x600-v1": "display-halfpage-300x600",
+    "znews-home-inline-v1": "znews-middle-banner",
+    "zingmp3-masthead-v1": "zmp3-top-banner",
+    "smoney-top-desktop-v1": "smoney-top-desktop",
+    "smoney-top-mobile-v1": "smoney-top-mobile",
+    "smoney-screener-desktop-v1": "smoney-screener-desktop",
+    "smoney-screener-mobile-v1": "smoney-screener-mobile",
+    "dicungcon-bridge-desktop-v1": "dicungcon-bridge-desktop",
+    "dicungcon-bridge-mobile-v1": "dicungcon-bridge-mobile",
+    "zagoo-interstitial-desktop-v1": "zagoo-interstitial-desktop",
+    "zagoo-interstitial-mobile-v1": "zagoo-interstitial-mobile",
+}
 
 
 def normalize_size(value: Any) -> str:
@@ -31,7 +52,9 @@ def format_spec_for_zone(zone: dict) -> dict | None:
     """Return a generation spec only when backed by the known format catalog."""
     size = normalize_size(zone.get("size"))
     is_skin = size == "skin" or str(zone.get("format", "")).lower() == "skin"
-    format_id = SKIN_FORMAT_ID if is_skin else EXACT_FORMAT_BY_SIZE.get(size)
+    format_id = FORMAT_BY_CREATIVE_CONTRACT.get(zone.get("creativeContractId"))
+    if not format_id:
+        format_id = SKIN_FORMAT_ID if is_skin else EXACT_FORMAT_BY_SIZE.get(size)
     fmt = AD_FORMATS.get(format_id or "")
     if not fmt:
         return None
@@ -41,7 +64,7 @@ def format_spec_for_zone(zone: dict) -> dict | None:
         "width": int(fmt["width"]),
         "height": int(fmt["height"]),
         "media_type": "image",
-        "intended_format": "skin" if is_skin else "banner",
+        "intended_format": "skin" if format_id == SKIN_FORMAT_ID else "banner",
         "zone_size": "skin" if is_skin else size,
     }
 

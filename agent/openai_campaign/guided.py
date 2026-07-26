@@ -443,10 +443,15 @@ async def handle_openai_dmp_recommend(
                     session_id, value, client=client,
                 ),
                 provider="openai",
-                # The configured reranker is a GreenNode Qwen endpoint. OpenAI
-                # conversations keep deterministic RRF order instead of
-                # crossing that provider boundary.
-                use_reranker=False,
+                # The legacy reranker belongs to the GreenNode boundary.
+                # The optional nano mode is an explicitly shared fixed
+                # relevance specialist, like the existing creative/report
+                # specialists; it never becomes a conversational fallback.
+                rerank_mode=(
+                    "openai_nano"
+                    if config.AUDIENCE_RERANK_MODE == "openai_nano"
+                    else "off"
+                ),
             )
             result.setdefault("provenance", {
                 "provider": "openai", "model": config.OPENAI_CAMPAIGN_MODEL,
@@ -648,7 +653,19 @@ async def _grounded_audience_entry(
     )
     return {
         "skip": False, "need_more_info": False, "text": reply, "blocks": blocks,
-        "meta": {"tool": "openai_audience_entry", "model": selected_model, "step": 1},
+        "meta": {
+            "tool": "openai_audience_entry",
+            "model": selected_model,
+            "step": 1,
+            "retrieval": {
+                "applied": bool(diagnostics.get("applied")),
+                "mode": diagnostics.get("mode", "legacy_full_catalog"),
+                "candidates": diagnostics.get("candidates"),
+                "reranked": bool(diagnostics.get("reranked")),
+                "rerank_mode": diagnostics.get("rerank_mode", "off"),
+                "rerank_model": diagnostics.get("rerank_model"),
+            },
+        },
         "suggestions": [
             {"label": "✅ Áp dụng tất cả", "action": "send", "text": "đồng ý, áp dụng tất cả segments này"},
             {"label": "🗑️ Bỏ bớt segment", "action": "prefill", "text": "Bỏ segment "},

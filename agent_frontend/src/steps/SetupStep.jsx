@@ -38,6 +38,7 @@ export default function SetupStep({ data, onChange, brief, creative, segment, is
             const staticZone = staticMap[z.id] || {}
             return {
               ...staticZone,
+              ...z,
               id: z.id,
               reach: z.reach, vi: z.vi, ctr: z.ctr, cpm: z.cpm,
               format: z.format || staticZone.format,

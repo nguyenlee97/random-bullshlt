@@ -12,6 +12,7 @@ from rag.recommend import (
     _raw_query,
     recommend_rag,
 )
+from rag.nano_rerank import rerank_candidates
 from handlers.audience import _normalize_targeting
 from tools.audience_provenance import catalog_source
 
@@ -214,6 +215,101 @@ async def test_rewritten_qdrant_queries_execute_concurrently(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_bm25_only_does_not_initialize_dense_embedding(monkeypatch):
+    import rag.embeddings as embeddings
+    import rag.recommend as recommend
+
+    class Values(list):
+        def tolist(self):
+            return list(self)
+
+    class Client:
+        def query_points(self, *_args, **_kwargs):
+            return SimpleNamespace(points=[])
+
+    def dense_must_not_run(_queries):
+        raise AssertionError("dense embedding ran in bm25_only mode")
+
+    monkeypatch.setattr(embeddings, "embed_dense", dense_must_not_run)
+    monkeypatch.setattr(
+        embeddings,
+        "embed_sparse",
+        lambda queries: [
+            SimpleNamespace(indices=Values([1]), values=Values([1.0]))
+            for _ in queries
+        ],
+    )
+    monkeypatch.setattr(recommend, "get_qdrant", lambda: Client())
+
+    assert await _hybrid_search(["food delivery"], 5, mode="bm25_only") == []
+
+
+@pytest.mark.asyncio
+async def test_nano_reranker_rejects_unknown_segment_and_fails_open(monkeypatch):
+    class Responses:
+        async def parse(self, **_kwargs):
+            return SimpleNamespace(
+                output_parsed=SimpleNamespace(items=[
+                    SimpleNamespace(candidate_index=29, relevance_score=1.0)
+                ]),
+                id="resp-test",
+            )
+
+    class Client:
+        responses = Responses()
+
+    monkeypatch.setattr(
+        "rag.nano_rerank.config.OPENAI_API_KEY", "test-key"
+    )
+    order, meta = await rerank_candidates(
+        "food shoppers",
+        [
+            {"segmentId": "SEG-1", "fullLabel": "Food"},
+            {"segmentId": "SEG-2", "fullLabel": "Online shoppers"},
+        ],
+        client=Client(),
+    )
+
+    assert order is None
+    assert meta["applied"] is False
+    assert meta["reason"] == "provider_or_validation_failure"
+
+
+@pytest.mark.asyncio
+async def test_nano_reranker_normalizes_duplicates_and_appends_omissions(monkeypatch):
+    class Responses:
+        async def parse(self, **_kwargs):
+            return SimpleNamespace(
+                output_parsed=SimpleNamespace(items=[
+                    SimpleNamespace(candidate_index=1, relevance_score=0.9),
+                    SimpleNamespace(candidate_index=1, relevance_score=0.8),
+                ]),
+                id="resp-test",
+            )
+
+    class Client:
+        responses = Responses()
+
+    monkeypatch.setattr(
+        "rag.nano_rerank.config.OPENAI_API_KEY", "test-key"
+    )
+    order, meta = await rerank_candidates(
+        "food shoppers",
+        [
+            {"segmentId": "SEG-1", "fullLabel": "Food"},
+            {"segmentId": "SEG-2", "fullLabel": "Online shoppers"},
+            {"segmentId": "SEG-3", "fullLabel": "Coupons"},
+        ],
+        client=Client(),
+    )
+
+    assert order == [1, 0, 2]
+    assert meta["applied"] is True
+    assert meta["duplicate_count"] == 1
+    assert meta["omitted_count"] == 2
+
+
+@pytest.mark.asyncio
 async def test_rag_selection_dedupes_stable_ids_and_backfills_ranked_candidates(monkeypatch):
     import rag.recommend as recommend
 
@@ -237,7 +333,7 @@ async def test_rag_selection_dedupes_stable_ids_and_backfills_ranked_candidates(
     async def ready(_session_id):
         return True
 
-    async def search(_queries, _limit):
+    async def search(_queries, _limit, mode=None):
         return candidates
 
     async def select(_prompt):
@@ -271,3 +367,116 @@ async def test_rag_selection_dedupes_stable_ids_and_backfills_ranked_candidates(
     assert len(set(ids)) == 6
     assert "INT002" in ids
     assert result["rag"]["dropped_duplicates"] == 1
+
+
+@pytest.mark.asyncio
+async def test_recommend_rag_keeps_catalog_order_when_selector_fails(monkeypatch):
+    import rag.recommend as recommend
+
+    candidates = [
+        {
+            "_id": f"mongo-{index}",
+            "segmentId": f"SEG-{index}",
+            "fullLabel": f"Segment {index}",
+            "name": f"Segment {index}",
+            "_text": f"relevant audience {index}",
+            "_rank": index,
+            "_query_hits": 1,
+            "_fusion_score": 1 / (61 + index),
+            "_rag_index": {"segment_count": 310},
+        }
+        for index in range(1, 8)
+    ]
+
+    async def ready(_session_id):
+        return True
+
+    async def search(_queries, _limit, mode=None):
+        return candidates
+
+    async def unavailable_selector(_prompt):
+        raise TimeoutError("provider timed out")
+
+    monkeypatch.setattr(recommend, "ensure_index", ready)
+    monkeypatch.setattr(recommend, "_hybrid_search", search)
+    monkeypatch.setattr(recommend, "_select", unavailable_selector)
+    monkeypatch.setattr(recommend.config, "RAG_QUERY_REWRITE", False)
+    monkeypatch.setattr(recommend.config, "AUDIENCE_RERANK_MODE", "off")
+    monkeypatch.setattr(recommend.config, "RAG_TOP_RETRIEVE", 7)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_FINAL", 7)
+
+    result = await recommend_rag("selector-fail-open", {
+        "brand": "Example",
+        "objective": "awareness",
+        "notes": "relevant audience",
+    })
+
+    assert [item["segmentId"] for item in result["recommendations"]] == [
+        "SEG-1", "SEG-2", "SEG-3", "SEG-4", "SEG-5", "SEG-6",
+    ]
+    assert result["rag"]["applied"] is True
+    assert result["rag"]["selector"] == "retrieval_order_fallback"
+    assert result["rag"]["selector_fallback_reason"] == "provider_unavailable"
+    assert "selector_error" not in result["rag"]
+
+
+@pytest.mark.asyncio
+async def test_recommend_rag_applies_bounded_nano_order_and_keeps_tail(monkeypatch):
+    import rag.nano_rerank as nano
+    import rag.recommend as recommend
+
+    candidates = [
+        {
+            "_id": f"mongo-{index}",
+            "segmentId": f"SEG-{index}",
+            "fullLabel": f"Segment {index}",
+            "name": f"Segment {index}",
+            "_text": f"segment {index}",
+            "_rank": index,
+            "_query_hits": 1,
+            "_fusion_score": 1 / (61 + index),
+            "_rag_index": {"segment_count": 310},
+        }
+        for index in range(1, 8)
+    ]
+
+    async def ready(_session_id):
+        return True
+
+    async def search(_queries, _limit, mode=None):
+        return candidates
+
+    async def nano_order(_query, _candidates):
+        return [2, 0, 1], {
+            "applied": True,
+            "mode": "openai_nano",
+            "model": "gpt-5.4-nano",
+            "candidate_count": 3,
+        }
+
+    async def select(_prompt):
+        return [
+            {"fullLabel": f"Segment {index}", "reason": "fixture"}
+            for index in (3, 1, 2, 4, 5, 6)
+        ], "fixture"
+
+    monkeypatch.setattr(recommend, "ensure_index", ready)
+    monkeypatch.setattr(recommend, "_hybrid_search", search)
+    monkeypatch.setattr(recommend, "_select", select)
+    monkeypatch.setattr(nano, "rerank_candidates", nano_order)
+    monkeypatch.setattr(recommend.config, "RAG_QUERY_REWRITE", False)
+    monkeypatch.setattr(recommend.config, "AUDIENCE_RERANK_MODE", "openai_nano")
+    monkeypatch.setattr(recommend.config, "RAG_TOP_RETRIEVE", 7)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_FINAL", 7)
+
+    result = await recommend_rag("nano-order", {
+        "brand": "Example",
+        "notes": "relevant audience",
+    })
+
+    assert result["rag"]["reranked"] is True
+    assert result["rag"]["rerank_mode"] == "openai_nano"
+    assert result["rag"]["rerank_model"] == "gpt-5.4-nano"
+    assert [item["segmentId"] for item in result["recommendations"]][:3] == [
+        "SEG-3", "SEG-1", "SEG-2",
+    ]

@@ -76,6 +76,54 @@ class Config:
     OPENAI_CAMPAIGN_MAX_TOOL_CALLS: int = int(
         os.getenv("OPENAI_CAMPAIGN_MAX_TOOL_CALLS", "4")
     )
+    # NP-6 placement reranking is an independent, bounded experiment. It does
+    # not select or change either campaign conversation engine.
+    PLACEMENT_RERANK_ENABLED: bool = (
+        os.getenv("PLACEMENT_RERANK_ENABLED", "false").lower() == "true"
+    )
+    PLACEMENT_RERANK_MODEL: str = os.getenv(
+        "PLACEMENT_RERANK_MODEL", "gpt-5.4-nano"
+    )
+    PLACEMENT_RERANK_REASONING_EFFORT: str = os.getenv(
+        "PLACEMENT_RERANK_REASONING_EFFORT", "low"
+    )
+    PLACEMENT_RERANK_CANDIDATE_LIMIT: int = int(
+        os.getenv("PLACEMENT_RERANK_CANDIDATE_LIMIT", "12")
+    )
+    PLACEMENT_RERANK_MAX_OUTPUT_TOKENS: int = int(
+        os.getenv("PLACEMENT_RERANK_MAX_OUTPUT_TOKENS", "3000")
+    )
+    PLACEMENT_RERANK_TIMEOUT_SECONDS: float = float(
+        os.getenv("PLACEMENT_RERANK_TIMEOUT_SECONDS", "20")
+    )
+    # Placement retrieval is intentionally independent from audience RAG and
+    # from both campaign conversation engines. The catalog is small enough to
+    # keep a versioned dense+BM25 index in process; failures fall back to the
+    # existing deterministic scorer.
+    PLACEMENT_RAG_ENABLED: bool = (
+        os.getenv("PLACEMENT_RAG_ENABLED", "false").lower() == "true"
+    )
+    PLACEMENT_RAG_RETRIEVE_LIMIT: int = int(
+        os.getenv("PLACEMENT_RAG_RETRIEVE_LIMIT", "30")
+    )
+    PLACEMENT_RAG_CONTEXT_LIMIT: int = int(
+        os.getenv("PLACEMENT_RAG_CONTEXT_LIMIT", "6")
+    )
+    PLACEMENT_RAG_SEMANTIC_THRESHOLD: float = float(
+        os.getenv("PLACEMENT_RAG_SEMANTIC_THRESHOLD", "0.42")
+    )
+    PLACEMENT_RAG_MAX_QUERIES: int = int(
+        os.getenv("PLACEMENT_RAG_MAX_QUERIES", "4")
+    )
+    PLACEMENT_RAG_EMBEDDING_MODEL: str = os.getenv(
+        "PLACEMENT_RAG_EMBEDDING_MODEL", "text-embedding-3-small"
+    )
+    PLACEMENT_RAG_EMBEDDING_TIMEOUT_SECONDS: float = float(
+        os.getenv("PLACEMENT_RAG_EMBEDDING_TIMEOUT_SECONDS", "30")
+    )
+    PLACEMENT_RAG_TOPIC_RERANK_THRESHOLD: float = float(
+        os.getenv("PLACEMENT_RAG_TOPIC_RERANK_THRESHOLD", "0.35")
+    )
     OPENAI_IMAGE_ENABLED: bool = (
         os.getenv("OPENAI_IMAGE_ENABLED", "true").lower() == "true"
     )
@@ -328,6 +376,28 @@ class Config:
     RAG_DENSE_MODEL: str = os.getenv(
         "RAG_DENSE_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     RAG_SPARSE_MODEL: str = os.getenv("RAG_SPARSE_MODEL", "Qdrant/bm25")
+    AUDIENCE_RAG_RETRIEVAL_MODE: str = os.getenv(
+        "AUDIENCE_RAG_RETRIEVAL_MODE", "hybrid_dense_bm25"
+    )
+    AUDIENCE_RERANK_MODE: str = os.getenv(
+        "AUDIENCE_RERANK_MODE",
+        "legacy" if os.getenv("RAG_USE_RERANK", "false").lower() == "true" else "off",
+    ).lower()
+    AUDIENCE_NANO_RERANK_MODEL: str = os.getenv(
+        "AUDIENCE_NANO_RERANK_MODEL", "gpt-5.4-nano"
+    )
+    AUDIENCE_NANO_RERANK_REASONING_EFFORT: str = os.getenv(
+        "AUDIENCE_NANO_RERANK_REASONING_EFFORT", "low"
+    )
+    AUDIENCE_NANO_RERANK_CANDIDATE_LIMIT: int = int(
+        os.getenv("AUDIENCE_NANO_RERANK_CANDIDATE_LIMIT", "30")
+    )
+    AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS: int = int(
+        os.getenv("AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS", "3500")
+    )
+    AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS: float = float(
+        os.getenv("AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS", "30")
+    )
     RAG_TOP_RETRIEVE: int = int(os.getenv("RAG_TOP_RETRIEVE", "50"))
     RAG_TOP_FINAL: int = int(os.getenv("RAG_TOP_FINAL", "25"))
     # Keep model-assisted ranking stages independently controllable. Retrieval
@@ -377,3 +447,15 @@ class Config:
 
 
 config = Config()
+
+if config.AUDIENCE_RAG_RETRIEVAL_MODE not in {
+    "bm25_only", "dense_only", "hybrid_dense_bm25"
+}:
+    raise ValueError(
+        "AUDIENCE_RAG_RETRIEVAL_MODE must be bm25_only, dense_only, "
+        "or hybrid_dense_bm25"
+    )
+if config.AUDIENCE_RERANK_MODE not in {"off", "legacy", "openai_nano"}:
+    raise ValueError(
+        "AUDIENCE_RERANK_MODE must be off, legacy, or openai_nano"
+    )

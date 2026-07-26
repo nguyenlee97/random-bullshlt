@@ -1,0 +1,72 @@
+[
+  {
+    "id": "audience-only-music",
+    "case_group": "audience_only",
+    "brief": {"brand": "NovaPass", "objective": "awareness", "notes": "Ra mắt dịch vụ thành viên mới và cần tăng nhận diện."},
+    "audience": [{"category": "Entertainment (leisure)", "subcategory": "Concerts", "name": "Live events", "fullLabel": "Live events"}],
+    "expected_topic": "music_live_events"
+  },
+  {
+    "id": "audience-only-gaming",
+    "case_group": "audience_only",
+    "brief": {"brand": "NovaPass", "objective": "consideration", "notes": "Khuyến khích người dùng khám phá ưu đãi mới."},
+    "audience": [{"category": "Entertainment (leisure)", "subcategory": "Video games", "name": "Esports", "fullLabel": "Esports"}],
+    "expected_topic": "gaming_esports"
+  },
+  {
+    "id": "audience-only-movies",
+    "case_group": "audience_only",
+    "brief": {"brand": "NovaPass", "objective": "awareness", "notes": "Giới thiệu gói nội dung giải trí mới."},
+    "audience": [{"category": "Entertainment (leisure)", "subcategory": "Streaming media", "name": "Streaming television", "fullLabel": "Streaming television"}],
+    "expected_topic": "movies_tv_streaming"
+  },
+  {
+    "id": "audience-only-books",
+    "case_group": "audience_only",
+    "brief": {"brand": "NovaPass", "objective": "consideration", "notes": "Thúc đẩy lượt đăng ký cho sản phẩm nội dung số."},
+    "audience": [{"category": "Hobbies and activities", "subcategory": "Reading", "name": "E-books", "fullLabel": "E-books"}],
+    "expected_topic": "books_reading"
+  },
+  {
+    "id": "audience-only-family",
+    "case_group": "audience_only",
+    "brief": {"brand": "An Tâm", "objective": "awareness", "notes": "Tăng nhận biết cho dòng sản phẩm chăm sóc hằng ngày."},
+    "audience": [{"category": "Family and relationships", "subcategory": "Parenting", "name": "Parents with young children", "fullLabel": "Parents with young children"}],
+    "expected_topic": "family_parenting"
+  },
+  {
+    "id": "audience-only-food",
+    "case_group": "audience_only",
+    "brief": {"brand": "Daily+", "objective": "conversion", "notes": "Thúc đẩy dùng thử và đặt hàng trong tuần ra mắt."},
+    "audience": [{"category": "Food and drink (consumables)", "subcategory": "Restaurants", "name": "Food", "fullLabel": "Food"}],
+    "expected_topic": "food_dining"
+  },
+  {
+    "id": "audience-only-fashion",
+    "case_group": "audience_only",
+    "brief": {"brand": "Daily+", "objective": "consideration", "notes": "Giới thiệu bộ sưu tập mới đến nhóm khách hàng quan tâm."},
+    "audience": [{"category": "Shopping and fashion", "subcategory": "Beauty", "name": "Cosmetics", "fullLabel": "Cosmetics"}],
+    "expected_topic": "fashion_beauty"
+  },
+  {
+    "id": "audience-only-travel",
+    "case_group": "audience_only",
+    "brief": {"brand": "GoMore", "objective": "conversion", "notes": "Tăng lượt đặt dịch vụ trong đợt ưu đãi cuối tháng."},
+    "audience": [{"category": "Travel", "subcategory": "Hotels", "name": "Frequent travelers", "fullLabel": "Frequent travelers"}],
+    "expected_topic": "travel_hospitality"
+  },
+  {
+    "id": "audience-only-automotive",
+    "case_group": "audience_only",
+    "brief": {"brand": "Move+", "objective": "consideration", "notes": "Thu hút khách hàng tìm hiểu sản phẩm mới tại đô thị."},
+    "audience": [{"category": "Purchase behavior (Purchase behavior)", "subcategory": "Vehicles", "name": "Vehicle shoppers", "fullLabel": "Vehicle shoppers"}],
+    "expected_topic": "automotive_mobility"
+  },
+  {
+    "id": "audience-only-marketing",
+    "case_group": "audience_only",
+    "brief": {"brand": "Scale+", "objective": "conversion", "notes": "Tăng số lượt đăng ký dùng thử nền tảng cho doanh nghiệp."},
+    "audience": [{"category": "Business and industry", "subcategory": "Marketing", "name": "Digital marketing", "fullLabel": "Digital marketing"}],
+    "expected_topic": "marketing_digital_business"
+  }
+]

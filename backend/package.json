@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "test": "node --test tests",
     "migrate:audience-sizes": "node seed/backfill-audience-sizes.js",
+    "migrate:np6-catalog": "node seed/migrate-np6-catalog.js",
     "seed": "node seed/index.js",
     "seed:force": "node seed/index.js --force"
   },

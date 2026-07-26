@@ -95,7 +95,10 @@ const taskIcon = status => {
 }
 
 const evidenceText = evidence => {
-  if (evidence.type === 'audience_pipeline') return `RAG ${evidence.retrieval_candidates || 0} candidates → rerank ${evidence.reranked ? 'đã áp dụng' : evidence.rerank_enabled ? 'không khả dụng' : 'tắt'} → ${evidence.selector || 'selector'}`
+  if (evidence.type === 'audience_pipeline') {
+    if (!evidence.retrieval_applied) return `Legacy full-catalog → ${evidence.selector || 'selector'}`
+    return `RAG ${evidence.retrieval_mode || 'hybrid'} · ${evidence.retrieval_candidates || 0} candidates → rerank ${evidence.reranked ? 'đã áp dụng' : evidence.rerank_enabled ? 'không khả dụng' : 'tắt'} → ${evidence.selector || 'selector'}`
+  }
   if (evidence.type === 'catalog_segments') return `${evidence.count || 0} segment catalog: ${(evidence.ids || []).slice(0, 6).join(', ')}${(evidence.ids || []).length > 6 ? '…' : ''}`
   if (evidence.type === 'order_guard') return `Order guard: ${evidence.passed ? 'PASS' : 'BLOCKED'}`
   if (evidence.type === 'order_draft') return `Order draft: ${evidence.placements || 0} placements · idempotency ${evidence.idempotency_key || '—'}`
@@ -880,6 +883,8 @@ export default function AutopilotPanel({
               onSendReportQuestion={onSendReportQuestion}
               onReportActivate={onReportActivate}
               onReportExit={onReportExit}
+              runId={run.run_id}
+              sessionId={run.session_id || window.__AGENT_SESSION_ID__}
             />
           ) : <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="autopilot-results-title">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -898,7 +903,9 @@ export default function AutopilotPanel({
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Audience</p>
                 <p className="mt-1 text-lg font-black text-slate-900">{audienceResult.attrs?.length || 0} segment</p>
                 <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                  {audienceCatalogCount ? `${audienceCatalogCount} catalog` : 'Catalog hiện hành'} → {audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || audienceResult.retrieval?.retrieval_candidates || 0} ứng viên RAG · {audienceResult.retrieval?.reranked ? 'đã rerank' : 'selector an toàn'}
+                  {audienceCatalogCount ? `${audienceCatalogCount} catalog` : 'Catalog hiện hành'} → {audienceResult.retrieval?.applied
+                    ? `${audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || audienceResult.retrieval?.retrieval_candidates || 0} ứng viên RAG · ${audienceResult.retrieval?.reranked ? 'đã rerank' : 'selector an toàn'}`
+                    : 'legacy full-catalog · selector an toàn'}
                 </p>
               </article>
               <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -926,7 +933,9 @@ export default function AutopilotPanel({
                       Audience đã chọn · {audienceResult.attrs.length} segment
                     </summary>
                     <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                      {audienceCatalogCount ? `Catalog có ${audienceCatalogCount} segment.` : 'Run cũ chưa lưu tổng số catalog.'} RAG truy xuất {audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || 0} ứng viên liên quan trước khi selector an toàn chọn kết quả cuối.
+                      {audienceCatalogCount ? `Catalog có ${audienceCatalogCount} segment.` : 'Run cũ chưa lưu tổng số catalog.'} {audienceResult.retrieval?.applied
+                        ? `RAG ${audienceResult.retrieval?.mode || 'hybrid'} truy xuất ${audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || 0} ứng viên trước khi ${audienceResult.retrieval?.reranked ? 'nano rerank và ' : ''}selector chọn kết quả cuối.`
+                        : 'Run này dùng selector trên toàn catalog, không phải RAG.'}
                     </p>
                     <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                       {audienceResult.attrs.map((item, index) => (

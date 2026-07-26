@@ -21,10 +21,10 @@
   <h1>Advertising Agent<br/><span>AI campaign operating system</span></h1>
   <p>Một hệ thống AI quảng cáo end-to-end kết nối brief, strategy, audience, creative, media, launch, live view và reporting trong một canonical workspace — vận hành bằng Copilot trên web, Autopilot bền vững và Zalo OA.</p>
   <div class="badges"><span class="badge">React · FastAPI · Node</span><span class="badge">LangGraph orchestration</span><span class="badge">MongoDB canonical workspace</span><span class="badge">Hybrid RAG · Qdrant</span><span class="badge">VLM Creative Intelligence</span><span class="badge">Zalo Login &amp; OA</span><span class="badge">Prometheus · Grafana · Langfuse</span></div>
-  <div class="meta">Current-state build 2026-07-20.6 · Capability đã chạy được tách rõ khỏi roadmap</div>
+  <div class="meta">Current-state build 2026-07-27.2 · Capability đã chạy được tách rõ khỏi roadmap</div>
 </header>
 <main class="wrap">
-  <nav class="toc"><b>Nội dung</b><ol><li><a href="#business">Bài toán &amp; hành trình business</a></li><li><a href="#modes">Copilot và Autopilot</a></li><li><a href="#architecture">Kiến trúc hệ thống</a></li><li><a href="#workspace">Canonical workspace</a></li><li><a href="#intelligence">Audience &amp; Creative Intelligence</a></li><li><a href="#durability">Durable execution</a></li><li><a href="#zalo">Zalo identity &amp; channel</a></li><li><a href="#reports">Live view &amp; sáu báo cáo</a></li><li><a href="#security">Security &amp; observability</a></li></ol></nav>
+  <nav class="toc"><b>Nội dung</b><ol><li><a href="#business">Bài toán &amp; hành trình business</a></li><li><a href="#modes">Copilot và Autopilot</a></li><li><a href="#architecture">Kiến trúc hệ thống</a></li><li><a href="#workspace">Canonical workspace</a></li><li><a href="#intelligence">Recommendation &amp; Creative Intelligence</a></li><li><a href="#durability">Durable execution</a></li><li><a href="#zalo">Zalo identity &amp; channel</a></li><li><a href="#reports">Live view &amp; sáu báo cáo</a></li><li><a href="#security">Security &amp; observability</a></li></ol></nav>
 
   <h2 id="business"><span class="n">01</span>Từ business brief đến campaign có thể vận hành</h2>
   <p class="lead">Bài toán không phải “chat với AI để lấy một đoạn copy”. Đội quảng cáo phải chuyển một mục tiêu kinh doanh mơ hồ thành audience có căn cứ, creative đúng format, placement khả thi, order an toàn và báo cáo có thể giải thích — đồng thời giữ cho con người quyền sửa và quyết định launch.</p>
@@ -65,13 +65,13 @@ flowchart TB
   CTRL --> AG
   AG --> LG[LangGraph Copilot / Autopilot orchestration]
   LG --> CAP[Typed capability registry]
-  CAP --> RAG[Qdrant hybrid audience RAG]
+  CAP --> RAG[Hybrid audience & placement recommendation]
   CAP --> VLM[VLM + image provider]
   CAP --> BE[Node campaign backend]
   AG --> DB[(MongoDB)]
   BE --> DB
   CAP --> OBS[Prometheus · Grafana · Langfuse]
-  BE --> SITES[ZNews · BaoMoi · ZingMP3 replicas]
+  BE --> SITES[ZNews · BaoMoi · ZingMP3 · S-Money · Đi Cùng Con · Zagoo]
   </div></div>
   <div class="table"><table><thead><tr><th>Layer</th><th>Trách nhiệm</th><th>Trust boundary</th></tr></thead><tbody>
     <tr><td>Experience</td><td>Landing, identity, Copilot workspace, Autopilot timeline/review, report, responsive mobile</td><td>Không phải nguồn dữ liệu cuối cùng</td></tr>
@@ -95,15 +95,60 @@ flowchart LR
   </div></div>
   <p>Dependency invalidation có chọn lọc: đổi budget làm strategy/forecast/order draft stale nhưng không xóa creative; đổi creative chỉ chạy lại analysis, compatibility và assignments. Kết quả worker chậm bị từ chối nếu input revision không còn khớp.</p>
 
-  <h2 id="intelligence"><span class="n">05</span>Audience RAG và Creative Intelligence</h2>
+  <h2 id="intelligence"><span class="n">05</span>Recommendation Intelligence: placement, audience và creative</h2>
+  <p class="lead">Recommendation không còn chỉ dựa vào giá và availability. NP-6 bổ sung semantic retrieval và bounded reranking trên metadata do catalog quản lý, nhưng giữ hard constraint, model lock và side-effect contract ở lớp deterministic của server.</p>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart TB
+  B[Approved brief + audience context] --> N[Normalize multilingual intent]
+  N --> P1[Placement dense + BM25 topic retrieval]
+  N --> A1[Audience dense + BM25 retrieval]
+  P1 --> P2[GPT-5.4-nano topic rerank]
+  P2 --> P3[Eligibility · availability · format · budget]
+  P3 --> P4[Context-first deterministic score]
+  P4 --> PE[Placement shortlist + match evidence]
+  A1 --> A2[RRF top 50 candidates]
+  A2 --> A3[GPT-5.4-nano rerank top 30]
+  A3 --> A4[Explicit exclusion & contradiction guard]
+  A4 --> A5[Provider-owned selector · exactly 6]
+  A5 --> AE[Catalog ID validation · dedupe · evidence]
+  </div></div>
+
+  <h3>Hai pipeline dùng chung nguyên tắc, không dùng chung dữ liệu tùy tiện</h3>
+  <div class="table"><table><thead><tr><th>Stage</th><th>Ad placement recommendation</th><th>Audience recommendation</th></tr></thead><tbody>
+    <tr><td>Catalog</td><td>258 placement hoạt động: 35 legacy + 214 category + 9 property; mỗi zone có topic, keyword, DMP affinity, placement family, provenance và creative contract.</td><td>310 DMP segment có stable ID, category/subcategory, size range và fingerprint của index.</td></tr>
+    <tr><td>Dense retrieval</td><td><code>text-embedding-3-small</code>; index topic chạy in-process vì catalog chỉ có hàng trăm document.</td><td><code>paraphrase-multilingual-MiniLM-L12-v2</code>; vector 384 chiều lưu trong Qdrant.</td></tr>
+    <tr><td>Sparse retrieval</td><td>BM25-style score giữ exact vocabulary tiếng Việt/Anh từ metadata placement.</td><td>Qdrant sparse BM25 giữ brand, product, interest và taxonomy term chính xác.</td></tr>
+    <tr><td>Fusion</td><td>Dense + sparse rank được Reciprocal Rank Fusion theo từng query; topic được mở rộng trở lại các placement format hợp lệ.</td><td>Dense + sparse được RRF thành 50 candidate; query gốc luôn được giữ để không mất tín hiệu brief.</td></tr>
+    <tr><td>Rerank</td><td><code>gpt-5.4-nano</code> rerank tối đa 30 topic ID đã biết; không được thêm hoặc sửa ID.</td><td><code>gpt-5.4-nano</code> chấm tối đa 30 candidate; server sort theo relevance score rồi nối lại tail theo retrieval order.</td></tr>
+    <tr><td>Deterministic boundary</td><td>Availability, booking conflict, device, creative ratio/format, budget và objective performance vẫn được kiểm tra ngoài LLM. Context match tạo tier ưu tiên; reach/quality chỉ reorder bên trong tier.</td><td>Explicit exclusion, B2B/B2C contradiction, ID grounding và duplicate removal chạy trước/sau selector. Selector lỗi thì giữ guarded retrieval order thay vì dump lại toàn catalog.</td></tr>
+    <tr><td>Engine boundary</td><td>Reranker là fixed relevance specialist, không thay conversational engine của campaign.</td><td>Copilot và Autopilot dùng cùng retrieval/rerank; selector cuối vẫn thuộc GreenNode hoặc OpenAI theo immutable campaign model.</td></tr>
+    <tr><td>Evidence</td><td>Card trả topic, matched keyword/DMP affinity, dense/sparse rank, nano rationale và ranking mode.</td><td>Artifact trả retrieval mode, candidate count, rerank model/status, guard rejection, provider selector và stage latency.</td></tr>
+  </tbody></table></div>
+
+  <div class="callout success"><b>Fail-open có giới hạn:</b> embedding, reranker hoặc provider lỗi không được tạo ID mới. Placement quay về deterministic contextual scorer; audience giữ candidate order đã được guard và catalog-grounding. Lỗi recommendation không được nới lỏng ownership, confirmation, image quota, audience-reach hay order-idempotency.</div>
+
+  <h3>Placement experiment · 43 brief · 23 topic class</h3>
+  <div class="table"><table><thead><tr><th>Setup</th><th>Top-1 đúng</th><th>Top-3 đúng</th><th>Semantic hard-case top-1</th><th>p95 latency</th></tr></thead><tbody>
+    <tr><td>Deterministic contextual baseline</td><td>76.7%</td><td>81.4%</td><td>10.0%</td><td>0.08s</td></tr>
+    <tr><td>Dense + BM25 retrieval</td><td>81.4%</td><td>86.1%</td><td>20.0%</td><td>1.18s</td></tr>
+    <tr><td><b>Dense + BM25 + GPT-5.4-nano</b></td><td><b>100%</b></td><td><b>100%</b></td><td><b>100%</b></td><td>12.6s</td></tr>
+  </tbody></table></div>
+
+  <h3>Audience experiment · 80 golden briefs · 310 segment</h3>
+  <div class="table"><table><thead><tr><th>Setup</th><th>Retrieval recall@50</th><th>Must-have recall@6</th><th>nDCG@6</th><th>Exclusion violation@6</th><th>p95 latency</th></tr></thead><tbody>
+    <tr><td>BM25-only baseline</td><td>38.8%</td><td>24.0%</td><td>18.4%</td><td>1</td><td>2.08s</td></tr>
+    <tr><td>Dense + BM25 retrieval</td><td>75.0%</td><td>47.9%</td><td>36.3%</td><td>1</td><td>2.10s</td></tr>
+    <tr><td><b>Dense + BM25 + GPT-5.4-nano</b></td><td><b>75.0%</b></td><td><b>75.8%</b></td><td><b>61.3%</b></td><td><b>0</b></td><td>7.50s</td></tr>
+  </tbody></table></div>
+
+  <div class="metrics"><div class="metric"><b>258</b><span>active placement có versioned audience context</span></div><div class="metric"><b>310</b><span>audience segment trong production Qdrant</span></div><div class="metric"><b>100%</b><span>placement top-1 trên 43-case NP-6 matrix</span></div><div class="metric"><b>75.8%</b><span>audience must-have recall@6 trên 80 brief</span></div></div>
+  <p class="small">Các số eval là bằng chứng regression của dataset/run ngày 2026-07-27, không phải SLA chất lượng cho mọi brief. Synthetic inventory metric chỉ phục vụ demo delivery; semantic relevance không thay đổi audience reach arithmetic.</p>
+
+  <h3>Creative Intelligence sau recommendation</h3>
   <div class="grid">
-    <div class="card"><h3>Hybrid audience retrieval</h3><p>Query rewrite đa khía cạnh giữ tín hiệu gốc; dense multilingual embeddings + sparse BM25 được Reciprocal Rank Fusion hợp nhất. Candidate IDs được grounding vào catalog và exclusion guard trước khi selector chọn.</p></div>
     <div class="card"><h3>Creative analysis</h3><p>Deterministic dimension/format checks kết hợp VLM semantic fit, brand safety và confidence. Verdict cùng analysis ID được lưu; Copilot và Autopilot đều có human review boundary.</p></div>
     <div class="card"><h3>Bounded multi-format generation</h3><p>Placement intent tạo exact-format plan; worker deduplicate size, cap tối đa ba asset, tạo có giới hạn, normalize và persist theo revision trước final compatibility ranking.</p></div>
-    <div class="card"><h3>Catalog-grounded planning</h3><p>Zone, CPM, inventory và segment đều đọc từ catalog/service. Qwen reranker hiện tắt vì A/B gần nhất làm giảm relevance và tăng latency; hybrid fallback vẫn là production path.</p></div>
   </div>
-  <div class="metrics"><div class="metric"><b>310</b><span>audience segments trong production fingerprint</span></div><div class="metric"><b>0.840</b><span>must-recall@25 trên 80-case run gần nhất</span></div><div class="metric"><b>0</b><span>unknown/exclusion/grounding violations trong safety run</span></div><div class="metric"><b>3</b><span>AI assets tối đa cho một format plan hiện tại</span></div></div>
-  <p class="small">Các số eval là bằng chứng regression của dataset/run đã ghi nhận, không phải SLA chất lượng cho mọi brief.</p>
 
   <h2 id="durability"><span class="n">06</span>Durable runs, workers, leases và side-effect safety</h2>
   <div class="steps">
@@ -160,7 +205,7 @@ sequenceDiagram
     <div class="card"><h3>Release discipline</h3><p>Frontend production build, focused suites, browser matrix, tracked-secret scan, health/readiness, rollback snapshot rồi mới switch static assets.</p></div>
   </div>
 
-  <footer>Advertising Agent · Current-state technical document · Release 2026-07-20.6 · Updated 2026-07-20</footer>
+  <footer>Advertising Agent · Current-state technical document · Release 2026-07-27.2 · Updated 2026-07-27</footer>
 </main>
 
 <div class="lightbox" id="diagram-lightbox" role="dialog" aria-modal="true" aria-label="Sơ đồ phóng to">

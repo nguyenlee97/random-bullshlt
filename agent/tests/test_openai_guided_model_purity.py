@@ -239,6 +239,9 @@ async def test_openai_rag_injects_openai_rewriter_and_selector(monkeypatch):
     monkeypatch.setattr(rag_recommend, "recommend_rag", fake_rag)
     monkeypatch.setattr(guided.config, "USE_RAG_AUDIENCE", True)
     monkeypatch.setattr(
+        guided.config, "AUDIENCE_RERANK_MODE", "openai_nano"
+    )
+    monkeypatch.setattr(
         guided, "_rewrite_rag_queries",
         AsyncMock(return_value=["food lovers"]),
     )
@@ -255,7 +258,7 @@ async def test_openai_rag_injects_openai_rewriter_and_selector(monkeypatch):
     )
 
     assert captured["provider"] == "openai"
-    assert captured["use_reranker"] is False
+    assert captured["rerank_mode"] == "openai_nano"
     assert callable(captured["selector"])
     assert callable(captured["query_rewriter"])
     assert result["rag"]["queries"] == ["food lovers"]

@@ -68,6 +68,8 @@ const campaignSchema = new mongoose.Schema(
     // Legacy single creative (kept for backward compat; also used as primary fallback)
     creative:   { type: creativeSchema,   default: () => ({}) },
     placements: [{ type: String }],               // placement IDs from zone catalog
+    catalogVersion: { type: String, default: null },
+    placementSnapshots: { type: [mongoose.Schema.Types.Mixed], default: [] },
     targeting:  { type: targetingSchema,  default: () => ({}) },
     dmp:        { type: dmpSchema,        default: () => ({ include: [], exclude: [] }) },
 

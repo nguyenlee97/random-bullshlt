@@ -22,6 +22,9 @@ ALLOWED_DOMAINS = {
     "znews-stg.pawgrammers.io.vn",
     "baomoi-stg.pawgrammers.io.vn",
     "zingmp3-stg.pawgrammers.io.vn",
+    "smoney-stg.pawgrammers.io.vn",
+    "dicungcon-stg.pawgrammers.io.vn",
+    "zagoo-stg.pawgrammers.io.vn",
 }
 
 # ── All possible ad zone DOM IDs per site domain ───────────────────────────────
@@ -44,6 +47,21 @@ SITE_ZONES = {
     ],
     "zingmp3-stg.pawgrammers.io.vn": [
         ("ZingMP3_Masthead", "Masthead Banner"),
+    ],
+    "smoney-stg.pawgrammers.io.vn": [
+        ("SMoney_TopPromo_Desktop", "Top Promo Desktop"),
+        ("SMoney_TopPromo_Mobile", "Top Promo Mobile"),
+        ("SMoney_StockScreener_InContent_Desktop", "Stock Screener Desktop"),
+        ("SMoney_StockScreener_InContent_Mobile", "Stock Screener Mobile"),
+    ],
+    "dicungcon-stg.pawgrammers.io.vn": [
+        ("DiCungCon_ContentBridge_Desktop", "Content Bridge Desktop"),
+        ("DiCungCon_ContentBridge_Mobile", "Content Bridge Mobile"),
+        ("DiCungCon_SidebarRail_Desktop", "Sidebar Rail Desktop"),
+    ],
+    "zagoo-stg.pawgrammers.io.vn": [
+        ("Zagoo_Interstitial_Desktop", "Game Interstitial Desktop"),
+        ("Zagoo_Interstitial_Mobile", "Game Interstitial Mobile"),
     ],
 }
 

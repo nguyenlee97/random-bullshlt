@@ -138,18 +138,55 @@ async def _select(prompt: str) -> tuple[list[dict], str]:
     return parse_json_response(raw).get("recommendations", []), "generator"
 
 
-async def _hybrid_search(queries: list[str], limit: int) -> list[dict]:
+async def _hybrid_search(
+    queries: list[str],
+    limit: int,
+    mode: str | None = None,
+) -> list[dict]:
     """Multi-query hybrid (dense+sparse, RRF) → merged, deduped payload list."""
     from qdrant_client import models as qm
     from rag.embeddings import embed_dense, embed_sparse
 
-    dense, sparse = await asyncio.gather(
-        asyncio.to_thread(embed_dense, queries),
-        asyncio.to_thread(embed_sparse, queries),
-    )
+    retrieval_mode = mode or config.AUDIENCE_RAG_RETRIEVAL_MODE
+    if retrieval_mode not in {"bm25_only", "dense_only", "hybrid_dense_bm25"}:
+        raise ValueError(f"unsupported audience retrieval mode: {retrieval_mode}")
+
+    dense = None
+    sparse = None
+    tasks = []
+    if retrieval_mode in {"dense_only", "hybrid_dense_bm25"}:
+        tasks.append(("dense", asyncio.to_thread(embed_dense, queries)))
+    if retrieval_mode in {"bm25_only", "hybrid_dense_bm25"}:
+        tasks.append(("sparse", asyncio.to_thread(embed_sparse, queries)))
+    values = await asyncio.gather(*(task for _, task in tasks))
+    for (name, _), value in zip(tasks, values):
+        if name == "dense":
+            dense = value
+        else:
+            sparse = value
     client = get_qdrant()
 
     def query_one(index: int):
+        if retrieval_mode == "bm25_only":
+            vector = sparse[index]
+            return client.query_points(
+                config.RAG_COLLECTION,
+                query=qm.SparseVector(
+                    indices=vector.indices.tolist(),
+                    values=vector.values.tolist(),
+                ),
+                using="sparse",
+                limit=limit,
+                with_payload=True,
+            )
+        if retrieval_mode == "dense_only":
+            return client.query_points(
+                config.RAG_COLLECTION,
+                query=dense[index],
+                using="dense",
+                limit=limit,
+                with_payload=True,
+            )
         return client.query_points(
             config.RAG_COLLECTION,
             prefetch=[
@@ -199,6 +236,7 @@ async def recommend_rag(
     query_rewriter=None,
     provider: str = "greennode",
     use_reranker: bool | None = None,
+    rerank_mode: str | None = None,
 ) -> dict:
     """Recommend catalog segments with optional provider-owned model stages.
 
@@ -228,7 +266,11 @@ async def recommend_rag(
     # 2. hybrid retrieve
     try:
         stage_t0 = time.time()
-        candidates = await _hybrid_search(queries, config.RAG_TOP_RETRIEVE)
+        candidates = await _hybrid_search(
+            queries,
+            config.RAG_TOP_RETRIEVE,
+            mode=config.AUDIENCE_RAG_RETRIEVAL_MODE,
+        )
         retrieval_s = time.time() - stage_t0
         RAG_STAGE_SECONDS.labels(stage="retrieve").observe(retrieval_s)
     except Exception as e:
@@ -240,15 +282,40 @@ async def recommend_rag(
     # 3. rerank (graceful skip → keep RRF order)
     brief_text = " | ".join(str(brief.get(k) or "") for k in ("brand", "objective", "kpi", "notes"))
     stage_t0 = time.time()
-    rerank_enabled = config.RAG_USE_RERANK if use_reranker is None else use_reranker
-    if rerank_enabled:
+    selected_rerank_mode = (
+        ("legacy" if use_reranker else "off")
+        if use_reranker is not None
+        else (rerank_mode or config.AUDIENCE_RERANK_MODE)
+    )
+    rerank_meta = {
+        "applied": False,
+        "mode": selected_rerank_mode,
+        "reason": "disabled",
+    }
+    if selected_rerank_mode == "legacy":
         order = await rerank_docs(brief_text, [c["_text"] for c in candidates])
+        rerank_meta = {
+            "applied": bool(order),
+            "mode": "legacy",
+            "model": config.RERANK_MODEL if order else None,
+            "candidate_count": len(candidates),
+        }
+    elif selected_rerank_mode == "openai_nano":
+        from rag.nano_rerank import rerank_candidates
+
+        order, rerank_meta = await rerank_candidates(brief_text, candidates)
     else:
         RAG_RERANK.labels(outcome="disabled").inc()
         order = None
     rerank_s = time.time() - stage_t0
     RAG_STAGE_SECONDS.labels(stage="rerank").observe(rerank_s)
-    reranked = [candidates[i] for i in order] if order else candidates
+    if order:
+        bounded_count = int(rerank_meta.get("candidate_count") or len(order))
+        bounded = candidates[:bounded_count]
+        reranked = [bounded[index] for index in order] + candidates[bounded_count:]
+    else:
+        reranked = candidates
+    rerank_enabled = selected_rerank_mode != "off"
 
     # Remove deterministic conflicts before selection so the model can still
     # return the required six safe recommendations. The same guard is applied
@@ -272,10 +339,21 @@ async def recommend_rag(
         segments_json=json.dumps(labels, ensure_ascii=False),
     )
     stage_t0 = time.time()
-    if selector is not None:
-        recs, selector_name = await selector(prompt)
-    else:
-        recs, selector_name = await _select(prompt)
+    selector_error = None
+    try:
+        if selector is not None:
+            recs, selector_name = await selector(prompt)
+        else:
+            recs, selector_name = await _select(prompt)
+    except Exception as exc:
+        # Retrieval and the bounded reranker have already produced a guarded,
+        # catalog-only order. A transient conversational-provider failure must
+        # not discard that evidence and fall all the way back to the legacy
+        # full-catalog path. The public rows are still filled below from `top`,
+        # with stable catalog IDs and no invented segment.
+        recs = []
+        selector_name = "retrieval_order_fallback"
+        selector_error = f"{type(exc).__name__}: {str(exc)[:120]}"
     generation_s = time.time() - stage_t0
     RAG_STAGE_SECONDS.labels(stage="generate").observe(generation_s)
 
@@ -340,7 +418,10 @@ async def recommend_rag(
         "rag": "recommend_done", "queries": queries, "candidates": len(candidates),
         "rewrite_enabled": config.RAG_QUERY_REWRITE,
         "rerank_enabled": rerank_enabled,
+        "rerank_mode": selected_rerank_mode,
+        "rerank_meta": rerank_meta,
         "selector": selector_name,
+        "selector_error": selector_error,
         "provider": provider,
         "reranked": bool(order), "returned": len(enriched),
         "dropped_hallucinated": dropped,
@@ -352,11 +433,19 @@ async def recommend_rag(
                      "rerank": int(rerank_s * 1000),
                      "generate": int(generation_s * 1000)}})
     return {"recommendations": enriched, "total_segments": catalog_segments,
-            "rag": {"queries": queries, "candidates": len(candidates),
+            "rag": {"applied": True,
+                    "mode": config.AUDIENCE_RAG_RETRIEVAL_MODE,
+                    "queries": queries, "candidates": len(candidates),
                     "catalog_segments": catalog_segments,
                     "rewrite_enabled": config.RAG_QUERY_REWRITE,
                     "rerank_enabled": rerank_enabled,
+                    "rerank_mode": selected_rerank_mode,
+                    "rerank_model": rerank_meta.get("model"),
+                    "rerank_meta": rerank_meta,
                     "selector": selector_name,
+                    "selector_fallback_reason": (
+                        "provider_unavailable" if selector_error else None
+                    ),
                     "provider": provider,
                     "guard_rejected": guard_rejected,
                     "dropped_duplicates": duplicates_dropped,
