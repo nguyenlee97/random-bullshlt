@@ -3,6 +3,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from models import ChatRequest, AgentResponse, ResponseMeta
+from quality.models import FeedbackRequest, FeedbackResponse
 from ratelimit import limiter, CHAT_LIMIT, RECOMMEND_LIMIT
 from handlers.boot import handle_boot
 from handlers.brief import handle_brief
@@ -497,36 +498,87 @@ async def delete_session(session_id: str, request: Request):
 @agent_router.post("/chat", response_model=AgentResponse)
 @limiter.limit(CHAT_LIMIT)
 async def chat(request: Request, req: ChatRequest) -> AgentResponse:
+    import time
+    from quality.events import enqueue_chat_interaction
+
+    started_at = time.time()
+    response = await _dispatch_chat(request, req)
+    enqueue_chat_interaction(
+        session_id=req.session_id or "default",
+        step=req.step,
+        response=response,
+        started_at=started_at,
+        workspace_revision_before=req.workspace_revision,
+        guard_summary=getattr(request.state, "guard_summary", None),
+    )
+    return response
+
+
+async def _dispatch_chat(request: Request, req: ChatRequest) -> AgentResponse:
     sid = req.session_id or "default"
     await _assert_session_access(request, sid)
 
     # Treat every browser-provided string as data, never as control text. A
     # flagged request cannot reach a model or mutation handler.
-    from prompt_guard import scan_untrusted_payload
+    from guardrails.models import GuardDecision
+    from guardrails.service import evaluate_payload, event_payload
     untrusted = {
         "message": req.message,
         "formData": req.formData.model_dump() if req.formData else None,
         "workspace_events": req.workspace_events,
     }
-    injection = scan_untrusted_payload(untrusted, "chat")
-    if injection:
-        from metrics import INJECTION_FLAGGED
-        from session import log_event
-        surface, finding = injection
-        INJECTION_FLAGGED.labels(surface=surface, rule=finding.rule).inc()
-        await log_event(sid, "prompt_injection_blocked", {
-            "surface": surface,
-            "rule": finding.rule,
-        })
-        return AgentResponse(
-            text=(
-                "Em đã chặn nội dung có dấu hiệu cố thay đổi quy tắc hoặc ép hệ thống "
-                "thực thi công cụ. Anh/chị hãy gửi lại yêu cầu campaign thuần túy; "
-                "workspace chưa bị thay đổi."
-            ),
-            blocks=[],
-            meta=ResponseMeta(tool="prompt_guard", model="none", step=req.step),
+    guard_result = evaluate_payload(untrusted, "chat")
+    request.state.guard_summary = {
+        "decision": guard_result.decision.value,
+        "finding_count": len(guard_result.findings),
+        "policy_version": guard_result.policy_version,
+    }
+    if guard_result.findings:
+        from metrics import (
+            GUARDRAIL_DECISIONS,
+            GUARDRAIL_PROTECTED_STATE,
+            INJECTION_FLAGGED,
         )
+        from quality.events import enqueue_quality_event
+        from session import log_event
+        first = guard_result.findings[0]
+        severity = guard_result.highest_severity.value
+        for located in guard_result.findings:
+            INJECTION_FLAGGED.labels(
+                surface=located.path, rule=located.finding.rule
+            ).inc()
+        GUARDRAIL_DECISIONS.labels(
+            surface=first.path,
+            mode=_cfg.GUARDRAIL_MODE,
+            decision=guard_result.decision.value,
+            severity=severity,
+        ).inc()
+        await log_event(sid, "prompt_injection_detected", {
+            "surface": first.path,
+            "rules": [item.finding.rule for item in guard_result.findings],
+            "decision": guard_result.decision.value,
+        })
+        enqueue_quality_event(
+            "guard_decision",
+            session_id=sid,
+            surface=first.path,
+            payload=event_payload(guard_result, untrusted),
+        )
+        if guard_result.decision == GuardDecision.block:
+            GUARDRAIL_PROTECTED_STATE.labels(
+                surface=first.path,
+                workspace_mutated="false",
+                order_created="false",
+            ).inc()
+            return AgentResponse(
+                text=(
+                    "Em đã chặn nội dung có dấu hiệu cố thay đổi quy tắc hoặc ép hệ thống "
+                    "thực thi công cụ. Anh/chị hãy gửi lại yêu cầu campaign thuần túy; "
+                    "workspace chưa bị thay đổi."
+                ),
+                blocks=[],
+                meta=ResponseMeta(tool="prompt_guard", model="none", step=req.step),
+            )
 
     # ── Boot ──────────────────────────────────────────────────────────────────
     if req.step == -1 or (req.step == 0 and not req.formData and not req.message):
@@ -643,6 +695,71 @@ async def chat(request: Request, req: ChatRequest) -> AgentResponse:
         text="Em chưa hiểu yêu cầu. Anh/Chị thử mô tả rõ hơn hoặc tương tác với form ở panel phải nhé!",
         blocks=[],
         meta={"tool": None, "model": "none", "step": req.step},
+    )
+
+
+@agent_router.post(
+    "/feedback",
+    response_model=FeedbackResponse,
+    status_code=201,
+)
+@limiter.limit("20/minute")
+async def feedback_create(
+    request: Request, response: Response, body: FeedbackRequest,
+) -> FeedbackResponse:
+    """Record owned run/conversation feedback without changing campaign state."""
+    from metrics import FEEDBACK_WRITES
+    from quality.feedback import record_feedback
+
+    actor = await _request_actor(request)
+    from identity import require_session_access
+    try:
+        conversation = await require_session_access(actor, body.session_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=404, detail="feedback target not found") from exc
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="feedback target not found")
+
+    run = None
+    if body.target_kind == "run":
+        run = await _assert_run_access(request, body.run_id or "")
+        if run.get("session_id") != body.session_id:
+            raise HTTPException(status_code=404, detail="feedback target not found")
+        if body.task_id and not any(
+            task.get("task_id") == body.task_id for task in run.get("tasks", [])
+        ):
+            raise HTTPException(status_code=422, detail="task is not part of this run")
+    if body.request_id:
+        from quality.store import interaction_belongs_to_session
+        if not await interaction_belongs_to_session(
+            body.session_id, body.request_id
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="request_id is not part of this conversation",
+            )
+
+    from workspace.service import get_workspace
+    workspace_revision = (await get_workspace(body.session_id)).get("revision")
+
+    try:
+        stored, created = await record_feedback(
+            body,
+            actor=actor,
+            conversation=conversation,
+            run=run,
+            workspace_revision=workspace_revision,
+        )
+    except Exception as exc:
+        FEEDBACK_WRITES.labels(outcome="error").inc()
+        raise HTTPException(
+            status_code=503,
+            detail="feedback could not be stored; please retry",
+        ) from exc
+    response.status_code = 201 if created else 200
+    return FeedbackResponse(
+        feedback_id=stored["_id"],
+        request_id=request.state.request_id,
     )
 
 
@@ -1481,7 +1598,7 @@ async def screenshot_route(
 ):
     """
     Capture a zone-aware screenshot of a live test-site URL using Playwright.
-    Only allowed for whitelisted staging domains (znews-stg, baomoi-stg, zingmp3-stg).
+    Only allowed for the whitelisted NP-6 staging publisher domains.
 
     Query params:
         url       — full URL to capture (must be in ALLOWED_DOMAINS)

@@ -18,6 +18,23 @@ try:
     INJECTION_FLAGGED = Counter(
         "agent_prompt_injection_flagged_total", "Prompt injection detections",
         ["surface", "rule"])
+    GUARDRAIL_DECISIONS = Counter(
+        "agent_guardrail_decisions_total", "Guardrail decisions",
+        ["surface", "mode", "decision", "severity"])
+    GUARDRAIL_PROTECTED_STATE = Counter(
+        "agent_guardrail_protected_state_total",
+        "Protected state observed after guardrail decisions",
+        ["surface", "workspace_mutated", "order_created"])
+    FEEDBACK = Counter(
+        "agent_feedback_total", "User feedback", ["sentiment", "surface"])
+    FEEDBACK_REASONS = Counter(
+        "agent_feedback_reason_total", "Negative feedback reasons",
+        ["reason_code", "surface"])
+    FEEDBACK_WRITES = Counter(
+        "agent_feedback_write_total", "Feedback persistence", ["outcome"])
+    QUALITY_EVENT_WRITES = Counter(
+        "agent_quality_event_write_total", "Quality event persistence",
+        ["event_type", "outcome"])
     TOOL_CALLS = Counter(
         "agent_tool_calls_total", "Tool executions", ["tool", "outcome"])
     FALLBACK_LEVEL = Counter(
@@ -56,6 +73,8 @@ except ImportError:  # prometheus_client not installed — everything no-ops
         def inc(self, *a, **k): pass
         def observe(self, *a, **k): pass
     LLM_CALLS = LLM_TOKENS = LLM_PROVIDER_EVENTS = INJECTION_FLAGGED = TOOL_CALLS = FALLBACK_LEVEL = _Noop()
+    GUARDRAIL_DECISIONS = GUARDRAIL_PROTECTED_STATE = _Noop()
+    FEEDBACK = FEEDBACK_REASONS = FEEDBACK_WRITES = QUALITY_EVENT_WRITES = _Noop()
     ORDERS_CREATED = ORDERS_REJECTED = SESSION_COST = _Noop()
     RAG_REQUESTS = RAG_HALLUCINATED = RAG_GUARD_REJECTED = RAG_RERANK = _Noop()
     RAG_STAGE_SECONDS = RAG_CANDIDATES = _Noop()

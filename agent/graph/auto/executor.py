@@ -19,15 +19,19 @@ async def _recommend_audience(state: AgentState, feedback: str | None) -> dict:
 
 
 async def _rank_zones(state: AgentState, feedback: str | None) -> dict:
+    from tools.placement_relevance import build_placement_context
     from tools.zone_ranker import rank_zones
     from tools.order_api import fetch_zone_conflicts
     session = await get_or_create_session(state["session_id"])
     brief = session.get("form_state", {}).get("brief", {})
     creative = session.get("form_state", {}).get("creative", {})
+    segment = session.get("form_state", {}).get("segment", {})
     ranked = await rank_zones(
         objective=brief.get("objective", "awareness"),
         budget=brief.get("budget", 0), kpi=brief.get("kpi", ""),
-        creative_files=creative.get("files", []), limit=12)
+        creative_files=creative.get("files", []),
+        placement_context=build_placement_context(brief, segment),
+        limit=12)
     conflicts = await fetch_zone_conflicts(brief.get("startDate", ""), brief.get("endDate", ""))
     available = [z for z in ranked if not conflicts.get(z["id"])]
     return {"zones": available[:6], "conflicts_skipped": len(ranked) - len(available)}

@@ -1347,6 +1347,23 @@ export const AgentAPI = {
     return CURRENT_CONVERSATION_ID
   },
 
+  async submitFeedback(payload) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        session_id: payload.session_id || SESSION_ID,
+        workspace_revision: payload.workspace_revision ?? WORKSPACE_REVISION,
+      }),
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) {
+      throw await responseError(response, 'Không thể lưu phản hồi. Vui lòng thử lại.')
+    }
+    return withRequestId(await response.json(), response)
+  },
+
   async boot() {
     const real = await callAgent({ session_id: SESSION_ID, step: -1, message: '' })
     return real ?? safeDemoFallback(AGENT_SCENARIOS.boot())
@@ -2070,7 +2087,7 @@ export const AgentAPI = {
 
   /**
    * Capture a full-page screenshot of a live test-site URL via Playwright.
-   * Only works for whitelisted staging domains (znews-stg, baomoi-stg, zingmp3-stg).
+   * Only works for whitelisted NP-6 staging publisher domains.
    *
    * @param {string}   siteUrl  - e.g. "https://znews-stg.pawgrammers.io.vn"
    * @param {string[]} zoneIds  - DOM element IDs to capture (from selectedZoneIds).

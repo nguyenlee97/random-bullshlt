@@ -274,6 +274,15 @@ async def create_run(
     workspace = await get_workspace(session_id)
     from identity import get_conversation_model_for_session
     model_lock = await get_conversation_model_for_session(session_id)
+    from quality.versioning import get_version_manifest
+    quality_version_manifest = get_version_manifest(
+        engine=(
+            "openai"
+            if model_lock["conversation_model"] == "openai"
+            else "greennode"
+        ),
+        approval_policy=approval_policy,
+    )
     run_id = f"run_{uuid.uuid4().hex}"
     request_id = get_request_id()
     trace_id = request_id if request_id != "-" else f"trace_{uuid.uuid4().hex[:16]}"
@@ -290,6 +299,7 @@ async def create_run(
         "conversation_id": model_lock.get("conversation_id"),
         "conversation_model": model_lock["conversation_model"],
         "conversation_model_version": model_lock["conversation_model_version"],
+        "quality_version_manifest": quality_version_manifest,
         "idempotency_key": key, "cancel_requested": False,
         "pause_requested": False, "current_task_id": None,
         "created_at": now, "updated_at": now,

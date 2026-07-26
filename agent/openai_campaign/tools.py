@@ -15,7 +15,7 @@ from audience_reach import estimate_unique_reach
 from openai_campaign.knowledge import search_ad_knowledge
 from session import set_pending_proposal
 from tools.audience_library import get_all_segments, search_audience
-from tools.order_api import fetch_zone_conflicts
+from tools.order_api import fetch_zone_conflicts, public_conflict_details
 from tools.registry import execute_tool
 from tools.zone_catalog import get_all_zones
 from workspace.intent import InvalidWorkspaceIntent, resolve_legacy_update
@@ -288,7 +288,7 @@ OPENAI_TOOL_DEFINITIONS = [
     {
         "type": "function",
         "name": "get_order_status",
-        "description": "Read the current status of one campaign order or recent orders.",
+        "description": "Read one campaign order or recent orders owned by the current actor.",
         "strict": True,
         "parameters": {
             "type": "object",
@@ -426,7 +426,7 @@ async def _execute_read_tool(name: str, args: dict) -> dict:
             "availability": "booked" if item in conflicts else (
                 "available" if start_date and end_date else "unknown_dates_required"
             ),
-            "conflict": conflicts.get(item),
+            "conflict": public_conflict_details(conflicts.get(item)),
         } for item in requested if item in zone_map]
         return {
             "zones": entries, "start_date": start_date or None, "end_date": end_date or None,
@@ -483,6 +483,9 @@ def _proposal_suggestions(field: str) -> list[dict]:
 
 
 def _bounded_json(value: Any) -> str:
+    from security import redact_pii
+
+    value = redact_pii(value)
     payload = json.dumps(value, ensure_ascii=False, default=str)
     if len(payload) <= MAX_TOOL_RESULT_CHARS:
         return payload
@@ -514,7 +517,9 @@ async def execute_openai_tool(
         }:
             result = await _execute_read_tool(name, safe_args)
         else:
-            result = await execute_tool(name, safe_args)
+            result = await execute_tool(
+                name, safe_args, session_id=session_id
+            )
         return {"output": _bounded_json(result), "ui": None, "mutated": False}
 
     if name != MUTATION_TOOL_NAME:

@@ -185,7 +185,7 @@ function SetupReport({ outcome }) {
 
 export default function AutopilotOutcome({
   workspace, taskByKey, fallbackBrief, reportState, onReportChange,
-  onSendReportQuestion, onReportActivate, onReportExit,
+  onSendReportQuestion, onReportActivate, onReportExit, runId, sessionId,
 }) {
   const [activeTab, setActiveTab] = useState('result')
   const [reportInitError, setReportInitError] = useState('')
@@ -243,6 +243,14 @@ export default function AutopilotOutcome({
             recoZones={outcome.zones}
             order={outcome.order}
             forecast={outcome.forecast}
+            feedbackTarget={{
+              sessionId,
+              targetKind: 'run',
+              runId,
+              surface: 'autopilot_summary',
+              step: 4,
+              workspaceRevision: workspace?.revision ?? null,
+            }}
           />
         )}
         {activeTab === 'setup' && <SetupReport outcome={outcome} />}

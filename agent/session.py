@@ -235,6 +235,9 @@ async def delete_session_data(session_id: str) -> dict[str, int]:
     Campaign orders are business records owned by the Node backend and are
     intentionally outside this lifecycle operation.
     """
+    from quality.events import drain_session_quality_tasks
+
+    await drain_session_quality_tasks(session_id)
     deleted: dict[str, int] = {}
     if await _ensure_mongo():
         db = _client[config.MONGODB_DB]
@@ -261,7 +264,12 @@ async def delete_session_data(session_id: str) -> dict[str, int]:
             "agent_runs": {"session_id": session_id},
             "agent_tasks": {"run_id": {"$in": run_ids}},
             "agent_run_events": {"run_id": {"$in": run_ids}},
-            "graph_checkpoints": {"thread_id": {"$in": [session_id, f"{session_id}:auto"]}},
+            "agent_interactions": {"session_id": session_id},
+            "agent_quality_events": {"session_id": session_id},
+            "agent_feedback": {"target.session_id": session_id},
+            "graph_checkpoints": {
+                "thread_id": {"$in": [session_id, f"{session_id}:auto"]}
+            },
             "checkpoint_writes": {"thread_id": {"$in": [session_id, f"{session_id}:auto"]}},
         }
         for collection, query in filters.items():
@@ -317,6 +325,9 @@ async def delete_session_data(session_id: str) -> dict[str, int]:
     deleted["agent_runs"] = len(run_ids)
     deleted["agent_tasks"] = len(task_ids)
     deleted["agent_run_events"] = before_events - len(autopilot_store._mem_events)
+
+    from quality.store import delete_quality_for_sessions
+    deleted.update(await delete_quality_for_sessions([session_id]))
     return deleted
 
 

@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-27.2"
+BUILD_VERSION = "2026-07-27.3"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -230,4 +230,9 @@ BUILD_FEATURES = [
     "zalo-campaign-comparison-summary",               # one owned campaign-list call exposes budget and dates for comparisons
     "zalo-tool-error-observability",                  # Zalo model/tool failures are recorded without weakening mutation safety
     "mobile-adaptive-guidance-ui",                    # target-aware tours, compact review controls and touch-safe creative crop
+    "quality-data-foundation",                        # versioned interactions, quality events and feedback
+    "run-feedback",                                   # owned idempotent Guided/Autopilot feedback
+    "typed-guardrail-policy",                         # legacy-compatible enforce + shadow decision modes
+    "owned-agent-order-reads",                        # campaign status tools use server-derived ownership scope
+    "privacy-safe-zone-conflicts",                    # availability omits other campaign identity
 ]

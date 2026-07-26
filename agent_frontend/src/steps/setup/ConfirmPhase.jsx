@@ -312,8 +312,7 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
             <ul className="space-y-1 pl-6">
               {conflictedZones.map(z => (
                 <li key={z.id} className="text-[11px] text-red-600 leading-tight">
-                  <span className="font-bold">{z.name || z.id}</span>: đang được chiến dịch{' '}
-                  <span className="font-bold">&ldquo;{z.conflict.campaignName}&rdquo;</span>{' '}
+                  <span className="font-bold">{z.name || z.id}</span>: đang được một chiến dịch khác{' '}
                   đặt từ {z.conflict.startDate} đến {z.conflict.endDate}
                 </li>
               ))}

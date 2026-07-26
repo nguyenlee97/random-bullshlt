@@ -73,6 +73,12 @@ async def test_run_start_is_idempotent_and_has_fixed_plan():
     assert all(task["status"] == "pending" for task in first["tasks"][1:])
     assert first["trace_id"] == second["trace_id"]
     assert first["creative_source"] == "upload"
+    assert first["quality_version_manifest"]["quality_schema_version"] == "quality-v1"
+    assert (
+        first["quality_version_manifest"]["approval_policy"]
+        == "critical_only"
+    )
+    assert first["quality_version_manifest"] == second["quality_version_manifest"]
     assert [task["plan_index"] for task in first["tasks"]] == list(
         range(len(service.STANDARD_PLAN))
     )

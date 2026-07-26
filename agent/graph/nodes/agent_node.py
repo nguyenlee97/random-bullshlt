@@ -235,7 +235,7 @@ async def tools_node(state: AgentState) -> dict:
         await alog(session_id, "tool_call", {"tool": name, "path": "graph",
                                              "args": {k: str(v)[:100] for k, v in args.items()}})
         t0 = time.time()
-        result = await execute_tool(name, args)
+        result = await execute_tool(name, args, session_id=session_id)
         await alog(session_id, "tool_result", {"tool": name,
                    "duration_ms": int((time.time() - t0) * 1000)})
         tool_results.append({"tool_call_id": tc["id"], "role": "tool",

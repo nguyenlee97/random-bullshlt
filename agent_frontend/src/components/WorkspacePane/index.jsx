@@ -93,6 +93,13 @@ const WorkspacePane = forwardRef(function WorkspacePane(
             ...formState.setup,
             creativeFiles: formState.creative.files || [],
           }}
+          feedbackTarget={{
+            sessionId: window.__AGENT_SESSION_ID__,
+            targetKind: 'conversation',
+            surface: 'guided_result',
+            step: 4,
+            workspaceRevision,
+          }}
         />
       )
       case 5: return <ReportStep data={formState.report} onChange={v => updateFormSlice('report', v)} isDone={isDone} formState={formState} onSendChat={onSendChat} />

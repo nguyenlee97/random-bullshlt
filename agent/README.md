@@ -101,7 +101,7 @@ User ─── Chat ──► Agent (FastAPI + GreenNode MaaS)
 | **AI report generation** | Fixed OpenAI GPT-5.4-mini specialist with report-evidence-v1 metric contracts |
 | **PDF generation** | pdfkit (server-side, no puppeteer) |
 | **Email delivery** | Resend API |
-| **Image generation** | Direct OpenAI GPT Image 2; GPT-5.4-nano visual QA |
+| **Image generation** | Direct OpenAI GPT Image 2; GPT-5.4-mini visual QA |
 | **Frontend** | React 18 · Vite · Recharts · Tailwind |
 | **Ad platform** | AdsPilot (Express + MongoDB) |
 | **Deployment** | GreenNode AgentBase Custom Agent Runtime |

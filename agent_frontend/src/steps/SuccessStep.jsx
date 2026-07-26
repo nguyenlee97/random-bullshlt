@@ -11,6 +11,7 @@ import {
 import { getSelectedZones, fmtVnd, fmtImp, estImpressions, checkMismatch } from './setup/setupUtils'
 import { ALL_ZONES } from '@/data/zones'
 import { AgentAPI } from '@/api/agentApi'
+import RunFeedback from '@/components/feedback/RunFeedback'
 
 // ─── Check if campaign is currently live (start ≤ now ≤ end) ──────────────────
 function isLive(brief) {
@@ -291,7 +292,7 @@ function PlatformScreenshotRow({ zone }) {
 
 
 // ─── Main SuccessStep export ───────────────────────────────────────────────────
-export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSize, setup, allZones, recoZones, order, forecast }) {
+export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSize, setup, allZones, recoZones, order, forecast, feedbackTarget }) {
   const ids = selectedZoneIds || []
   const dynamicPool = [...(recoZones || []), ...(allZones || [])]
   const selectedZones = ids.map(id => {
@@ -364,6 +365,8 @@ export default function SuccessStep({ brief, zones, selectedZoneIds, audienceSiz
           )}
         </div>
       </div>
+
+      {feedbackTarget && <RunFeedback {...feedbackTarget} />}
 
       {/* Quick links */}
       <Card data-demo="quick-links-card" className="border-brand-200">

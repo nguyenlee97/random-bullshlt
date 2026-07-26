@@ -21,7 +21,7 @@
   <h1>Advertising Agent<br/><span>AI campaign operating system</span></h1>
   <p>Một hệ thống AI quảng cáo end-to-end kết nối brief, strategy, audience, creative, media, launch, live view và reporting trong một canonical workspace — vận hành bằng Copilot trên web, Autopilot bền vững và Zalo OA.</p>
   <div class="badges"><span class="badge">React · FastAPI · Node</span><span class="badge">LangGraph orchestration</span><span class="badge">MongoDB canonical workspace</span><span class="badge">Hybrid RAG · Qdrant</span><span class="badge">VLM Creative Intelligence</span><span class="badge">Zalo Login &amp; OA</span><span class="badge">Prometheus · Grafana · Langfuse</span></div>
-  <div class="meta">Current-state build 2026-07-27.2 · Capability đã chạy được tách rõ khỏi roadmap</div>
+  <div class="meta">Current-state build 2026-07-27.3 · Capability đã chạy được tách rõ khỏi roadmap</div>
 </header>
 <main class="wrap">
   <nav class="toc"><b>Nội dung</b><ol><li><a href="#business">Bài toán &amp; hành trình business</a></li><li><a href="#modes">Copilot và Autopilot</a></li><li><a href="#architecture">Kiến trúc hệ thống</a></li><li><a href="#workspace">Canonical workspace</a></li><li><a href="#intelligence">Recommendation &amp; Creative Intelligence</a></li><li><a href="#durability">Durable execution</a></li><li><a href="#zalo">Zalo identity &amp; channel</a></li><li><a href="#reports">Live view &amp; sáu báo cáo</a></li><li><a href="#security">Security &amp; observability</a></li></ol></nav>
@@ -75,8 +75,8 @@ flowchart TB
   </div></div>
   <div class="table"><table><thead><tr><th>Layer</th><th>Trách nhiệm</th><th>Trust boundary</th></tr></thead><tbody>
     <tr><td>Experience</td><td>Landing, identity, Copilot workspace, Autopilot timeline/review, report, responsive mobile</td><td>Không phải nguồn dữ liệu cuối cùng</td></tr>
-    <tr><td>LLM controller</td><td>Intent, function calling, artifact-grounded explanation, Zalo tool loop</td><td>Không tự truyền owner ID hoặc ghi arbitrary JSON</td></tr>
-    <tr><td>Capability layer</td><td>RAG, creative analysis/generation, placement, forecast, guard, order, report</td><td>Typed schema + server validation + idempotency</td></tr>
+    <tr><td>LLM controller</td><td>Intent, function calling, artifact-grounded explanation, Zalo tool loop</td><td>Không tự truyền owner ID, session scope hoặc ghi arbitrary JSON</td></tr>
+    <tr><td>Capability layer</td><td>RAG, creative analysis/generation, placement, forecast, guard, order, report</td><td>Typed schema + server validation + ownership scope + idempotency</td></tr>
     <tr><td>Persistence</td><td>Conversation, canonical workspace, proposal, run/task/event, leases, ownership registry</td><td>Server-side actor resolution và revision checks</td></tr>
   </tbody></table></div>
 
@@ -199,13 +199,15 @@ sequenceDiagram
   <div class="grid3">
     <div class="card"><h3>Identity &amp; CSRF</h3><p>Opaque hashed revocable HttpOnly sessions, centralized CSRF header/cookie contract, Argon2id local credentials và server-side actor resolution.</p></div>
     <div class="card"><h3>Channel safety</h3><p>PKCE login, one-time TTL link attempts, signed webhook verification, dedupe, persisted rotating OA token và owner-free tool schema.</p></div>
+    <div class="card"><h3>Input &amp; tool policy</h3><p>Typed input rules chạy trước model/tool execution. Campaign status dùng session scope do server cấp; booking conflict chỉ trả availability và date window, không lộ campaign khác.</p></div>
+    <div class="card"><h3>Quality signals</h3><p>Interaction/event có version và feedback idempotent từ kết quả Copilot/Autopilot được lưu tách biệt khỏi workspace và execution state.</p></div>
     <div class="card"><h3>Observability</h3><p>Structured request/LLM/tool/order logs; Prometheus metrics, Grafana dashboards, Langfuse traces và stable Autopilot run trace ID.</p></div>
     <div class="card"><h3>Failure recovery</h3><p>Pause/resume/cancel/replan, retry policy, stale lease reclaim, revision conflict, idempotent order/report/image boundaries và rollback backups.</p></div>
     <div class="card"><h3>Deployment</h3><p>Nginx serves frontend/proxies APIs; FastAPI Agent và Node backend chạy dưới PM2; MongoDB/Qdrant/workers cùng readiness contract.</p></div>
     <div class="card"><h3>Release discipline</h3><p>Frontend production build, focused suites, browser matrix, tracked-secret scan, health/readiness, rollback snapshot rồi mới switch static assets.</p></div>
   </div>
 
-  <footer>Advertising Agent · Current-state technical document · Release 2026-07-27.2 · Updated 2026-07-27</footer>
+  <footer>Advertising Agent · Current-state technical document · Release 2026-07-27.3 · Updated 2026-07-27</footer>
 </main>
 
 <div class="lightbox" id="diagram-lightbox" role="dialog" aria-modal="true" aria-label="Sơ đồ phóng to">

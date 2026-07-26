@@ -60,6 +60,17 @@ async def fetch_all_orders() -> list[dict]:
     return resp.json()
 
 
+def public_conflict_details(conflict: dict | None) -> dict | None:
+    """Return booking evidence without exposing another campaign's identity."""
+    if not conflict:
+        return None
+    return {
+        "booked": True,
+        "startDate": conflict.get("startDate"),
+        "endDate": conflict.get("endDate"),
+    }
+
+
 async def set_order_delivery_state(order_id: str, action: str) -> dict:
     """Pause/resume one already ownership-resolved order.
 

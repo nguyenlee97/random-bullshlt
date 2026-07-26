@@ -192,6 +192,48 @@ class Config:
         os.getenv("AUTH_LOGIN_ACCOUNT_LIMIT", "10")
     )
 
+    # ── Additive quality data + staged guardrails ─────────────────────────
+    # Quality writes never control campaign execution. Existing deterministic
+    # guard enforcement remains independently enabled.
+    QUALITY_DATA_ENABLED: bool = (
+        os.getenv("QUALITY_DATA_ENABLED", "true").lower() == "true"
+    )
+    QUALITY_EVENT_TIMEOUT_MS: int = int(
+        os.getenv("QUALITY_EVENT_TIMEOUT_MS", "250")
+    )
+    QUALITY_INTERACTION_RETENTION_DAYS: int = int(
+        os.getenv("QUALITY_INTERACTION_RETENTION_DAYS", "90")
+    )
+    QUALITY_EVENT_RETENTION_DAYS: int = int(
+        os.getenv("QUALITY_EVENT_RETENTION_DAYS", "90")
+    )
+    QUALITY_FEEDBACK_RETENTION_DAYS: int = int(
+        os.getenv("QUALITY_FEEDBACK_RETENTION_DAYS", "180")
+    )
+    QUALITY_FEEDBACK_ALLOW_MEMORY_FALLBACK: bool = (
+        os.getenv("QUALITY_FEEDBACK_ALLOW_MEMORY_FALLBACK", "false").lower()
+        == "true"
+    )
+    GUARDRAIL_MODE: str = os.getenv("GUARDRAIL_MODE", "enforce").lower()
+    GUARDRAIL_POLICY_VERSION: str = os.getenv(
+        "GUARDRAIL_POLICY_VERSION", "guard-policy-v1"
+    )
+    GUARDRAIL_NEW_RULE_MODE: str = os.getenv(
+        "GUARDRAIL_NEW_RULE_MODE", "shadow"
+    ).lower()
+    GUARDRAIL_MAX_FINDINGS: int = int(
+        os.getenv("GUARDRAIL_MAX_FINDINGS", "5")
+    )
+    GUARDRAIL_MAX_EXCERPT_CHARS: int = int(
+        os.getenv("GUARDRAIL_MAX_EXCERPT_CHARS", "500")
+    )
+    GUARDRAIL_TOOL_OUTPUT_SHADOW: bool = (
+        os.getenv("GUARDRAIL_TOOL_OUTPUT_SHADOW", "false").lower() == "true"
+    )
+    GUARDRAIL_FINAL_OUTPUT_SHADOW: bool = (
+        os.getenv("GUARDRAIL_FINAL_OUTPUT_SHADOW", "false").lower() == "true"
+    )
+
     # Zalo Login uses the Social OAuth v4 endpoints.  It deliberately mints the
     # same opaque Advertising Agent session as local login; Zalo tokens never
     # become browser/session credentials and are not persisted.
@@ -448,6 +490,12 @@ class Config:
 
 config = Config()
 
+if config.GUARDRAIL_MODE not in {"off", "shadow", "enforce"}:
+    raise ValueError("GUARDRAIL_MODE must be off, shadow, or enforce")
+if config.GUARDRAIL_NEW_RULE_MODE not in {"off", "shadow", "enforce"}:
+    raise ValueError("GUARDRAIL_NEW_RULE_MODE must be off, shadow, or enforce")
+if config.QUALITY_EVENT_TIMEOUT_MS < 10:
+    raise ValueError("QUALITY_EVENT_TIMEOUT_MS must be at least 10")
 if config.AUDIENCE_RAG_RETRIEVAL_MODE not in {
     "bm25_only", "dense_only", "hybrid_dense_bm25"
 }:

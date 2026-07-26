@@ -731,7 +731,9 @@ async def handle_freeform(
                     "args": {k: str(v)[:100] for k, v in args.items()},
                 })
                 t_tool = time.time()
-                result = await execute_tool(tc.function.name, args)
+                result = await execute_tool(
+                    tc.function.name, args, session_id=session_id
+                )
                 await alog(session_id, "tool_result", {
                     "tool": tc.function.name,
                     "duration_ms": int((time.time() - t_tool) * 1000),
