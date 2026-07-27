@@ -1,5 +1,9 @@
 chat-session
 docs
+!docs/
+docs/*
+!docs/copy-review/
+!docs/copy-review/**
 prototype-n8n-build
 test-ad-image
 greennode-ref
@@ -10,3 +14,4 @@ __pycache__/
 eval/reports
 eval/external-reports
 agent_frontend/dist
+output
