@@ -70,8 +70,140 @@ def review_intent(message: str) -> str:
     return "approve" if approve else "question"
 
 
+def _placement_selection_ordinals(message: str) -> list[int] | None:
+    """Parse the bounded edit command; approval remains a separate action."""
+    folded = _fold(message)
+    if "?" in message or re.search(r"\b(khong chon|bo|loai)\b", folded):
+        return None
+    match = re.search(
+        r"\bchon\b(?:\s+(?:cac|nhung))?\s+"
+        r"(?:ad\s+zone|zone|placement|vi\s+tri)\b(?P<tail>.*)$",
+        folded,
+    )
+    if not match:
+        return None
+    values = [int(value) for value in re.findall(r"\d+", match.group("tail"))]
+    return list(dict.fromkeys(values)) if values else None
+
+
+def _audience_selection_ordinals(message: str) -> list[int] | None:
+    """Parse only explicit numbered audience edits; approval stays separate."""
+    folded = _fold(message)
+    if "?" in message or re.search(r"\b(khong chon|bo|loai)\b", folded):
+        return None
+    match = re.search(
+        r"\bchon\b(?:\s+(?:cac|nhung))?\s+"
+        r"(?:audience|segment|doi\s+tuong)\b(?P<tail>.*)$",
+        folded,
+    )
+    if not match:
+        return None
+    values = [int(value) for value in re.findall(r"\d+", match.group("tail"))]
+    return list(dict.fromkeys(values)) if values else None
+
+
+def _is_creative_preview_request(message: str) -> bool:
+    """Safe read-only fast path; never grants approval or mutates the run."""
+    folded = _fold(message)
+    if any(term in folded for term in (
+        "chap nhan creative", "duyet creative", "phe duyet creative",
+        "approve creative", "accept creative",
+    )):
+        return False
+    creative_terms = (
+        "creative", "banner", "hinh", "anh", "asset", "mau quang cao",
+    )
+    preview_terms = (
+        "xem", "cho xem", "gui", "nhan", "mo", "preview", "show", "display",
+    )
+    return (
+        any(term in folded for term in creative_terms)
+        and any(term in folded for term in preview_terms)
+    )
+
+
 def _artifact(workspace: dict, name: str) -> Any:
     return (workspace.get("artifacts", {}).get(name, {}) or {}).get("value")
+
+
+def _creative_review_items(
+    workspace: dict, intel_docs: list[dict] | None = None,
+) -> list[dict]:
+    creative = _artifact(workspace, "creative") or {}
+    files = creative.get("files") or []
+    verdict = _artifact(workspace, "creative_verdict") or {}
+    docs = list(intel_docs or verdict.get("files") or [])
+
+    def matching_doc(file: dict) -> dict:
+        return next(
+            (
+                doc for doc in docs
+                if (
+                    doc.get("analysis_id") == file.get("analysisId")
+                    or (doc.get("url") and doc.get("url") == file.get("url"))
+                    or (doc.get("name") and doc.get("name") == file.get("name"))
+                )
+            ),
+            {},
+        )
+
+    items = []
+    for index, file in enumerate(files, 1):
+        doc = matching_doc(file)
+        status = (
+            doc.get("effective_status")
+            or doc.get("status")
+            or file.get("analysisStatus")
+            or "analysis_required"
+        )
+        reasons = list(doc.get("review_reasons") or file.get("reviewReasons") or [])
+        advisories = list(doc.get("generation_advisories") or [])
+        items.append({
+            "number": index,
+            "name": file.get("name") or f"Creative {index}",
+            "url": file.get("url") or "",
+            "width": file.get("width"),
+            "height": file.get("height"),
+            "format_id": file.get("formatId") or "",
+            "analysis_id": doc.get("analysis_id") or file.get("analysisId"),
+            "status": status,
+            "review_reasons": reasons,
+            "advisories": advisories,
+        })
+    return items
+
+
+def _creative_review_summary(items: list[dict]) -> str:
+    labels = {
+        "auto_approved": "Đạt kiểm tra",
+        "approved_override": "Đã được duyệt thủ công",
+        "needs_review": "Cần duyệt thủ công",
+        "analysis_required": "Chưa có kết quả kiểm tra",
+    }
+    lines = [f"Có {len(items)} creative trong run hiện tại:"]
+    for item in items:
+        size = (
+            f"{item.get('width')}×{item.get('height')}"
+            if item.get("width") and item.get("height")
+            else "chưa rõ kích thước"
+        )
+        line = (
+            f"{item['number']}. Creative {item['number']} · {size} · "
+            f"{labels.get(item.get('status'), item.get('status') or 'chưa kiểm tra')}"
+        )
+        if item.get("review_reasons"):
+            line += "\n   Cảnh báo: " + "; ".join(
+                str(reason)[:180] for reason in item["review_reasons"][:3]
+            )
+        elif item.get("advisories"):
+            line += "\n   Lưu ý không chặn duyệt: " + "; ".join(
+                str(note)[:180] for note in item["advisories"][:2]
+            )
+        lines.append(line)
+    lines.append(
+        "Ảnh được gửi ngay sau tin nhắn này. Việc xem ảnh không thay đổi checkpoint."
+    )
+    return "\n".join(lines)
 
 
 def _read_only_context(workspace: dict, run: dict) -> dict:
@@ -153,6 +285,7 @@ async def _answer_openai_autopilot_question(
 async def _recorded_response(
     session_id: str, message: str, text: str, *, tool: str, step: int,
     suggestions: list | None = None, model: str = "none",
+    media_parts: list[dict] | None = None,
 ) -> AgentResponse:
     await add_message(session_id, "user", message)
     await add_message(session_id, "assistant", text)
@@ -161,6 +294,7 @@ async def _recorded_response(
         blocks=[],
         suggestions=suggestions or [],
         meta=ResponseMeta(tool=tool, model=model, step=step),
+        media_parts=media_parts or [],
     )
 
 
@@ -169,7 +303,13 @@ async def route_autopilot_chat(
     active_report_tab: str = "daily_ops",
 ) -> AgentResponse | None:
     """Intercept chat only when this session is an Autopilot campaign/run."""
-    from autopilot.service import get_latest_run, rerun_review_task, review_task
+    from autopilot.service import (
+        get_latest_run,
+        rerun_review_task,
+        review_task,
+        select_audience_recommendations,
+        select_placement_intent,
+    )
     from workspace.service import get_workspace
 
     workspace = await get_workspace(session_id)
@@ -195,6 +335,334 @@ async def route_autopilot_chat(
         None,
     )
     if status == "waiting_review" and waiting:
+        from campaign_models import OPENAI_GPT_5_4_MINI
+
+        if (
+            run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+            and waiting.get("key") in {"analyze_creatives", "assign_creatives"}
+        ):
+            creative_value = _artifact(workspace, "creative") or {}
+            creative_files = creative_value.get("files") or []
+            from creative_intel.service import (
+                approve_override,
+                sync_generation_vlm_reviews,
+            )
+
+            intel_docs = await sync_generation_vlm_reviews(
+                session_id, creative_files,
+            )
+            creative_items = _creative_review_items(workspace, intel_docs)
+            if _is_creative_preview_request(message):
+                media_parts = [
+                    {"kind": "image", "image_url": item["url"]}
+                    for item in creative_items
+                    if str(item.get("url") or "").startswith("https://")
+                ]
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    _creative_review_summary(creative_items),
+                    tool="autopilot_creative_preview",
+                    step=step,
+                    suggestions=[
+                        "Chấp nhận creative 1 vì tôi đã kiểm tra thủ công",
+                        "Tạo lại creative",
+                        "Xác nhận",
+                    ],
+                    media_parts=media_parts,
+                )
+            plain_decisions = {
+                "xac nhan", "dong y", "duyet", "tiep tuc",
+                "huy", "tu choi", "khong duyet",
+            }
+            action = None
+            if _fold(message) not in plain_decisions:
+                try:
+                    from openai_campaign.autopilot import (
+                        classify_openai_creative_review_action,
+                    )
+
+                    action = await classify_openai_creative_review_action(
+                        session_id=session_id,
+                        message=message,
+                        creatives=creative_items,
+                    )
+                except Exception:
+                    action = None
+
+            action_evidence = _fold(getattr(action, "evidence", ""))
+            valid_action = bool(
+                action
+                and action_evidence
+                and action_evidence in _fold(message)
+            )
+            if valid_action and action.intent == "show_creatives":
+                media_parts = [
+                    {"kind": "image", "image_url": item["url"]}
+                    for item in creative_items
+                    if str(item.get("url") or "").startswith("https://")
+                ]
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    _creative_review_summary(creative_items),
+                    tool="autopilot_creative_preview",
+                    step=step,
+                    suggestions=[
+                        "Chấp nhận creative 1 vì tôi đã kiểm tra thủ công",
+                        "Tạo lại creative",
+                        "Xác nhận",
+                    ],
+                    media_parts=media_parts,
+                )
+
+            if valid_action and action.intent == "replace_or_regenerate":
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    "Mình chưa thay creative chỉ từ câu hỏi này. Hãy mở workspace và chọn "
+                    "“Chỉnh hoặc thay creative” để tải file khác hoặc tạo lại; run hiện tại "
+                    "được giữ nguyên và chỉ các bước phụ thuộc sẽ chạy lại.",
+                    tool="autopilot_creative_replace_guidance",
+                    step=step,
+                )
+
+            if valid_action and action.intent == "approve_override":
+                flagged = [
+                    item for item in creative_items
+                    if item.get("status") == "needs_review"
+                ]
+                requested_numbers = list(dict.fromkeys(action.creative_numbers))
+                if not requested_numbers and len(flagged) == 1:
+                    requested_numbers = [flagged[0]["number"]]
+                chosen = [
+                    item for item in flagged
+                    if item["number"] in requested_numbers
+                ]
+                invalid_numbers = [
+                    number for number in requested_numbers
+                    if number < 1
+                    or number > len(creative_items)
+                    or not any(item["number"] == number for item in flagged)
+                ]
+                reason = action.reason.strip()
+                if (
+                    not action.explicit
+                    or len(reason) < 5
+                    or not chosen
+                    or invalid_numbers
+                    or any(not item.get("analysis_id") for item in chosen)
+                ):
+                    return await _recorded_response(
+                        session_id,
+                        message,
+                        "Chưa ghi nhận phê duyệt thủ công. Hãy nêu rõ creative và lý do, "
+                        "ví dụ: “Chấp nhận creative 1 vì tôi đã kiểm tra chữ và thương hiệu”. "
+                        "Checkpoint chưa thay đổi.",
+                        tool="autopilot_creative_override_invalid",
+                        step=step,
+                    )
+                for item in chosen:
+                    await approve_override(
+                        session_id,
+                        item["analysis_id"],
+                        reason,
+                        actor="zalo_campaign_operator",
+                    )
+                from autopilot.service import reconcile_workspace_changes
+
+                await reconcile_workspace_changes(run["run_id"])
+                approved_labels = ", ".join(
+                    f"Creative {item['number']}" for item in chosen
+                )
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    f"Đã lưu phê duyệt thủ công cho {approved_labels}. Lý do: {reason}. "
+                    "Cảnh báo gốc và người duyệt đã được giữ trong audit trail. "
+                    "Autopilot đang kiểm tra lại các bước phụ thuộc và sẽ gửi phân bổ "
+                    "creative mới để bạn xác nhận.",
+                    tool="autopilot_creative_override",
+                    step=step,
+                    suggestions=["Xem creative", "Hủy"],
+                )
+
+            blocked_creatives = [
+                item for item in creative_items
+                if item.get("status") not in {"auto_approved", "approved_override"}
+            ]
+            if blocked_creatives and review_intent(message) == "approve":
+                blocked_labels = ", ".join(
+                    f"Creative {item['number']}" for item in blocked_creatives
+                )
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    f"Chưa thể xác nhận bước này vì {blocked_labels} chưa đạt kiểm tra "
+                    "hoặc chưa được duyệt thủ công. Bạn có thể nhắn “Xem creative”, "
+                    "thay/tạo lại creative, hoặc chấp nhận một creative kèm lý do.",
+                    tool="autopilot_creative_review_required",
+                    step=step,
+                    suggestions=["Xem creative", "Chỉnh hoặc thay creative", "Hủy"],
+                )
+
+        audience_ordinals = _audience_selection_ordinals(message)
+        if (
+            run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+            and waiting.get("key") == "retrieve_audience"
+            and audience_ordinals is not None
+        ):
+            pending_value = (
+                (waiting.get("pending_artifact") or {}).get("value")
+                or waiting.get("result")
+                or {}
+            )
+            candidates = (
+                pending_value.get("recommendations")
+                or [
+                    *(pending_value.get("attrs") or []),
+                    *(pending_value.get("adjacent_attrs") or []),
+                ]
+            )
+            invalid = [
+                ordinal for ordinal in audience_ordinals
+                if ordinal < 1 or ordinal > len(candidates)
+            ]
+            if invalid:
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    "Không thể cập nhật audience: số "
+                    + ", ".join(str(value) for value in invalid)
+                    + f" nằm ngoài danh sách 1–{len(candidates)}. "
+                    "Checkpoint chưa bị thay đổi.",
+                    tool="autopilot_audience_selection_invalid",
+                    step=step,
+                )
+            selected_segments = [
+                candidates[ordinal - 1] for ordinal in audience_ordinals
+            ]
+            selected_ids = [
+                str(
+                    segment.get("segmentId")
+                    or segment.get("_id")
+                    or segment.get("code")
+                    or segment.get("fullLabel")
+                    or segment.get("name")
+                    or ""
+                ).strip()
+                for segment in selected_segments
+                if isinstance(segment, dict)
+            ]
+            try:
+                await select_audience_recommendations(
+                    run["run_id"],
+                    selected_ids,
+                    actor="campaign_operator",
+                    reason="explicit ordinal audience selection from Autopilot chat",
+                )
+            except Exception as exc:
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    f"Chưa thể cập nhật audience: {str(exc)}. "
+                    "Checkpoint chưa bị thay đổi.",
+                    tool="autopilot_audience_selection_conflict",
+                    step=step,
+                )
+            chosen = ", ".join(
+                f"{ordinal}. "
+                + str(
+                    segment.get("fullLabel")
+                    or segment.get("name")
+                    or segment.get("code")
+                    or segment.get("_id")
+                )
+                for ordinal, segment in zip(audience_ordinals, selected_segments)
+            )
+            return await _recorded_response(
+                session_id,
+                message,
+                f"Đã cập nhật audience được chọn: {chosen}. "
+                "Nhóm liên quan chỉ được áp dụng vì bạn vừa chọn rõ số mục. "
+                "Checkpoint vẫn đang chờ duyệt; hãy gửi “Xác nhận” riêng để tiếp tục.",
+                tool="autopilot_audience_selection",
+                step=step,
+                suggestions=["Xác nhận", "Gợi ý lại audience", "Hủy"],
+            )
+
+        placement_ordinals = _placement_selection_ordinals(message)
+        if (
+            run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+            and waiting.get("key") == "plan_placement_intent"
+            and placement_ordinals is not None
+        ):
+            pending_value = (
+                (waiting.get("pending_artifact") or {}).get("value")
+                or waiting.get("result")
+                or {}
+            )
+            candidates = pending_value.get("candidates") or []
+            invalid = [
+                ordinal
+                for ordinal in placement_ordinals
+                if ordinal < 1 or ordinal > len(candidates)
+            ]
+            if invalid:
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    "Không thể cập nhật ad zone: số "
+                    + ", ".join(str(value) for value in invalid)
+                    + f" nằm ngoài danh sách 1–{len(candidates)}. "
+                    "Checkpoint chưa bị thay đổi.",
+                    tool="autopilot_placement_selection_invalid",
+                    step=step,
+                )
+            selected_zones = [
+                candidates[ordinal - 1] for ordinal in placement_ordinals
+            ]
+            selected_ids = [
+                str(zone.get("id"))
+                for zone in selected_zones
+                if isinstance(zone, dict) and zone.get("id")
+            ]
+            try:
+                await select_placement_intent(
+                    run["run_id"],
+                    selected_ids,
+                    actor="campaign_operator",
+                    reason="explicit ordinal selection from Autopilot chat",
+                )
+            except Exception as exc:
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    f"Chưa thể cập nhật ad zone: {str(exc)}. "
+                    "Checkpoint chưa bị thay đổi.",
+                    tool="autopilot_placement_selection_conflict",
+                    step=step,
+                )
+            chosen = ", ".join(
+                f"{ordinal}. "
+                + str(
+                    zone.get("name")
+                    or zone.get("label")
+                    or zone.get("id")
+                )
+                for ordinal, zone in zip(placement_ordinals, selected_zones)
+            )
+            return await _recorded_response(
+                session_id,
+                message,
+                f"Đã cập nhật danh sách ad zone còn lại: {chosen}. "
+                "Đây mới là chỉnh sửa danh sách; checkpoint vẫn đang chờ duyệt. "
+                "Hãy gửi “Xác nhận” riêng khi bạn muốn tiếp tục.",
+                tool="autopilot_placement_selection",
+                step=step,
+                suggestions=["Xác nhận", "Hủy"],
+            )
+
         intent = review_intent(message)
         if intent == "retry":
             if waiting.get("key") != "retrieve_audience":

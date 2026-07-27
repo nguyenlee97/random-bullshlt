@@ -239,10 +239,10 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
         session_id=run["session_id"],
         brief_override=brief,
     )
-    attrs = recommendation.get("recommendations") or []
-    if not attrs:
+    attrs = (recommendation.get("recommendations") or [])[:15]
+    adjacent_attrs = (recommendation.get("adjacent_recommendations") or [])[:15]
+    if not attrs and not adjacent_attrs:
         raise RuntimeError("audience retrieval returned no catalog-backed segments")
-    attrs = attrs[:15]
     size = sum(
         int(((item.get("sizeMin") or 0) + (item.get("sizeMax") or 0)) / 2)
         for item in attrs
@@ -263,7 +263,14 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
         "candidates", recommendation.get("total_segments", len(attrs))
     )
     return CapabilityResult(
-        value={"attrs": attrs, "size": size, "retrieval": diagnostics},
+        value={
+            "attrs": attrs,
+            "adjacent_attrs": adjacent_attrs,
+            "recommendations": [*attrs, *adjacent_attrs],
+            "selection_required": not bool(attrs),
+            "size": size,
+            "retrieval": diagnostics,
+        },
         evidence=[{
             "type": "catalog_segments", "count": len(attrs),
             "ids": [item.get("_id") for item in attrs if item.get("_id")],
@@ -279,9 +286,12 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
             "rerank_enabled": bool(diagnostics.get("rerank_enabled")),
             "reranked": bool(diagnostics.get("reranked")),
             "selector": diagnostics.get("selector", "legacy"),
+            "recommended_count": len(attrs),
+            "adjacent_count": len(adjacent_attrs),
             "strategy_id": selected,
             "stage_ms": diagnostics.get("stage_ms", {}),
         }],
+        force_review=not bool(attrs),
     )
 
 
@@ -310,6 +320,61 @@ async def _derive_targeting(run: dict, workspace: dict) -> CapabilityResult:
     )
 
 
+def _diverse_openai_placement_candidates(
+    zones: list[dict],
+    *,
+    limit: int = 12,
+    max_per_topic: int = 6,
+    max_per_topic_family: int = 2,
+) -> list[dict]:
+    """Keep the ranked order while preventing one page topic from dominating."""
+    selected: list[dict] = []
+    topic_counts: dict[str, int] = {}
+    family_counts: dict[tuple[str, str], int] = {}
+
+    def topic(zone: dict) -> str:
+        return str(
+            zone.get("topicId")
+            or zone.get("siteId")
+            or f"legacy:{zone.get('id') or id(zone)}"
+        )
+
+    for zone in zones:
+        topic_id = topic(zone)
+        family = str(
+            zone.get("placementFamily")
+            or zone.get("inventoryTier")
+            or zone.get("format")
+            or "other"
+        )
+        family_key = (topic_id, family)
+        if topic_counts.get(topic_id, 0) >= max_per_topic:
+            continue
+        if family_counts.get(family_key, 0) >= max_per_topic_family:
+            continue
+        selected.append(zone)
+        topic_counts[topic_id] = topic_counts.get(topic_id, 0) + 1
+        family_counts[family_key] = family_counts.get(family_key, 0) + 1
+        if len(selected) >= limit:
+            return selected
+
+    # If family diversity made the list too small, backfill different formats
+    # from the same relevant topics while retaining the per-topic ceiling.
+    selected_ids = {str(zone.get("id")) for zone in selected}
+    for zone in zones:
+        if str(zone.get("id")) in selected_ids:
+            continue
+        topic_id = topic(zone)
+        if topic_counts.get(topic_id, 0) >= max_per_topic:
+            continue
+        selected.append(zone)
+        selected_ids.add(str(zone.get("id")))
+        topic_counts[topic_id] = topic_counts.get(topic_id, 0) + 1
+        if len(selected) >= limit:
+            break
+    return selected
+
+
 async def _plan_placement_intent(run: dict, workspace: dict) -> CapabilityResult:
     """Rank inventory before creative exists; no compatibility decision is made here."""
     from tools.order_api import fetch_zone_conflicts
@@ -333,7 +398,13 @@ async def _plan_placement_intent(run: dict, workspace: dict) -> CapabilityResult
     strategy = _artifact(workspace, "strategy", {})
     selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
     available = sort_ranked_zones_for_strategy(available, selected)
-    candidates = available[:12]
+    from campaign_models import OPENAI_GPT_5_4_MINI
+
+    candidates = (
+        _diverse_openai_placement_candidates(available)
+        if run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+        else available[:12]
+    )
     if not candidates:
         return CapabilityResult(
             value={
@@ -600,7 +671,11 @@ async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
 
 
 async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
-    from creative_intel.service import enqueue_analysis, get_intel
+    from creative_intel.service import (
+        enqueue_analysis,
+        get_intel,
+        sync_generation_vlm_reviews,
+    )
     creative = _artifact(workspace, "creative", {})
     files = creative.get("files", []) if isinstance(creative, dict) else []
     if not files:
@@ -619,6 +694,7 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
     if pending_files:
         await enqueue_analysis(run["session_id"], pending_files)
         docs = await get_intel(run["session_id"])
+    docs = await sync_generation_vlm_reviews(run["session_id"], files)
     statuses = {doc.get("effective_status") for doc in docs}
     if statuses & {"queued", "analyzing", "committing"}:
         return CapabilityResult(

@@ -479,6 +479,38 @@ async def _delivery_image_parts(
     return parts
 
 
+async def _prepare_remote_review_media_parts(
+    media_parts: list[dict],
+) -> list[str | dict]:
+    """Fetch review images and reuse the proven OA <=1 MB delivery contract."""
+    import httpx
+
+    prepared_parts: list[str | dict] = []
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+        for index, part in enumerate(media_parts, 1):
+            if not isinstance(part, dict) or part.get("kind") != "image":
+                continue
+            url = str(part.get("image_url") or "").strip()
+            if not url.startswith("https://"):
+                continue
+            try:
+                response = await client.get(url)
+                response.raise_for_status()
+                content_type = str(
+                    response.headers.get("content-type") or "image/png"
+                ).split(";", 1)[0]
+                prepared_parts.extend(await _delivery_image_parts(
+                    response.content,
+                    content_type,
+                    label=f"creative {index}",
+                ))
+            except Exception:
+                # A public HTTPS URL may still be accepted directly by Zalo.
+                # Keep this read-only preview usable if the proxy fetch fails.
+                prepared_parts.append(part)
+    return prepared_parts
+
+
 async def _get_channel_media_doc(token: str) -> dict | None:
     import hashlib
     digest = hashlib.sha256(str(token or "").encode()).hexdigest()
@@ -610,7 +642,13 @@ def _pending_expired(pending: dict) -> bool:
     return expiry <= _now()
 
 
-async def _handle_pending(thread: dict, message: str, campaigns: list[dict]) -> tuple[str | None, dict]:
+async def _handle_pending(
+    thread: dict,
+    message: str,
+    campaigns: list[dict],
+    *,
+    semantic_decision: str | None = None,
+) -> tuple[str | None, dict]:
     pending = thread.get("pending_action") or {}
     if not pending:
         return None, thread
@@ -667,7 +705,7 @@ async def _handle_pending(thread: dict, message: str, campaigns: list[dict]) -> 
             return _campaign_choices(eligible_campaigns), thread
         thread = await _select_campaign(thread, selected)
         return f"Đã chọn chiến dịch “{selected['order'].get('brand')}” ({selected['campaign_id']}).", thread
-    if folded in _REJECT:
+    if folded in _REJECT or semantic_decision == "reject":
         thread = await _update_thread(thread, {"pending_action": None})
         return "Đã hủy yêu cầu. Không có thay đổi nào được thực hiện.", thread
     if pending.get("kind") == "campaign_lifecycle":
@@ -737,7 +775,7 @@ async def _handle_pending(thread: dict, message: str, campaigns: list[dict]) -> 
             "Creative source: AI generation. Trả lời “Xác nhận” để bắt đầu hoặc “Hủy”."
         ), thread
     if pending.get("kind") == "confirm_autopilot_brief":
-        if folded not in _CONFIRM:
+        if folded not in _CONFIRM and semantic_decision != "approve":
             return "Brief đang chờ duyệt. Trả lời “Xác nhận” hoặc “Hủy”.", thread
         result = await _start_autopilot(thread, pending["brief"], pending["mode"])
         thread = result["thread"]
@@ -894,7 +932,7 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
     if not message:
         return []
 
-    from session import add_message
+    from session import add_message, get_history
     from zalo_sessions import append_chat_message, build_context, get_or_roll_chat_session
 
     thread = await get_or_create_thread(external_uid)
@@ -917,6 +955,60 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
             await append_chat_message(chat_session["chat_session_id"], "assistant", pending_text)
             return [pending_text]
 
+    # Natural-language approval is interpreted by OpenAI, but authorization
+    # remains deterministic: the server requires an exact evidence span and
+    # invokes the existing pending-action handler itself.
+    if pending_kind == "confirm_autopilot_brief":
+        pending = thread.get("pending_action") or {}
+        try:
+            from zalo_openai import classify_pending_brief_decision
+
+            decision = await classify_pending_brief_decision(
+                message=message,
+                pending=pending,
+                history=await get_history(thread["session_id"]),
+                thread_id=thread["thread_id"],
+            )
+            evidence = _fold(decision.evidence)
+            valid_decision = (
+                decision.scope == "pending_brief"
+                and decision.intent in {"approve", "reject"}
+                and decision.explicit
+                and bool(evidence)
+                and evidence in _fold(message)
+            )
+            if valid_decision:
+                pending_text, thread = await _handle_pending(
+                    thread,
+                    message,
+                    await owned_campaigns(thread),
+                    semantic_decision=decision.intent,
+                )
+            else:
+                pending_text = decision.reply.strip() or (
+                    "Brief vẫn đang chờ duyệt và chưa được bắt đầu hoặc thay đổi. "
+                    "Bạn có thể xác nhận bắt đầu, yêu cầu sửa brief, hoặc hủy."
+                )
+        except Exception as exc:
+            await alog(
+                thread["session_id"],
+                "error",
+                {
+                    "handler": "zalo_pending_brief_decision",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc)[:500],
+                },
+            )
+            pending_text = (
+                "Brief vẫn đang chờ duyệt và chưa có thay đổi nào được thực hiện. "
+                "Trợ lý chưa thể hiểu quyết định lúc này; vui lòng thử lại."
+            )
+        await add_message(thread["session_id"], "assistant", pending_text)
+        await append_chat_message(
+            chat_session["chat_session_id"], "assistant", pending_text,
+        )
+        return [pending_text]
+
     # OpenAI Autopilot review questions need the exact pending artifact, not the
     # channel's general progress tool. The review router is read-only unless it
     # detects an explicit confirmation/rejection phrase.
@@ -936,7 +1028,10 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
                     if response is not None:
                         await add_message(thread["session_id"], "assistant", response.text)
                         await append_chat_message(chat_session["chat_session_id"], "assistant", response.text)
-                        return [response.text]
+                        review_media = await _prepare_remote_review_media_parts(
+                            getattr(response, "media_parts", []),
+                        )
+                        return [response.text, *review_media]
         except Exception:
             pass
 

@@ -353,6 +353,28 @@ async def _process_progress_once() -> bool:
                     thread=thread, text=text,
                     idempotency_key=idempotency_key, run_id=run["run_id"],
                 )
+                if (
+                    is_openai_run
+                    and event_task
+                    and event_task.get("key") == "assign_creatives"
+                ):
+                    from openai_campaign.zalo_review import assignment_media_parts
+
+                    assignment_value = (
+                        (event_task.get("pending_artifact") or {}).get("value")
+                        or event_task.get("result")
+                        or {}
+                    )
+                    for image_index, part in enumerate(
+                        assignment_media_parts(assignment_value, workspace), 1
+                    ):
+                        await enqueue_image(
+                            thread=thread,
+                            image_url=part["image_url"],
+                            idempotency_key=(
+                                f"{idempotency_key}:creative:{image_index}"
+                            ),
+                        )
 
         # Existing subscriptions may already have delivered the old generic
         # waiting-review event. Emit the richer v2 summary once without replaying
@@ -376,6 +398,24 @@ async def _process_progress_once() -> bool:
                         idempotency_key=f"run-review-summary:{marker}",
                         run_id=run["run_id"],
                     )
+                    if waiting_task.get("key") == "assign_creatives":
+                        from openai_campaign.zalo_review import assignment_media_parts
+
+                        assignment_value = (
+                            (waiting_task.get("pending_artifact") or {}).get("value")
+                            or waiting_task.get("result")
+                            or {}
+                        )
+                        for image_index, part in enumerate(
+                            assignment_media_parts(assignment_value, workspace), 1
+                        ):
+                            await enqueue_image(
+                                thread=thread,
+                                image_url=part["image_url"],
+                                idempotency_key=(
+                                    f"run-review-summary:{marker}:creative:{image_index}"
+                                ),
+                            )
                 review_markers.add(marker)
                 new_review_markers.append(marker)
         terminal_key = f"terminal:{run.get('status')}"

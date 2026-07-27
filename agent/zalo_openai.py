@@ -55,6 +55,16 @@ class ZaloBriefDraft(BaseModel):
     notes: str = ""
 
 
+class ZaloPendingBriefDecision(BaseModel):
+    intent: Literal[
+        "approve", "reject", "question", "edit_request", "unclear",
+    ]
+    scope: Literal["pending_brief"] = "pending_brief"
+    explicit: bool = False
+    evidence: str = ""
+    reply: str = ""
+
+
 class ZaloSessionSummary(BaseModel):
     summary: str = ""
     user_goals: list[str] = Field(default_factory=list)
@@ -455,6 +465,65 @@ async def extract_zalo_brief(
     if response.output_parsed is None:
         raise RuntimeError("OpenAI returned no Zalo brief")
     return response.output_parsed.model_dump()
+
+
+_PENDING_BRIEF_DECISION_INSTRUCTIONS = """
+Classify the latest Vietnamese or English message about a server-owned campaign
+brief that is already waiting for confirmation. Understand natural language,
+missing accents, typos, slang, and short follow-ups.
+
+Return approve only when the user explicitly authorizes starting the pending
+brief now. Return reject only for an explicit cancellation. A question about
+confirmation is question, a requested brief change is edit_request, and vague
+sentiment is unclear. Negation, deferral, questions, and edit requests always
+take precedence over words such as confirm, approve, OK, or continue.
+
+The evidence must be an exact non-empty span copied from latest_message when
+intent is approve or reject. Set explicit=false when the decision is inferred,
+ambiguous, conditional, or lacks an exact evidence span. The reply must be a
+short Vietnamese response for question, edit_request, or unclear; it must say
+that the pending brief was not started or changed. Never invent campaign state,
+never approve a different scope, and output only the schema.
+""".strip()
+
+
+async def classify_pending_brief_decision(
+    *,
+    message: str,
+    pending: dict,
+    history: list[dict],
+    thread_id: str,
+) -> ZaloPendingBriefDecision:
+    """Interpret unrestricted language without granting mutation authority."""
+    brief = pending.get("brief") if isinstance(pending.get("brief"), dict) else {}
+    context = {
+        "latest_message": message,
+        "pending_state": {
+            "kind": pending.get("kind"),
+            "mode": pending.get("mode"),
+            "brief": {
+                key: brief.get(key)
+                for key in (
+                    "brand", "objective", "kpi", "budget",
+                    "startDate", "endDate", "notes",
+                )
+            },
+        },
+        "recent_messages": _bounded_history(history)[-6:],
+    }
+    response = await _get_client().responses.parse(
+        model=config.ZALO_CHAT_MODEL,
+        instructions=_PENDING_BRIEF_DECISION_INSTRUCTIONS,
+        input=json.dumps(context, ensure_ascii=False),
+        text_format=ZaloPendingBriefDecision,
+        reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
+        max_output_tokens=min(config.ZALO_CHAT_MAX_OUTPUT_TOKENS, 500),
+        store=False,
+        safety_identifier=_safety_identifier(thread_id),
+    )
+    if response.output_parsed is None:
+        raise RuntimeError("OpenAI returned no pending brief decision")
+    return response.output_parsed
 
 
 def reset_zalo_openai_for_test() -> None:

@@ -121,6 +121,75 @@ def _canonical_verdict(doc: dict) -> dict:
     return out
 
 
+_GENERATION_BLOCK_LABELS = {
+    "critical_crop": "Nội dung quan trọng bị cắt khỏi vùng an toàn",
+    "core_text_unreadable": "Brand, thông điệp chính hoặc CTA không đọc được",
+    "missing_required_asset": "Thiếu asset bắt buộc trong creative",
+    "material_unsupported_claim": "Creative có claim quan trọng không được brief hỗ trợ",
+    "safety_risk": "Creative có rủi ro an toàn thương hiệu",
+}
+
+
+def _generation_vlm_reasons(file: dict) -> list[str]:
+    """Return only critical generation-QA blockers.
+
+    The later Creative Intelligence verdict remains canonical for semantic
+    brief fit. Generation QA contributes a hard gate only for concrete visual,
+    required-asset, unsupported-claim, safety, or availability failures.
+    """
+    generation = file.get("generation") or {}
+    verdict = generation.get("vlmVerdict") or generation.get("vlm_verdict") or {}
+    provenance = (
+        generation.get("vlmProvenance")
+        or generation.get("vlm_provenance")
+        or {}
+    )
+    if provenance.get("error"):
+        return ["Kiểm tra hình ảnh sau khi tạo gặp lỗi — cần duyệt thủ công"]
+    if not isinstance(verdict, dict):
+        return []
+    blocking_issues = {
+        str(item).strip()
+        for item in verdict.get("blocking_issues") or []
+        if str(item).strip()
+    }
+    # Backward-compatible deterministic interpretation for verdicts produced
+    # before blocking_issues existed.
+    if verdict.get("composition_safe") is False:
+        blocking_issues.add("critical_crop")
+    if verdict.get("text_readable") is False:
+        blocking_issues.add("core_text_unreadable")
+    if verdict.get("missing_required_assets"):
+        blocking_issues.add("missing_required_asset")
+    return [
+        _GENERATION_BLOCK_LABELS.get(issue, f"Lỗi QA tạo ảnh: {issue}")
+        for issue in sorted(blocking_issues)
+    ]
+
+
+def _generation_vlm_advisories(file: dict) -> list[str]:
+    """Keep noncritical generation observations visible without blocking."""
+    generation = file.get("generation") or {}
+    verdict = generation.get("vlmVerdict") or generation.get("vlm_verdict") or {}
+    if not isinstance(verdict, dict) or verdict.get("acceptable") is not False:
+        return []
+    if _generation_vlm_reasons(file):
+        return []
+    advisories = ["QA tạo ảnh có lưu ý nhưng không yêu cầu duyệt thủ công"]
+    unexpected = [
+        str(item).strip()
+        for item in verdict.get("unexpected_text") or []
+        if str(item).strip()
+    ]
+    if unexpected:
+        advisories.append("Chữ bổ sung: " + ", ".join(unexpected[:4]))
+    for note in verdict.get("review_notes") or []:
+        clean = str(note).strip()
+        if clean:
+            advisories.append(clean[:240])
+    return list(dict.fromkeys(advisories))
+
+
 async def _col():
     from session import _ensure_mongo
 
@@ -154,6 +223,47 @@ async def get_intel(session_id: str) -> list[dict]:
         docs = [d for d in _mem.values() if d.get("session_id") == session_id]
         docs.sort(key=lambda d: d.get("created_at") or _now())
     return [_public(d) for d in docs]
+
+
+async def sync_generation_vlm_reviews(
+    session_id: str, files: list[dict],
+) -> list[dict]:
+    """Reconcile generation QA with the canonical Creative Intelligence verdict.
+
+    Critical preflight issues fail closed. Noncritical observations remain
+    advisory. This also repairs runs promoted by the previous broad gate.
+    """
+    for file in files or []:
+        reasons = _generation_vlm_reasons(file)
+        advisories = _generation_vlm_advisories(file)
+        url = str(file.get("url") or "").strip()
+        if not url:
+            continue
+        doc = await _get(_key(session_id, url))
+        if not doc:
+            continue
+        previous_generation_reasons = set(doc.get("generation_review_reasons") or [])
+        canonical_reasons = [
+            reason for reason in doc.get("review_reasons") or []
+            if reason not in previous_generation_reasons
+        ]
+        merged = list(dict.fromkeys([*canonical_reasons, *reasons]))
+        doc["generation_vlm_verdict"] = (
+            (file.get("generation") or {}).get("vlmVerdict")
+            or (file.get("generation") or {}).get("vlm_verdict")
+            or {}
+        )
+        doc["generation_review_reasons"] = reasons
+        doc["generation_advisories"] = advisories
+        doc["review_reasons"] = merged
+        if merged:
+            doc["status"] = "needs_review"
+        elif doc.get("status") == "needs_review" and not canonical_reasons:
+            # Repair verdicts promoted by the previous broad generation gate.
+            doc["status"] = "auto_approved"
+        doc["updated_at"] = _now()
+        await _save(doc)
+    return await get_intel(session_id)
 
 
 async def get_intel_by_ids(session_id: str, analysis_ids: list[str]) -> dict[str, dict]:
@@ -190,6 +300,31 @@ async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
             continue
         analysis_id = _key(session_id, url)
         existing = await _get(analysis_id)
+        generation_reasons = _generation_vlm_reasons(file)
+        generation_advisories = _generation_vlm_advisories(file)
+        if existing:
+            previous_generation_reasons = set(
+                existing.get("generation_review_reasons") or []
+            )
+            canonical_reasons = [
+                reason for reason in existing.get("review_reasons") or []
+                if reason not in previous_generation_reasons
+            ]
+            existing["generation_vlm_verdict"] = (
+                (file.get("generation") or {}).get("vlmVerdict")
+                or (file.get("generation") or {}).get("vlm_verdict")
+                or {}
+            )
+            existing["generation_review_reasons"] = generation_reasons
+            existing["generation_advisories"] = generation_advisories
+            existing["review_reasons"] = list(dict.fromkeys([
+                *canonical_reasons,
+                *generation_reasons,
+            ]))
+            if existing["review_reasons"]:
+                existing["status"] = "needs_review"
+            elif existing.get("status") == "needs_review" and not canonical_reasons:
+                existing["status"] = "auto_approved"
         retry_for_route_change = bool(
             existing
             and existing.get("status") == "needs_review"
@@ -236,6 +371,13 @@ async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
             "vlm_provider": vlm_route["provider"],
             "vlm_model": vlm_route["model"],
             "vlm_route_key": vlm_route["key"],
+            "generation_vlm_verdict": (
+                (file.get("generation") or {}).get("vlmVerdict")
+                or (file.get("generation") or {}).get("vlm_verdict")
+                or {}
+            ),
+            "generation_review_reasons": generation_reasons,
+            "generation_advisories": generation_advisories,
             "attempts": (existing or {}).get("attempts", 0),
             "created_at": created_at,
             "updated_at": _now(),
@@ -461,7 +603,7 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
     deterministic = await analyze_url(
         url, name=name, mime_type=doc.get("mime_type", "")
     )
-    reasons: list[str] = []
+    reasons: list[str] = list(doc.get("generation_review_reasons") or [])
 
     if deterministic.get("fetch_error") or deterministic.get("decode_error"):
         reasons.append(

@@ -51,6 +51,12 @@ def _raw_query(brief: dict) -> str:
 def _focused_query(brief: dict) -> str:
     """Build a concise product/audience query without creative workflow noise."""
     notes = str(brief.get("notes") or "")
+    notes = re.split(
+        r"(?i)\b(?:creative(?:\s+(?:direction|notes?))?|visual|"
+        r"gợi ý creative|đề xuất creative|hình ảnh|ý tưởng hình ảnh)\s*:",
+        notes,
+        maxsplit=1,
+    )[0]
     chunks = [
         chunk.strip()
         for chunk in re.split(r"[\n;]+|(?<=[.!?])\s+", notes)
@@ -67,6 +73,8 @@ def _focused_query(brief: dict) -> str:
     ]
     fields = [
         str(brief.get("brand") or "").strip(),
+        str(brief.get("objective") or "").strip(),
+        str(brief.get("kpi") or "").strip(),
         " ".join(audience_chunks).strip(),
     ]
     return " | ".join(field for field in fields if field) or _raw_query(brief)
@@ -86,6 +94,27 @@ def _score_reason(brief: dict, segment: dict) -> str:
         f"{label}{taxonomy_note}, được xếp hạng liên quan cao với tín hiệu "
         f"sản phẩm và audience trong brief {brand}."
     )
+
+
+def _assessment_reason(
+    brief: dict,
+    segment: dict,
+    assessment: dict,
+    tier: str,
+) -> str:
+    matched = [
+        str(item).strip()
+        for item in assessment.get("matched_signals") or []
+        if str(item).strip()
+    ]
+    limitation = str(assessment.get("limitation") or "").strip()
+    if not matched:
+        return _score_reason(brief, segment)
+    prefix = "Khớp trực tiếp" if tier == "recommended" else "Liên quan để mở rộng"
+    reason = f"{prefix}: " + "; ".join(matched[:4]) + "."
+    if tier == "adjacent" and limitation:
+        reason += f" Hạn chế: {limitation}"
+    return reason
 
 
 def _rank_merged(merged: dict[str, dict]) -> list[dict]:
@@ -268,6 +297,230 @@ async def _hybrid_search(
     return _rank_merged(merged)
 
 
+def _candidate_key(payload: dict) -> str:
+    return str(
+        payload.get("_id")
+        or payload.get("segmentId")
+        or payload.get("fullLabel")
+        or payload.get("name")
+        or ""
+    ).strip()
+
+
+def _trace_row(payload: dict, *, rank: int, score: float | None = None) -> dict:
+    row = {
+        "rank": rank + 1,
+        "segment_id": (
+            payload.get("segmentId")
+            or payload.get("_id")
+            or payload.get("code")
+        ),
+        "full_label": payload.get("fullLabel") or payload.get("name"),
+        "category": payload.get("category"),
+        "subcategory": payload.get("subcategory"),
+    }
+    if score is not None:
+        row["score"] = round(float(score), 6)
+    return row
+
+
+def _merge_openai_retrieval(
+    query_specs: list[dict],
+    dense_rows: list[list[tuple[dict, float]]],
+    sparse_rows: list[list[tuple[dict, float]]],
+) -> tuple[list[dict], dict]:
+    """Fuse source ranks and preserve a balanced front window for nano.
+
+    Each query contributes candidates round-robin, with product and buyer
+    queries ahead of broad brief queries. This prevents the bounded reranker
+    window from being consumed by one generic query while still keeping global
+    RRF evidence for later tie-breaking and debugging.
+    """
+    per_query: list[dict] = []
+    merged: dict[str, dict] = {}
+    for query_index, spec in enumerate(query_specs):
+        query_items: dict[str, dict] = {}
+        for source, rows in (
+            ("dense", dense_rows[query_index]),
+            ("bm25", sparse_rows[query_index]),
+        ):
+            for rank, (payload, raw_score) in enumerate(rows):
+                key = _candidate_key(payload)
+                if not key:
+                    continue
+                item = query_items.setdefault(key, {
+                    "payload": payload,
+                    "rrf": 0.0,
+                    "best_rank": rank,
+                    "source_ranks": {},
+                    "source_scores": {},
+                })
+                item["rrf"] += 1.0 / (60 + rank + 1)
+                item["best_rank"] = min(item["best_rank"], rank)
+                item["source_ranks"][source] = rank + 1
+                item["source_scores"][source] = round(float(raw_score), 6)
+        ordered = sorted(
+            query_items.values(),
+            key=lambda item: (-item["rrf"], item["best_rank"], _candidate_key(item["payload"])),
+        )
+        query_trace = {
+            "query": spec.get("query"),
+            "kind": spec.get("kind", "rewrite"),
+            "dense_top": [
+                _trace_row(payload, rank=rank, score=score)
+                for rank, (payload, score) in enumerate(dense_rows[query_index][:10])
+            ],
+            "bm25_top": [
+                _trace_row(payload, rank=rank, score=score)
+                for rank, (payload, score) in enumerate(sparse_rows[query_index][:10])
+            ],
+            "fused_top": [],
+            "ordered_keys": [],
+        }
+        for rank, item in enumerate(ordered):
+            payload = item["payload"]
+            key = _candidate_key(payload)
+            query_trace["ordered_keys"].append(key)
+            if rank < 10:
+                query_trace["fused_top"].append({
+                    **_trace_row(payload, rank=rank, score=item["rrf"]),
+                    "source_ranks": item["source_ranks"],
+                })
+            target = merged.setdefault(key, {
+                **payload,
+                "_rank": item["best_rank"],
+                "_fusion_score": 0.0,
+                "_query_hits": 0,
+                "_query_matches": [],
+                "_aspect_hits": [],
+            })
+            target["_rank"] = min(target["_rank"], item["best_rank"])
+            target["_fusion_score"] += item["rrf"]
+            target["_query_hits"] += 1
+            target["_query_matches"].append({
+                "query": spec.get("query"),
+                "kind": spec.get("kind", "rewrite"),
+                "query_rank": rank + 1,
+                "source_ranks": item["source_ranks"],
+                "source_scores": item["source_scores"],
+            })
+            kind = str(spec.get("kind") or "rewrite")
+            if kind not in target["_aspect_hits"]:
+                target["_aspect_hits"].append(kind)
+        per_query.append(query_trace)
+
+    priority = {"product": 0, "buyer": 1, "industry": 2, "brief": 3, "rewrite": 4}
+    query_order = sorted(
+        range(len(per_query)),
+        key=lambda index: (priority.get(per_query[index]["kind"], 5), index),
+    )
+    balanced_keys: list[str] = []
+    seen: set[str] = set()
+    max_rows = max((len(item["ordered_keys"]) for item in per_query), default=0)
+    for rank in range(max_rows):
+        for query_index in query_order:
+            rows = per_query[query_index]["ordered_keys"]
+            if rank >= len(rows):
+                continue
+            key = rows[rank]
+            if key in seen:
+                continue
+            seen.add(key)
+            balanced_keys.append(key)
+
+    global_keys = sorted(
+        merged,
+        key=lambda key: (
+            -len(merged[key]["_aspect_hits"]),
+            -merged[key]["_query_hits"],
+            -merged[key]["_fusion_score"],
+            merged[key]["_rank"],
+            key,
+        ),
+    )
+    ordered_keys = balanced_keys + [key for key in global_keys if key not in seen]
+    ordered = []
+    for rank, key in enumerate(ordered_keys):
+        item = merged[key]
+        item["_rank"] = rank
+        ordered.append(item)
+
+    trace = {
+        "schema_version": 1,
+        "query_results": [
+            {key: value for key, value in item.items() if key != "ordered_keys"}
+            for item in per_query
+        ],
+        "merged_pre_rerank": [{
+            **_trace_row(item, rank=index, score=item.get("_fusion_score")),
+            "query_hits": item.get("_query_hits"),
+            "aspect_hits": item.get("_aspect_hits"),
+            "query_matches": item.get("_query_matches"),
+        } for index, item in enumerate(ordered[:30])],
+    }
+    return ordered, trace
+
+
+async def _openai_hybrid_search(
+    query_specs: list[dict],
+    limit: int,
+) -> tuple[list[dict], dict]:
+    """OpenAI-only source-visible retrieval; GreenNode keeps legacy Qdrant fusion."""
+    from qdrant_client import models as qm
+    from rag.embeddings import embed_dense, embed_sparse
+
+    queries = [str(item.get("query") or "").strip() for item in query_specs]
+    dense, sparse = await asyncio.gather(
+        asyncio.to_thread(embed_dense, queries),
+        asyncio.to_thread(embed_sparse, queries),
+    )
+    client = get_qdrant()
+
+    def query_source(index: int, source: str):
+        if source == "dense":
+            return client.query_points(
+                config.RAG_COLLECTION,
+                query=dense[index],
+                using="dense",
+                limit=limit,
+                with_payload=True,
+            )
+        vector = sparse[index]
+        return client.query_points(
+            config.RAG_COLLECTION,
+            query=qm.SparseVector(
+                indices=vector.indices.tolist(),
+                values=vector.values.tolist(),
+            ),
+            using="sparse",
+            limit=limit,
+            with_payload=True,
+        )
+
+    calls = [
+        (index, source)
+        for index in range(len(queries))
+        for source in ("dense", "bm25")
+    ]
+    responses = await asyncio.gather(*(
+        asyncio.to_thread(query_source, index, "sparse" if source == "bm25" else source)
+        for index, source in calls
+    ))
+    dense_rows: list[list[tuple[dict, float]]] = [[] for _ in queries]
+    sparse_rows: list[list[tuple[dict, float]]] = [[] for _ in queries]
+    for (index, source), response in zip(calls, responses):
+        target = dense_rows if source == "dense" else sparse_rows
+        target[index] = [
+            (dict(point.payload or {}), float(point.score or 0))
+            for point in response.points
+        ]
+    return _merge_openai_retrieval(
+        query_specs,
+        dense_rows,
+        sparse_rows,
+    )
+
+
 async def recommend_rag(
     session_id: str,
     brief: dict,
@@ -282,6 +535,8 @@ async def recommend_rag(
     select_from_rerank_scores: bool = False,
     min_relevance_score: float | None = None,
     rerank_candidate_limit: int | None = None,
+    include_raw_query: bool = True,
+    detailed_retrieval: bool = False,
 ) -> dict:
     """Recommend catalog segments with optional provider-owned model stages.
 
@@ -300,8 +555,11 @@ async def recommend_rag(
     raw_query = _raw_query(brief)
     focused_query = _focused_query(brief) if use_focused_query else raw_query
     queries = [focused_query]
-    if raw_query not in queries:
+    query_specs = [{"query": focused_query, "kind": "brief"}]
+    if include_raw_query and raw_query not in queries:
         queries.append(raw_query)
+        query_specs.append({"query": raw_query, "kind": "brief"})
+    query_plan = None
     rewrite_enabled = (
         config.RAG_QUERY_REWRITE
         if enable_query_rewrite is None
@@ -313,18 +571,45 @@ async def recommend_rag(
         else:
             from rag.query_rewrite import rewrite
             rewritten = await rewrite(brief)
-        queries.extend(q for q in rewritten if q and q not in queries)
+        if isinstance(rewritten, dict):
+            query_plan = rewritten
+            rewritten = rewritten.get("queries") or []
+        planned_specs = (
+            query_plan.get("query_specs") or []
+            if isinstance(query_plan, dict)
+            else []
+        )
+        kind_by_query = {
+            str(item.get("query") or "").casefold(): item.get("kind", "rewrite")
+            for item in planned_specs
+            if isinstance(item, dict) and item.get("query")
+        }
+        for query in rewritten:
+            if not query or query in queries:
+                continue
+            queries.append(query)
+            query_specs.append({
+                "query": query,
+                "kind": kind_by_query.get(str(query).casefold(), "rewrite"),
+            })
     rewrite_s = time.time() - stage_t0
     RAG_STAGE_SECONDS.labels(stage="rewrite").observe(rewrite_s)
 
     # 2. hybrid retrieve
     try:
         stage_t0 = time.time()
-        candidates = await _hybrid_search(
-            queries,
-            config.RAG_TOP_RETRIEVE,
-            mode=config.AUDIENCE_RAG_RETRIEVAL_MODE,
-        )
+        if detailed_retrieval:
+            candidates, retrieval_trace = await _openai_hybrid_search(
+                query_specs,
+                config.RAG_TOP_RETRIEVE,
+            )
+        else:
+            candidates = await _hybrid_search(
+                queries,
+                config.RAG_TOP_RETRIEVE,
+                mode=config.AUDIENCE_RAG_RETRIEVAL_MODE,
+            )
+            retrieval_trace = None
         retrieval_s = time.time() - stage_t0
         RAG_STAGE_SECONDS.labels(stage="retrieve").observe(retrieval_s)
     except Exception as e:
@@ -360,12 +645,17 @@ async def recommend_rag(
         from rag.nano_rerank import rerank_candidates
 
         if rerank_candidate_limit is None:
-            order, rerank_meta = await rerank_candidates(brief_text, candidates)
+            order, rerank_meta = await rerank_candidates(
+                brief_text,
+                candidates,
+                session_id=session_id,
+            )
         else:
             order, rerank_meta = await rerank_candidates(
                 brief_text,
                 candidates,
                 candidate_limit=rerank_candidate_limit,
+                session_id=session_id,
             )
     else:
         RAG_RERANK.labels(outcome="disabled").inc()
@@ -418,7 +708,15 @@ async def recommend_rag(
         )
         scores = rerank_meta.get("scores") if rerank_meta.get("applied") else {}
         scores = scores if isinstance(scores, dict) else {}
+        assessments = (
+            rerank_meta.get("assessments")
+            if rerank_meta.get("applied")
+            else {}
+        )
+        assessments = assessments if isinstance(assessments, dict) else {}
         recs = []
+        adjacent_recs = []
+        gate_decisions = []
         for candidate in top:
             candidate_id = str(
                 candidate.get("segmentId")
@@ -428,35 +726,67 @@ async def recommend_rag(
                 or ""
             ).strip()
             score = float(scores.get(candidate_id, -1))
-            if score < threshold:
-                continue
-            recs.append({
-                "fullLabel": candidate.get("fullLabel") or candidate.get("name", ""),
-                "reason": _score_reason(brief, candidate),
+            assessment = assessments.get(candidate_id) or {}
+            # Old stored results and unit fixtures only have a score. Preserve
+            # their contract, while current OpenAI calls must honor the richer
+            # direct/adjacent/unrelated judgment.
+            model_tier = assessment.get("match_tier")
+            if not model_tier:
+                model_tier = "recommended" if score >= threshold else "unrelated"
+            if model_tier == "recommended" and score >= threshold:
+                decision = "recommended"
+                if len(recs) < 6:
+                    recs.append({
+                        "fullLabel": candidate.get("fullLabel") or candidate.get("name", ""),
+                        "reason": _assessment_reason(
+                            brief, candidate, assessment, decision,
+                        ),
+                        "tier": decision,
+                        "relevance_score": score,
+                        **assessment,
+                    })
+            elif model_tier == "adjacent" and score >= 0.20:
+                decision = "adjacent"
+                if len(adjacent_recs) < 6:
+                    adjacent_recs.append({
+                        "fullLabel": candidate.get("fullLabel") or candidate.get("name", ""),
+                        "reason": _assessment_reason(
+                            brief, candidate, assessment, decision,
+                        ),
+                        "tier": decision,
+                        "relevance_score": score,
+                        **assessment,
+                    })
+            else:
+                decision = "rejected"
+            gate_decisions.append({
+                "segment_id": candidate_id,
+                "full_label": candidate.get("fullLabel") or candidate.get("name"),
+                "score": score,
+                "model_tier": model_tier,
+                "decision": decision,
+                "matched_signals": assessment.get("matched_signals") or [],
+                "missing_signals": assessment.get("missing_signals") or [],
+                "limitation": assessment.get("limitation") or "",
             })
-            if len(recs) >= 6:
-                break
         quality_gate = {
             "applied": True,
             "threshold": threshold,
             "eligible": len(recs),
+            "recommended": len(recs),
+            "adjacent": len(adjacent_recs),
             "rejected": sum(
-                1
-                for candidate in top
-                if float(scores.get(str(
-                    candidate.get("segmentId")
-                    or candidate.get("_id")
-                    or candidate.get("fullLabel")
-                    or candidate.get("name")
-                    or ""
-                ).strip(), -1)) < threshold
+                1 for item in gate_decisions if item["decision"] == "rejected"
             ),
             "reranker_available": bool(rerank_meta.get("applied")),
+            "decisions": gate_decisions,
         }
         selector_name = "openai_nano_scores"
         if not rerank_meta.get("applied"):
             selector_error = "reranker_unavailable"
     else:
+        adjacent_recs = []
+        gate_decisions = []
         try:
             if selector is not None:
                 recs, selector_name = await selector(prompt)
@@ -476,7 +806,7 @@ async def recommend_rag(
 
     # 5. candidate-ID validation ⛔ — LLM may not invent segments
     label_map = {(c.get("fullLabel") or c.get("name", "")): c for c in top}
-    enriched, dropped, duplicates_dropped = [], 0, 0
+    enriched, adjacent_enriched, dropped, duplicates_dropped = [], [], 0, 0
     seen: set[str] = set()
 
     def _identity(segment: dict) -> str:
@@ -491,13 +821,20 @@ async def recommend_rag(
     def _public_recommendation(segment: dict, reason: str) -> dict:
         index_metadata = segment.get("_rag_index") or {}
         source = catalog_source(segment, index_metadata)
-        internal = {"_rank", "_text", "_fusion_score", "_query_hits", "_rag_index"}
+        internal = {
+            "_rank", "_text", "_fusion_score", "_query_hits", "_rag_index",
+            "_query_matches", "_aspect_hits",
+        }
         public = {key: value for key, value in segment.items() if key not in internal}
         return {**public, "reason": reason, "source": source}
 
-    for rec in recs:
-        seg = label_map.get(rec.get("fullLabel", ""))
-        if seg:
+    def _enrich_recommendations(rows: list[dict], target: list[dict]) -> None:
+        nonlocal dropped, duplicates_dropped, guard_rejected
+        for rec in rows:
+            seg = label_map.get(rec.get("fullLabel", ""))
+            if not seg:
+                dropped += 1
+                continue
             guard_reason = _guard_reason(brief, seg)
             if guard_reason:
                 RAG_GUARD_REJECTED.labels(reason=guard_reason).inc()
@@ -508,9 +845,17 @@ async def recommend_rag(
                 duplicates_dropped += 1
                 continue
             seen.add(identity)
-            enriched.append(_public_recommendation(seg, rec.get("reason", "")))
-        else:
-            dropped += 1
+            public = _public_recommendation(seg, rec.get("reason", ""))
+            for key in (
+                "tier", "relevance_score", "match_tier", "matched_signals",
+                "missing_signals", "limitation",
+            ):
+                if key in rec:
+                    public[key] = rec[key]
+            target.append(public)
+
+    _enrich_recommendations(recs, enriched)
+    _enrich_recommendations(adjacent_recs, adjacent_enriched)
     if dropped:
         RAG_HALLUCINATED.inc(dropped)
 
@@ -532,9 +877,10 @@ async def recommend_rag(
             ))
 
     RAG_REQUESTS.labels(outcome="ok").inc()
-    await alog(session_id, "info", {
+    log_payload = {
         "rag": "recommend_done", "queries": queries, "candidates": len(candidates),
         "rewrite_enabled": rewrite_enabled,
+        "query_plan": query_plan,
         "rerank_enabled": rerank_enabled,
         "rerank_mode": selected_rerank_mode,
         "rerank_meta": rerank_meta,
@@ -543,6 +889,7 @@ async def recommend_rag(
         "quality_gate": quality_gate,
         "provider": provider,
         "reranked": bool(order), "returned": len(enriched),
+        "adjacent_returned": len(adjacent_enriched),
         "dropped_hallucinated": dropped,
         "dropped_duplicates": duplicates_dropped,
         "guard_rejected": guard_rejected,
@@ -550,19 +897,67 @@ async def recommend_rag(
         "stage_ms": {"rewrite": int(rewrite_s * 1000),
                      "retrieve": int(retrieval_s * 1000),
                      "rerank": int(rerank_s * 1000),
-                     "generate": int(generation_s * 1000)}})
-    return {"recommendations": enriched, "total_segments": catalog_segments,
+                     "generate": int(generation_s * 1000)}}
+    if provider == "openai":
+        scores = rerank_meta.get("scores") or {}
+        assessments = rerank_meta.get("assessments") or {}
+        trace_limit = (
+            rerank_candidate_limit
+            or config.AUDIENCE_NANO_RERANK_CANDIDATE_LIMIT
+        )
+        log_payload.update({
+            "trace_schema_version": 1,
+            "query_specs": query_specs,
+            "retrieval_trace": retrieval_trace,
+            "rerank_trace": [{
+                "pre_rerank_rank": index + 1,
+                "segment_id": str(
+                    candidate.get("segmentId")
+                    or candidate.get("_id")
+                    or candidate.get("fullLabel")
+                    or candidate.get("name")
+                    or ""
+                ),
+                "full_label": candidate.get("fullLabel") or candidate.get("name"),
+                "score": scores.get(str(
+                    candidate.get("segmentId")
+                    or candidate.get("_id")
+                    or candidate.get("fullLabel")
+                    or candidate.get("name")
+                    or ""
+                )),
+                "assessment": assessments.get(str(
+                    candidate.get("segmentId")
+                    or candidate.get("_id")
+                    or candidate.get("fullLabel")
+                    or candidate.get("name")
+                    or ""
+                )),
+            } for index, candidate in enumerate(candidates[:trace_limit])],
+        })
+        await alog(session_id, "openai_audience_pipeline_trace", log_payload)
+    else:
+        await alog(session_id, "info", log_payload)
+    return {"recommendations": enriched,
+            "adjacent_recommendations": adjacent_enriched,
+            "total_segments": catalog_segments,
             "rag": {"applied": True,
                     "mode": config.AUDIENCE_RAG_RETRIEVAL_MODE,
                     "queries": queries, "candidates": len(candidates),
                     "catalog_segments": catalog_segments,
                     "rewrite_enabled": rewrite_enabled,
+                    "query_plan": query_plan,
                     "rerank_enabled": rerank_enabled,
                     "rerank_mode": selected_rerank_mode,
                     "rerank_model": rerank_meta.get("model"),
                     "rerank_meta": rerank_meta,
                     "selector": selector_name,
                     "quality_gate": quality_gate,
+                    "tier_counts": {
+                        "recommended": len(enriched),
+                        "adjacent": len(adjacent_enriched),
+                        "rejected": quality_gate.get("rejected", 0),
+                    },
                     "selector_fallback_reason": (
                         "provider_unavailable" if selector_error else None
                     ),

@@ -11,6 +11,7 @@ const chatPane = readFileSync(new URL('../src/components/ChatPane/index.jsx', im
 const debugExport = readFileSync(new URL('../src/lib/debugExport.js', import.meta.url), 'utf8')
 const audience = readFileSync(new URL('../src/steps/AudienceStep.jsx', import.meta.url), 'utf8')
 const autopilot = readFileSync(new URL('../src/components/AutopilotPanel.jsx', import.meta.url), 'utf8')
+const autopilotReview = readFileSync(new URL('../src/components/AutopilotReview.jsx', import.meta.url), 'utf8')
 const briefStep = readFileSync(new URL('../src/steps/BriefStep.jsx', import.meta.url), 'utf8')
 const router = readFileSync(new URL('../../agent/router.py', import.meta.url), 'utf8')
 
@@ -64,6 +65,17 @@ test('OpenAI audience keeps every selected segment visible above the full catalo
   assert.match(audience, /Bỏ chọn \$\{attr\.name\}/)
 })
 
+test('OpenAI audience separates direct recommendations from optional expansion', () => {
+  assert.match(audience, /directReco/)
+  assert.match(audience, /adjacentReco/)
+  assert.match(audience, /Liên quan để mở rộng · chưa chọn/)
+  assert.match(autopilotReview, /Đề xuất trực tiếp/)
+  assert.match(autopilotReview, /Liên quan để mở rộng/)
+  assert.match(autopilot, /!audienceReviewReady/)
+  assert.doesNotMatch(autopilotReview, /Catalog không bị cắt/)
+  assert.doesNotMatch(autopilot, /Catalog có \$\{audienceCatalogCount\} segment/)
+})
+
 test('Audience review exposes a real rerun action in Copilot and Autopilot', () => {
   assert.match(api, /async rerunAutopilotAudience\(runId, taskId, reason = ''\)/)
   assert.match(api, /tasks\/\$\{encodeURIComponent\(taskId\)\}\/rerun/)
@@ -75,6 +87,13 @@ test('Audience review exposes a real rerun action in Copilot and Autopilot', () 
 test('Copilot does not mount the hidden Autopilot poller', () => {
   assert.match(app, /experienceMode === 'autopilot' && \(\s*<AutopilotPanel/)
   assert.match(autopilot, /setInterval\(loadPrerequisites, 3000\)/)
+})
+
+test('Autopilot creative assignment uses canonical review status', () => {
+  assert.match(autopilotReview, /file\.analysisStatus \|\| file\.intel\?\.effective_status/)
+  assert.match(autopilotReview, /generationAdvisories/)
+  assert.doesNotMatch(autopilotReview, /generationRejected/)
+  assert.doesNotMatch(autopilotReview, /generationVerdict\.acceptable === false/)
 })
 
 test('anonymous identity bootstrap is shared across history refreshes', () => {

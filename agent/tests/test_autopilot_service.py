@@ -443,6 +443,68 @@ async def test_operator_can_rerun_unapproved_audience_review():
 
 
 @pytest.mark.asyncio
+async def test_adjacent_only_audience_requires_explicit_selection_before_review():
+    await _seed("audience-adjacent-review")
+    run = await service.create_run(
+        "audience-adjacent-review",
+        approval_policy="review_every_stage",
+        idempotency_key="audience-adjacent-review",
+    )
+    context = await get_task_context("audience-adjacent-review", "audience")
+    task_id = f"{run['run_id']}:retrieve_audience"
+    related = [
+        {
+            "_id": "INT006", "segmentId": "INT006",
+            "fullLabel": "Construction", "tier": "adjacent",
+            "sizeMin": 1_000_000, "sizeMax": 2_000_000,
+        },
+        {
+            "_id": "INT020", "segmentId": "INT020",
+            "fullLabel": "Management", "tier": "adjacent",
+            "sizeMin": 2_000_000, "sizeMax": 3_000_000,
+        },
+    ]
+    value = {
+        "attrs": [],
+        "adjacent_attrs": related,
+        "recommendations": related,
+        "selection_required": True,
+        "size": 0,
+    }
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result=value,
+        pending_artifact={
+            "session_id": "audience-adjacent-review",
+            "artifact": "audience",
+            "value": value,
+            "input_revisions": context["input_revisions"],
+            "base_artifact_revision": context["artifact_revision"],
+        },
+    )
+
+    with pytest.raises(service.RunConflict, match="at least one selected"):
+        await service.review_task(run["run_id"], task_id, approved=True)
+
+    selected = await service.select_audience_recommendations(
+        run["run_id"], ["INT020"], reason="Management is an acceptable proxy"
+    )
+    selected_task = next(
+        item for item in selected["tasks"] if item["task_id"] == task_id
+    )
+    selected_value = selected_task["pending_artifact"]["value"]
+    assert [item["segmentId"] for item in selected_value["attrs"]] == ["INT020"]
+    assert selected_value["selection_required"] is False
+
+    await service.review_task(run["run_id"], task_id, approved=True)
+    committed = await get_workspace("audience-adjacent-review")
+    assert [
+        item["segmentId"]
+        for item in committed["artifacts"]["audience"]["value"]["attrs"]
+    ] == ["INT020"]
+
+
+@pytest.mark.asyncio
 async def test_reach_first_placement_intent_prioritizes_reach(monkeypatch):
     async def fake_rank_zones(**_kwargs):
         return [
@@ -462,6 +524,58 @@ async def test_reach_first_placement_intent_prioritizes_reach(monkeypatch):
     }}
     result = await _plan_placement_intent({"session_id": "reach-first"}, workspace)
     assert result.value["candidate_zone_ids"] == ["premium-large", "mid", "cheap-small"]
+
+
+@pytest.mark.asyncio
+async def test_openai_placement_intent_limits_one_topic_without_changing_greennode(monkeypatch):
+    from campaign_models import GREENNODE_MINIMAX, OPENAI_GPT_5_4_MINI
+
+    zones = [
+        {
+            "id": f"home-{index}",
+            "topicId": "home_garden_diy",
+            "placementFamily": f"family-{index % 3}",
+            "reach": 1_000_000 - index,
+            "score": 100 - index,
+        }
+        for index in range(10)
+    ] + [
+        {
+            "id": f"tech-{index}",
+            "topicId": "technology_science",
+            "placementFamily": f"tech-family-{index}",
+            "reach": 500_000 - index,
+            "score": 80 - index,
+        }
+        for index in range(2)
+    ]
+
+    async def fake_rank_zones(**_kwargs):
+        return zones
+
+    async def fake_conflicts(_start, _end):
+        return {}
+
+    monkeypatch.setattr("tools.zone_ranker.rank_zones", fake_rank_zones)
+    monkeypatch.setattr("tools.order_api.fetch_zone_conflicts", fake_conflicts)
+    workspace = {"artifacts": {
+        "brief": {"value": BRIEF},
+        "strategy": {"value": {"selected": "balanced"}},
+    }}
+
+    openai = await _plan_placement_intent(
+        {"session_id": "openai-zones", "conversation_model": OPENAI_GPT_5_4_MINI},
+        workspace,
+    )
+    greennode = await _plan_placement_intent(
+        {"session_id": "greennode-zones", "conversation_model": GREENNODE_MINIMAX},
+        workspace,
+    )
+
+    openai_topics = [zone["topicId"] for zone in openai.value["candidates"]]
+    assert openai_topics.count("home_garden_diy") == 6
+    assert openai_topics.count("technology_science") == 2
+    assert len(greennode.value["candidates"]) == 12
 
 
 @pytest.mark.asyncio

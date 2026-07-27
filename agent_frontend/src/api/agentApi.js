@@ -947,6 +947,7 @@ function mergeCreativeIntel(files, docs) {
       analysisId: doc.analysis_id,
       analysisStatus: doc.effective_status || doc.status,
       reviewReasons: doc.review_reasons || [],
+      generationAdvisories: doc.generation_advisories || [],
       deterministic,
       vlm: doc.vlm || {},
       vlmError: doc.vlm_error || null,

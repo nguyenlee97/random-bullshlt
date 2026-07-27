@@ -978,8 +978,20 @@ async def review_task(
             )
         task = await tasks.find_one({"_id": task_id, "run_id": run_id}) if tasks is not None \
             else _mem_tasks.get(task_id)
-        if not task or task["status"] != "waiting_review":
-            raise RunConflict("task is no longer waiting for review")
+    if not task or task["status"] != "waiting_review":
+        raise RunConflict("task is no longer waiting for review")
+    if (
+        approved
+        and task.get("key") == "retrieve_audience"
+        and (
+            ((task.get("pending_artifact") or {}).get("value") or {}).get(
+                "selection_required"
+            )
+        )
+    ):
+        raise RunConflict(
+            "audience review requires at least one selected segment"
+        )
     if approved and task.get("pending_artifact") and not retry_after_review:
         from workspace.service import commit_artifact_result
         pending = task["pending_artifact"]
@@ -1072,6 +1084,106 @@ async def rerun_review_task(
         "explicit_review_rerun": True,
     })
     await _refresh_run_status(run_id)
+    return await get_run(run_id)
+
+
+async def select_audience_recommendations(
+    run_id: str,
+    segment_ids: list[str],
+    *,
+    actor: str = "campaign_operator",
+    reason: str = "",
+) -> dict:
+    """Select reviewed direct/adjacent catalog rows without approving the gate."""
+    from audience_reach import audience_selection
+
+    run = await get_run(run_id)
+    if run["status"] in RUN_TERMINAL:
+        raise RunConflict("audience selection cannot change after the run is terminal")
+    task = next(
+        (item for item in run["tasks"] if item["key"] == "retrieve_audience"),
+        None,
+    )
+    if not task or task["status"] != "waiting_review":
+        raise RunConflict("audience recommendation is not waiting for review")
+    pending = deepcopy(task.get("pending_artifact") or {})
+    if pending.get("artifact") != "audience":
+        raise RunConflict("audience review has no pending artifact")
+
+    value = deepcopy(pending.get("value") or {})
+    candidates = (
+        value.get("recommendations")
+        or [*(value.get("attrs") or []), *(value.get("adjacent_attrs") or [])]
+    )
+
+    def identity(item: dict) -> str:
+        return str(
+            item.get("segmentId")
+            or item.get("_id")
+            or item.get("code")
+            or item.get("fullLabel")
+            or item.get("name")
+            or ""
+        ).strip()
+
+    by_id = {
+        identity(item): item
+        for item in candidates
+        if isinstance(item, dict) and identity(item)
+    }
+    selected_ids = list(dict.fromkeys(
+        str(item).strip() for item in segment_ids if str(item).strip()
+    ))
+    if not selected_ids:
+        raise ValueError("select at least one audience segment")
+    if len(selected_ids) > 12:
+        raise ValueError("select at most 12 audience segments")
+    unknown = [segment_id for segment_id in selected_ids if segment_id not in by_id]
+    if unknown:
+        raise ValueError(
+            "audience is not in the reviewed recommendation: "
+            + ", ".join(unknown)
+        )
+
+    selected = [deepcopy(by_id[segment_id]) for segment_id in selected_ids]
+    selection = audience_selection(selected)
+    selection_reason = reason.strip() or "Operator adjusted the reviewed audience"
+    value.update({
+        **selection,
+        "selection_required": False,
+        "selection": {
+            "source": "operator",
+            "actor": actor,
+            "reason": selection_reason,
+            "selected_at": _now(),
+            "selected_count": len(selected),
+        },
+    })
+    pending["value"] = value
+    evidence = deepcopy(task.get("evidence") or [])
+    evidence.append({
+        "type": "audience_selection_updated",
+        "actor": actor,
+        "selected_count": len(selected),
+        "segment_ids": selected_ids,
+        "reason": selection_reason,
+    })
+    updates = {
+        "result": value,
+        "pending_artifact": pending,
+        "evidence": evidence,
+        "updated_at": _now(),
+    }
+    _, tasks, _ = await _collections()
+    if tasks is not None:
+        await tasks.update_one({"_id": task["task_id"]}, {"$set": updates})
+    else:
+        _mem_tasks[task["task_id"]].update(updates)
+    await _emit(run_id, "audience_selection_updated", {
+        "task_id": task["task_id"],
+        "actor": actor,
+        "selected_count": len(selected),
+    })
     return await get_run(run_id)
 
 

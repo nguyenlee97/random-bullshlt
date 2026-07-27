@@ -444,7 +444,7 @@ class Config:
         os.getenv("OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE", "0.50")
     )
     OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT: int = int(
-        os.getenv("OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT", "50")
+        os.getenv("OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT", "30")
     )
     RAG_TOP_RETRIEVE: int = int(os.getenv("RAG_TOP_RETRIEVE", "50"))
     RAG_TOP_FINAL: int = int(os.getenv("RAG_TOP_FINAL", "25"))

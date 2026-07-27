@@ -143,6 +143,11 @@ def reset_session_col(monkeypatch):
     except ImportError:
         pass
     try:
+        from openai_campaign import audience_search
+        audience_search.reset_audience_search_for_test()
+    except ImportError:
+        pass
+    try:
         from quality import store as quality_store
         monkeypatch.setattr(quality_store, "_mem_interactions", {}, raising=False)
         monkeypatch.setattr(quality_store, "_mem_events", {}, raising=False)

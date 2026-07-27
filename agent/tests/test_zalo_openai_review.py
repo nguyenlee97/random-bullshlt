@@ -3,7 +3,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from campaign_models import GREENNODE_MINIMAX, OPENAI_GPT_5_4_MINI
-from openai_campaign.zalo_review import render_openai_review_message
+from openai_campaign.zalo_review import (
+    assignment_media_parts,
+    render_openai_review_message,
+)
 from zalo_worker import _progress_message
 
 
@@ -45,7 +48,18 @@ def _workspace() -> dict:
                 "gender": ["Male", "Female"],
                 "geo": ["TP.HCM"],
             }},
-            "creative": {"value": {"files": [{"name": "mixi-banner.png"}]}},
+            "creative": {"value": {"files": [{
+                "name": "mixi-banner.png",
+                "url": "https://example.test/mixi-banner.png",
+                "width": 1160,
+                "height": 280,
+            }]}},
+            "creative_verdict": {"value": {"files": [{
+                "name": "mixi-banner.png",
+                "url": "https://example.test/mixi-banner.png",
+                "status": "auto_approved",
+                "effective_status": "auto_approved",
+            }]}},
             "placement_intent": {"value": {
                 "candidates": [{"id": "ZONE-1", "name": "Masthead"}],
             }},
@@ -93,7 +107,8 @@ def test_openai_audience_review_lists_exact_pending_segments_and_reasons():
     assert "Tea (nonalcoholic beverage)" in text
     assert "2,53 triệu–3,56 triệu" in text
     assert "Phù hợp trực tiếp với sản phẩm." in text
-    assert "Xác nhận” để duyệt toàn bộ danh sách" in text
+    assert "Xác nhận” để duyệt các đề xuất trực tiếp" in text
+    assert "Chọn audience 1,2,3" in text
     assert "https://example.test/?conversation=conv-1" in text
     assert "stale" not in text
 
@@ -131,7 +146,58 @@ def test_openai_placement_review_shows_inventory_metrics_and_estimate_disclosure
     assert "CPM 42.000đ" in text
     assert "reach 2,5 triệu" in text
     assert "ước tính" in text
-    assert "mở workspace để thay đổi placement" in text
+    assert "Ad zone đề xuất ban đầu" in text
+    assert "Chọn zone 1,2,3" in text
+    assert "lọc lại độ tương thích" in text
+    assert "tối đa 6 zone cuối" not in text
+    assert "mở workspace để thay đổi ad zone" in text
+
+
+def test_openai_audience_review_labels_adjacent_rows_as_unselected():
+    run, task = _run("retrieve_audience", {
+        "attrs": [],
+        "adjacent_attrs": [{
+            "_id": "INT006",
+            "fullLabel": "Construction",
+            "reason": "Liên quan để mở rộng. Hạn chế: proxy ngành rộng.",
+        }],
+        "selection_required": True,
+    })
+
+    text = _progress_message(run, _event(task), workspace=_workspace())
+
+    assert "Đề xuất trực tiếp đang chờ duyệt: 0 segment" in text
+    assert "Audience liên quan để mở rộng (chưa tự chọn): 1 segment" in text
+    assert "1. Construction" in text
+    assert "Agent chưa tự chọn mục nào" in text
+
+
+def test_openai_placement_review_keeps_all_twelve_ordinals_visible():
+    zones = [{
+        "id": f"ZONE-{index}",
+        "name": f"Category homepage ad zone number {index}",
+        "channel": "BaoMoi",
+        "cpm": 40_000 + index * 1_000,
+        "reach": 2_500_000 - index * 10_000,
+        "topic_relevance": {
+            "matched_keywords": ["nông nghiệp", "đại lý phân bón"],
+        },
+    } for index in range(1, 13)]
+    run, task = _run("plan_placement_intent", {
+        "candidate_zone_ids": [zone["id"] for zone in zones],
+        "candidates": zones,
+    })
+
+    text = _progress_message(run, _event(task), workspace=_workspace())
+    numbered = {
+        int(line.split(".", 1)[0])
+        for line in text.splitlines()
+        if line.split(".", 1)[0].isdigit()
+    }
+
+    assert numbered == set(range(1, 13))
+    assert len(text) <= 1950
+    assert "Chọn zone 1,2,3" in text
 
 
 def test_openai_assignment_review_resolves_zone_and_creative_names():
@@ -142,8 +208,15 @@ def test_openai_assignment_review_resolves_zone_and_creative_names():
 
     text = _progress_message(run, _event(task), workspace=_workspace())
 
-    assert "Masthead → mixi-banner.png" in text
-    assert "Xác nhận” để duyệt mapping" in text
+    assert "Masthead → Creative A (1160×280)" in text
+    assert "Creative A: mixi-banner.png · đạt kiểm tra" in text
+    assert "Xác nhận” để duyệt phân bổ" in text
+    assert assignment_media_parts(
+        task["pending_artifact"]["value"], _workspace()
+    ) == [{
+        "kind": "image",
+        "image_url": "https://example.test/mixi-banner.png",
+    }]
 
 
 def test_openai_launch_review_shows_material_order_facts_and_side_effect():
@@ -191,7 +264,7 @@ def test_large_review_keeps_confirmation_instructions_within_zalo_limit():
     )
 
     assert len(text) <= 1950
-    assert "Xác nhận” để duyệt toàn bộ danh sách" in text
+    assert "Xác nhận” để duyệt các đề xuất trực tiếp đang được chọn" in text
     assert "Gợi ý lại audience" in text
     assert "https://example.test/workspace" in text
 

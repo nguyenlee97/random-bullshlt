@@ -99,6 +99,92 @@ def test_focused_query_removes_creative_and_strategy_workflow_noise():
     assert "Chiến lược" not in query
 
 
+def test_focused_query_preserves_b2b_and_exclusions_before_creative_tail():
+    query = _focused_query({
+        "brand": "GreenFarm",
+        "notes": (
+            "B2B bán phân bón cho trang trại và đại lý nông nghiệp; "
+            "loại trừ người chỉ thích làm vườn tại nhà. "
+            "Creative: bò uống sữa trên cánh đồng xanh."
+        ),
+    })
+
+    assert "B2B" in query
+    assert "trang trại" in query
+    assert "loại trừ" in query
+    assert "bò uống sữa" not in query
+
+
+@pytest.mark.asyncio
+async def test_semantic_query_plan_adds_catalog_queries_without_raw_creative_noise(monkeypatch):
+    import rag.recommend as recommend
+
+    captured = {}
+    candidate = {
+        "_id": "mongo-agri",
+        "segmentId": "INT002",
+        "fullLabel": "Agriculture",
+        "name": "Agriculture",
+        "_text": "agriculture business",
+        "_rank": 0,
+        "_query_hits": 1,
+        "_fusion_score": 1 / 61,
+        "_rag_index": {"segment_count": 310},
+    }
+
+    async def ready(_session_id):
+        return True
+
+    async def search(queries, _limit, mode=None):
+        captured["queries"] = queries
+        return [candidate]
+
+    async def planner(_brief):
+        return {
+            "queries": ["agriculture industry", "farm input dealers"],
+            "industry_queries": ["agriculture industry"],
+            "buyer_queries": ["farm input dealers"],
+            "creative_only_concepts": ["cow drinking milk"],
+            "applied": True,
+        }
+
+    monkeypatch.setattr(recommend, "ensure_index", ready)
+    monkeypatch.setattr(recommend, "_hybrid_search", search)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_RETRIEVE", 10)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_FINAL", 10)
+
+    result = await recommend_rag(
+        "semantic-query-plan",
+        {
+            "brand": "GreenFarm",
+            "objective": "conversion",
+            "kpi": "qualified dealer leads",
+            "notes": (
+                "B2B fertilizer for farms. "
+                "Creative: cow drinking milk in a green field."
+            ),
+        },
+        provider="openai",
+        query_rewriter=planner,
+        use_focused_query=True,
+        enable_query_rewrite=True,
+        include_raw_query=False,
+        rerank_mode="off",
+        select_from_rerank_scores=True,
+        min_relevance_score=0.5,
+    )
+
+    assert captured["queries"] == [
+        "GreenFarm | conversion | qualified dealer leads | B2B fertilizer for farms.",
+        "agriculture industry",
+        "farm input dealers",
+    ]
+    assert all("cow drinking milk" not in query for query in captured["queries"])
+    assert result["rag"]["query_plan"]["creative_only_concepts"] == [
+        "cow drinking milk",
+    ]
+
+
 def test_targeting_normalization_rejects_invented_values_and_dimensions():
     options = {
         "geo": {"South": ["TP.HCM", "Đà Nẵng"]},
@@ -464,7 +550,7 @@ async def test_recommend_rag_applies_bounded_nano_order_and_keeps_tail(monkeypat
     async def search(_queries, _limit, mode=None):
         return candidates
 
-    async def nano_order(_query, _candidates):
+    async def nano_order(_query, _candidates, **_kwargs):
         return [2, 0, 1], {
             "applied": True,
             "mode": "openai_nano",
@@ -537,7 +623,9 @@ async def test_openai_score_gate_reaches_beyond_old_window_and_rejects_fillers(m
     async def search(_queries, _limit, mode=None):
         return candidates
 
-    async def nano_order(_query, _candidates, candidate_limit=None):
+    async def nano_order(
+        _query, _candidates, candidate_limit=None, **_kwargs
+    ):
         assert candidate_limit == 50
         leading = [37, 31, 36]
         order = leading + [index for index in range(40) if index not in leading]
@@ -614,7 +702,9 @@ async def test_openai_score_gate_returns_empty_instead_of_six_weak_segments(monk
     async def search(_queries, _limit, mode=None):
         return candidates
 
-    async def nano_order(_query, _candidates, candidate_limit=None):
+    async def nano_order(
+        _query, _candidates, candidate_limit=None, **_kwargs
+    ):
         return list(range(8)), {
             "applied": True,
             "mode": "openai_nano",
@@ -641,3 +731,140 @@ async def test_openai_score_gate_returns_empty_instead_of_six_weak_segments(monk
     assert result["recommendations"] == []
     assert result["rag"]["quality_gate"]["eligible"] == 0
     assert result["rag"]["quality_gate"]["rejected"] == 8
+
+
+def test_openai_retrieval_merge_balances_product_buyer_and_industry_queries():
+    from rag.recommend import _merge_openai_retrieval
+
+    def row(segment_id, label, score):
+        return ({
+            "_id": segment_id,
+            "segmentId": segment_id,
+            "fullLabel": label,
+            "_text": label,
+            "_rag_index": {"segment_count": 310},
+        }, score)
+
+    specs = [
+        {"query": "IoT leak sensor", "kind": "product"},
+        {"query": "warehouse manager", "kind": "buyer"},
+        {"query": "industrial facilities", "kind": "industry"},
+    ]
+    dense = [
+        [row("PRODUCT", "Technology early adopters", 0.9), row("GENERIC", "Shops admins", 0.8)],
+        [row("BUYER", "Management", 0.9), row("GENERIC", "Shops admins", 0.8)],
+        [row("INDUSTRY", "Construction", 0.9), row("GENERIC", "Shops admins", 0.8)],
+    ]
+    sparse = [
+        [row("PRODUCT", "Technology early adopters", 12.0)],
+        [row("BUYER", "Management", 11.0)],
+        [row("INDUSTRY", "Construction", 10.0)],
+    ]
+
+    candidates, trace = _merge_openai_retrieval(specs, dense, sparse)
+
+    assert [item["segmentId"] for item in candidates[:3]] == [
+        "PRODUCT", "BUYER", "INDUSTRY",
+    ]
+    assert trace["query_results"][0]["dense_top"][0]["full_label"] == (
+        "Technology early adopters"
+    )
+    assert trace["query_results"][1]["bm25_top"][0]["full_label"] == "Management"
+    assert trace["merged_pre_rerank"][0]["segment_id"] == "PRODUCT"
+
+
+@pytest.mark.asyncio
+async def test_openai_tiers_keep_broad_b2b_proxies_optional(monkeypatch):
+    import rag.nano_rerank as nano
+    import rag.recommend as recommend
+
+    candidates = [
+        {
+            "_id": "BEH011", "segmentId": "BEH011",
+            "fullLabel": "Shops admins", "name": "Shops admins",
+            "category": "Digital Activities", "_text": "shops admins",
+            "_rank": 0, "_query_hits": 2, "_fusion_score": 0.03,
+            "_rag_index": {"segment_count": 310},
+        },
+        {
+            "_id": "INT006", "segmentId": "INT006",
+            "fullLabel": "Construction", "name": "Construction",
+            "category": "Business and industry", "_text": "construction",
+            "_rank": 1, "_query_hits": 1, "_fusion_score": 0.02,
+            "_rag_index": {"segment_count": 310},
+        },
+        {
+            "_id": "INT020", "segmentId": "INT020",
+            "fullLabel": "Management", "name": "Management",
+            "category": "Business and industry", "_text": "management",
+            "_rank": 2, "_query_hits": 1, "_fusion_score": 0.01,
+            "_rag_index": {"segment_count": 310},
+        },
+    ]
+
+    async def ready(_session_id):
+        return True
+
+    async def search(_queries, _limit, mode=None):
+        return candidates
+
+    async def nano_order(
+        _query, _candidates, candidate_limit=None, **_kwargs
+    ):
+        return [0, 1, 2], {
+            "applied": True,
+            "mode": "openai_nano",
+            "candidate_count": 3,
+            "scores": {"BEH011": 0.72, "INT006": 0.50, "INT020": 0.45},
+            "assessments": {
+                "BEH011": {
+                    "match_tier": "unrelated",
+                    "matched_signals": [],
+                    "missing_signals": ["facility role", "industrial IoT"],
+                    "limitation": "Digital activity, not a warehouse buyer role.",
+                },
+                "INT006": {
+                    "match_tier": "adjacent",
+                    "matched_signals": ["industrial facilities"],
+                    "missing_signals": ["warehouse operations", "IoT procurement"],
+                    "limitation": "Broad industry proxy.",
+                },
+                "INT020": {
+                    "match_tier": "adjacent",
+                    "matched_signals": ["management role"],
+                    "missing_signals": ["facility specialization"],
+                    "limitation": "Broad role proxy.",
+                },
+            },
+        }
+
+    monkeypatch.setattr(recommend, "ensure_index", ready)
+    monkeypatch.setattr(recommend, "_hybrid_search", search)
+    monkeypatch.setattr(nano, "rerank_candidates", nano_order)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_FINAL", 25)
+
+    result = await recommend_rag(
+        "aquaguard-tier-test",
+        {
+            "brand": "AquaGuard Pro",
+            "notes": "IoT leak sensors for warehouses and factories; B2B facility managers.",
+        },
+        provider="openai",
+        rerank_mode="openai_nano",
+        select_from_rerank_scores=True,
+        min_relevance_score=0.50,
+    )
+
+    assert result["recommendations"] == []
+    assert [
+        item["segmentId"] for item in result["adjacent_recommendations"]
+    ] == ["INT006", "INT020"]
+    assert all(
+        item["tier"] == "adjacent"
+        for item in result["adjacent_recommendations"]
+    )
+    assert result["rag"]["tier_counts"] == {
+        "recommended": 0,
+        "adjacent": 2,
+        "rejected": 1,
+    }

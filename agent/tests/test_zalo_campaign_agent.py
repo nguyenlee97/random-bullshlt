@@ -293,6 +293,100 @@ async def test_zalo_autopilot_modes_map_to_existing_policies(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_openai_natural_brief_confirmation_uses_validated_semantic_decision(monkeypatch):
+    import zalo_campaign_agent as agent
+    from config import config
+    from zalo_openai import ZaloPendingBriefDecision
+
+    monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
+    thread = await agent.get_or_create_thread("oa-natural-brief-confirm")
+    thread = await agent._update_thread(thread, {"pending_action": {
+        "kind": "confirm_autopilot_brief",
+        "mode": "semi_automatic",
+        "brief": {"brand": "GreenFarm"},
+        "expires_at": agent._now() + timedelta(minutes=5),
+    }})
+    classifier = AsyncMock(return_value=ZaloPendingBriefDecision(
+        intent="approve",
+        explicit=True,
+        evidence="làm luôn theo brief này",
+    ))
+    start = AsyncMock(return_value={"thread": thread, "text": "started"})
+    tool_loop = AsyncMock(side_effect=AssertionError("tool loop must not run"))
+    monkeypatch.setattr("zalo_openai.classify_pending_brief_decision", classifier)
+    monkeypatch.setattr("zalo_openai.run_zalo_tool_turn", tool_loop)
+    monkeypatch.setattr(agent, "_start_autopilot", start)
+    monkeypatch.setattr(agent, "owned_campaigns", AsyncMock(return_value=[]))
+
+    result = await agent.handle_channel_event({
+        "event_name": "user_send_text",
+        "external_uid": "oa-natural-brief-confirm",
+        "text": "Được, làm luôn theo brief này nhé",
+    })
+
+    assert result == ["started"]
+    start.assert_awaited_once()
+    assert start.await_args.args[1:] == (
+        {"brand": "GreenFarm"}, "semi_automatic",
+    )
+    tool_loop.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_openai_brief_question_and_invalid_evidence_fail_closed(monkeypatch):
+    import zalo_campaign_agent as agent
+    from config import config
+    from zalo_openai import ZaloPendingBriefDecision
+
+    monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
+    start = AsyncMock()
+    tool_loop = AsyncMock(side_effect=AssertionError("tool loop must not run"))
+    monkeypatch.setattr(agent, "_start_autopilot", start)
+    monkeypatch.setattr("zalo_openai.run_zalo_tool_turn", tool_loop)
+
+    for uid, decision in (
+        (
+            "oa-brief-question",
+            ZaloPendingBriefDecision(
+                intent="question",
+                explicit=False,
+                reply="Brief chưa chạy; bạn đang hỏi về lịch.",
+            ),
+        ),
+        (
+            "oa-brief-bad-evidence",
+            ZaloPendingBriefDecision(
+                intent="approve",
+                explicit=True,
+                evidence="xác nhận ngay",
+            ),
+        ),
+    ):
+        thread = await agent.get_or_create_thread(uid)
+        await agent._update_thread(thread, {"pending_action": {
+            "kind": "confirm_autopilot_brief",
+            "mode": "semi_automatic",
+            "brief": {"brand": "GreenFarm"},
+            "expires_at": agent._now() + timedelta(minutes=5),
+        }})
+        monkeypatch.setattr(
+            "zalo_openai.classify_pending_brief_decision",
+            AsyncMock(return_value=decision),
+        )
+        result = await agent.handle_channel_event({
+            "event_name": "user_send_text",
+            "external_uid": uid,
+            "text": "Lịch này ổn không?",
+        })
+        assert "chưa" in result[0].lower() or "chờ duyệt" in result[0].lower()
+        updated = await agent.get_or_create_thread(uid)
+        assert updated["pending_action"]["kind"] == "confirm_autopilot_brief"
+
+    start.assert_not_awaited()
+    tool_loop.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_workspace_link_tool_uses_owned_active_conversation(monkeypatch):
     import zalo_campaign_agent as agent
     from config import config
@@ -446,6 +540,49 @@ async def test_openai_zalo_review_question_uses_exact_checkpoint_context(monkeyp
         0,
     )
     tool_agent.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_remote_creative_preview_reuses_zalo_image_optimizer(monkeypatch):
+    import httpx
+    import zalo_campaign_agent as agent
+
+    class FakeResponse:
+        content = b"large-generated-image"
+        headers = {"content-type": "image/png"}
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, _url):
+            return FakeResponse()
+
+    optimized = AsyncMock(return_value=[{
+        "kind": "image",
+        "image_url": "https://example.test/zalo-safe.png",
+        "byte_size": 800_000,
+    }])
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: FakeClient())
+    monkeypatch.setattr(agent, "_delivery_image_parts", optimized)
+
+    parts = await agent._prepare_remote_review_media_parts([{
+        "kind": "image",
+        "image_url": "https://example.test/original.png",
+    }])
+
+    assert parts[0]["byte_size"] == 800_000
+    optimized.assert_awaited_once_with(
+        b"large-generated-image",
+        "image/png",
+        label="creative 1",
+    )
 
 
 @pytest.mark.asyncio

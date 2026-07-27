@@ -115,6 +115,136 @@ async def test_job_is_persisted_processed_and_override_is_audited(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_noncritical_generation_warning_repairs_legacy_review_status(monkeypatch):
+    import creative_intel.service as service
+
+    async def no_mongo():
+        return None
+
+    monkeypatch.setattr(service, "_col", no_mongo)
+    service._mem.clear()
+    url = "https://example.test/generated.png"
+    analysis_id = service._key("generated-review", url)
+    service._mem[analysis_id] = {
+        "_id": analysis_id,
+        "session_id": "generated-review",
+        "url": url,
+        "name": "generated.png",
+        "status": "needs_review",
+        "review_reasons": [
+            "Kiểm tra hình ảnh sau khi tạo không đạt",
+            "Có chữ ngoài brief: FREE SHIPPING",
+            "Thông điệp ngoài brief",
+        ],
+        "generation_review_reasons": [
+            "Kiểm tra hình ảnh sau khi tạo không đạt",
+            "Có chữ ngoài brief: FREE SHIPPING",
+            "Thông điệp ngoài brief",
+        ],
+        "created_at": service._now(),
+        "updated_at": service._now(),
+    }
+
+    docs = await service.sync_generation_vlm_reviews("generated-review", [{
+        "url": url,
+        "generation": {"vlmVerdict": {
+            "acceptable": False,
+            "composition_safe": True,
+            "text_readable": True,
+            "missing_required_assets": [],
+            "unexpected_text": ["FREE SHIPPING"],
+            "review_notes": ["Thông điệp ngoài brief"],
+        }},
+    }])
+
+    assert docs[0]["effective_status"] == "auto_approved"
+    assert docs[0]["review_reasons"] == []
+    assert "Chữ bổ sung: FREE SHIPPING" in docs[0]["generation_advisories"]
+    assert docs[0]["generation_vlm_verdict"]["acceptable"] is False
+
+
+@pytest.mark.asyncio
+async def test_critical_generation_issue_still_promotes_verdict_to_review(monkeypatch):
+    import creative_intel.service as service
+
+    async def no_mongo():
+        return None
+
+    monkeypatch.setattr(service, "_col", no_mongo)
+    service._mem.clear()
+    url = "https://example.test/cropped.png"
+    analysis_id = service._key("generated-critical", url)
+    service._mem[analysis_id] = {
+        "_id": analysis_id,
+        "session_id": "generated-critical",
+        "url": url,
+        "name": "cropped.png",
+        "status": "auto_approved",
+        "review_reasons": [],
+        "created_at": service._now(),
+        "updated_at": service._now(),
+    }
+
+    docs = await service.sync_generation_vlm_reviews("generated-critical", [{
+        "url": url,
+        "generation": {"vlmVerdict": {
+            "acceptable": False,
+            "composition_safe": False,
+            "text_readable": True,
+            "missing_required_assets": [],
+            "blocking_issues": [],
+            "review_notes": ["CTA bị cắt"],
+        }},
+    }])
+
+    assert docs[0]["effective_status"] == "needs_review"
+    assert docs[0]["review_reasons"] == [
+        "Nội dung quan trọng bị cắt khỏi vùng an toàn",
+    ]
+    assert docs[0]["generation_advisories"] == []
+
+
+@pytest.mark.asyncio
+async def test_generation_vlm_outage_remains_fail_closed(monkeypatch):
+    import creative_intel.service as service
+
+    async def no_mongo():
+        return None
+
+    monkeypatch.setattr(service, "_col", no_mongo)
+    service._mem.clear()
+    url = "https://example.test/unavailable.png"
+    analysis_id = service._key("generated-unavailable", url)
+    service._mem[analysis_id] = {
+        "_id": analysis_id,
+        "session_id": "generated-unavailable",
+        "url": url,
+        "name": "unavailable.png",
+        "status": "auto_approved",
+        "review_reasons": [],
+        "created_at": service._now(),
+        "updated_at": service._now(),
+    }
+
+    docs = await service.sync_generation_vlm_reviews("generated-unavailable", [{
+        "url": url,
+        "generation": {
+            "vlmVerdict": {
+                "acceptable": False,
+                "confidence": "low",
+                "review_notes": ["VLM acceptance check unavailable"],
+            },
+            "vlmProvenance": {"error": "TimeoutError"},
+        },
+    }])
+
+    assert docs[0]["effective_status"] == "needs_review"
+    assert docs[0]["review_reasons"] == [
+        "Kiểm tra hình ảnh sau khi tạo gặp lỗi — cần duyệt thủ công",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_worker_marks_verdict_stale_when_creative_changes_mid_analysis(monkeypatch):
     import creative_intel.service as service
     from workspace.service import apply_mutation, get_workspace

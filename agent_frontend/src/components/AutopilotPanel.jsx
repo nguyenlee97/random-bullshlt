@@ -22,7 +22,7 @@ const TASK_LABELS = {
   normalize_brief: 'Chuẩn hóa brief', validate_brief: 'Kiểm tra brief',
   generate_strategy: 'Xây dựng chiến lược', retrieve_audience: 'Tìm audience',
   derive_targeting: 'Thiết lập targeting',
-  plan_placement_intent: 'Đề xuất placement sơ bộ',
+  plan_placement_intent: 'Ad zone đề xuất ban đầu',
   plan_creative_formats: 'Lập kế hoạch format',
   prepare_creatives: 'Chuẩn bị creative',
   analyze_creatives: 'Phân tích creative',
@@ -74,7 +74,7 @@ const audienceName = item => item.fullLabel || item.label || item.name || item.c
 
 const ARTIFACT_LABELS = {
   brief: 'brief', strategy: 'chiến lược', audience: 'audience',
-  targeting: 'targeting', placement_intent: 'placement sơ bộ',
+  targeting: 'targeting', placement_intent: 'ad zone ban đầu',
   creative_format_plan: 'kế hoạch format', creative: 'creative',
   creative_verdict: 'creative verdict',
   placements: 'placements', assignments: 'phân bổ creative', forecast: 'dự báo',
@@ -107,7 +107,7 @@ const evidenceText = evidence => {
   if (evidence.type === 'forecast_inputs') return `${evidence.method || 'forecast'} · ${evidence.zone_count || 0} placement · CPM ${formatNumber(evidence.average_cpm)} ₫ · tần suất ${evidence.frequency || '—'}`
   if (evidence.type === 'creative_source') return `Creative ${evidence.source === 'ai_generate' ? 'AI tự tạo' : 'do người dùng tải lên'} · ${evidence.count || 0} file${evidence.reused ? ' · tái sử dụng' : ''}`
   if (evidence.type === 'creative_format_coverage') return `Creative phủ ${evidence.covered || 0}/${evidence.required || 0} format · còn thiếu ${(evidence.missing || []).map(item => `${item.width}×${item.height}`).join(', ') || 'không'}`
-  if (evidence.type === 'placement_intent') return `${evidence.candidate_count || 0} placement sơ bộ · ${evidence.conflict_count || 0} conflict · chưa lọc theo creative`
+  if (evidence.type === 'placement_intent') return `${evidence.candidate_count || 0} ad zone ban đầu · ${evidence.conflict_count || 0} conflict · chưa lọc theo creative`
   if (evidence.type === 'creative_format_plan') return `${evidence.format_count || 0} format: ${(evidence.format_ids || []).join(', ')} · tối đa ${evidence.max_assets || 0} asset · ${evidence.estimated_provider_calls || 0} provider call`
   if (evidence.type === 'creative_generation') return `AI tạo ${evidence.count || 0} creative: ${(evidence.format_ids || []).join(', ')}${(evidence.failed_formats || []).length ? ` · lỗi ${(evidence.failed_formats || []).join(', ')}` : ''}`
   if (evidence.type === 'creative_verdicts') return `${evidence.count || 0} creative verdict · ${evidence.revalidated ? 'đã revalidate' : 'hiện hành'}`
@@ -441,6 +441,8 @@ export default function AutopilotPanel({
   const creativeCoverage = creativePlacementCoverage(creativeFiles, assignmentResult)
   const placementResult = taskByKey.rank_placements?.result || taskByKey.rank_placements?.pending_artifact?.value || {}
   const audienceResult = taskByKey.retrieve_audience?.result || taskByKey.retrieve_audience?.pending_artifact?.value || {}
+  const audienceReviewReady = waiting?.key !== 'retrieve_audience'
+    || Boolean((audienceResult.attrs || []).length)
   const audienceCatalogCount = audienceResult.retrieval?.catalog_segments || audienceResult.retrieval?.total_segments || 0
   const forecastResult = taskByKey.forecast?.result || taskByKey.forecast?.pending_artifact?.value || {}
   const orderResult = taskByKey.verify_order?.result?.order || taskByKey.create_order?.result?.order || null
@@ -692,7 +694,7 @@ export default function AutopilotPanel({
               </div>
               {policy === 'critical_only' && (
                 <p className="mt-3 rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-2 text-[11px] leading-5 text-brand-800">
-                  Agent sẽ dừng tại: Tìm audience → Thiết lập targeting → Đề xuất placement sơ bộ → Gán creative → Duyệt launch. Creative có rủi ro sẽ luôn dừng để review.
+                  Agent sẽ dừng tại: Tìm audience → Thiết lập targeting → Ad zone đề xuất ban đầu → Gán creative → Duyệt launch. Creative có rủi ro sẽ luôn dừng để review.
                 </p>
               )}
             </div>
@@ -921,11 +923,7 @@ export default function AutopilotPanel({
               <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Audience</p>
                 <p className="mt-1 text-lg font-black text-slate-900">{audienceResult.attrs?.length || 0} segment</p>
-                <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                  {audienceCatalogCount ? `${audienceCatalogCount} catalog` : 'Catalog hiện hành'} → {audienceResult.retrieval?.applied
-                    ? `${audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || audienceResult.retrieval?.retrieval_candidates || 0} ứng viên RAG · ${audienceResult.retrieval?.reranked ? 'đã rerank' : 'selector an toàn'}`
-                    : 'legacy full-catalog · selector an toàn'}
-                </p>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">Các segment đã được người dùng hoặc Autopilot xác nhận.</p>
               </article>
               <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Placement</p>
@@ -951,11 +949,6 @@ export default function AutopilotPanel({
                     <summary className="cursor-pointer text-xs font-black text-slate-900">
                       Audience đã chọn · {audienceResult.attrs.length} segment
                     </summary>
-                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                      {audienceCatalogCount ? `Catalog có ${audienceCatalogCount} segment.` : 'Run cũ chưa lưu tổng số catalog.'} {audienceResult.retrieval?.applied
-                        ? `RAG ${audienceResult.retrieval?.mode || 'hybrid'} truy xuất ${audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || 0} ứng viên trước khi ${audienceResult.retrieval?.reranked ? 'nano rerank và ' : ''}selector chọn kết quả cuối.`
-                        : 'Run này dùng selector trên toàn catalog, không phải RAG.'}
-                    </p>
                     <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                       {audienceResult.attrs.map((item, index) => (
                         <li key={item._id || item.code || index} className="rounded-lg bg-slate-50 px-2.5 py-2">
@@ -1038,6 +1031,8 @@ export default function AutopilotPanel({
               label={TASK_LABELS[waiting.key] || waiting.key}
               brief={displayBrief}
               formatPlan={formatPlan}
+              creativeFiles={creativeFiles}
+              placementValue={placementResult}
               selectedPlacementIds={placementSelection}
               onPlacementSelectionChange={waiting.key === 'plan_placement_intent' ? setPlacementSelection : undefined}
             />
@@ -1095,7 +1090,7 @@ export default function AutopilotPanel({
                   data-demo="autopilot-review-approve"
                   data-autopilot-task={waiting.key}
                   onClick={() => review(waiting, true)}
-                  disabled={loading || (retryAction && !retryReady) || (waiting.key === 'plan_placement_intent' && !placementSelection.length)}
+                  disabled={loading || (retryAction && !retryReady) || !audienceReviewReady || (waiting.key === 'plan_placement_intent' && !placementSelection.length)}
                   className={`min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 sm:min-w-0 sm:flex-none ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}
                 >
                   {retryAction ? 'Kiểm tra lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}

@@ -14,7 +14,8 @@ _MAX_MESSAGE_LENGTH = 1950
 _TASK_TITLES = {
     "retrieve_audience": "Audience đề xuất",
     "derive_targeting": "Targeting đề xuất",
-    "plan_placement_intent": "Placement shortlist",
+    "plan_placement_intent": "Ad zone đề xuất ban đầu",
+    "analyze_creatives": "Kiểm tra creative",
     "assign_creatives": "Phân bổ creative",
     "launch_approval": "Xác nhận launch",
 }
@@ -129,8 +130,9 @@ def _compose(header: str, lines: list[str], footer: str) -> str:
 
 def _audience_lines(value: dict) -> list[str]:
     attrs = value.get("attrs") or []
+    adjacent = value.get("adjacent_attrs") or []
     lines = [
-        f"Danh sách đang chờ duyệt: {len(attrs)} segment"
+        f"Đề xuất trực tiếp đang chờ duyệt: {len(attrs)} segment"
         + (f" · quy mô cộng gộp khoảng {_compact_number(value.get('size'))}" if value.get("size") else "")
     ]
     for index, item in enumerate(attrs, 1):
@@ -144,7 +146,27 @@ def _audience_lines(value: dict) -> list[str]:
         if reason:
             line += f"\n   Lý do: {reason}"
         lines.append(line)
-    if not attrs:
+    if adjacent:
+        lines.append(
+            f"Audience liên quan để mở rộng (chưa tự chọn): {len(adjacent)} segment"
+        )
+        for index, item in enumerate(adjacent, len(attrs) + 1):
+            if not isinstance(item, dict):
+                continue
+            size = _range(item.get("sizeMin"), item.get("sizeMax"))
+            line = f"{index}. {_name(item, f'Segment {index}')}"
+            if size:
+                line += f" · {size}"
+            reason = _plain(item.get("reason") or item.get("description"), 140)
+            if reason:
+                line += f"\n   Liên quan/giới hạn: {reason}"
+            lines.append(line)
+    if not attrs and adjacent:
+        lines.append(
+            "Catalog chưa có segment khớp trực tiếp, nên Agent chưa tự chọn mục "
+            "nào. Chỉ chọn nhóm mở rộng khi bạn thấy phù hợp."
+        )
+    elif not attrs:
         lines.append("Không tìm thấy segment hợp lệ trong artifact đang chờ duyệt.")
     return lines
 
@@ -165,31 +187,45 @@ def _targeting_lines(value: dict) -> list[str]:
 
 def _placement_lines(value: dict) -> list[str]:
     zones = value.get("candidates") or value.get("zones") or []
-    lines = [f"Shortlist đang chờ duyệt: {len(zones)} placement"]
+    lines = [
+        f"Danh sách ad zone ứng viên đang chờ duyệt: {len(zones)} zone",
+        "Đây là danh sách ban đầu trước khi kiểm tra creative; bước sau sẽ lọc "
+        "lại độ tương thích trước khi phân bổ creative.",
+        "Thứ tự ưu tiên dựa trên độ khớp brief/audience, strategy, CPM/reach "
+        "và inventory còn trống.",
+    ]
     for index, zone in enumerate(zones, 1):
         if not isinstance(zone, dict):
             continue
-        label = _name(zone, f"Placement {index}")
-        identity = _plain(zone.get("id"), 50)
-        context = _plain(
-            zone.get("channel")
-            or zone.get("siteId")
-            or zone.get("format")
-            or zone.get("size"),
-            45,
-        )
-        details = [item for item in (identity, context) if item]
+        label = _plain(_name(zone, f"Ad zone {index}"), 44)
         metric = []
         if zone.get("cpm") is not None:
             metric.append(f"CPM {_integer(zone.get('cpm'))}đ")
         if zone.get("reach") is not None:
             metric.append(f"reach {_compact_number(zone.get('reach'))}")
-        suffix = " · ".join([*details, *metric])
-        lines.append(f"{index}. {label}" + (f" · {suffix}" if suffix else ""))
+        line = f"{index}. {label}"
+        if metric:
+            line += " · " + " · ".join(metric)
+        relevance = zone.get("topic_relevance") or {}
+        matched = (
+            relevance.get("matched_keywords")
+            or relevance.get("matched_segments")
+            or relevance.get("matched_subcategories")
+            or relevance.get("matched_topics")
+            or []
+        )
+        reason = ", ".join(_plain(item, 24) for item in matched[:2])
+        if reason:
+            line += f" · khớp: {reason}"
+        lines.append(line)
     if zones:
-        lines.append("CPM và reach là số liệu catalog/ước tính, không phải delivery thực tế.")
+        lines.append(
+            "Gợi ý: CPM thấp giúp ngân sách mua được nhiều lượt hiển thị hơn; "
+            "reach cao giúp phủ rộng hơn. Cả hai là dữ liệu catalog/ước tính, "
+            "không phải delivery thực tế."
+        )
     else:
-        lines.append("Không có placement khả dụng trong artifact đang chờ duyệt.")
+        lines.append("Không có ad zone khả dụng trong artifact đang chờ duyệt.")
     return lines
 
 
@@ -206,15 +242,70 @@ def _assignment_lines(value: dict, workspace: dict) -> list[str]:
         for item in zones
         if isinstance(item, dict) and item.get("id")
     }
-    lines = [f"Phân bổ đang chờ duyệt: {len(assignments)} placement"]
+    verdict_value = _artifact(workspace, "creative_verdict") or {}
+    verdicts = verdict_value.get("files") or []
+    unique_indexes = list(dict.fromkeys(
+        file_index for file_index in assignments.values()
+        if isinstance(file_index, int)
+    ))
+    labels = {
+        file_index: f"Creative {chr(65 + position)}"
+        for position, file_index in enumerate(unique_indexes)
+    }
+    lines = [f"Phân bổ đang chờ duyệt: {len(assignments)} ad zone"]
     for index, (zone_id, file_index) in enumerate(assignments.items(), 1):
         zone_label = zone_names.get(str(zone_id), _plain(zone_id, 70))
         try:
             file = files[int(file_index)]
         except (IndexError, TypeError, ValueError):
             file = {}
-        creative_name = _name(file, f"Creative #{file_index}") if isinstance(file, dict) else f"Creative #{file_index}"
-        lines.append(f"{index}. {zone_label} → {creative_name}")
+        creative_label = labels.get(file_index, f"Creative #{file_index}")
+        size = (
+            f"{file.get('width')}×{file.get('height')}"
+            if isinstance(file, dict) and file.get("width") and file.get("height")
+            else ""
+        )
+        lines.append(
+            f"{index}. {zone_label} → {creative_label}"
+            + (f" ({size})" if size else "")
+        )
+    if unique_indexes:
+        lines.append("Creative dùng trong phân bổ:")
+    status_labels = {
+        "auto_approved": "đạt kiểm tra",
+        "approved_override": "đã duyệt thủ công",
+        "needs_review": "cần duyệt thủ công",
+    }
+    for file_index in unique_indexes:
+        try:
+            file = files[int(file_index)]
+        except (IndexError, TypeError, ValueError):
+            continue
+        verdict = next(
+            (
+                item for item in verdicts
+                if item.get("analysis_id") == file.get("analysisId")
+                or (item.get("url") and item.get("url") == file.get("url"))
+                or (item.get("name") and item.get("name") == file.get("name"))
+            ),
+            {},
+        )
+        status = (
+            verdict.get("effective_status")
+            or verdict.get("status")
+            or file.get("analysisStatus")
+            or "chưa có verdict"
+        )
+        lines.append(
+            f"• {labels[file_index]}: "
+            f"{file.get('formatId') or file.get('name') or 'asset'} · "
+            f"{status_labels.get(status, status)}"
+        )
+        reasons = verdict.get("review_reasons") or file.get("reviewReasons") or []
+        if reasons and status not in {"auto_approved", "approved_override"}:
+            lines.append("  Cảnh báo: " + "; ".join(
+                _plain(reason, 120) for reason in reasons[:2]
+            ))
     warnings = value.get("warnings") or []
     incompatible = value.get("incompatible_placements") or []
     if warnings:
@@ -223,6 +314,59 @@ def _assignment_lines(value: dict, workspace: dict) -> list[str]:
         lines.append("⚠ Chưa tương thích: " + ", ".join(_plain(item, 50) for item in incompatible))
     if not assignments:
         lines.append("Chưa có mapping placement → creative hoàn chỉnh.")
+    return lines
+
+
+def assignment_media_parts(value: dict, workspace: dict) -> list[dict]:
+    """Return each assigned image once, in the same A/B order as the summary."""
+    assignments = value.get("assignments", value)
+    assignments = assignments if isinstance(assignments, dict) else {}
+    creative = _artifact(workspace, "creative") or {}
+    files = creative.get("files") or []
+    parts = []
+    seen = set()
+    for file_index in assignments.values():
+        try:
+            file = files[int(file_index)]
+        except (IndexError, TypeError, ValueError):
+            continue
+        url = str(file.get("url") or "").strip()
+        if not url.startswith("https://") or url in seen:
+            continue
+        seen.add(url)
+        parts.append({"kind": "image", "image_url": url})
+    return parts
+
+
+def _creative_analysis_lines(value: dict, workspace: dict) -> list[str]:
+    creative = _artifact(workspace, "creative") or {}
+    files = creative.get("files") or []
+    verdict_value = _artifact(workspace, "creative_verdict") or {}
+    verdicts = verdict_value.get("files") or []
+    if value.get("reason") == "analysis_in_progress":
+        return [
+            f"Agent đang kiểm tra {len(files)} creative.",
+            "Bạn không cần xác nhận khi phân tích chưa xong. Agent sẽ gửi kết quả "
+            "hoặc cảnh báo cần duyệt ngay khi hoàn tất.",
+        ]
+    lines = [f"Kết quả kiểm tra creative: {len(files)} file"]
+    for index, file in enumerate(files, 1):
+        verdict = next(
+            (
+                item for item in verdicts
+                if item.get("analysis_id") == file.get("analysisId")
+                or (item.get("url") and item.get("url") == file.get("url"))
+                or (item.get("name") and item.get("name") == file.get("name"))
+            ),
+            {},
+        )
+        status = verdict.get("effective_status") or verdict.get("status") or "chưa có kết quả"
+        lines.append(f"{index}. Creative {index} · {status}")
+        reasons = verdict.get("review_reasons") or []
+        if reasons:
+            lines.append("   Cảnh báo: " + "; ".join(
+                _plain(reason, 120) for reason in reasons[:2]
+            ))
     return lines
 
 
@@ -302,18 +446,36 @@ def render_openai_review_message(
     if key == "retrieve_audience":
         lines = _audience_lines(value)
         action = (
-            "Trả lời “Xác nhận” để duyệt toàn bộ danh sách, “Gợi ý lại audience” "
-            "để Agent truy xuất một danh sách mới, “Hủy” để dừng, hoặc hỏi thêm về segment."
+            "Trả lời “Xác nhận” để duyệt các đề xuất trực tiếp đang được chọn. "
+            "Nhắn “Chọn audience 1,2,3” để thay danh sách bằng đúng các số đó "
+            "(kể cả mục liên quan để mở rộng), rồi gửi “Xác nhận” riêng. Nhắn "
+            "“Gợi ý lại audience” để Agent truy xuất danh sách mới, hoặc “Hủy” để dừng."
         )
     elif key == "derive_targeting":
         lines = _targeting_lines(value)
         action = "Trả lời “Xác nhận” để duyệt targeting, “Hủy” để dừng, hoặc hỏi thêm trước khi quyết định."
     elif key == "plan_placement_intent":
         lines = _placement_lines(value)
-        action = "Trả lời “Xác nhận” để duyệt shortlist, “Hủy” để dừng, hoặc mở workspace để thay đổi placement."
+        action = (
+            "Bạn có thể nhắn “Chọn zone 1,2,3” để chỉ giữ các zone đó; "
+            "sau khi chỉnh, nhắn “Xác nhận” riêng để duyệt. Nhắn “Hủy” để dừng "
+            "hoặc mở workspace để thay đổi ad zone."
+        )
+    elif key == "analyze_creatives":
+        lines = _creative_analysis_lines(value, workspace)
+        action = (
+            "Nhắn “Xem creative” để nhận ảnh. Nếu một creative cần duyệt thủ công, "
+            "hãy thay/tạo lại hoặc nhắn “Chấp nhận creative 1 vì …” với lý do cụ thể. "
+            "Nhắn “Hủy” để dừng."
+        )
     elif key == "assign_creatives":
         lines = _assignment_lines(value, workspace)
-        action = "Trả lời “Xác nhận” để duyệt mapping, “Hủy” để dừng, hoặc mở workspace để đối chiếu creative."
+        action = (
+            "Các ảnh được gửi ngay sau tin nhắn này. Trả lời “Xác nhận” để duyệt "
+            "phân bổ, “Xem creative” để nhận lại ảnh, “Hủy” để dừng, hoặc mở "
+            "workspace để chỉnh creative. Creative có cảnh báo phải được thay thế "
+            "hoặc duyệt thủ công kèm lý do trước khi xác nhận."
+        )
     elif key == "launch_approval":
         lines = _launch_lines(value, workspace)
         action = "Trả lời “Xác nhận” để launch hoặc “Hủy” để dừng."

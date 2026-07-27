@@ -432,10 +432,15 @@ async def handle_openai_dmp_recommend(
     if config.USE_RAG_AUDIENCE:
         try:
             from rag.recommend import recommend_rag
+            from openai_campaign.audience_search import plan_audience_search
+
+            async def _plan_queries(value: dict) -> dict:
+                return await plan_audience_search(session_id, value)
 
             result = await recommend_rag(
                 session_id,
                 brief,
+                query_rewriter=_plan_queries,
                 provider="openai",
                 # The legacy reranker belongs to the GreenNode boundary.
                 # The optional nano mode is an explicitly shared fixed
@@ -447,12 +452,14 @@ async def handle_openai_dmp_recommend(
                     else "off"
                 ),
                 use_focused_query=True,
-                enable_query_rewrite=False,
+                enable_query_rewrite=True,
+                include_raw_query=False,
                 select_from_rerank_scores=True,
                 min_relevance_score=config.OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE,
                 rerank_candidate_limit=(
                     config.OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT
                 ),
+                detailed_retrieval=True,
             )
             result.setdefault("provenance", {
                 "provider": "openai", "model": config.OPENAI_CAMPAIGN_MODEL,
@@ -566,12 +573,23 @@ async def _grounded_audience_entry(
     recommendation = await handle_openai_dmp_recommend(
         session_id, brief_override=brief, client=client,
     )
-    enriched = _dedupe_segments([
+    recommended = _dedupe_segments([
         _normalize_dmp_attr(item)
         for item in recommendation.get("recommendations") or []
         if isinstance(item, dict)
     ])
-    if not enriched:
+    adjacent = _dedupe_segments([
+        _normalize_dmp_attr(item)
+        for item in recommendation.get("adjacent_recommendations") or []
+        if isinstance(item, dict)
+    ])
+    recommended_ids = {_segment_identity(item) for item in recommended}
+    adjacent = [
+        item for item in adjacent
+        if _segment_identity(item) not in recommended_ids
+    ]
+    all_options = [*recommended, *adjacent]
+    if not all_options:
         await log_event(session_id, "error", {
             "handler": "openai_audience_entry", "event": "grounded_retrieval_empty",
             "provider": "openai", "model": config.OPENAI_CAMPAIGN_MODEL,
@@ -593,7 +611,7 @@ async def _grounded_audience_entry(
     options = await get_targeting_options()
     try:
         targeting, targeting_reasoning, selected_model = await _recommend_targeting(
-            session_id, brief, options, enriched, client=client,
+            session_id, brief, options, recommended or adjacent, client=client,
         )
     except Exception as exc:
         await log_event(session_id, "error", {
@@ -617,15 +635,26 @@ async def _grounded_audience_entry(
             "type": "table", "title": "🎯 Targeting Parameters gợi ý",
             "columns": ["Nhóm", "Giá trị đề xuất", "Lý do"], "rows": target_rows,
         })
-    blocks.append({
-        "type": "table", "title": "👥 DMP Audience Segments gợi ý",
-        "columns": ["Segment", "Loại", "Size ước tính", "Lý do phù hợp"],
-        "rows": [[
-            item.get("fullLabel", "?"), item.get("type", ""),
-            item.get("sizeRaw") or "—", item.get("reason", ""),
-        ] for item in enriched],
-    })
-    selection = audience_selection(enriched)
+    if recommended:
+        blocks.append({
+            "type": "table", "title": "👥 Audience đề xuất trực tiếp",
+            "columns": ["Segment", "Loại", "Size ước tính", "Lý do phù hợp"],
+            "rows": [[
+                item.get("fullLabel", "?"), item.get("type", ""),
+                item.get("sizeRaw") or "—", item.get("reason", ""),
+            ] for item in recommended],
+        })
+    if adjacent:
+        blocks.append({
+            "type": "table",
+            "title": "↗ Audience liên quan để mở rộng · chưa tự chọn",
+            "columns": ["Segment", "Loại", "Size ước tính", "Liên quan và giới hạn"],
+            "rows": [[
+                item.get("fullLabel", "?"), item.get("type", ""),
+                item.get("sizeRaw") or "—", item.get("reason", ""),
+            ] for item in adjacent],
+        })
+    selection = audience_selection(recommended)
     audience_size = selection["size"]
     size_known = selection["sizeKnown"]
     blocks.append({
@@ -633,17 +662,28 @@ async def _grounded_audience_entry(
         "changes": {
             "field": "segment",
             "value": {
-                **selection, "targeting": targeting,
+                **selection,
+                "targeting": targeting,
+                "recommendations": all_options,
+                "adjacent_attrs": adjacent,
             },
             "reason": (
-                f"Agent gợi ý {len(enriched)} segment dựa trên catalog "
-                f"phù hợp với brief {brief.get('brand', '')}"
+                f"Agent tìm thấy {len(recommended)} segment khớp trực tiếp và "
+                f"{len(adjacent)} segment liên quan để mở rộng cho brief "
+                f"{brief.get('brand', '')}"
             ),
         },
         "is_locked": False, "warning": "",
         "instruction": (
-            "Anh/chị bấm **Đồng ý** để áp dụng tất cả segments, hoặc chỉnh trực tiếp "
-            "ở panel phải trước khi xác nhận. Nếu danh sách chưa phù hợp, chọn "
+            (
+                "Các segment khớp trực tiếp đã được chọn sẵn; nhóm liên quan để "
+                "mở rộng chưa được tự chọn. "
+                if recommended else
+                "Catalog chưa có segment khớp trực tiếp nên Agent chưa tự chọn "
+                "segment nào; hãy chọn ít nhất một mục liên quan nếu phù hợp. "
+            )
+            + "Anh/chị có thể chỉnh trực tiếp ở panel phải trước khi xác nhận. "
+            "Nếu danh sách chưa phù hợp, chọn "
             "**Gợi ý lại** hoặc nhắn “Gợi ý lại audience”."
         ),
     })
@@ -651,17 +691,20 @@ async def _grounded_audience_entry(
     await log_event(session_id, "audience_entry", {
         "brand": brief.get("brand"), "pipeline": "openai_grounded_retrieval",
         "provider": "openai", "model": config.OPENAI_CAMPAIGN_MODEL,
-        "dmp_count": len(enriched), "audience_size": audience_size,
+        "dmp_count": len(recommended), "adjacent_count": len(adjacent),
+        "audience_size": audience_size,
         "retrieval_candidates": diagnostics.get("candidates"),
     })
     reply = (
         f"Dựa trên brief **{brief.get('brand')}** "
-        f"({brief.get('objective', 'awareness')}), em gợi ý audience như sau:"
+        f"({brief.get('objective', 'awareness')}), em tìm thấy "
+        f"**{len(recommended)} segment khớp trực tiếp** và "
+        f"**{len(adjacent)} segment liên quan để mở rộng**."
     )
     # Preserve exact names and recommendation reasons for later explanation
     # turns. The old count-only history made this evidence disappear at once.
     history_rows = []
-    for item in enriched[:12]:
+    for item in all_options[:12]:
         label = str(
             item.get("fullLabel") or item.get("name")
             or item.get("segmentId") or item.get("_id") or "?"
@@ -669,14 +712,23 @@ async def _grounded_audience_entry(
         identity = str(item.get("segmentId") or item.get("_id") or "").strip()
         reason = str(item.get("reason") or "").strip()
         suffix = f" [{identity}]" if identity else ""
+        tier = (
+            "liên quan mở rộng"
+            if item.get("tier") == "adjacent"
+            else "đề xuất trực tiếp"
+        )
         history_rows.append(
-            f"- {label}{suffix}" + (f": {reason[:500]}" if reason else "")
+            f"- [{tier}] {label}{suffix}"
+            + (f": {reason[:500]}" if reason else "")
         )
     history_snapshot = "\n".join(history_rows)
     await add_message(
         session_id, "assistant",
         reply
-        + f"\n\n(Đã gợi ý {len(enriched)} DMP segments duy nhất từ catalog và targeting params.)"
+        + (
+            f"\n\n(Đã tìm thấy {len(recommended)} đề xuất trực tiếp và "
+            f"{len(adjacent)} lựa chọn liên quan từ catalog.)"
+        )
         + (f"\n\nRecommendation snapshot:\n{history_snapshot}" if history_snapshot else ""),
     )
     return {
@@ -692,10 +744,15 @@ async def _grounded_audience_entry(
                 "reranked": bool(diagnostics.get("reranked")),
                 "rerank_mode": diagnostics.get("rerank_mode", "off"),
                 "rerank_model": diagnostics.get("rerank_model"),
+                "tier_counts": diagnostics.get("tier_counts") or {},
             },
         },
         "suggestions": [
-            {"label": "✅ Áp dụng tất cả", "action": "send", "text": "đồng ý, áp dụng tất cả segments này"},
+            *([{
+                "label": "✅ Áp dụng đề xuất trực tiếp",
+                "action": "send",
+                "text": "đồng ý, áp dụng các segment được đề xuất trực tiếp",
+            }] if recommended else []),
             {"label": "🔄 Gợi ý lại", "action": "send", "text": "Gợi ý lại audience phù hợp với brief này"},
             {"label": "🗑️ Bỏ bớt segment", "action": "prefill", "text": "Bỏ segment "},
             {"label": "🔍 Tìm thêm segments", "action": "prefill", "text": "Tìm thêm segments liên quan đến "},

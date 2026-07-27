@@ -672,10 +672,17 @@ export default function App() {
           if (data && !data.skip) {
             // Extract workspace_proposal block
             const proposalBlock = (data.blocks || []).find(b => b.type === 'workspace_proposal' && b.changes?.field === 'segment')
-            if (proposalBlock?.changes?.value?.attrs?.length) {
+            const proposalValue = proposalBlock?.changes?.value
+            const recommendationOptions = proposalValue?.recommendations?.length
+              ? proposalValue.recommendations
+              : (proposalValue?.attrs || [])
+            if (proposalValue && recommendationOptions.length) {
               // Store for AudienceStep recoFromChat (shows in AI Gợi ý section)
-              setAudienceRecommendation(proposalBlock.changes.value.attrs)
-              log.step('audience-entry — stored recommendation', { count: proposalBlock.changes.value.attrs.length })
+              setAudienceRecommendation(recommendationOptions)
+              log.step('audience-entry — stored recommendation', {
+                recommended: proposalValue.attrs?.length || 0,
+                adjacent: proposalValue.adjacent_attrs?.length || 0,
+              })
               // ── Auto-apply: pre-populate segment form (attrs + targeting + size) ──
               // Same as brief: audience is populated immediately so user can edit via
               // workspace panel or chat (bidirectional). Injected messages bypass
@@ -1661,7 +1668,10 @@ export default function App() {
   const openAutopilotAudienceEditor = useCallback((audience, taskKey = 'retrieve_audience') => {
     if (audience?.attrs) {
       const normalizedAudience = normalizeAudienceSelection(audience)
-      setAudienceRecommendation(normalizedAudience.attrs)
+      const recommendationOptions = audience.recommendations?.length
+        ? audience.recommendations
+        : [...normalizedAudience.attrs, ...(audience.adjacent_attrs || [])]
+      setAudienceRecommendation(recommendationOptions)
       setFormStateWithEvents(prev => ({
         ...prev,
         segment: {

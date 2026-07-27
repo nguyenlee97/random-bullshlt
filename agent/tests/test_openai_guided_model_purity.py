@@ -247,8 +247,9 @@ async def test_openai_rag_uses_one_scored_specialist_without_selector(monkeypatc
     assert captured["provider"] == "openai"
     assert captured["rerank_mode"] == "openai_nano"
     assert captured["use_focused_query"] is True
-    assert captured["enable_query_rewrite"] is False
+    assert captured["enable_query_rewrite"] is True
+    assert captured["include_raw_query"] is False
     assert captured["select_from_rerank_scores"] is True
     assert "selector" not in captured
-    assert "query_rewriter" not in captured
+    assert callable(captured["query_rewriter"])
     assert result["rag"]["queries"] == ["Mixifood"]
