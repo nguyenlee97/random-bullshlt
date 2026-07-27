@@ -917,20 +917,26 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
             await append_chat_message(chat_session["chat_session_id"], "assistant", pending_text)
             return [pending_text]
 
-    # Existing Autopilot review remains a server-side confirmation boundary.
-    # It is only entered for an explicit confirmation/rejection phrase.
+    # OpenAI Autopilot review questions need the exact pending artifact, not the
+    # channel's general progress tool. The review router is read-only unless it
+    # detects an explicit confirmation/rejection phrase.
     active_session = thread.get("active_campaign_session_id")
-    if active_session and _fold(message) in _CONFIRM.union(_REJECT):
+    if active_session:
         try:
             from autopilot.service import get_latest_run
             run = await get_latest_run(active_session)
             if run and run.get("status") == "waiting_review":
-                from autopilot.chat import route_autopilot_chat
-                response = await route_autopilot_chat(message, active_session, 0)
-                if response is not None:
-                    await add_message(thread["session_id"], "assistant", response.text)
-                    await append_chat_message(chat_session["chat_session_id"], "assistant", response.text)
-                    return [response.text]
+                from campaign_models import OPENAI_GPT_5_4_MINI
+
+                is_openai_run = run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+                is_explicit_decision = _fold(message) in _CONFIRM.union(_REJECT)
+                if is_openai_run or is_explicit_decision:
+                    from autopilot.chat import route_autopilot_chat
+                    response = await route_autopilot_chat(message, active_session, 0)
+                    if response is not None:
+                        await add_message(thread["session_id"], "assistant", response.text)
+                        await append_chat_message(chat_session["chat_session_id"], "assistant", response.text)
+                        return [response.text]
         except Exception:
             pass
 

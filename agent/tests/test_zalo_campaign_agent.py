@@ -1,4 +1,5 @@
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -400,6 +401,51 @@ def test_progress_messages_are_milestone_scoped_and_launch_is_explicit():
     assert "XÁC NHẬN LAUNCH" in _progress_message(run, {
         "type": "task_waiting_review", "payload": {"task_id": "task-launch"},
     })
+
+
+@pytest.mark.asyncio
+async def test_openai_zalo_review_question_uses_exact_checkpoint_context(monkeypatch):
+    import autopilot.chat as autopilot_chat
+    import autopilot.service as autopilot_service
+    import zalo_campaign_agent as agent
+    from campaign_models import OPENAI_GPT_5_4_MINI
+    from config import config
+
+    thread = await agent.get_or_create_thread("oa-user-openai-review-question")
+    await agent._update_thread(thread, {
+        "active_campaign_session_id": "session-openai-review",
+    })
+    monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
+    monkeypatch.setattr(autopilot_service, "get_latest_run", AsyncMock(return_value={
+        "run_id": "run-openai-review",
+        "status": "waiting_review",
+        "conversation_model": OPENAI_GPT_5_4_MINI,
+        "tasks": [{
+            "task_id": "run-openai-review:retrieve_audience",
+            "key": "retrieve_audience",
+            "status": "waiting_review",
+        }],
+    }))
+    review = AsyncMock(return_value=SimpleNamespace(
+        text="Segment Tea phù hợp trực tiếp với brief; checkpoint vẫn đang chờ duyệt.",
+    ))
+    monkeypatch.setattr(autopilot_chat, "route_autopilot_chat", review)
+    tool_agent = AsyncMock(side_effect=AssertionError("generic Zalo tool loop was called"))
+    monkeypatch.setattr("zalo_openai.run_zalo_tool_turn", tool_agent)
+
+    response = await agent.handle_channel_event({
+        "event_name": "user_send_text",
+        "external_uid": "oa-user-openai-review-question",
+        "text": "Tại sao agent đề xuất segment Tea?",
+    })
+
+    assert "Segment Tea" in response[0]
+    review.assert_awaited_once_with(
+        "Tại sao agent đề xuất segment Tea?",
+        "session-openai-review",
+        0,
+    )
+    tool_agent.assert_not_awaited()
 
 
 @pytest.mark.asyncio
