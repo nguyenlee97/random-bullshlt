@@ -436,12 +436,6 @@ async def handle_openai_dmp_recommend(
             result = await recommend_rag(
                 session_id,
                 brief,
-                selector=lambda prompt: _select_dmp_candidates(
-                    session_id, prompt, client=client,
-                ),
-                query_rewriter=lambda value: _rewrite_rag_queries(
-                    session_id, value, client=client,
-                ),
                 provider="openai",
                 # The legacy reranker belongs to the GreenNode boundary.
                 # The optional nano mode is an explicitly shared fixed
@@ -451,6 +445,13 @@ async def handle_openai_dmp_recommend(
                     "openai_nano"
                     if config.AUDIENCE_RERANK_MODE == "openai_nano"
                     else "off"
+                ),
+                use_focused_query=True,
+                enable_query_rewrite=False,
+                select_from_rerank_scores=True,
+                min_relevance_score=config.OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE,
+                rerank_candidate_limit=(
+                    config.OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT
                 ),
             )
             result.setdefault("provenance", {
@@ -466,6 +467,15 @@ async def handle_openai_dmp_recommend(
                 "rag_fallback": str(exc)[:150],
                 "provider": "openai", "model": config.OPENAI_CAMPAIGN_MODEL,
             })
+            return {
+                "recommendations": [],
+                "total_segments": 0,
+                "note": "openai_rag_unavailable",
+                "provenance": {
+                    "provider": "openai",
+                    "model": config.OPENAI_CAMPAIGN_MODEL,
+                },
+            }
 
     all_segments = await get_all_segments(limit=400)
     labels = [
@@ -633,7 +643,8 @@ async def _grounded_audience_entry(
         "is_locked": False, "warning": "",
         "instruction": (
             "Anh/chị bấm **Đồng ý** để áp dụng tất cả segments, hoặc chỉnh trực tiếp "
-            "ở panel phải trước khi xác nhận."
+            "ở panel phải trước khi xác nhận. Nếu danh sách chưa phù hợp, chọn "
+            "**Gợi ý lại** hoặc nhắn “Gợi ý lại audience”."
         ),
     })
     diagnostics = recommendation.get("rag") or {}
@@ -685,6 +696,7 @@ async def _grounded_audience_entry(
         },
         "suggestions": [
             {"label": "✅ Áp dụng tất cả", "action": "send", "text": "đồng ý, áp dụng tất cả segments này"},
+            {"label": "🔄 Gợi ý lại", "action": "send", "text": "Gợi ý lại audience phù hợp với brief này"},
             {"label": "🗑️ Bỏ bớt segment", "action": "prefill", "text": "Bỏ segment "},
             {"label": "🔍 Tìm thêm segments", "action": "prefill", "text": "Tìm thêm segments liên quan đến "},
         ],
@@ -696,6 +708,7 @@ async def handle_openai_audience_entry(
     brief_hint: dict | None = None,
     *,
     client: Any | None = None,
+    force: bool = False,
 ) -> dict:
     session = await get_or_create_session(session_id)
     brief = session.get("form_state", {}).get("brief", {})
@@ -718,7 +731,7 @@ async def handle_openai_audience_entry(
             await update_form_state(session_id, "brief", brief)
     if not brief.get("brand"):
         return {"skip": True, "reason": "brief_not_set"}
-    if session.get("form_state", {}).get("segment", {}).get("attrs"):
+    if not force and session.get("form_state", {}).get("segment", {}).get("attrs"):
         return {"skip": True, "reason": "audience_already_set"}
     await log_event(session_id, "audience_entry", {
         "brief_source": source, "brand": brief.get("brand"),

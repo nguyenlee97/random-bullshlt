@@ -64,6 +64,14 @@ test('OpenAI audience keeps every selected segment visible above the full catalo
   assert.match(audience, /Bỏ chọn \$\{attr\.name\}/)
 })
 
+test('Audience review exposes a real rerun action in Copilot and Autopilot', () => {
+  assert.match(api, /async rerunAutopilotAudience\(runId, taskId, reason = ''\)/)
+  assert.match(api, /tasks\/\$\{encodeURIComponent\(taskId\)\}\/rerun/)
+  assert.match(autopilot, /waiting\.key === 'retrieve_audience'/)
+  assert.match(autopilot, />\s*Gợi ý lại audience\s*</)
+  assert.match(app, /nhắn “Gợi ý lại audience”/)
+})
+
 test('Copilot does not mount the hidden Autopilot poller', () => {
   assert.match(app, /experienceMode === 'autopilot' && \(\s*<AutopilotPanel/)
   assert.match(autopilot, /setInterval\(loadPrerequisites, 3000\)/)

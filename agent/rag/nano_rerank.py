@@ -17,12 +17,12 @@ from metrics import RAG_RERANK
 
 
 class AudienceRerankItem(BaseModel):
-    candidate_index: int = Field(ge=0, le=29)
+    candidate_index: int = Field(ge=0, le=49)
     relevance_score: float = Field(ge=0, le=1)
 
 
 class AudienceRerankResult(BaseModel):
-    items: list[AudienceRerankItem] = Field(min_length=1, max_length=30)
+    items: list[AudienceRerankItem] = Field(min_length=1, max_length=50)
 
 
 _client: AsyncOpenAI | None = None
@@ -69,7 +69,7 @@ async def rerank_candidates(
     """
     limit = min(
         candidate_limit or config.AUDIENCE_NANO_RERANK_CANDIDATE_LIMIT,
-        30,
+        50,
         len(candidates),
     )
     bounded = candidates[:limit]

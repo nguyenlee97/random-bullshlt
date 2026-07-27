@@ -626,7 +626,7 @@ export default function App() {
     if (autopilotSummary.status === 'waiting_review') {
       return {
         mode: 'review',
-        message: autopilotSummary.waitingMessage || 'Agent đang chờ quyết định. Chỉ xác nhận hoặc từ chối; nếu muốn sửa, hãy từ chối rồi chỉnh dữ liệu.',
+        message: autopilotSummary.waitingMessage || 'Agent đang chờ quyết định. Với Audience, bạn có thể nhắn “Gợi ý lại audience”; các checkpoint khác vẫn hỗ trợ xác nhận, hỏi thêm hoặc từ chối.',
       }
     }
     if (['completed', 'failed', 'cancelled'].includes(autopilotSummary.status)) {

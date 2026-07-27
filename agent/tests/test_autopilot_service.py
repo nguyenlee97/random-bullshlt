@@ -406,6 +406,43 @@ async def test_operator_can_select_pending_strategy_before_review():
 
 
 @pytest.mark.asyncio
+async def test_operator_can_rerun_unapproved_audience_review():
+    await _seed("audience-rerun")
+    run = await service.create_run(
+        "audience-rerun",
+        approval_policy="review_every_stage",
+        idempotency_key="audience-rerun",
+    )
+    task_id = f"{run['run_id']}:retrieve_audience"
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result={"attrs": [{"segmentId": "INT020", "fullLabel": "Books"}]},
+        evidence=[{"type": "audience_pipeline"}],
+        pending_artifact={
+            "session_id": "audience-rerun",
+            "artifact": "audience",
+            "value": {"attrs": [{"segmentId": "INT020", "fullLabel": "Books"}]},
+            "input_revisions": {},
+            "base_artifact_revision": 0,
+        },
+    )
+
+    rerun = await service.rerun_review_task(
+        run["run_id"],
+        task_id,
+        actor="test",
+        reason="recommend again",
+    )
+
+    task = next(item for item in rerun["tasks"] if item["task_id"] == task_id)
+    assert task["status"] == "queued"
+    assert task["result"] is None
+    assert task["evidence"] == []
+    assert task["pending_artifact"] is None
+    assert (await get_workspace("audience-rerun"))["artifacts"]["audience"]["status"] == "missing"
+
+
+@pytest.mark.asyncio
 async def test_reach_first_placement_intent_prioritizes_reach(monkeypatch):
     async def fake_rank_zones(**_kwargs):
         return [

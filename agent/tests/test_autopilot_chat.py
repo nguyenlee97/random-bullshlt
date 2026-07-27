@@ -11,6 +11,8 @@ def test_review_intent_requires_explicit_language_and_rejects_negation_first():
         "Tôi đang hỏi để review, chưa phê duyệt creative."
     ) == "question"
     assert review_intent("Có nên phê duyệt bước này không?") == "question"
+    assert review_intent("Gợi ý lại audience") == "retry"
+    assert review_intent("Can you recommend audience again?") == "retry"
 
 
 @pytest.mark.asyncio
@@ -97,6 +99,59 @@ async def test_waiting_review_records_only_explicit_decision(monkeypatch):
     approved = await route_autopilot_chat("Đồng ý, tiếp tục", "session-2", 3)
     assert approved.meta.tool == "autopilot_review_chat"
     assert decisions == [True]
+
+
+@pytest.mark.asyncio
+async def test_waiting_audience_review_can_rerun_without_approval(monkeypatch):
+    import autopilot.chat as chat
+    import autopilot.service as service
+    import workspace.service as workspace_service
+
+    reruns = []
+    approvals = []
+
+    async def fake_add_message(*args):
+        return None
+
+    async def fake_workspace(_session_id):
+        return {"experience_mode": "autopilot", "artifacts": {}}
+
+    async def fake_run(_session_id):
+        return {
+            "run_id": "run-audience",
+            "status": "waiting_review",
+            "tasks": [{
+                "task_id": "task-audience",
+                "key": "retrieve_audience",
+                "title": "Tìm audience",
+                "status": "waiting_review",
+                "result": {"attrs": [{"fullLabel": "Books"}]},
+            }],
+        }
+
+    async def fake_rerun(run_id, task_id, *, actor, reason):
+        reruns.append((run_id, task_id, actor, reason))
+        return {"run_id": run_id, "status": "queued"}
+
+    async def fake_review(*args, **kwargs):
+        approvals.append((args, kwargs))
+
+    monkeypatch.setattr(chat, "add_message", fake_add_message)
+    monkeypatch.setattr(workspace_service, "get_workspace", fake_workspace)
+    monkeypatch.setattr(service, "get_latest_run", fake_run)
+    monkeypatch.setattr(service, "rerun_review_task", fake_rerun)
+    monkeypatch.setattr(service, "review_task", fake_review)
+
+    response = await route_autopilot_chat(
+        "Gợi ý lại audience",
+        "session-audience",
+        1,
+    )
+
+    assert response.meta.tool == "autopilot_audience_rerun"
+    assert "danh sách mới" in response.text
+    assert len(reruns) == 1
+    assert approvals == []
 
 
 @pytest.mark.asyncio

@@ -16,6 +16,7 @@ WorkflowAction = Literal[
     "defer",
     "update_brief",
     "select_audience",
+    "rerun_audience",
     "generate_creative",
     "select_zone",
     "launch",

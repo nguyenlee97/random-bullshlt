@@ -440,6 +440,12 @@ class Config:
     AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS: float = float(
         os.getenv("AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS", "30")
     )
+    OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE: float = float(
+        os.getenv("OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE", "0.45")
+    )
+    OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT: int = int(
+        os.getenv("OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT", "50")
+    )
     RAG_TOP_RETRIEVE: int = int(os.getenv("RAG_TOP_RETRIEVE", "50"))
     RAG_TOP_FINAL: int = int(os.getenv("RAG_TOP_FINAL", "25"))
     # Keep model-assisted ranking stages independently controllable. Retrieval

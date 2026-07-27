@@ -192,6 +192,7 @@ def test_large_review_keeps_confirmation_instructions_within_zalo_limit():
 
     assert len(text) <= 1950
     assert "Xác nhận” để duyệt toàn bộ danh sách" in text
+    assert "Gợi ý lại audience" in text
     assert "https://example.test/workspace" in text
 
 

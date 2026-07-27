@@ -1783,6 +1783,23 @@ export const AgentAPI = {
     }
   },
 
+  async rerunAutopilotAudience(runId, taskId, reason = '') {
+    try {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/rerun`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor: 'campaign_operator',
+          reason: reason || 'Operator requested a new audience recommendation',
+        }),
+        signal: AbortSignal.timeout(10000),
+      })
+      const data = await res.json().catch(() => ({}))
+      return res.ok ? withRequestId(data, res) : { ok: false, status: res.status, ...(data.detail || data) }
+    } catch (e) {
+      return { ok: false, detail: e.message }
+    }
+  },
+
   async selectAutopilotStrategy(runId, optionId, reason = '') {
     try {
       const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/strategy`, {

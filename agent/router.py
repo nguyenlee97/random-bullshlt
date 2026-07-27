@@ -1353,6 +1353,27 @@ async def autopilot_review(
         raise _autopilot_error(exc) from exc
 
 
+@agent_router.post("/autopilot/runs/{run_id}/tasks/{task_id}/rerun")
+async def autopilot_rerun_review_task(
+    run_id: str,
+    task_id: str,
+    raw_request: Request,
+    request: _AutopilotActionRequest,
+):
+    from autopilot.service import RunConflict, rerun_review_task
+    try:
+        await _assert_run_access(raw_request, run_id)
+        _require_autopilot_worker()
+        return await rerun_review_task(
+            run_id,
+            task_id,
+            actor=request.actor,
+            reason=request.reason,
+        )
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
 @agent_router.post("/autopilot/runs/{run_id}/strategy")
 async def autopilot_select_strategy(
     run_id: str, raw_request: Request, request: _AutopilotStrategyRequest

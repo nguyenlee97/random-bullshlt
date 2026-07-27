@@ -98,7 +98,8 @@ def _needs_proposal(decision: TurnDecision) -> bool:
     return bool(
         decision.would_mutate_workspace
         and decision.workflow_action in {
-            "update_brief", "select_audience", "select_zone", "other",
+            "update_brief", "select_audience", "rerun_audience",
+            "select_zone", "other",
         }
     )
 
@@ -474,6 +475,52 @@ async def _handle_openai_freeform_impl(
                     model=config.OPENAI_CAMPAIGN_MODEL,
                     step=step,
                 ),
+            )
+
+        if decision.workflow_action == "rerun_audience":
+            if step != 1:
+                reply = (
+                    "Chỉ có thể gợi ý lại audience khi campaign đang ở bước "
+                    "Audience. Workspace chưa bị thay đổi."
+                )
+                await _persist_reply(session_id, message, reply)
+                return AgentResponse(
+                    text=reply,
+                    blocks=[{"type": "info", "text": reply}],
+                    meta=ResponseMeta(
+                        tool="audience_rerun_unavailable",
+                        model=config.OPENAI_CAMPAIGN_MODEL,
+                        step=step,
+                    ),
+                )
+            from openai_campaign.guided import handle_openai_audience_entry
+
+            await add_message(session_id, "user", message)
+            result = await handle_openai_audience_entry(
+                session_id,
+                client=api,
+                force=True,
+            )
+            proposal = next(
+                (
+                    block.get("changes")
+                    for block in result.get("blocks", [])
+                    if block.get("type") == "workspace_proposal"
+                    and block.get("changes", {}).get("field") == "segment"
+                ),
+                None,
+            )
+            meta = result.get("meta") or {}
+            return AgentResponse(
+                text=result.get("text") or "",
+                blocks=result.get("blocks") or [],
+                meta=ResponseMeta(
+                    tool=meta.get("tool", "openai_audience_rerun"),
+                    model=meta.get("model", config.OPENAI_CAMPAIGN_MODEL),
+                    step=meta.get("step", step),
+                ),
+                workspace_update=proposal,
+                suggestions=result.get("suggestions") or [],
             )
 
         pending_response = await _handle_pending_decision(

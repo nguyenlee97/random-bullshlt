@@ -48,6 +48,46 @@ def _raw_query(brief: dict) -> str:
     return " | ".join(str(value) for value in fields if value) or "general audience"
 
 
+def _focused_query(brief: dict) -> str:
+    """Build a concise product/audience query without creative workflow noise."""
+    notes = str(brief.get("notes") or "")
+    chunks = [
+        chunk.strip()
+        for chunk in re.split(r"[\n;]+|(?<=[.!?])\s+", notes)
+        if chunk.strip()
+    ]
+    meta_markers = (
+        "creative note", "creative direction", "goi y creative",
+        "de xuat creative", "tao creative", "thiet ke banner",
+        "chien luoc uu tien", "strategy prioritize",
+    )
+    audience_chunks = [
+        chunk for chunk in chunks
+        if not any(marker in _fold_text(chunk) for marker in meta_markers)
+    ]
+    fields = [
+        str(brief.get("brand") or "").strip(),
+        " ".join(audience_chunks).strip(),
+    ]
+    return " | ".join(field for field in fields if field) or _raw_query(brief)
+
+
+def _score_reason(brief: dict, segment: dict) -> str:
+    """Return a conservative catalog-grounded explanation without another LLM."""
+    label = str(segment.get("fullLabel") or segment.get("name") or "Segment").strip()
+    taxonomy = " · ".join(
+        str(segment.get(key) or "").strip()
+        for key in ("category", "subcategory")
+        if str(segment.get(key) or "").strip()
+    )
+    brand = str(brief.get("brand") or "campaign").strip()
+    taxonomy_note = f" thuộc nhóm {taxonomy}" if taxonomy else ""
+    return (
+        f"{label}{taxonomy_note}, được xếp hạng liên quan cao với tín hiệu "
+        f"sản phẩm và audience trong brief {brand}."
+    )
+
+
 def _rank_merged(merged: dict[str, dict]) -> list[dict]:
     """Coverage-first ordering for already merged per-query candidates."""
     ordered = sorted(
@@ -237,6 +277,11 @@ async def recommend_rag(
     provider: str = "greennode",
     use_reranker: bool | None = None,
     rerank_mode: str | None = None,
+    use_focused_query: bool = False,
+    enable_query_rewrite: bool | None = None,
+    select_from_rerank_scores: bool = False,
+    min_relevance_score: float | None = None,
+    rerank_candidate_limit: int | None = None,
 ) -> dict:
     """Recommend catalog segments with optional provider-owned model stages.
 
@@ -252,8 +297,17 @@ async def recommend_rag(
     # the 80-case candidate benchmark, but remain optional because they add an
     # external model dependency and must pass the end-to-end release gate.
     stage_t0 = time.time()
-    queries = [_raw_query(brief)]
-    if config.RAG_QUERY_REWRITE:
+    raw_query = _raw_query(brief)
+    focused_query = _focused_query(brief) if use_focused_query else raw_query
+    queries = [focused_query]
+    if raw_query not in queries:
+        queries.append(raw_query)
+    rewrite_enabled = (
+        config.RAG_QUERY_REWRITE
+        if enable_query_rewrite is None
+        else enable_query_rewrite
+    )
+    if rewrite_enabled:
         if query_rewriter is not None:
             rewritten = await query_rewriter(brief)
         else:
@@ -280,7 +334,9 @@ async def recommend_rag(
     catalog_segments = _catalog_segment_count(candidates)
 
     # 3. rerank (graceful skip → keep RRF order)
-    brief_text = " | ".join(str(brief.get(k) or "") for k in ("brand", "objective", "kpi", "notes"))
+    brief_text = focused_query if use_focused_query else " | ".join(
+        str(brief.get(k) or "") for k in ("brand", "objective", "kpi", "notes")
+    )
     stage_t0 = time.time()
     selected_rerank_mode = (
         ("legacy" if use_reranker else "off")
@@ -303,7 +359,14 @@ async def recommend_rag(
     elif selected_rerank_mode == "openai_nano":
         from rag.nano_rerank import rerank_candidates
 
-        order, rerank_meta = await rerank_candidates(brief_text, candidates)
+        if rerank_candidate_limit is None:
+            order, rerank_meta = await rerank_candidates(brief_text, candidates)
+        else:
+            order, rerank_meta = await rerank_candidates(
+                brief_text,
+                candidates,
+                candidate_limit=rerank_candidate_limit,
+            )
     else:
         RAG_RERANK.labels(outcome="disabled").inc()
         order = None
@@ -331,7 +394,8 @@ async def recommend_rag(
     top = eligible[: config.RAG_TOP_FINAL]
     RAG_CANDIDATES.observe(len(top))
 
-    # 4. LLM reasons over candidates only (same prompt family as old path)
+    # 4. Select from the fixed specialist's scores on the OpenAI path. The
+    # legacy/GreenNode path retains its existing selector unchanged.
     labels = [c.get("fullLabel") or c.get("name", "") for c in top]
     prompt = DMP_RECOMMEND_USER.format(
         brand=brief.get("brand", "?"), objective=brief.get("objective", "?"),
@@ -340,20 +404,73 @@ async def recommend_rag(
     )
     stage_t0 = time.time()
     selector_error = None
-    try:
-        if selector is not None:
-            recs, selector_name = await selector(prompt)
-        else:
-            recs, selector_name = await _select(prompt)
-    except Exception as exc:
-        # Retrieval and the bounded reranker have already produced a guarded,
-        # catalog-only order. A transient conversational-provider failure must
-        # not discard that evidence and fall all the way back to the legacy
-        # full-catalog path. The public rows are still filled below from `top`,
-        # with stable catalog IDs and no invented segment.
+    quality_gate = {
+        "applied": select_from_rerank_scores,
+        "threshold": min_relevance_score,
+        "eligible": 0,
+        "rejected": 0,
+    }
+    if select_from_rerank_scores:
+        threshold = (
+            config.OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE
+            if min_relevance_score is None
+            else min_relevance_score
+        )
+        scores = rerank_meta.get("scores") if rerank_meta.get("applied") else {}
+        scores = scores if isinstance(scores, dict) else {}
         recs = []
-        selector_name = "retrieval_order_fallback"
-        selector_error = f"{type(exc).__name__}: {str(exc)[:120]}"
+        for candidate in top:
+            candidate_id = str(
+                candidate.get("segmentId")
+                or candidate.get("_id")
+                or candidate.get("fullLabel")
+                or candidate.get("name")
+                or ""
+            ).strip()
+            score = float(scores.get(candidate_id, -1))
+            if score < threshold:
+                continue
+            recs.append({
+                "fullLabel": candidate.get("fullLabel") or candidate.get("name", ""),
+                "reason": _score_reason(brief, candidate),
+            })
+            if len(recs) >= 6:
+                break
+        quality_gate = {
+            "applied": True,
+            "threshold": threshold,
+            "eligible": len(recs),
+            "rejected": sum(
+                1
+                for candidate in top
+                if float(scores.get(str(
+                    candidate.get("segmentId")
+                    or candidate.get("_id")
+                    or candidate.get("fullLabel")
+                    or candidate.get("name")
+                    or ""
+                ).strip(), -1)) < threshold
+            ),
+            "reranker_available": bool(rerank_meta.get("applied")),
+        }
+        selector_name = "openai_nano_scores"
+        if not rerank_meta.get("applied"):
+            selector_error = "reranker_unavailable"
+    else:
+        try:
+            if selector is not None:
+                recs, selector_name = await selector(prompt)
+            else:
+                recs, selector_name = await _select(prompt)
+        except Exception as exc:
+            # Retrieval and the bounded reranker have already produced a guarded,
+            # catalog-only order. A transient conversational-provider failure must
+            # not discard that evidence and fall all the way back to the legacy
+            # full-catalog path. The public rows are still filled below from `top`,
+            # with stable catalog IDs and no invented segment.
+            recs = []
+            selector_name = "retrieval_order_fallback"
+            selector_error = f"{type(exc).__name__}: {str(exc)[:120]}"
     generation_s = time.time() - stage_t0
     RAG_STAGE_SECONDS.labels(stage="generate").observe(generation_s)
 
@@ -397,31 +514,33 @@ async def recommend_rag(
     if dropped:
         RAG_HALLUCINATED.inc(dropped)
 
-    # Structured selection requires six rows, but a provider can repeat one
-    # valid label. Fill any resulting gap from the already-ranked, guarded
-    # candidate set so every output remains unique and catalog-grounded.
-    desired = min(6, len(top))
-    for seg in top:
-        if len(enriched) >= desired:
-            break
-        identity = _identity(seg)
-        if not identity or identity in seen:
-            continue
-        seen.add(identity)
-        enriched.append(_public_recommendation(
-            seg,
-            "Bổ sung theo thứ hạng truy xuất phù hợp với brief và mục tiêu campaign.",
-        ))
+    if not select_from_rerank_scores:
+        # Legacy structured selection still requires six rows. Preserve its
+        # existing catalog-grounded fill behavior without applying it to the
+        # quality-gated OpenAI path.
+        desired = min(6, len(top))
+        for seg in top:
+            if len(enriched) >= desired:
+                break
+            identity = _identity(seg)
+            if not identity or identity in seen:
+                continue
+            seen.add(identity)
+            enriched.append(_public_recommendation(
+                seg,
+                "Bổ sung theo thứ hạng truy xuất phù hợp với brief và mục tiêu campaign.",
+            ))
 
     RAG_REQUESTS.labels(outcome="ok").inc()
     await alog(session_id, "info", {
         "rag": "recommend_done", "queries": queries, "candidates": len(candidates),
-        "rewrite_enabled": config.RAG_QUERY_REWRITE,
+        "rewrite_enabled": rewrite_enabled,
         "rerank_enabled": rerank_enabled,
         "rerank_mode": selected_rerank_mode,
         "rerank_meta": rerank_meta,
         "selector": selector_name,
         "selector_error": selector_error,
+        "quality_gate": quality_gate,
         "provider": provider,
         "reranked": bool(order), "returned": len(enriched),
         "dropped_hallucinated": dropped,
@@ -437,12 +556,13 @@ async def recommend_rag(
                     "mode": config.AUDIENCE_RAG_RETRIEVAL_MODE,
                     "queries": queries, "candidates": len(candidates),
                     "catalog_segments": catalog_segments,
-                    "rewrite_enabled": config.RAG_QUERY_REWRITE,
+                    "rewrite_enabled": rewrite_enabled,
                     "rerank_enabled": rerank_enabled,
                     "rerank_mode": selected_rerank_mode,
                     "rerank_model": rerank_meta.get("model"),
                     "rerank_meta": rerank_meta,
                     "selector": selector_name,
+                    "quality_gate": quality_gate,
                     "selector_fallback_reason": (
                         "provider_unavailable" if selector_error else None
                     ),

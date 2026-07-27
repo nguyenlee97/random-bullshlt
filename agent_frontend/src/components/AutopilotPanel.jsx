@@ -333,6 +333,25 @@ export default function AutopilotPanel({
     }
   }
 
+  const rerunAudience = async task => {
+    if (!run?.run_id || task?.key !== 'retrieve_audience' || loading) return
+    setLoading(true)
+    setError('')
+    try {
+      const next = await AgentAPI.rerunAutopilotAudience(
+        run.run_id,
+        task.task_id,
+        'Operator requested a new audience recommendation from review',
+      )
+      if (!next?.run_id) throw new Error(next?.detail || 'Không thể gợi ý lại audience.')
+      setRun(next)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const openEditor = editor => {
     setError('')
     editor?.()
@@ -1062,6 +1081,15 @@ export default function AutopilotPanel({
                     className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 sm:min-w-0 sm:flex-none"
                   >{edit.label}</button>
                 ))}
+                {waiting.key === 'retrieve_audience' && !retryAction && (
+                  <button
+                    onClick={() => rerunAudience(waiting)}
+                    disabled={loading}
+                    className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-brand-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50 sm:min-w-0 sm:flex-none"
+                  >
+                    Gợi ý lại audience
+                  </button>
+                )}
                 <button onClick={cancelRunWithConfirmation} disabled={loading} className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:min-w-0 sm:flex-none">Hủy run</button>
                 <button
                   data-demo="autopilot-review-approve"

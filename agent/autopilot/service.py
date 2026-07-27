@@ -1014,6 +1014,67 @@ async def review_task(
     return await get_run(run_id)
 
 
+async def rerun_review_task(
+    run_id: str,
+    task_id: str,
+    *,
+    actor: str = "campaign_operator",
+    reason: str = "",
+) -> dict:
+    """Replace an unapproved audience proposal by rerunning its task."""
+    _, tasks, _ = await _collections()
+    task = (
+        await tasks.find_one({"_id": task_id, "run_id": run_id})
+        if tasks is not None
+        else _mem_tasks.get(task_id)
+    )
+    if not task or task.get("run_id") != run_id:
+        raise KeyError(f"task not found: {task_id}")
+    if task.get("status") != "waiting_review":
+        raise RunConflict("task is not waiting for review")
+    if task.get("key") != "retrieve_audience":
+        raise RunConflict("only the audience review can be recommended again")
+
+    run = await get_run(run_id)
+    if run.get("status") in RUN_TERMINAL:
+        raise RunConflict("audience cannot be rerun after the run is terminal")
+    if any(
+        item.get("key") == "create_order" and item.get("status") == "succeeded"
+        for item in run.get("tasks", [])
+    ):
+        raise RunConflict("audience cannot be rerun after order creation")
+
+    now = _now()
+    updates = {
+        "status": "queued",
+        "result": None,
+        "evidence": [],
+        "pending_artifact": None,
+        "review_decision": {
+            "approved": None,
+            "actor": actor,
+            "reason": reason.strip() or "Audience recommendation requested again",
+            "created_at": now,
+        },
+        "completed_at": None,
+        "lease_owner": None,
+        "lease_expires_at": None,
+        "updated_at": now,
+    }
+    if tasks is not None:
+        await tasks.update_one({"_id": task_id}, {"$set": updates})
+    else:
+        _mem_tasks[task_id].update(updates)
+    await _emit(run_id, "task_retry_scheduled", {
+        "task_id": task_id,
+        "actor": actor,
+        "reason": updates["review_decision"]["reason"],
+        "explicit_review_rerun": True,
+    })
+    await _refresh_run_status(run_id)
+    return await get_run(run_id)
+
+
 async def select_placement_intent(
     run_id: str,
     zone_ids: list[str],

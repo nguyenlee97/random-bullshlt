@@ -30,12 +30,21 @@ def _fold(text: str) -> str:
 
 
 def review_intent(message: str) -> str:
-    """Return approve/reject/question at the human authorization boundary.
+    """Return approve/reject/retry/question at the authorization boundary.
 
     Mentioning approval while asking a question is not approval. Ambiguous,
     deferred, or explicitly "not yet" language always remains read-only.
     """
     folded = _fold(message)
+    retry = re.search(
+        r"\b("
+        r"goi y lai audience|de xuat lai audience|tim lai audience"
+        r"|recommend audience again|rerun audience|retry audience"
+        r")\b",
+        folded,
+    )
+    if retry:
+        return "retry"
     deferred = re.search(
         r"\b("
         r"chua (dong y|xac nhan|chap nhan|duyet|phe duyet|quyet dinh)"
@@ -160,7 +169,7 @@ async def route_autopilot_chat(
     active_report_tab: str = "daily_ops",
 ) -> AgentResponse | None:
     """Intercept chat only when this session is an Autopilot campaign/run."""
-    from autopilot.service import get_latest_run, review_task
+    from autopilot.service import get_latest_run, rerun_review_task, review_task
     from workspace.service import get_workspace
 
     workspace = await get_workspace(session_id)
@@ -187,6 +196,45 @@ async def route_autopilot_chat(
     )
     if status == "waiting_review" and waiting:
         intent = review_intent(message)
+        if intent == "retry":
+            if waiting.get("key") != "retrieve_audience":
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    "Chỉ có thể gợi ý lại khi Autopilot đang dừng ở checkpoint Audience. "
+                    "Checkpoint hiện tại chưa bị thay đổi.",
+                    tool="autopilot_audience_rerun_unavailable",
+                    step=step,
+                )
+            try:
+                await rerun_review_task(
+                    run["run_id"],
+                    waiting["task_id"],
+                    actor="campaign_operator",
+                    reason="explicit audience rerun from Autopilot chat",
+                )
+            except Exception as exc:
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    f"Chưa thể gợi ý lại audience: {str(exc)}. "
+                    "Danh sách hiện tại vẫn được giữ để review.",
+                    tool="autopilot_audience_rerun_conflict",
+                    step=step,
+                    suggestions=[
+                        "Gợi ý lại audience",
+                        "Đồng ý, tiếp tục",
+                        "Từ chối",
+                    ],
+                )
+            return await _recorded_response(
+                session_id,
+                message,
+                "Đã yêu cầu Autopilot truy xuất và xếp hạng lại audience. "
+                "Danh sách cũ chưa được duyệt; Agent sẽ gửi danh sách mới khi hoàn tất.",
+                tool="autopilot_audience_rerun",
+                step=step,
+            )
         if intent == "question":
             context = _read_only_context(workspace, run)
             context["review_checkpoint"] = {
@@ -238,7 +286,11 @@ async def route_autopilot_chat(
                 text,
                 tool="autopilot_review_qa",
                 step=step,
-                suggestions=["Đồng ý, tiếp tục", "Từ chối"],
+                suggestions=(
+                    ["Gợi ý lại audience", "Đồng ý, tiếp tục", "Từ chối"]
+                    if waiting.get("key") == "retrieve_audience"
+                    else ["Đồng ý, tiếp tục", "Từ chối"]
+                ),
                 model=answer_model,
             )
 

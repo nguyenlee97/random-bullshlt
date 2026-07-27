@@ -301,7 +301,10 @@ def render_openai_review_message(
 
     if key == "retrieve_audience":
         lines = _audience_lines(value)
-        action = "Trả lời “Xác nhận” để duyệt toàn bộ danh sách, “Hủy” để dừng, hoặc hỏi thêm về segment."
+        action = (
+            "Trả lời “Xác nhận” để duyệt toàn bộ danh sách, “Gợi ý lại audience” "
+            "để Agent truy xuất một danh sách mới, “Hủy” để dừng, hoặc hỏi thêm về segment."
+        )
     elif key == "derive_targeting":
         lines = _targeting_lines(value)
         action = "Trả lời “Xác nhận” để duyệt targeting, “Hủy” để dừng, hoặc hỏi thêm trước khi quyết định."

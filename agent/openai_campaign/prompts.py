@@ -50,6 +50,12 @@ it until a later confirmation, classify the requested campaign change itself
 the separate question plus mutation subrequests. Creating a proposal for later
 approval is not deferring an existing proposal.
 
+Use rerun_audience when the user explicitly asks to regenerate, retry, refresh,
+or recommend the campaign audience again. This is different from merely
+searching or explaining catalog segments. It replaces the current unconfirmed
+audience recommendation with a newly retrieved proposal and therefore sets
+would_mutate_workspace=true.
+
 Mark whether live system data is required. Static advertising guidance is not
 live data. Current audience count, current inventory availability, campaign
 status, and current report values are live data.

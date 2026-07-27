@@ -6,6 +6,7 @@ import pytest
 from rag.index import _catalog_fingerprint
 from rag.recommend import _catalog_segment_count
 from rag.recommend import (
+    _focused_query,
     _guard_reason,
     _hybrid_search,
     _rank_merged,
@@ -79,6 +80,23 @@ def test_raw_query_preserves_user_audience_notes():
     assert "urban runners" in query
     assert "exclude children" in query
     assert "conversion" in query
+
+
+def test_focused_query_removes_creative_and_strategy_workflow_noise():
+    query = _focused_query({
+        "brand": "Phở Anh Hai",
+        "objective": "conversion",
+        "notes": (
+            "Mục tiêu bán được nhiều phở. "
+            "Creative notes: người dùng chưa biết creative, nhờ gợi ý giúp.\n"
+            "Chiến lược: ưu tiên audience có ý định cao."
+        ),
+    })
+
+    assert "Phở Anh Hai" in query
+    assert "bán được nhiều phở" in query
+    assert "Creative notes" not in query
+    assert "Chiến lược" not in query
 
 
 def test_targeting_normalization_rejects_invented_values_and_dimensions():
@@ -480,3 +498,146 @@ async def test_recommend_rag_applies_bounded_nano_order_and_keeps_tail(monkeypat
     assert [item["segmentId"] for item in result["recommendations"]][:3] == [
         "SEG-3", "SEG-1", "SEG-2",
     ]
+
+
+@pytest.mark.asyncio
+async def test_openai_score_gate_reaches_beyond_old_window_and_rejects_fillers(monkeypatch):
+    import rag.nano_rerank as nano
+    import rag.recommend as recommend
+
+    candidates = [
+        {
+            "_id": f"mongo-{index}",
+            "segmentId": f"SEG-{index}",
+            "fullLabel": f"Segment {index}",
+            "name": f"Segment {index}",
+            "category": "Unrelated",
+            "_text": f"segment {index}",
+            "_rank": index,
+            "_query_hits": 1,
+            "_fusion_score": 1 / (61 + index),
+            "_rag_index": {"segment_count": 310},
+        }
+        for index in range(40)
+    ]
+    for index, label in (
+        (31, "Diners (restaurant)"),
+        (36, "Restaurants (dining)"),
+        (37, "Vietnamese cuisine (food & drink)"),
+    ):
+        candidates[index].update({
+            "fullLabel": label,
+            "name": label,
+            "category": "Food and drink (consumables)",
+        })
+
+    async def ready(_session_id):
+        return True
+
+    async def search(_queries, _limit, mode=None):
+        return candidates
+
+    async def nano_order(_query, _candidates, candidate_limit=None):
+        assert candidate_limit == 50
+        leading = [37, 31, 36]
+        order = leading + [index for index in range(40) if index not in leading]
+        scores = {f"SEG-{index}": 0.22 for index in range(40)}
+        scores.update({"SEG-31": 0.91, "SEG-36": 0.88, "SEG-37": 0.94})
+        return order, {
+            "applied": True,
+            "mode": "openai_nano",
+            "model": "gpt-5.4-nano",
+            "candidate_count": 40,
+            "scores": scores,
+        }
+
+    async def selector_must_not_run(_prompt):
+        raise AssertionError("second audience selector ran")
+
+    monkeypatch.setattr(recommend, "ensure_index", ready)
+    monkeypatch.setattr(recommend, "_hybrid_search", search)
+    monkeypatch.setattr(recommend, "_select", selector_must_not_run)
+    monkeypatch.setattr(nano, "rerank_candidates", nano_order)
+    monkeypatch.setattr(recommend.config, "RAG_QUERY_REWRITE", False)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_RETRIEVE", 50)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_FINAL", 25)
+
+    result = await recommend_rag(
+        "openai-quality-gate",
+        {
+            "brand": "Phở Anh Hai",
+            "objective": "conversion",
+            "notes": "Mục tiêu bán được nhiều phở. Creative notes: gợi ý creative.",
+        },
+        provider="openai",
+        rerank_mode="openai_nano",
+        use_focused_query=True,
+        enable_query_rewrite=False,
+        select_from_rerank_scores=True,
+        min_relevance_score=0.45,
+        rerank_candidate_limit=50,
+    )
+
+    assert [item["segmentId"] for item in result["recommendations"]] == [
+        "SEG-37", "SEG-31", "SEG-36",
+    ]
+    assert all(item["category"] == "Food and drink (consumables)"
+               for item in result["recommendations"])
+    assert result["rag"]["selector"] == "openai_nano_scores"
+    assert result["rag"]["quality_gate"]["eligible"] == 3
+    assert result["rag"]["stage_ms"]["generate"] == 0
+
+
+@pytest.mark.asyncio
+async def test_openai_score_gate_returns_empty_instead_of_six_weak_segments(monkeypatch):
+    import rag.nano_rerank as nano
+    import rag.recommend as recommend
+
+    candidates = [
+        {
+            "_id": f"mongo-{index}",
+            "segmentId": f"WEAK-{index}",
+            "fullLabel": f"Weak segment {index}",
+            "name": f"Weak segment {index}",
+            "_text": f"weak {index}",
+            "_rank": index,
+            "_query_hits": 1,
+            "_fusion_score": 1 / (61 + index),
+            "_rag_index": {"segment_count": 310},
+        }
+        for index in range(8)
+    ]
+
+    async def ready(_session_id):
+        return True
+
+    async def search(_queries, _limit, mode=None):
+        return candidates
+
+    async def nano_order(_query, _candidates, candidate_limit=None):
+        return list(range(8)), {
+            "applied": True,
+            "mode": "openai_nano",
+            "candidate_count": 8,
+            "scores": {f"WEAK-{index}": 0.22 for index in range(8)},
+        }
+
+    monkeypatch.setattr(recommend, "ensure_index", ready)
+    monkeypatch.setattr(recommend, "_hybrid_search", search)
+    monkeypatch.setattr(nano, "rerank_candidates", nano_order)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_RETRIEVE", 50)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_FINAL", 25)
+
+    result = await recommend_rag(
+        "openai-reject-weak",
+        {"brand": "Example", "notes": "specific product"},
+        provider="openai",
+        rerank_mode="openai_nano",
+        select_from_rerank_scores=True,
+        min_relevance_score=0.45,
+        rerank_candidate_limit=50,
+    )
+
+    assert result["recommendations"] == []
+    assert result["rag"]["quality_gate"]["eligible"] == 0
+    assert result["rag"]["quality_gate"]["rejected"] == 8
