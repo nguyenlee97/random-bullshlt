@@ -441,7 +441,7 @@ class Config:
         os.getenv("AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS", "30")
     )
     OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE: float = float(
-        os.getenv("OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE", "0.45")
+        os.getenv("OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE", "0.50")
     )
     OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT: int = int(
         os.getenv("OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT", "50")
