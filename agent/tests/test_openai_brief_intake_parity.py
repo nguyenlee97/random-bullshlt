@@ -52,6 +52,109 @@ def _update_brief_decision():
     })
 
 
+def _clarification_decision():
+    from openai_campaign.schemas import TurnDecision
+
+    return TurnDecision.model_validate({
+        "turn_type": "clarification",
+        "user_goal": "Nhắc lại mục tiêu đã cung cấp",
+        "subrequests": [],
+        "faq_scope": "none",
+        "workflow_action": "none",
+        "entities": [],
+        "would_mutate_workspace": False,
+        "needs_clarification": True,
+        "clarification_question": "Mục tiêu campaign là gì?",
+        "confidence": 0.9,
+    })
+
+
+def test_openai_explicit_history_union_does_not_change_greennode_default():
+    from graph.nodes.brief_collector import _explicit_advisory_missing_fields
+
+    messages = [{
+        "role": "user",
+        "content": (
+            "Objective Awareness, KPI Reach, audience là nông dân "
+            "tại miền Tây."
+        ),
+    }]
+
+    assert _explicit_advisory_missing_fields(
+        {"messages": messages}, provided_fields=[],
+    ) == ["objective", "kpi", "notes"]
+    assert _explicit_advisory_missing_fields(
+        {"messages": messages, "merge_explicit_text_evidence": True},
+        provided_fields=[],
+    ) == []
+
+
+@pytest.mark.asyncio
+async def test_openai_brief_correction_classified_as_clarification_stays_in_collector(
+    monkeypatch,
+):
+    import graph.nodes.brief_collector as collector
+    import openai_campaign.engine as engine
+    from graph.nodes.brief_collector import BriefDelegationDecision, BriefIntakeTurn
+    from session import get_pending_proposal
+
+    forbidden = AsyncMock(side_effect=AssertionError("GreenNode structured call"))
+    monkeypatch.setattr(collector, "structured", forbidden)
+    monkeypatch.setattr(
+        engine, "decide_turn", AsyncMock(return_value=_clarification_decision()),
+    )
+    client = _Client({
+        "BriefIntakeTurn": BriefIntakeTurn(
+            action="ask_clarification",
+            message="Cần bổ sung Brief.",
+            missing_fields=["objective", "kpi", "notes"],
+        ),
+        "BriefDelegationDecision": BriefDelegationDecision(
+            mode="none", provided_fields=[], delegated_fields=[],
+        ),
+    })
+
+    result = await engine.handle_openai_freeform(
+        "Mục tiêu tôi đã nói ở trên là Awareness rồi.",
+        0,
+        "openai-objective-correction",
+        client=client,
+    )
+
+    assert result.meta.tool == "freeform_chat"
+    assert "Mục tiêu campaign" not in result.text
+    assert "KPI mong muốn" in result.text
+    assert "Đối tượng mục tiêu" in result.text
+    assert await get_pending_proposal("openai-objective-correction") is None
+    forbidden.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_openai_tool_rejects_nested_initial_brief_proposal():
+    from openai_campaign.tools import execute_openai_tool
+    from workspace.intent import InvalidWorkspaceIntent
+    from workspace.service import get_workspace, list_pending_proposals
+
+    session_id = "openai-nested-initial-brief"
+    with pytest.raises(InvalidWorkspaceIntent, match="toàn bộ field `brief`"):
+        await execute_openai_tool(
+            "propose_workspace_change",
+            {
+                "field": "brief.notes",
+                "value_json": '"TP.HCM và các tỉnh lân cận"',
+                "reason": "Bổ sung địa lý",
+            },
+            session_id=session_id,
+            message="Phạm vi địa lý là TP.HCM và các tỉnh lân cận",
+            workspace=None,
+            confirmed_steps=[],
+        )
+
+    workspace = await get_workspace(session_id)
+    assert workspace["artifacts"]["brief"]["value"] is None
+    assert await list_pending_proposals(session_id) == []
+
+
 def test_openai_yearless_in_progress_range_stays_in_current_year():
     from openai_campaign.brief import normalize_openai_yearless_dates
 

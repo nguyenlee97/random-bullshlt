@@ -18,7 +18,7 @@ import log from '@/lib/logger'
 import { ArrowLeft, MessageSquare, LayoutDashboard, Sparkles } from 'lucide-react'
 import { DemoProvider } from '@/demo/DemoEngine'
 import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
-import { canApproveWorkflowStep } from '@/lib/workflowValidation'
+import { canApproveWorkflowStep, isBriefReady } from '@/lib/workflowValidation'
 import { normalizeAudienceSelection } from '@/lib/audience'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
 import { AGENT_PATH, agentEntryUrl, hasAgentIntent } from '@/lib/publicExperience'
@@ -1459,9 +1459,48 @@ export default function App() {
     const handler = async (e) => {
       log.event('agent:workspace_confirm received', e.detail)
       if (e.detail?.patch) {
-        handleWorkspaceUpdate(e.detail.patch)
         const originalField = e.detail.patch.field || ''
         const target = workspacePatchTarget(originalField)
+        const rawValue = e.detail.patch.value
+        const patchValue = typeof rawValue === 'string'
+          ? (() => { try { return JSON.parse(rawValue) } catch { return {} } })()
+          : (rawValue || {})
+        const invalidInitialOpenAIBrief = (
+          currentConversationModel === 'openai_gpt_5_4_mini'
+          && target.step === 0
+          && !isBriefReady(formState.brief)
+          && (originalField !== 'brief' || !isBriefReady(patchValue))
+        )
+        if (invalidInitialOpenAIBrief) {
+          log.workspace(
+            `Rejected incomplete initial OpenAI Brief proposal (${originalField})`,
+          )
+          if (e.detail.patch.proposal_id) {
+            await AgentAPI.rejectWorkspaceProposal(
+              e.detail.patch.proposal_id,
+              'invalid_partial_openai_brief',
+            )
+            window.dispatchEvent(new CustomEvent('agent:workspace_proposal_result', {
+              detail: {
+                proposal_id: e.detail.patch.proposal_id,
+                status: 'rejected',
+              },
+            }))
+          }
+          window.dispatchEvent(new CustomEvent('agent:inject_message', {
+            detail: {
+              id: `invalid_brief_${Date.now()}`,
+              role: 'assistant',
+              content: 'Brief chưa đủ dữ liệu nên chưa được lưu. Vui lòng bổ sung các trường còn thiếu để tạo một đề xuất Brief hoàn chỉnh.',
+              blocks: [],
+              timestamp: new Date().toISOString(),
+              metadata: { tool: 'workspace_clarification', model: 'none', step: 0 },
+            },
+          }))
+          return
+        }
+
+        handleWorkspaceUpdate(e.detail.patch)
         // Persist every typed proposal, including targeting, creative files,
         // placements and assignments. The previous step-only map silently
         // skipped those proposal classes.
@@ -1501,10 +1540,6 @@ export default function App() {
         if (stepStatuses[stepNum] !== 'done' && stepStatuses[stepNum] !== 'stale') {
           // Setup has multiple sub-phases and is completed only after safe order creation.
           if (stepNum === 3) return
-          const rawValue = e.detail.patch.value
-          const patchValue = typeof rawValue === 'string'
-            ? (() => { try { return JSON.parse(rawValue) } catch { return {} } })()
-            : (rawValue || {})
           const confirmMessages = {
             0: '✅ Brief đã được lưu! Em sẽ chuyển sang bước **Audience** để gợi ý segments phù hợp.',
             1: `✅ Audience đã xác nhận! ${(patchValue.attrs || []).length || 'Các'} segments được áp dụng — em sẽ chuyển sang bước **Creative**.`,
@@ -1526,7 +1561,7 @@ export default function App() {
     }
     window.addEventListener('agent:workspace_confirm', handler)
     return () => window.removeEventListener('agent:workspace_confirm', handler)
-  }, [handleWorkspaceUpdate, stepStatuses, markStepDone, experienceMode])
+  }, [handleWorkspaceUpdate, stepStatuses, markStepDone, experienceMode, currentConversationModel, formState.brief])
 
   // Listen for agent:setup_zones_confirmed — fired by WorkspaceProposalBlock when user
   // clicks "✅ Duyệt các zones này". This advances the setup sub-phase to 'assign' using
@@ -1888,6 +1923,7 @@ export default function App() {
             autopilotMode={experienceMode === 'autopilot'}
             autopilotEditorArtifact={autopilotEditorArtifact}
             onAutopilotSave={handleAutopilotEditorSave}
+            openaiCampaignFlow={currentConversationModel === 'openai_gpt_5_4_mini'}
             onReturnToAutopilot={() => {
               autopilotEditorArtifactRef.current = null
               setAutopilotEditorArtifact(null)
@@ -1903,24 +1939,26 @@ export default function App() {
           ${experienceMode === 'autopilot' && activeTab === 'autopilot' ? 'flex flex-1' : 'hidden'}
           ${experienceMode === 'autopilot' && activeTab !== 'workspace' ? 'md:flex' : 'md:hidden'}
         `}>
-          <AutopilotPanel
-            key={currentConversationId || 'autopilot'}
-            brief={formState.brief}
-            canonicalWorkspace={canonicalWorkspace}
-            initialRun={restoredAutopilotRun}
-            onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
-            onOpenChat={() => setActiveTab('chat')}
-            onOpenBrief={() => openAutopilotEditor(0, 'brief')}
-            onOpenAudience={openAutopilotAudienceEditor}
-            onOpenCreative={() => openAutopilotEditor(2, 'creative')}
-            onOpenAssignments={openAutopilotAssignmentEditor}
-            onStatusChange={setAutopilotSummary}
-            reportState={formState.report}
-            onReportChange={updateAutopilotReport}
-            onSendReportQuestion={sendMessage}
-            onReportActivate={initializeReport}
-            onReportExit={exitAutopilotReport}
-          />
+          {experienceMode === 'autopilot' && (
+            <AutopilotPanel
+              key={currentConversationId || 'autopilot'}
+              brief={formState.brief}
+              canonicalWorkspace={canonicalWorkspace}
+              initialRun={restoredAutopilotRun}
+              onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
+              onOpenChat={() => setActiveTab('chat')}
+              onOpenBrief={() => openAutopilotEditor(0, 'brief')}
+              onOpenAudience={openAutopilotAudienceEditor}
+              onOpenCreative={() => openAutopilotEditor(2, 'creative')}
+              onOpenAssignments={openAutopilotAssignmentEditor}
+              onStatusChange={setAutopilotSummary}
+              reportState={formState.report}
+              onReportChange={updateAutopilotReport}
+              onSendReportQuestion={sendMessage}
+              onReportActivate={initializeReport}
+              onReportExit={exitAutopilotReport}
+            />
+          )}
         </div>
 
         {/* ── Chat Pane ─────────────────────────────────────────────
@@ -1942,6 +1980,37 @@ export default function App() {
             onRetry={retryLastMessage}
             canRetry={canRetry && !busy}
             policy={autopilotChatPolicy}
+            debugContext={{
+              conversation_model: currentConversationModel,
+              experience_mode: experienceMode,
+              current_step: currentStep,
+              step_statuses: stepStatuses,
+              workspace_revision: canonicalWorkspace?.revision ?? null,
+              brief: formState.brief,
+              audience: {
+                attrs: (formState.segment?.attrs || []).map(item => ({
+                  id: item.segmentId || item._id || item.code || '',
+                  name: item.fullLabel || item.name || '',
+                  type: item.type || '',
+                })),
+                targeting: formState.segment?.targeting || {},
+              },
+              creative: {
+                files: (formState.creative?.files || []).map(file => ({
+                  id: file.id,
+                  name: file.name,
+                  type: file.type,
+                  formatId: file.formatId,
+                  aiGenerated: Boolean(file.aiGenerated),
+                  analysisStatus: file.analysisStatus || null,
+                  generation: file.generation || null,
+                })),
+              },
+              setup: {
+                selectedZoneIds: formState.setup?.selectedZoneIds || [],
+                assignment_count: Object.keys(formState.setup?.assignments || {}).length,
+              },
+            }}
           />
         </div>
 

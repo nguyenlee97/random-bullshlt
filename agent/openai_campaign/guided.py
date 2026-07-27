@@ -647,9 +647,26 @@ async def _grounded_audience_entry(
         f"Dựa trên brief **{brief.get('brand')}** "
         f"({brief.get('objective', 'awareness')}), em gợi ý audience như sau:"
     )
+    # Preserve exact names and recommendation reasons for later explanation
+    # turns. The old count-only history made this evidence disappear at once.
+    history_rows = []
+    for item in enriched[:12]:
+        label = str(
+            item.get("fullLabel") or item.get("name")
+            or item.get("segmentId") or item.get("_id") or "?"
+        ).strip()
+        identity = str(item.get("segmentId") or item.get("_id") or "").strip()
+        reason = str(item.get("reason") or "").strip()
+        suffix = f" [{identity}]" if identity else ""
+        history_rows.append(
+            f"- {label}{suffix}" + (f": {reason[:500]}" if reason else "")
+        )
+    history_snapshot = "\n".join(history_rows)
     await add_message(
         session_id, "assistant",
-        reply + f"\n\n(Đã gợi ý {len(enriched)} DMP segments duy nhất từ catalog và targeting params.)",
+        reply
+        + f"\n\n(Đã gợi ý {len(enriched)} DMP segments duy nhất từ catalog và targeting params.)"
+        + (f"\n\nRecommendation snapshot:\n{history_snapshot}" if history_snapshot else ""),
     )
     return {
         "skip": False, "need_more_info": False, "text": reply, "blocks": blocks,

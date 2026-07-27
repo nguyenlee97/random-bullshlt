@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { cn, fmt } from '@/lib/utils'
 import { AgentAPI, fetchDmpAttributes } from '@/api/agentApi'
 import { dedupeDmpAttrs, enrichAudienceSelection, normalizeDmpAttr } from '@/lib/audience'
-import { Users, Check, Search, Loader2, Sparkles, ChevronDown, ChevronUp, BrainCircuit } from 'lucide-react'
+import { Users, Check, Search, Loader2, Sparkles, ChevronDown, ChevronUp, BrainCircuit, X } from 'lucide-react'
 import TargetingPanel from '@/components/TargetingPanel'
 
 function getUid(a) { return a._uid || a.code || a.name || '' }
@@ -49,7 +49,10 @@ function AttrCard({ attr, selected, onToggle, reason, isReco }) {
   )
 }
 
-export default function AudienceStep({ data, onChange, isDone, brief, recoFromChat, expandTargeting = false }) {
+export default function AudienceStep({
+  data, onChange, isDone, brief, recoFromChat, expandTargeting = false,
+  openaiCampaignFlow = false,
+}) {
 
   const [allAttrs, setAllAttrs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -212,6 +215,37 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
           {data.attrs.length > 0 && <Badge variant="green">{data.attrs.length} đã chọn</Badge>}
         </CardContent>
       </Card>
+
+      {openaiCampaignFlow && data.attrs.length > 0 && (
+        <div
+          className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-2.5"
+          data-demo="selected-audience-shelf"
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <Check className="h-3.5 w-3.5 text-brand-600" />
+            <span className="text-xs font-bold text-brand-700">Segment đã chọn</span>
+            <Badge variant="green" className="ml-auto">{data.attrs.length}</Badge>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {data.attrs.map(attr => (
+              <button
+                key={getUid(attr)}
+                type="button"
+                onClick={() => toggleAttr(attr)}
+                title={`Bỏ chọn ${attr.name}`}
+                aria-label={`Bỏ chọn ${attr.name}`}
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-brand-200 bg-white px-2 py-1 text-[11px] font-semibold text-brand-700 shadow-sm transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+              >
+                <span className="truncate">{attr.name}</span>
+                <X className="h-3 w-3 flex-shrink-0" />
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-brand-600">
+            Luôn hiển thị tại đây, kể cả khi segment nằm sâu trong danh sách đầy đủ.
+          </p>
+        </div>
+      )}
 
       {/* Targeting Parameters from AI */}
       <TargetingPanel

@@ -420,22 +420,36 @@ async def _handle_openai_freeform_impl(
             duration_ms=int((time.perf_counter() - decision_started) * 1000),
         )
 
-        # Match the established Copilot contract for an uncommitted initial
-        # Brief. The semantic coordinator decides whether this is a Brief
-        # action; the OpenAI-owned typed collector gathers every hard fact,
-        # asks for missing operator fields, and creates one atomic proposal.
-        if (
-            step == 0
-            and pending is None
-            and decision.workflow_action in {"update_brief", "approve"}
-        ):
+        # At the Brief step, the typed collector is the sole writer until a
+        # complete canonical Brief exists. A factual continuation/correction
+        # may be labelled "clarification" by the semantic planner; generic
+        # chat must not lose it or create a partial ``brief.notes`` proposal.
+        # FAQ-only turns remain on the read-only answer path.
+        if step == 0 and pending is None:
+            from autopilot.capabilities import validate_brief_value
             from workspace.service import get_workspace
 
             canonical = await get_workspace(session_id)
             current_brief = (
                 canonical.get("artifacts", {}).get("brief", {}).get("value")
             )
-            if not current_brief:
+            _, brief_errors = validate_brief_value(current_brief)
+            has_mutation_subrequest = any(
+                item.kind == "mutation" for item in decision.subrequests
+            )
+            is_brief_collection_turn = (
+                decision.turn_type == "clarification"
+                or (
+                    not decision.requires_clarification()
+                    and (
+                        decision.turn_type == "workflow_action"
+                        or decision.workflow_action in {"update_brief", "approve"}
+                        or decision.would_mutate_workspace
+                        or has_mutation_subrequest
+                    )
+                )
+            )
+            if brief_errors and is_brief_collection_turn:
                 from openai_campaign.brief import handle_openai_brief_intake
 
                 return await handle_openai_brief_intake(

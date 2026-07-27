@@ -12,6 +12,7 @@ import json
 from typing import Any
 
 from audience_reach import estimate_unique_reach
+from autopilot.capabilities import validate_brief_value
 from openai_campaign.knowledge import search_ad_knowledge
 from session import set_pending_proposal
 from tools.audience_library import get_all_segments, search_audience
@@ -538,6 +539,13 @@ async def execute_openai_tool(
         str(args.get("reason") or ""),
         source_message=message,
     )
+    if field.startswith("brief.") and validate_brief_value(
+        canonical.get("artifacts", {}).get("brief", {}).get("value")
+    )[1]:
+        raise InvalidWorkspaceIntent(
+            "Brief ban đầu chưa đầy đủ; phải đề xuất toàn bộ field `brief` "
+            "thay vì một field con."
+        )
     proposal = await create_proposal(
         session_id,
         field,

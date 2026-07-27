@@ -305,6 +305,7 @@ export default function CreativeStep({
   formatPlan,
   autopilotMode = false,
   onRepairSave,
+  openaiCampaignFlow = false,
 }) {
   const fileInputRef = useRef(null)
   const [lightboxFile, setLightboxFile] = useState(null)
@@ -784,7 +785,12 @@ export default function CreativeStep({
 
       {/* ── AI Tạo Ảnh tab ── */}
       {tab === 'ai' && (
-        <AdImageGenerator brief={brief} segment={segment} onAddToCreative={handleAddAiImages} />
+        <AdImageGenerator
+          brief={brief}
+          segment={segment}
+          onAddToCreative={handleAddAiImages}
+          openaiCampaignFlow={openaiCampaignFlow}
+        />
       )}
 
       {repairTarget && (

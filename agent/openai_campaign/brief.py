@@ -211,6 +211,10 @@ async def handle_openai_brief_intake(
             ],
             "tokens_spent": 0,
             "auto_approve_brief": auto_approve_brief,
+            # These safeguards are intentionally enabled only by the OpenAI
+            # campaign adapter; the GreenNode collector path is unchanged.
+            "merge_explicit_text_evidence": True,
+            "replace_incomplete_brief": True,
         },
         structured_runner=runner,
         proposal_actor="openai_campaign_copilot",

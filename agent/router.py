@@ -1440,6 +1440,8 @@ class GenerateImageRequest(BaseModel):
     prompt_spec: dict | None = None
     idempotency_key: str = ""
     quality: str = "medium"
+    campaign_flow: str = ""
+    audience_context: dict = {}
 
 
 class CreativeAssetRequest(BaseModel):
@@ -1503,9 +1505,44 @@ async def generate_image_route(request: Request, req: GenerateImageRequest):
     assets = await get_assets(actor, req.asset_ids, req.session_id)
     if len(assets) != len(set(req.asset_ids)):
         raise HTTPException(status_code=404, detail="one or more creative assets were not found")
+    creative_brief = dict(req.brief or {})
+    use_openai_context = False
+    if req.campaign_flow == "openai":
+        from campaign_models import OPENAI_GPT_5_4_MINI
+        from identity import get_conversation_model_for_session
+
+        model_lock = await get_conversation_model_for_session(req.session_id)
+        use_openai_context = (
+            model_lock["conversation_model"] == OPENAI_GPT_5_4_MINI
+        )
+    if use_openai_context:
+        attrs = (req.audience_context or {}).get("attrs") or []
+        names = [
+            str(
+                item.get("fullLabel") or item.get("name")
+                or item.get("code") or item.get("segmentId") or ""
+            ).strip()
+            for item in attrs[:12]
+            if isinstance(item, dict)
+        ]
+        targeting = (req.audience_context or {}).get("targeting") or {}
+        targeting_parts = [
+            f"{key}: {', '.join(map(str, value)) if isinstance(value, list) else value}"
+            for key, value in list(targeting.items())[:12]
+            if value
+        ] if isinstance(targeting, dict) else []
+        audience_parts = [
+            f"Selected DMP segments: {', '.join(filter(None, names))}"
+            if any(names) else "",
+            f"Targeting: {'; '.join(targeting_parts)}" if targeting_parts else "",
+        ]
+        audience_summary = "\n".join(filter(None, audience_parts))[:4000]
+        if audience_summary:
+            creative_brief["audience_summary"] = audience_summary
+
     return await handle_generate_image(
         session_id=req.session_id,
-        brief=req.brief,
+        brief=creative_brief,
         format_id=req.format_id,
         custom_prompt=req.custom_prompt,
         actor=actor,

@@ -22,6 +22,11 @@ Classify by meaning, not by keywords, string equality, or question punctuation.
 Use recent context to understand replies such as "yes", "do that", "those
 audiences", or "the second one". Never treat a short phrase as confirmation
 without a matching pending server proposal or clear conversational context.
+Treat a factual statement that defines or corrects what the brand sells, its
+product/service category, campaign theme, geography, or target customer as an
+update_brief workflow action, including when it is supplied during Audience or
+Creative. Product/category facts belong in Brief notes and must remain available
+to downstream audience and creative work.
 
 Only when pending_proposal is non-null, distinguish its disposition
 semantically:
@@ -80,6 +85,10 @@ Behavior rules:
 - When the decision contains a requested workspace mutation, use
   propose_workspace_change. It creates a visible proposal only; never say the
   change was applied. The user must approve it in a later turn.
+- When updating an existing Brief with a product, service, category, geography,
+  or target-customer correction, preserve the other canonical Brief fields and
+  include the new fact in Brief notes. Never replace or contradict a known
+  product category with a generic invented product.
 - For mixed requests, answer the read/question portion and create the proposal
   in the same turn. Keep the proposed change clearly separate from current fact.
 - Do not call mutation tools for hypothetical questions, recommendations that

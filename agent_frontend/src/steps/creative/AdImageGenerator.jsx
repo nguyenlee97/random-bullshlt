@@ -140,7 +140,12 @@ function GenLightbox({ img, onClose }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
+export default function AdImageGenerator({
+  brief,
+  segment,
+  onAddToCreative,
+  openaiCampaignFlow = false,
+}) {
   const [selectedFormatId, setSelectedFormatId] = useState(null)
   const [generating, setGenerating]             = useState(false)
   const [error, setError]                       = useState('')
@@ -172,6 +177,8 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
 
     const result = await AgentAPI.generateAdImage(brief, selectedFormatId, customPrompt, {
       assetIds: [...selectedAssetIds], promptSpec, quality: promptSpec?.quality || 'medium',
+      campaignFlow: openaiCampaignFlow ? 'openai' : '',
+      audienceContext: openaiCampaignFlow ? segment : {},
     })
 
     if (!result.ok) {
@@ -204,7 +211,7 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       },
     })
     setGenerating(false)
-  }, [selectedFormatId, generating, brief, customPrompt, selectedAssetIds, promptSpec])
+  }, [selectedFormatId, generating, brief, customPrompt, selectedAssetIds, promptSpec, openaiCampaignFlow, segment])
 
   const handleFormatSelect = useCallback((formatId) => {
     setSelectedFormatId(formatId)
@@ -273,8 +280,14 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       generation,
     }
     setGeneratedImages(prev => [newImg, ...prev])
+    if (openaiCampaignFlow) {
+      // A generated image is a draft, not an approved artifact, but it must be
+      // lifted into the parent Creative form immediately so step navigation
+      // cannot unmount and discard it.
+      onAddToCreative([newImg])
+    }
     setPendingCrop(null)
-  }, [])
+  }, [onAddToCreative, openaiCampaignFlow])
 
   const handleCropConfirm = useCallback((croppedDataUrl) => {
     if (!pendingCrop) return

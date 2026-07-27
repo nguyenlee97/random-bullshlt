@@ -28,6 +28,8 @@ const storageSet = (key, value) => {
 let LEGACY_ANONYMOUS_TOKEN = typeof window !== 'undefined' ? storageGet('anonymous-token') : ''
 let CURRENT_CONVERSATION_ID = typeof window !== 'undefined' ? storageGet('conversation-id') : ''
 const STORED_SESSION_ID = typeof window !== 'undefined' ? storageGet('session-id') : ''
+let IDENTITY_BOOTSTRAP_PROMISE = null
+let IDENTITY_BOOTSTRAP_RESULT = null
 
 const cookieGet = name => {
   if (typeof document === 'undefined') return ''
@@ -757,17 +759,29 @@ function conversationMessages(context) {
 }
 
 async function bootstrapIdentity() {
-  const response = await agentFetch(`${AGENT_URL}/api/agent/auth/anonymous`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(5000),
-  })
-  if (!response.ok) throw new Error('Không thể khởi tạo danh tính ẩn danh.')
-  const identity = await response.json()
-  // The response has now installed an HttpOnly cookie. Remove any credential
-  // left by the short-lived pre-cookie development build.
-  LEGACY_ANONYMOUS_TOKEN = ''
-  storageSet('anonymous-token', '')
-  return identity
+  if (IDENTITY_BOOTSTRAP_RESULT) return IDENTITY_BOOTSTRAP_RESULT
+  if (IDENTITY_BOOTSTRAP_PROMISE) return IDENTITY_BOOTSTRAP_PROMISE
+
+  IDENTITY_BOOTSTRAP_PROMISE = (async () => {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/auth/anonymous`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) throw new Error('Không thể khởi tạo danh tính ẩn danh.')
+    const identity = await response.json()
+    // The response has now installed an HttpOnly cookie. Remove any credential
+    // left by the short-lived pre-cookie development build.
+    LEGACY_ANONYMOUS_TOKEN = ''
+    storageSet('anonymous-token', '')
+    IDENTITY_BOOTSTRAP_RESULT = identity
+    return identity
+  })()
+
+  try {
+    return await IDENTITY_BOOTSTRAP_PROMISE
+  } finally {
+    IDENTITY_BOOTSTRAP_PROMISE = null
+  }
 }
 
 async function fetchConversation(conversationId) {
@@ -1142,6 +1156,16 @@ function serviceUnavailable(content, step) {
 
 
 export const AgentAPI = {
+  async getDebugLogs(limit = 500) {
+    const sessionId = SESSION_ID
+    const res = await agentFetch(
+      `${AGENT_URL}/api/agent/logs/${encodeURIComponent(sessionId)}?limit=${Math.max(1, Math.min(1000, Number(limit) || 500))}`,
+      { signal: AbortSignal.timeout(15000) },
+    )
+    if (!res.ok) throw new Error(`Không thể tải backend logs (HTTP ${res.status})`)
+    return res.json()
+  },
+
 
   /**
    * Bootstrap the anonymous device identity. Restoring the previous campaign
@@ -2012,6 +2036,8 @@ export const AgentAPI = {
           asset_ids: options.assetIds || [],
           prompt_spec: options.promptSpec || null,
           quality: options.quality || 'medium',
+          campaign_flow: options.campaignFlow || '',
+          audience_context: options.audienceContext || {},
           idempotency_key: options.idempotencyKey || `guided:${SESSION_ID}:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
         }),
         signal: AbortSignal.timeout(180000),  // AI image gen — up to 3 min

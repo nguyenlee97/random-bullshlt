@@ -180,7 +180,7 @@ export const STAGE1_STEPS = [
     target: '#chat-input',
     position: 'top',
     title: '⌨️ Ô nhập chat',
-    text: 'Hoặc gõ trực tiếp — agent hiểu tiếng Việt tự nhiên. Nhấn Enter để gửi.',
+    text: 'Hoặc gõ trực tiếp — agent hiểu tiếng Việt tự nhiên. Enter để xuống dòng; Ctrl/⌘+Enter để gửi, hoặc bấm nút gửi.',
   },
   {
     type: 'TOOLTIP',
