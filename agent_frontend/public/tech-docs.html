@@ -24,7 +24,7 @@
   <div class="meta">Current-state build 2026-07-27.3 · Capability đã chạy được tách rõ khỏi roadmap</div>
 </header>
 <main class="wrap">
-  <nav class="toc"><b>Nội dung</b><ol><li><a href="#business">Bài toán &amp; hành trình business</a></li><li><a href="#modes">Copilot và Autopilot</a></li><li><a href="#architecture">Kiến trúc hệ thống</a></li><li><a href="#workspace">Canonical workspace</a></li><li><a href="#intelligence">Recommendation &amp; Creative Intelligence</a></li><li><a href="#durability">Durable execution</a></li><li><a href="#zalo">Zalo identity &amp; channel</a></li><li><a href="#reports">Live view &amp; sáu báo cáo</a></li><li><a href="#security">Security &amp; observability</a></li></ol></nav>
+  <nav class="toc"><b>Nội dung</b><ol><li><a href="#business">Bài toán &amp; hành trình business</a></li><li><a href="#modes">Copilot và Autopilot</a></li><li><a href="#architecture">Kiến trúc hệ thống</a></li><li><a href="#workspace">Canonical workspace</a></li><li><a href="#intelligence">Recommendation &amp; Creative Intelligence</a></li><li><a href="#durability">Durable execution</a></li><li><a href="#zalo">Zalo identity &amp; channel</a></li><li><a href="#reports">Live view &amp; sáu báo cáo</a></li><li><a href="#feedback-loop">Feedback loop &amp; continuous improvement</a></li><li><a href="#security">Security &amp; observability</a></li></ol></nav>
 
   <h2 id="business"><span class="n">01</span>Từ business brief đến campaign có thể vận hành</h2>
   <p class="lead">Bài toán không phải “chat với AI để lấy một đoạn copy”. Đội quảng cáo phải chuyển một mục tiêu kinh doanh mơ hồ thành audience có căn cứ, creative đúng format, placement khả thi, order an toàn và báo cáo có thể giải thích — đồng thời giữ cho con người quyền sửa và quyết định launch.</p>
@@ -195,7 +195,65 @@ sequenceDiagram
     <tr><td>Zalo media</td><td>1080×1350 report JPEG, site/zone live screenshots, full PDF link</td><td>Owned campaign only</td></tr>
   </tbody></table></div>
 
-  <h2 id="security"><span class="n">09</span>Security, failure recovery, observability và deploy</h2>
+  <h2 id="feedback-loop"><span class="n">09</span>Feedback loop và continuous improvement</h2>
+  <p class="lead">Mỗi kết quả không chỉ là output cho người dùng; nó còn là một điểm đo có thể truy ngược về request, run, tool, guard policy, model và phiên bản Agent đã tạo ra nó. Feedback được giữ tách khỏi campaign state để hệ thống học từ tín hiệu chất lượng mà không tự ý sửa campaign đang chạy.</p>
+
+  <div class="grid3">
+    <div class="card"><h3><span class="status done">LIVE</span> Feedback tại điểm quyết định</h3><p>Kết quả Copilot và summary Autopilot hiển thị Có/Chưa. Phản hồi âm yêu cầu reason code hoặc comment, bao phủ recommendation sai, thiếu context, không làm theo yêu cầu, fact sai, unsafe, chậm, quá nhiều bước, giải thích khó hiểu, approval lỗi và tool/system error.</p></div>
+    <div class="card"><h3><span class="status done">LIVE</span> Correlation đầy đủ</h3><p>Mỗi feedback gắn với owned session, conversation hoặc run, request/task khi có, surface, workflow step và workspace revision. Version manifest khóa agent build, model/engine, quality schema và guard policy tại thời điểm run.</p></div>
+    <div class="card"><h3><span class="status done">LIVE</span> Durable &amp; privacy-aware</h3><p>MongoDB lưu interaction, quality event và feedback trong collection riêng. Owner được hash, free text được redact PII, payload bị giới hạn kích thước, TTL mặc định là 90 ngày cho trace/event và 180 ngày cho feedback.</p></div>
+    <div class="card"><h3><span class="status done">LIVE</span> Idempotent và ownership-scoped</h3><p><code>submission_id</code> chỉ tạo một bản ghi trong scope của owner. CSRF, request correlation và ownership check chặn feedback lên run của người khác; target ngoài scope trả privacy-safe not-found.</p></div>
+    <div class="card"><h3><span class="status done">LIVE</span> Không chặn response path</h3><p>Interaction/event được ghi best-effort ngoài critical path với timeout ngắn. Feedback yêu cầu durable store và thất bại rõ ràng thay vì giả vờ đã lưu; metric theo dõi write outcome, sentiment và reason.</p></div>
+    <div class="card"><h3><span class="status partial">FOUNDATION</span> Eval &amp; human labels</h3><p>Golden set hiện có 80 brief đã qua human review, gồm ambiguity, KPI conflict, catalog gap và adversarial input. Guardrail có offline/E2E attack suite; các tập này là regression baseline trước mọi thay đổi.</p></div>
+  </div>
+
+  <h3>Hai vòng cải thiện, một release gate</h3>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart LR
+  RUN[Copilot / Autopilot run<br/>LIVE] --> TRACE[Interaction + tool + guard trace<br/>LIVE]
+  RUN --> FB[Sentiment + reason + comment<br/>LIVE]
+  TRACE --> TRIAGE[Failure clustering & review queue<br/>NEXT]
+  FB --> TRIAGE
+  TRIAGE --> HITL[HITL adjudication<br/>NEXT]
+  HITL --> DATA[Versioned dataset candidates<br/>NEXT]
+  DATA --> SYS[Prompt · RAG · tool · policy fixes<br/>NEXT]
+  DATA --> TRAIN[SFT · DPO · RLHF / RLAIF<br/>OPTIONAL]
+  SYS --> GATE[Golden set + security + latency gates<br/>PARTIAL]
+  TRAIN --> GATE
+  GATE --> SHADOW[Shadow · canary · rollback<br/>NEXT]
+  SHADOW --> LATER[Improved later runs]
+  LATER --> RUN
+  </div></div>
+
+  <div class="table"><table><thead><tr><th>Signal</th><th>Dữ liệu hiện có</th><th>Cách biến thành cải thiện</th><th>Gate bắt buộc</th><th>Trạng thái</th></tr></thead><tbody>
+    <tr><td>User feedback</td><td>Sentiment, reason codes, redacted comment, request/run correlation, version manifest</td><td>Cluster failure theo step/tool/model; ưu tiên lỗi lặp lại; chuyển case đã review thành regression fixture</td><td>Không giảm task success, ownership safety hoặc approval correctness</td><td><span class="status partial">CAPTURE LIVE</span></td></tr>
+    <tr><td>Interaction trace</td><td>Latency, outcome, tool summary, fallback, proposal, guard decision, workspace revision trước/sau</td><td>Tách lỗi model khỏi lỗi retrieval, tool, policy, UI hoặc provider; sửa layer nhỏ nhất trước</td><td>Focused tests + end-to-end trajectory replay</td><td><span class="status done">LIVE</span></td></tr>
+    <tr><td>Guardrail findings</td><td>Rule, severity, decision, protected-state evidence và attack-suite result</td><td>Thêm adversarial case, chỉnh rule ở shadow mode, đo attack success và false-positive trước enforce</td><td>Không workspace mutation, không order/tool call khi bị block</td><td><span class="status done">LIVE</span></td></tr>
+    <tr><td>Human intervention</td><td>Approval checkpoint và canonical artifact history</td><td>Reviewer gắn root cause, severity, expected behavior và ideal action; reviewer thứ hai xử lý disagreement</td><td>Reviewer identity, label provenance và adjudication record</td><td><span class="status later">NEXT</span></td></tr>
+    <tr><td>Business outcome</td><td>Campaign/report artifacts có provenance; outcome-quality join chưa tự động</td><td>So sánh feedback với delivery outcome để tránh tối ưu “được thích” nhưng làm campaign kém hiệu quả</td><td>Truth label rõ measured/computed/estimate/synthetic</td><td><span class="status later">NEXT</span></td></tr>
+    <tr><td>Preference pair</td><td>Positive/negative feedback hiện là point label, chưa phải chosen-vs-rejected pair</td><td>Regenerate nhiều candidate trên cùng context, để human rank; dùng cho DPO hoặc reward model khi đủ chất lượng</td><td>Held-out eval, bias review, privacy/license review và rollback</td><td><span class="status later">OPTIONAL</span></td></tr>
+  </tbody></table></div>
+
+  <h3>Operating loop cho những run sau</h3>
+  <div class="steps">
+    <div class="step"><b>Collect — ghi evidence có version</b><span>Capture feedback cùng trajectory metadata, tool/guard outcome và workspace revision. Không dùng một nút “Có/Chưa” đơn lẻ làm ground truth.</span></div>
+    <div class="step"><b>Triage — tìm failure mode, không chỉ đếm dislike</b><span>Nhóm theo objective, step, tool, model, guard rule và reason. Sampling ưu tiên high-severity, repeated failure, disagreement và case có business impact.</span></div>
+    <div class="step"><b>HITL — con người adjudicate dữ liệu học</b><span>Reviewer xem context đã redact, artifact, tool trace và user expectation; gắn root cause, expected answer/action và mức tin cậy. Case bất đồng cần reviewer thứ hai trước khi vào dataset.</span></div>
+    <div class="step"><b>Improve — sửa system trước, train model khi cần</b><span>Ưu tiên prompt, retrieval, catalog, deterministic policy, tool contract và UX vì có thể kiểm chứng nhanh. SFT dùng ideal demonstrations; DPO dùng preference pairs; RLHF dùng reward model + RL khi có đủ scale. RLAIF chỉ tạo nhãn sơ bộ và vẫn cần human audit.</span></div>
+    <div class="step"><b>Evaluate — replay cả thành công lẫn thất bại</b><span>Chạy golden set, adversarial set, task/tool correctness, privacy, guard false-positive, latency và cost. Candidate phải thắng baseline trên slice mục tiêu mà không phá slice đang tốt.</span></div>
+    <div class="step"><b>Release — shadow, canary, observe, rollback</b><span>Replay trajectory đã de-identify trong shadow, canary theo tỷ lệ nhỏ, so sánh quality/safety/business metrics rồi mới mở rộng. Version manifest cho phép truy ngược và rollback chính xác.</span></div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h3>System learning — đường mặc định</h3><p>Feedback thay đổi prompt, RAG, tool, guard policy, workflow hoặc UX thông qua pull request, eval và release gate. Cách này cải thiện Agent ngay cả khi base model là API bên ngoài và không cho phép cập nhật weight.</p></div>
+    <div class="card"><h3>Model learning — đường có điều kiện</h3><p>Chỉ dùng SFT/DPO/RLHF/RLAIF khi có model path cho phép fine-tune, dataset đủ lớn và được adjudicate, cùng held-out eval chứng minh lợi ích. Không có online weight update trực tiếp từ feedback của một user.</p></div>
+  </div>
+
+  <p class="small">Phương pháp tham chiếu: <a href="https://arxiv.org/abs/2203.02155" target="_blank" rel="noreferrer">InstructGPT / RLHF</a> · <a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noreferrer">Direct Preference Optimization</a> · <a href="https://www.anthropic.com/research/constitutional-ai-harmlessness-from-ai-feedback" target="_blank" rel="noreferrer">Constitutional AI / RLAIF</a> · <a href="https://airc.nist.gov/airmf-resources/airmf/5-sec-core/" target="_blank" rel="noreferrer">NIST AI RMF: feedback, human oversight &amp; evaluation</a>.</p>
+
+  <div class="callout warn"><b>Đọc trước khi diễn giải sơ đồ:</b> Phần đang chạy gồm feedback UI/API, owner-scoped idempotent storage, redaction/retention, versioned interaction &amp; guard events, metrics, golden set và guardrail eval. Review queue, automated dataset-candidate pipeline, adjudication UI, outcome join, preference-pair generation, SFT/DPO/RLHF/RLAIF và closed-loop shadow/canary vẫn là các stage tiếp theo. Feedback hiện tại không tự sửa campaign, không tự đổi prompt và không cập nhật model weight.</div>
+
+  <h2 id="security"><span class="n">10</span>Security, failure recovery, observability và deploy</h2>
   <div class="grid3">
     <div class="card"><h3>Identity &amp; CSRF</h3><p>Opaque hashed revocable HttpOnly sessions, centralized CSRF header/cookie contract, Argon2id local credentials và server-side actor resolution.</p></div>
     <div class="card"><h3>Channel safety</h3><p>PKCE login, one-time TTL link attempts, signed webhook verification, dedupe, persisted rotating OA token và owner-free tool schema.</p></div>

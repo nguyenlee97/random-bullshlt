@@ -293,11 +293,19 @@ test('narrow mobile workspaces keep header, crop actions, review dock, and artif
   assert.match(workspacePane, /bg-gradient-to-l from-slate-50/)
 })
 
-test('technical document removes part 10 and forces a reliable Agent navigation', () => {
+test('technical document keeps the removed evidence content out and provides reliable Agent navigation', () => {
   assert.doesNotMatch(docs, /id="evidence"/)
-  assert.doesNotMatch(docs, /<span class="n">10<\/span>/)
   assert.match(docs, /href="\/agent\?from=docs" id="agent-entry-link"/)
   assert.doesNotMatch(docs, /agent-entry-link.*preventDefault|window\.location\.assign/)
+})
+
+test('technical document distinguishes the live feedback foundation from later learning stages', () => {
+  assert.match(docs, /id="feedback-loop"/)
+  assert.match(docs, /Feedback tại điểm quyết định/)
+  assert.match(docs, /HITL adjudication/)
+  assert.match(docs, /SFT · DPO · RLHF \/ RLAIF/)
+  assert.match(docs, /Feedback hiện tại không tự sửa campaign/)
+  assert.match(docs, /Review queue, automated dataset-candidate pipeline/)
 })
 
 test('public experience is responsive and honors reduced motion', () => {
