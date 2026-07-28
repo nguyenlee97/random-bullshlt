@@ -190,7 +190,7 @@ built with `agent_frontend/.env.production`, and deployed automatically to
 Configure the GitHub `production` environment before the first deployment:
 
 - Required secret: `VPS_SSH_KEY` (private key authorized on the VPS).
-- Recommended secret: `VPS_KNOWN_HOSTS` (pinned `known_hosts` entry).
+- Required secret: `VPS_KNOWN_HOSTS` (pinned `known_hosts` entry).
 - Optional variables: `VPS_HOST`, `VPS_PORT`, `VPS_USER`, and
   `VPS_DEPLOY_PATH`. Defaults match the current VPS runbook.
 

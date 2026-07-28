@@ -29,8 +29,6 @@ jobs:
       VPS_PORT: ${{ vars.VPS_PORT || '22' }}
       VPS_USER: ${{ vars.VPS_USER || 'root' }}
       VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH || '/var/www/agent' }}
-      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
 
     defaults:
       run:
@@ -64,9 +62,16 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
       - name: Validate deployment configuration
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
           if [[ -z "$VPS_SSH_KEY" ]]; then
             echo "::error::Missing production environment secret VPS_SSH_KEY"
+            exit 1
+          fi
+          if [[ -z "$VPS_KNOWN_HOSTS" ]]; then
+            echo "::error::Missing production environment secret VPS_KNOWN_HOSTS"
             exit 1
           fi
           if [[ ! "$VPS_PORT" =~ ^[0-9]+$ ]]; then
@@ -83,16 +88,14 @@ jobs:
           test -s agent_frontend/dist/index.html
 
       - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/production_key"
           chmod 600 "$HOME/.ssh/production_key"
-
-          if [[ -n "$VPS_KNOWN_HOSTS" ]]; then
-            printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          else
-            ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" > "$HOME/.ssh/known_hosts"
-          fi
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Upload immutable release
@@ -175,4 +178,4 @@ jobs:
 
       - name: Remove local SSH material
         if: always()
-        run: rm -f "$HOME/.ssh/production_key"
+        run: rm -f "$HOME/.ssh/production_key" "$HOME/.ssh/known_hosts"
