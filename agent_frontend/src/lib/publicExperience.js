@@ -1,5 +1,6 @@
 const HOME_PATH = '/home'
-const WORKSPACE_PATH = '/workspace'
+const MANAGE_PATH = '/manage'
+const LEGACY_WORKSPACE_PATH = '/workspace'
 const AGENT_PATH = '/agent'
 
 const publicMode = mode => mode === 'autopilot' ? 'autopilot' : 'copilot'
@@ -23,8 +24,11 @@ export function parseAppRoute(locationLike) {
   const queryRequiresAgent = params.has('conversation') || params.has('auth') || params.has('auth_error')
   const isAgentPath = segments[0] === 'agent'
 
-  if (pathname === WORKSPACE_PATH && !params.has('conversation')) {
-    return { surface: 'workspace', mode: '', conversationId: '' }
+  if (
+    (pathname === MANAGE_PATH || pathname === LEGACY_WORKSPACE_PATH)
+    && !params.has('conversation')
+  ) {
+    return { surface: 'manage', mode: '', conversationId: '' }
   }
 
   if (!isAgentPath && !queryRequiresAgent) {
@@ -84,4 +88,4 @@ export function authReturnTo(locationLike) {
   return `${locationLike?.pathname || AGENT_PATH}${query ? `?${query}` : ''}${locationLike?.hash || ''}`
 }
 
-export { AGENT_PATH, HOME_PATH, WORKSPACE_PATH }
+export { AGENT_PATH, HOME_PATH, MANAGE_PATH }

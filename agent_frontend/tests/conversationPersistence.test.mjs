@@ -61,3 +61,20 @@ test('conversation deletion is available individually and in bulk with safety co
   assert.match(deleteDialog, /XÓA TẤT CẢ/)
   assert.match(deleteDialog, /Thao tác này không thể hoàn tác/)
 })
+
+test('deleting the active conversation returns to management without creating a replacement chat', () => {
+  const managerBody = app.slice(
+    app.indexOf('const returnToCampaignManager'),
+    app.indexOf('const handleNewChat'),
+  )
+  const deleteBody = app.slice(
+    app.indexOf('const confirmDeleteConversations'),
+    app.indexOf('// Listen for agent:reset'),
+  )
+  assert.match(managerBody, /clearActiveConversation\(\)/)
+  assert.match(managerBody, /setPendingEntryMode\(''\)/)
+  assert.match(managerBody, /MANAGE_PATH/)
+  assert.doesNotMatch(managerBody, /newChat\(|agentPath\(/)
+  assert.match(deleteBody, /returnToCampaignManager\('replace'\)/)
+  assert.doesNotMatch(deleteBody, /handleNewChat\(\)|newChat\(/)
+})

@@ -80,7 +80,7 @@ test('claim updates ownership in place without recreating the active conversatio
 
 test('logout drops account-owned open state while anonymous-first entry stays available', () => {
   assert.match(app, /current\?\.ownership === 'account'/)
-  assert.match(app, /handleNewChat\(\)/)
+  assert.match(app, /returnToCampaignManager\('replace'\)/)
   assert.match(home, /Bạn muốn Agent/)
   assert.match(home, /đồng hành thế nào/)
   assert.match(auth, /Bạn vẫn có thể dùng ẩn danh/)

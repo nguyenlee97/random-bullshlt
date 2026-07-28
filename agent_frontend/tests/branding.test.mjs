@@ -79,7 +79,7 @@ test('core mode controls keep mobile layout and accessible names', async () => {
   assert.match(app, /aria-selected=/)
   assert.match(selector, /aria-label={`Bắt đầu \${mode\.title}/)
   assert.doesNotMatch(app, /<ModeSwitcher/)
-  assert.match(topBar, /aria-label="Về trang chủ"/)
+  assert.match(topBar, /aria-label="Về trang quản lý campaign"/)
   assert.match(topBar, /id="demo-btn"[\s\S]*id="conversation-history-btn"[\s\S]*data-demo="reset-btn"[\s\S]*<AccountMenu/)
   assert.doesNotMatch(topBar, /tech-docs-btn|new-chat-btn/)
   assert.match(composer, /aria-label="Tin nhắn gửi Advertising Agent"/)

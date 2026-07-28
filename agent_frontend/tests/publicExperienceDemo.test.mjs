@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
-  WORKSPACE_PATH,
+  MANAGE_PATH,
   agentConversationId,
   agentEntryMode,
   agentEntryUrl,
@@ -39,6 +39,7 @@ const styles = read('../src/index.css')
 test('public landing and agent modes have canonical SPA routes', () => {
   assert.equal(hasAgentIntent({ pathname: '/', search: '' }), false)
   assert.equal(hasAgentIntent({ pathname: '/home', search: '' }), false)
+  assert.equal(hasAgentIntent({ pathname: '/manage', search: '' }), true)
   assert.equal(hasAgentIntent({ pathname: '/workspace', search: '' }), true)
   assert.equal(hasAgentIntent({ pathname: '/agent', search: '' }), true)
   assert.equal(hasAgentIntent({ pathname: '/', search: '?conversation=conv_123' }), true)
@@ -56,10 +57,14 @@ test('public landing and agent modes have canonical SPA routes', () => {
     'conv_456',
   )
   assert.deepEqual(
-    parseAppRoute({ pathname: '/workspace', search: '' }),
-    { surface: 'workspace', mode: '', conversationId: '' },
+    parseAppRoute({ pathname: '/manage', search: '' }),
+    { surface: 'manage', mode: '', conversationId: '' },
   )
-  assert.equal(WORKSPACE_PATH, '/workspace')
+  assert.deepEqual(
+    parseAppRoute({ pathname: '/workspace', search: '' }),
+    { surface: 'manage', mode: '', conversationId: '' },
+  )
+  assert.equal(MANAGE_PATH, '/manage')
   assert.deepEqual(
     parseAppRoute({ pathname: '/agent/copilot/history/conv%20123', search: '' }),
     { surface: 'agent', mode: 'copilot', conversationId: 'conv 123' },
@@ -78,7 +83,8 @@ test('public landing and agent modes have canonical SPA routes', () => {
   )
   assert.match(app, /<PublicLanding/)
   assert.match(app, /agentEntryUrl\(window\.location, mode\)/)
-  assert.match(app, /const nextUrl = mode \? agentEntryUrl\(window\.location, mode\) : WORKSPACE_PATH/)
+  assert.match(app, /const nextUrl = mode \? agentEntryUrl\(window\.location, mode\) : MANAGE_PATH/)
+  assert.match(app, /route\.surface === 'manage'[\s\S]*window\.history\.replaceState\(\{\}, '', `\$\{MANAGE_PATH\}/)
   assert.match(app, /agentPath\(context\.experience_mode, context\.conversation_id \|\| conversationId\)/)
   assert.match(app, /pendingEntryMode/)
   assert.match(app, /pendingEntryStartRef/)
@@ -371,7 +377,7 @@ test('mobile tour guidance uses target-aware docking with manual move and collap
 test('narrow mobile workspaces keep header, crop actions, review dock, and artifact navigation reachable', () => {
   assert.match(topBar, /px-2 sm:gap-3 sm:px-5/)
   assert.match(topBar, /hidden min-\[400px\]:inline/)
-  assert.match(topBar, /aria-label="Về trang chủ"/)
+  assert.match(topBar, /aria-label="Về trang quản lý campaign"/)
   assert.doesNotMatch(topBar, /tech-docs-btn|new-chat-btn|>Docs<|>Trang chủ</)
   const tourIndex = topBar.indexOf('id="demo-btn"')
   const historyIndex = topBar.indexOf('id="conversation-history-btn"')

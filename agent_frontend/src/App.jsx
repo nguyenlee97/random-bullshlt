@@ -23,7 +23,7 @@ import { normalizeAudienceSelection } from '@/lib/audience'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
 import {
   HOME_PATH,
-  WORKSPACE_PATH,
+  MANAGE_PATH,
   agentConversationId,
   agentEntryMode,
   agentEntryUrl,
@@ -211,6 +211,8 @@ export default function App() {
     const route = parseAppRoute(window.location)
     if (route.surface === 'home' && window.location.pathname !== HOME_PATH) {
       window.history.replaceState({}, '', `${HOME_PATH}${window.location.search}${window.location.hash}`)
+    } else if (route.surface === 'manage' && window.location.pathname !== MANAGE_PATH) {
+      window.history.replaceState({}, '', `${MANAGE_PATH}${window.location.search}${window.location.hash}`)
     }
   }, [])
 
@@ -228,7 +230,7 @@ export default function App() {
         return
       }
       setExperienceMode(null)
-      if (route.surface === 'workspace') {
+      if (route.surface === 'manage') {
         setPendingConversationId('')
         setPendingEntryMode('')
         return
@@ -244,7 +246,7 @@ export default function App() {
     const mode = requestedMode === 'autopilot' ? 'autopilot' : requestedMode === 'copilot' ? 'copilot' : ''
     landingEntryAttemptRef.current += 1
     pendingEntryStartRef.current = ''
-    const nextUrl = mode ? agentEntryUrl(window.location, mode) : WORKSPACE_PATH
+    const nextUrl = mode ? agentEntryUrl(window.location, mode) : MANAGE_PATH
     window.history.pushState({}, '', nextUrl)
     setPendingConversationId('')
     setPendingEntryMode(mode)
@@ -621,7 +623,7 @@ export default function App() {
         if (initialRoute.surface !== 'home') {
           const returnPath = initialRoute.surface === 'agent'
             ? agentPath(initialRoute.mode, requestedConversation)
-            : WORKSPACE_PATH
+            : MANAGE_PATH
           window.history.replaceState(
             {},
             '',
@@ -1195,10 +1197,7 @@ export default function App() {
     return handleReset()
   }, [experienceMode, handleReset])
 
-  const handleNewChat = useCallback(() => {
-    const routeMode = experienceMode === 'autopilot' ? 'autopilot' : 'copilot'
-    landingEntryAttemptRef.current += 1
-    pendingEntryStartRef.current = ''
+  const clearActiveConversation = useCallback(() => {
     resetLocalCampaign()
     hydrateMessages([])
     setCurrentConversationId('')
@@ -1215,12 +1214,29 @@ export default function App() {
     setClaimError('')
     setClaimNotice('')
     setPendingConversationId('')
-    setPendingEntryMode(routeMode)
     setConversationHistory(prev => [...prev].sort((a, b) => (
       new Date(b.last_message_at || b.updated_at || 0) - new Date(a.last_message_at || a.updated_at || 0)
     )))
+  }, [hydrateMessages, resetLocalCampaign])
+
+  const returnToCampaignManager = useCallback((historyAction = 'push') => {
+    landingEntryAttemptRef.current += 1
+    pendingEntryStartRef.current = ''
+    clearActiveConversation()
+    setPendingEntryMode('')
+    setShowPublicLanding(false)
+    const method = historyAction === 'replace' ? 'replaceState' : 'pushState'
+    window.history[method]({}, '', MANAGE_PATH)
+  }, [clearActiveConversation])
+
+  const handleNewChat = useCallback(() => {
+    const routeMode = experienceMode === 'autopilot' ? 'autopilot' : 'copilot'
+    landingEntryAttemptRef.current += 1
+    pendingEntryStartRef.current = ''
+    clearActiveConversation()
+    setPendingEntryMode(routeMode)
     window.history.pushState({}, '', agentPath(routeMode))
-  }, [experienceMode, hydrateMessages, resetLocalCampaign])
+  }, [clearActiveConversation, experienceMode])
 
   const openAuthDialog = useCallback(() => {
     account.clearError()
@@ -1274,11 +1290,11 @@ export default function App() {
       await account.logout()
       const remaining = await AgentAPI.listConversations()
       setConversationHistory(remaining)
-      if (current?.ownership === 'account') handleNewChat()
+      if (current?.ownership === 'account') returnToCampaignManager('replace')
     } catch (error) {
       setHistoryError(error.message)
     }
-  }, [account.logout, conversationHistory, currentConversationId, handleNewChat])
+  }, [account.logout, conversationHistory, currentConversationId, returnToCampaignManager])
 
   const requestClaimConversation = useCallback(conversation => {
     setClaimError('')
@@ -1501,7 +1517,7 @@ export default function App() {
         await AgentAPI.deleteAllConversations()
         setConversationHistory([])
         setDeleteTarget(null)
-        if (currentConversationId || experienceMode) handleNewChat()
+        if (currentConversationId || experienceMode) returnToCampaignManager('replace')
         return
       }
 
@@ -1510,13 +1526,13 @@ export default function App() {
       await AgentAPI.deleteConversation(conversationId)
       setConversationHistory(prev => prev.filter(item => item.conversation_id !== conversationId))
       setDeleteTarget(null)
-      if (conversationId === currentConversationId) handleNewChat()
+      if (conversationId === currentConversationId) returnToCampaignManager('replace')
     } catch (error) {
       setDeleteError(error.message || 'Không thể xóa cuộc trò chuyện.')
     } finally {
       setDeleteBusy(false)
     }
-  }, [currentConversationId, deleteBusy, deleteTarget, experienceMode, handleNewChat])
+  }, [currentConversationId, deleteBusy, deleteTarget, experienceMode, returnToCampaignManager])
 
   // Listen for agent:reset event from BlockRenderer ActionResetBlock
   useEffect(() => {
@@ -1973,7 +1989,7 @@ export default function App() {
     <div ref={appShellRef} className="fixed inset-0 flex h-screen flex-col overflow-clip bg-gradient-to-br from-slate-50 to-brand-50/30 pb-[env(safe-area-inset-bottom)] md:pb-0">
       <TopBar
         onReset={handleReset}
-        onHome={returnToPublicLanding}
+        onManage={returnToCampaignManager}
         onOpenHistory={openConversationHistory}
         showDemo
         experienceMode={experienceMode}

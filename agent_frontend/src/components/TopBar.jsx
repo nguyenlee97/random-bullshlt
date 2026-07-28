@@ -4,7 +4,7 @@ import { useDemo } from '@/demo/DemoEngine'
 import AccountMenu from '@/components/AccountMenu'
 
 export default function TopBar({
-  onReset, onHome, onOpenHistory, showDemo, experienceMode,
+  onReset, onManage, onOpenHistory, showDemo, experienceMode,
   identity, identityBusy, onLogin, onLogout, onLoadSessions, onRevokeSession,
   onLinkZalo, onOpenZaloOA, onUnlinkZaloOA,
 }) {
@@ -15,10 +15,10 @@ export default function TopBar({
       {/* Logo */}
       <button
         type="button"
-        onClick={onHome}
+        onClick={onManage}
         className="flex shrink-0 items-center gap-2.5 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-        aria-label="Về trang chủ"
-        title="Về trang chủ"
+        aria-label="Về trang quản lý campaign"
+        title="Về trang quản lý campaign"
       >
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center shadow-sm">
           <Bot className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
