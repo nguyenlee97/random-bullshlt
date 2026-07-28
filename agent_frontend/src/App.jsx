@@ -218,6 +218,7 @@ export default function App() {
 
   const enterAgentForDemo = useCallback((mode) => {
     setPendingDemoMode(mode === 'autopilot' ? 'autopilot' : 'copilot')
+    setExperienceMode(null)
     enterAgent()
   }, [enterAgent])
 

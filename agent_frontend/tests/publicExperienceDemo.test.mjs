@@ -115,6 +115,7 @@ test('landing v3 implements the handed-off structure, assets, and production nav
   assert.match(app, /startGuidedDemo/)
   assert.match(app, /pendingDemoMode/)
   assert.match(app, /enterAgentForDemo/)
+  assert.match(app, /setPendingDemoMode\(mode === 'autopilot' \? 'autopilot' : 'copilot'\)[\s\S]*?setExperienceMode\(null\)[\s\S]*?enterAgent\(\)/)
   assert.match(app, /<PublicLanding onEnterAgent=\{enterAgent\} onOpenDemo=\{enterAgentForDemo\} \/>/)
   assert.doesNotMatch(app, /ProductDemo/)
 })
