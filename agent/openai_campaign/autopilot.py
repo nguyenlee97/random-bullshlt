@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -14,13 +14,64 @@ class _AutopilotReadOnlyAnswer(BaseModel):
     answer: str = Field(min_length=1, max_length=4000)
 
 
+class CreativeReviewAction(BaseModel):
+    intent: Literal[
+        "show_creatives",
+        "approve_override",
+        "replace_or_regenerate",
+        "other",
+    ] = "other"
+    creative_numbers: list[int] = Field(default_factory=list, max_length=12)
+    reason: str = Field(default="", max_length=500)
+    explicit: bool = False
+    evidence: str = Field(default="", max_length=500)
+
+
 AUTOPILOT_READONLY_INSTRUCTIONS = """
-You answer questions about a completed Campaign Autopilot run.
+You answer questions about a Campaign Autopilot run or its current human-review
+checkpoint.
 Use only the supplied artifact JSON. Never invent metrics, catalog entries,
-delivery results, or campaign state. Clearly label forecast and synthetic data
-as estimates or simulation. Do not propose or perform workspace changes.
-Answer concisely in Vietnamese and lead with the direct answer.
+delivery results, or campaign state. Clearly label forecasts as estimates.
+Never interpret a question as approval and do not propose or perform workspace
+changes. Answer concisely in Vietnamese and lead with the direct answer.
 """.strip()
+
+
+CREATIVE_REVIEW_ACTION_INSTRUCTIONS = """
+Classify one Vietnamese or English message at a creative-review checkpoint.
+Return show_creatives when the user asks to see, open, preview, inspect, or
+receive the generated creatives. Return approve_override only when the user
+explicitly accepts one or more numbered creatives despite a visual-review
+warning and supplies a meaningful reason for that manual decision. A generic
+"xác nhận", "đồng ý", or approval of the assignment is never a creative
+override. Return replace_or_regenerate when the user asks to replace, edit, or
+generate a flagged creative again. Creative numbers are one-based ordinals
+mentioned by the user. Evidence must be an exact contiguous quote from the
+message that supports the classification. Do not invent a reason.
+""".strip()
+
+
+async def classify_openai_creative_review_action(
+    *,
+    session_id: str,
+    message: str,
+    creatives: list[dict],
+    client: Any | None = None,
+) -> CreativeReviewAction:
+    result, _ = await generate_structured(
+        session_id=session_id,
+        instructions=CREATIVE_REVIEW_ACTION_INSTRUCTIONS,
+        input_data=json.dumps(
+            {"message": message, "creatives": creatives},
+            ensure_ascii=False,
+            default=str,
+        )[:12000],
+        schema=CreativeReviewAction,
+        schema_name="creative_review_action",
+        max_output_tokens=700,
+        client=client,
+    )
+    return result
 
 
 async def recommend_openai_autopilot_audience(

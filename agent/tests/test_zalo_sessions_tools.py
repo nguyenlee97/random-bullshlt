@@ -137,6 +137,71 @@ async def test_tool_agent_runs_function_call_round_trip(monkeypatch):
     assert responses.calls[0]["parallel_tool_calls"] is False
 
 
+@pytest.mark.asyncio
+async def test_list_campaigns_exposes_owned_comparison_fields(monkeypatch):
+    import zalo_campaign_agent
+    from zalo_tools import ToolExecutionContext, execute_zalo_tool
+
+    campaigns = [
+        {
+            "campaign_id": "ORD-LOW",
+            "order": {
+                "brand": "Low Budget",
+                "status": "paused",
+                "objective": "awareness",
+                "budget": 10_000_000,
+                "startDate": "2026-07-20",
+                "endDate": "2026-07-22",
+            },
+        },
+        {
+            "campaign_id": "ORD-HIGH",
+            "order": {
+                "brand": "High Budget",
+                "status": "active",
+                "objective": "conversion",
+                "budget": 120_000_000,
+                "startDate": "2026-07-23",
+                "endDate": "2026-07-30",
+            },
+        },
+    ]
+    owned = AsyncMock(return_value=campaigns)
+    monkeypatch.setattr(zalo_campaign_agent, "owned_campaigns", owned)
+    context = ToolExecutionContext(
+        thread={"thread_id": "zth-comparison", "session_id": "sess-comparison"},
+        current_message="Campaign nào budget cao nhất?",
+        history=[],
+    )
+
+    result = await execute_zalo_tool(context, "list_campaigns", {"status": "all"})
+
+    assert result["ok"] is True
+    assert result["campaigns"] == [
+        {
+            "campaign_id": "ORD-LOW",
+            "brand": "Low Budget",
+            "status": "paused",
+            "objective": "awareness",
+            "budget": 10_000_000,
+            "start_date": "2026-07-20",
+            "end_date": "2026-07-22",
+            "index": 1,
+        },
+        {
+            "campaign_id": "ORD-HIGH",
+            "brand": "High Budget",
+            "status": "active",
+            "objective": "conversion",
+            "budget": 120_000_000,
+            "start_date": "2026-07-23",
+            "end_date": "2026-07-30",
+            "index": 2,
+        },
+    ]
+    owned.assert_awaited_once_with(context.thread)
+
+
 def test_tool_schemas_never_accept_owner_identifiers():
     from zalo_tools import ZALO_TOOLS
 

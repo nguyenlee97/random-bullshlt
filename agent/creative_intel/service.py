@@ -40,6 +40,56 @@ def _fetch_url(url: str) -> str:
     return url
 
 
+async def _vlm_route_for_session(session_id: str) -> dict[str, str]:
+    """Resolve VLM provider from the conversation's immutable model lock."""
+    from campaign_models import OPENAI_GPT_5_4_MINI
+    from identity import get_conversation_model_for_session
+
+    lock = await get_conversation_model_for_session(session_id)
+    if lock["conversation_model"] == OPENAI_GPT_5_4_MINI:
+        provider = "openai"
+        model = config.OPENAI_VLM_MODEL
+    else:
+        provider = "greennode"
+        model = config.VLM_MODEL
+    return {
+        "provider": provider,
+        "model": model,
+        "key": f"{provider}:{model or 'disabled'}",
+    }
+
+
+def _has_retryable_vlm_failure(doc: dict) -> bool:
+    if doc.get("vlm_error"):
+        return True
+    return any(
+        str(reason).startswith("Phân tích hình ảnh gặp lỗi")
+        for reason in doc.get("review_reasons") or []
+    )
+
+
+async def _run_vlm_for_route(
+    route: dict[str, str], *, session_id: str, image_bytes: bytes,
+    mime_type: str, brief: dict,
+):
+    if route["provider"] == "openai":
+        from creative_intel.openai_vlm import analyze_image
+
+        return await analyze_image(
+            session_id, image_bytes, mime_type, brief,
+        )
+
+    from creative_intel.vlm import analyze_image_sync
+
+    vlm = await asyncio.to_thread(
+        analyze_image_sync, image_bytes, mime_type, brief,
+    )
+    return vlm, {
+        "provider": "greennode",
+        "model": route["model"],
+    }
+
+
 def effective_status(doc: dict) -> str:
     workspace_status = doc.get("workspace_status")
     if workspace_status == "stale":
@@ -69,6 +119,75 @@ def _canonical_verdict(doc: dict) -> dict:
         else doc.get("status", "queued")
     )
     return out
+
+
+_GENERATION_BLOCK_LABELS = {
+    "critical_crop": "Nội dung quan trọng bị cắt khỏi vùng an toàn",
+    "core_text_unreadable": "Brand, thông điệp chính hoặc CTA không đọc được",
+    "missing_required_asset": "Thiếu asset bắt buộc trong creative",
+    "material_unsupported_claim": "Creative có claim quan trọng không được brief hỗ trợ",
+    "safety_risk": "Creative có rủi ro an toàn thương hiệu",
+}
+
+
+def _generation_vlm_reasons(file: dict) -> list[str]:
+    """Return only critical generation-QA blockers.
+
+    The later Creative Intelligence verdict remains canonical for semantic
+    brief fit. Generation QA contributes a hard gate only for concrete visual,
+    required-asset, unsupported-claim, safety, or availability failures.
+    """
+    generation = file.get("generation") or {}
+    verdict = generation.get("vlmVerdict") or generation.get("vlm_verdict") or {}
+    provenance = (
+        generation.get("vlmProvenance")
+        or generation.get("vlm_provenance")
+        or {}
+    )
+    if provenance.get("error"):
+        return ["Kiểm tra hình ảnh sau khi tạo gặp lỗi — cần duyệt thủ công"]
+    if not isinstance(verdict, dict):
+        return []
+    blocking_issues = {
+        str(item).strip()
+        for item in verdict.get("blocking_issues") or []
+        if str(item).strip()
+    }
+    # Backward-compatible deterministic interpretation for verdicts produced
+    # before blocking_issues existed.
+    if verdict.get("composition_safe") is False:
+        blocking_issues.add("critical_crop")
+    if verdict.get("text_readable") is False:
+        blocking_issues.add("core_text_unreadable")
+    if verdict.get("missing_required_assets"):
+        blocking_issues.add("missing_required_asset")
+    return [
+        _GENERATION_BLOCK_LABELS.get(issue, f"Lỗi QA tạo ảnh: {issue}")
+        for issue in sorted(blocking_issues)
+    ]
+
+
+def _generation_vlm_advisories(file: dict) -> list[str]:
+    """Keep noncritical generation observations visible without blocking."""
+    generation = file.get("generation") or {}
+    verdict = generation.get("vlmVerdict") or generation.get("vlm_verdict") or {}
+    if not isinstance(verdict, dict) or verdict.get("acceptable") is not False:
+        return []
+    if _generation_vlm_reasons(file):
+        return []
+    advisories = ["QA tạo ảnh có lưu ý nhưng không yêu cầu duyệt thủ công"]
+    unexpected = [
+        str(item).strip()
+        for item in verdict.get("unexpected_text") or []
+        if str(item).strip()
+    ]
+    if unexpected:
+        advisories.append("Chữ bổ sung: " + ", ".join(unexpected[:4]))
+    for note in verdict.get("review_notes") or []:
+        clean = str(note).strip()
+        if clean:
+            advisories.append(clean[:240])
+    return list(dict.fromkeys(advisories))
 
 
 async def _col():
@@ -106,6 +225,47 @@ async def get_intel(session_id: str) -> list[dict]:
     return [_public(d) for d in docs]
 
 
+async def sync_generation_vlm_reviews(
+    session_id: str, files: list[dict],
+) -> list[dict]:
+    """Reconcile generation QA with the canonical Creative Intelligence verdict.
+
+    Critical preflight issues fail closed. Noncritical observations remain
+    advisory. This also repairs runs promoted by the previous broad gate.
+    """
+    for file in files or []:
+        reasons = _generation_vlm_reasons(file)
+        advisories = _generation_vlm_advisories(file)
+        url = str(file.get("url") or "").strip()
+        if not url:
+            continue
+        doc = await _get(_key(session_id, url))
+        if not doc:
+            continue
+        previous_generation_reasons = set(doc.get("generation_review_reasons") or [])
+        canonical_reasons = [
+            reason for reason in doc.get("review_reasons") or []
+            if reason not in previous_generation_reasons
+        ]
+        merged = list(dict.fromkeys([*canonical_reasons, *reasons]))
+        doc["generation_vlm_verdict"] = (
+            (file.get("generation") or {}).get("vlmVerdict")
+            or (file.get("generation") or {}).get("vlm_verdict")
+            or {}
+        )
+        doc["generation_review_reasons"] = reasons
+        doc["generation_advisories"] = advisories
+        doc["review_reasons"] = merged
+        if merged:
+            doc["status"] = "needs_review"
+        elif doc.get("status") == "needs_review" and not canonical_reasons:
+            # Repair verdicts promoted by the previous broad generation gate.
+            doc["status"] = "auto_approved"
+        doc["updated_at"] = _now()
+        await _save(doc)
+    return await get_intel(session_id)
+
+
 async def get_intel_by_ids(session_id: str, analysis_ids: list[str]) -> dict[str, dict]:
     wanted = {value for value in analysis_ids if value}
     if not wanted:
@@ -123,12 +283,14 @@ async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
     from workspace.service import get_task_context
 
     task_context = await get_task_context(session_id, "creative_verdict")
+    vlm_route = await _vlm_route_for_session(session_id)
     urls = sorted((file.get("url") or "").strip() for file in files or [] if file.get("url"))
     batch_seed = json.dumps({
         "session_id": session_id,
         "urls": urls,
         "creative_revision": task_context["input_revisions"].get("creative", 0),
         "verdict_revision": task_context["artifact_revision"],
+        "vlm_route_key": vlm_route["key"],
     }, sort_keys=True)
     batch_id = f"cib_{hashlib.sha256(batch_seed.encode()).hexdigest()[:24]}"
     jobs: list[dict] = []
@@ -138,7 +300,43 @@ async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
             continue
         analysis_id = _key(session_id, url)
         existing = await _get(analysis_id)
-        if existing and existing.get("status") in TERMINAL_STATUSES:
+        generation_reasons = _generation_vlm_reasons(file)
+        generation_advisories = _generation_vlm_advisories(file)
+        if existing:
+            previous_generation_reasons = set(
+                existing.get("generation_review_reasons") or []
+            )
+            canonical_reasons = [
+                reason for reason in existing.get("review_reasons") or []
+                if reason not in previous_generation_reasons
+            ]
+            existing["generation_vlm_verdict"] = (
+                (file.get("generation") or {}).get("vlmVerdict")
+                or (file.get("generation") or {}).get("vlm_verdict")
+                or {}
+            )
+            existing["generation_review_reasons"] = generation_reasons
+            existing["generation_advisories"] = generation_advisories
+            existing["review_reasons"] = list(dict.fromkeys([
+                *canonical_reasons,
+                *generation_reasons,
+            ]))
+            if existing["review_reasons"]:
+                existing["status"] = "needs_review"
+            elif existing.get("status") == "needs_review" and not canonical_reasons:
+                existing["status"] = "auto_approved"
+        retry_for_route_change = bool(
+            existing
+            and existing.get("status") == "needs_review"
+            and not (existing.get("override") or {}).get("approved")
+            and _has_retryable_vlm_failure(existing)
+            and existing.get("vlm_route_key") != vlm_route["key"]
+        )
+        if (
+            existing
+            and existing.get("status") in TERMINAL_STATUSES
+            and not retry_for_route_change
+        ):
             existing.update({
                 "file_id": file.get("id", existing.get("file_id", "")),
                 "format_id": file.get("formatId", existing.get("format_id", "")),
@@ -170,10 +368,26 @@ async def enqueue_analysis(session_id: str, files: list[dict]) -> list[dict]:
             "batch_id": batch_id,
             "task_context": task_context,
             "workspace_status": "pending",
+            "vlm_provider": vlm_route["provider"],
+            "vlm_model": vlm_route["model"],
+            "vlm_route_key": vlm_route["key"],
+            "generation_vlm_verdict": (
+                (file.get("generation") or {}).get("vlmVerdict")
+                or (file.get("generation") or {}).get("vlm_verdict")
+                or {}
+            ),
+            "generation_review_reasons": generation_reasons,
+            "generation_advisories": generation_advisories,
             "attempts": (existing or {}).get("attempts", 0),
             "created_at": created_at,
             "updated_at": _now(),
         }
+        if retry_for_route_change:
+            for key in (
+                "completed_at", "review_reasons", "vlm", "vlm_error",
+                "vlm_provenance", "override",
+            ):
+                doc.pop(key, None)
         await _save(doc)
         jobs.append(_public(doc))
     await _commit_batch_if_complete(session_id, batch_id)
@@ -389,7 +603,7 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
     deterministic = await analyze_url(
         url, name=name, mime_type=doc.get("mime_type", "")
     )
-    reasons: list[str] = []
+    reasons: list[str] = list(doc.get("generation_review_reasons") or [])
 
     if deterministic.get("fetch_error") or deterministic.get("decode_error"):
         reasons.append(
@@ -408,9 +622,15 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
             "Video đã trích xuất metadata nhưng cần người duyệt nội dung trước khi chạy"
         )
 
-    result: dict[str, Any] = {"deterministic": deterministic}
+    route = await _vlm_route_for_session(doc["session_id"])
+    result: dict[str, Any] = {
+        "deterministic": deterministic,
+        "vlm_provider": route["provider"],
+        "vlm_model": route["model"],
+        "vlm_route_key": route["key"],
+    }
     if (
-        config.VLM_MODEL
+        route["model"]
         and not is_video
         and not deterministic.get("fetch_error")
         and not deterministic.get("decode_error")
@@ -422,18 +642,19 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
             async with httpx.AsyncClient(timeout=config.CREATIVE_ANALYSIS_TIMEOUT_SECONDS) as client:
                 response = await client.get(url)
                 response.raise_for_status()
-            from creative_intel.vlm import analyze_image_sync
             from session import get_or_create_session
 
             session = await get_or_create_session(doc["session_id"])
             brief = session.get("form_state", {}).get("brief", {}) or {}
-            vlm = await asyncio.to_thread(
-                analyze_image_sync,
-                response.content,
-                doc.get("mime_type") or "image/png",
-                brief,
+            vlm, provenance = await _run_vlm_for_route(
+                route,
+                session_id=doc["session_id"],
+                image_bytes=response.content,
+                mime_type=doc.get("mime_type") or "image/png",
+                brief=brief,
             )
             result["vlm"] = vlm.model_dump()
+            result["vlm_provenance"] = provenance
             from creative_intel.policy import contains_prompt_injection
 
             flags = [flag for flag, value in vlm.safety.model_dump().items() if value]
@@ -442,15 +663,24 @@ async def _analyze_job(doc: dict) -> dict[str, Any]:
             if contains_prompt_injection(vlm.ocr_text):
                 reasons.append("Phát hiện câu lệnh đáng ngờ trong nội dung OCR")
             if vlm.confidence < config.VLM_CONFIDENCE_THRESHOLD:
-                reasons.append(f"Độ tin cậy VLM thấp ({vlm.confidence:.2f})")
+                reasons.append(f"Độ tin cậy phân tích thấp ({vlm.confidence:.2f})")
+            brief_fit = getattr(vlm, "brief_fit", None)
+            if brief_fit and brief_fit.critical_mismatch:
+                reasons.append("Creative mâu thuẫn nghiêm trọng với brief")
             if vlm.brief_match_score <= 2:
                 reasons.append(f"Creative không khớp brief ({vlm.brief_match_score}/5)")
-            VLM_CALLS.labels(model=config.VLM_MODEL, outcome="success").inc()
+            VLM_CALLS.labels(model=route["model"], outcome="success").inc()
         except Exception as exc:
-            VLM_CALLS.labels(model=config.VLM_MODEL, outcome="error").inc()
-            reasons.append(f"VLM lỗi — cần duyệt thủ công ({str(exc)[:80]})")
+            VLM_CALLS.labels(model=route["model"], outcome="error").inc()
+            result["vlm_error"] = {
+                "provider": route["provider"],
+                "model": route["model"],
+                "type": type(exc).__name__,
+                "message": str(exc)[:300],
+            }
+            reasons.append("Phân tích hình ảnh gặp lỗi — cần duyệt thủ công")
         finally:
-            VLM_SECONDS.labels(model=config.VLM_MODEL).observe(
+            VLM_SECONDS.labels(model=route["model"]).observe(
                 asyncio.get_running_loop().time() - started
             )
 

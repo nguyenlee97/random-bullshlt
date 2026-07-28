@@ -28,10 +28,6 @@ const modes = [
 const EMPTY_MODEL_CATALOG = { models: [], default_model: null }
 
 const modeLabel = mode => mode === 'autopilot' ? 'Campaign Autopilot' : 'Campaign Copilot'
-const modelLabel = model => model === 'openai_gpt_5_4_mini'
-  ? 'OpenAI · GPT-5.4 mini'
-  : 'GreenNode · MiniMax M2.5'
-
 const runStatus = status => ({
   queued: ['Đang chờ', 'bg-slate-100 text-slate-700'],
   running: ['Đang chạy', 'bg-blue-50 text-blue-700'],
@@ -272,7 +268,6 @@ export default function ExperienceSelector({
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
                       <span className="rounded-full bg-brand-50 px-2 py-0.5 font-bold text-brand-700">{modeLabel(item.experience_mode)}</span>
-                      <span className="rounded-full bg-violet-50 px-2 py-0.5 font-bold text-violet-700">{modelLabel(item.conversation_model)}</span>
                       <span className={`rounded-full px-2 py-0.5 font-bold ${item.ownership === 'account' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                         {item.ownership === 'account' ? 'Tài khoản' : 'Trên thiết bị'}
                       </span>

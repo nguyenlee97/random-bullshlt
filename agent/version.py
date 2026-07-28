@@ -3,9 +3,18 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-21.13"
+BUILD_VERSION = "2026-07-27.4"
 
 BUILD_FEATURES = [
+    "np6-placement-catalog",
+    "np6-audience-topic-taxonomy-v2",
+    "np6-context-first-zone-ranking",
+    "np6-hybrid-placement-retrieval",
+    "np6-nano-topic-reranking",
+    "np6-hybrid-audience-retrieval",
+    "np6-nano-audience-reranking",
+    "np6-audience-pipeline-evidence",
+    "np6-news-screenshot-zone-contract",
     "system-logs",
     "step-tool-rules",
     "brief-rules",
@@ -34,6 +43,15 @@ BUILD_FEATURES = [
     "image-gen-safe-zone",            # per-format safe-zone prompt constraints for correct crop
     "image-gen-canvas-crop",          # frontend canvas crop+resize to exact pixel dimensions
     "image-gen-quota",                # durable 20-output daily actor quota
+    "creative-assets-conversation-scope", # reference assets cannot leak across chats
+    "creative-walkthrough-assets-prompt", # walkthrough teaches assets and prompt composition without quota UI
+    "creative-walkthrough-review-gate",  # walkthrough waits for analysis/manual review before Setup
+    "creative-walkthrough-manual-review-auto-advance", # typing hands off to approval action
+    "openai-autopilot-interactive-walkthrough", # real run edits audience, targeting, placements and assignments
+    "autopilot-dual-creative-walkthrough", # randomly exercises uploaded or automatically prepared creatives
+    "provider-neutral-campaign-ux",        # provider details stay at homepage selection only
+    "autopilot-creative-placement-recovery", # crop/scale or generate missing formats without restarting run
+    "autopilot-review-dock-layout",    # readable stacked review message and actions at narrow workspace widths
     "image-gen-lightbox",             # click-to-zoom lightbox in AI image gallery
     "image-gen-brief-preview",        # collapsible brief+audience preview in generator UI
     "email-step",                     # Step 6: PDF generation + Resend email delivery
@@ -200,4 +218,22 @@ BUILD_FEATURES = [
     "openai-langfuse-turn-tracing",              # complete OpenAI prompts, responses, tools and errors share one turn trace
     "autopilot-reviewed-creative-repair",        # approved uploads supersede a failed AI-generation proposal
     "autopilot-replan-result-generation",       # rerun task commits replace their own stale artifacts safely
+    "openai-multi-topic-audience-search",        # semantic topic queries merge catalog matches without selecting them
+    "openai-deferred-proposal-disposition",      # not-yet approval keeps a proposal pending for later confirmation
+    "provider-aware-creative-vlm",                # uploaded creative analysis follows the immutable campaign model lock
+    "creative-vlm-failure-retry",                 # provider failures requeue while genuine review verdicts stay terminal
+    "openai-vlm-brief-fit-consistency",           # derive fit score from anchored visual evidence and gate critical mismatches
+    "autopilot-critical-review-checkpoints",       # critical policy stops at audience, targeting, placement, creative assignment and launch
+    "autopilot-review-question-safety",             # review questions never become approvals and receive artifact-grounded answers
+    "report-once-only-showcase-disclosure",         # report model reasons on metrics without repeating UI-only showcase provenance
+    "autopilot-report-resume-routing",               # completed runs use report Q&A even when resume restores stale step metadata
+    "autopilot-placement-intent-checkpoint",          # critical review stops at the editable preliminary placement proposal
+    "zalo-campaign-comparison-summary",               # one owned campaign-list call exposes budget and dates for comparisons
+    "zalo-tool-error-observability",                  # Zalo model/tool failures are recorded without weakening mutation safety
+    "mobile-adaptive-guidance-ui",                    # target-aware tours, compact review controls and touch-safe creative crop
+    "quality-data-foundation",                        # versioned interactions, quality events and feedback
+    "run-feedback",                                   # owned idempotent Guided/Autopilot feedback
+    "typed-guardrail-policy",                         # legacy-compatible enforce + shadow decision modes
+    "owned-agent-order-reads",                        # campaign status tools use server-derived ownership scope
+    "privacy-safe-zone-conflicts",                    # availability omits other campaign identity
 ]

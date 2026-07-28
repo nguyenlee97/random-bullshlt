@@ -828,7 +828,7 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
         </div>
         <div className="text-center">
           <p className="font-semibold text-foreground">Báo cáo chiến dịch</p>
-          <p className="text-xs text-muted-foreground mt-1">Đang chuẩn bị tạo báo cáo mô phỏng...</p>
+          <p className="text-xs text-muted-foreground mt-1">Đang chuẩn bị dữ liệu và phân tích báo cáo...</p>
         </div>
         <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
       </div>
@@ -841,7 +841,7 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
         <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
         <h3 className="mt-3 font-bold text-red-950">Không thể tạo báo cáo</h3>
         <p className="mt-2 text-xs leading-5 text-red-800">
-          {reportStatus?.errors || 0}/{reportStatus?.total || 6} hạng mục gặp lỗi. Kiểm tra cấu hình model rồi thử tạo lại.
+          {reportStatus?.errors || 0}/{reportStatus?.total || 6} hạng mục gặp lỗi. Vui lòng thử tạo lại báo cáo.
         </p>
         <button type="button" onClick={retryGeneration} disabled={retrying}
           className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-60">
@@ -861,10 +861,10 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
     <div className="space-y-0">
       {/* Ready summary + shared Copilot/Autopilot export action */}
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2">
-          <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-          <p className="text-[11px] text-amber-700 font-medium">
-            Dữ liệu mô phỏng (showcase) · {records.length} records · {Object.keys(analyses).length} phân tích AI
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+          <p className="text-[11px] text-slate-700 font-medium">
+            {records.length} bản ghi · {Object.keys(analyses).length} nhóm phân tích đã sẵn sàng
           </p>
         </div>
         <a
@@ -922,7 +922,6 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
             Nguồn số liệu, công thức & giới hạn · {currentAnalysis.dataContract.contractVersion}
           </summary>
           <div className="mt-3 space-y-3">
-            <p className="font-semibold text-amber-700">{currentAnalysis.dataContract.syntheticLabel}</p>
             <p>
               <strong>Thời gian:</strong> {currentAnalysis.dataContract.timeframe?.start || 'N/A'} → {currentAnalysis.dataContract.timeframe?.end || 'N/A'}
               {' · '}<strong>Nguồn:</strong> {currentAnalysis.dataContract.source}

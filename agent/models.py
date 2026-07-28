@@ -36,6 +36,9 @@ class CreativeFile(BaseModel):
     override: dict = Field(default_factory=dict)
     formatId: str = Field(default="", max_length=100)
     intendedFormat: str = Field(default="", max_length=100)
+    source: str = Field(default="", max_length=100)
+    derivedFromFileId: str = Field(default="", max_length=200)
+    repairMethod: str = Field(default="", max_length=32)
 
 
 class CreativeData(BaseModel):
@@ -124,3 +127,6 @@ class AgentResponse(BaseModel):
     meta: ResponseMeta | dict = {}
     workspace_update: dict | None = None   # Patch to apply to formState after user confirms
     suggestions: list = []           # Quick-reply chips — strings or {label, action, text}
+    # Channel-only rich parts. Web clients may ignore these; Zalo uses them to
+    # deliver review images without invoking a second model/tool loop.
+    media_parts: list[dict] = []

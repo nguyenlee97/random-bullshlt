@@ -18,6 +18,7 @@ import os
 os.environ["MONGODB_URI"] = "mongodb://127.0.0.1:1"   # unreachable → triggers in-memory fallback
 os.environ.pop("LANGFUSE_PUBLIC_KEY", None)            # no tracing in tests
 os.environ["RATE_LIMIT_ENABLED"] = "false"
+os.environ["QUALITY_FEEDBACK_ALLOW_MEMORY_FALLBACK"] = "true"
 os.environ.setdefault("AI_PLATFORM_API_KEY", "test-not-a-real-key")
 os.environ["ALLOW_OFFSHORE_LLM_FALLBACK"] = "false"
 
@@ -139,6 +140,21 @@ def reset_session_col(monkeypatch):
     try:
         from openai_campaign import client as openai_campaign_client
         openai_campaign_client.reset_for_test()
+    except ImportError:
+        pass
+    try:
+        from openai_campaign import audience_search
+        audience_search.reset_audience_search_for_test()
+    except ImportError:
+        pass
+    try:
+        from quality import store as quality_store
+        monkeypatch.setattr(quality_store, "_mem_interactions", {}, raising=False)
+        monkeypatch.setattr(quality_store, "_mem_events", {}, raising=False)
+        monkeypatch.setattr(quality_store, "_mem_feedback", {}, raising=False)
+        monkeypatch.setattr(
+            quality_store, "_mem_feedback_by_submission", {}, raising=False
+        )
     except ImportError:
         pass
     try:

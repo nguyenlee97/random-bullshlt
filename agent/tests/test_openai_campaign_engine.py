@@ -136,6 +136,83 @@ async def test_live_faq_runs_function_call_round_trip(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_multi_topic_audience_lookup_is_read_only_and_uses_separate_queries(monkeypatch):
+    import openai_campaign.engine as engine
+    import openai_campaign.tools as openai_tools
+    from session import get_pending_proposal
+
+    decision = _decision(
+        faq_scope="catalog_discovery",
+        subrequests=[{
+            "kind": "read",
+            "description": "Find coffee, beverage and office-worker audiences",
+            "requires_live_data": True,
+            "requested_capability": "search_audience_catalog",
+        }],
+    )
+    monkeypatch.setattr(engine, "decide_turn", AsyncMock(return_value=decision))
+
+    async def catalog_search(query, *, type_filter, limit):
+        rows = {
+            "coffee": [{
+                "segmentId": "INT131", "fullLabel": "Coffee (food & drink)",
+                "type": "Interest", "sizeMin": 147_000_000, "sizeMax": 165_000_000,
+                "sizeEstimatedAt": "2026-07-21T00:00:00Z",
+            }],
+            "beverages": [{
+                "segmentId": "INT130", "fullLabel": "Beverages (food & drink)",
+                "type": "Interest", "sizeMin": 120_000_000, "sizeMax": 140_000_000,
+                "sizeEstimatedAt": "2026-07-21T00:00:00Z",
+            }],
+            "office workers": [],
+        }
+        return rows[query]
+
+    monkeypatch.setattr(openai_tools, "search_audience", catalog_search)
+    client = _Client([
+        _response(output=[{
+            "type": "function_call", "call_id": "call-audiences",
+            "name": "search_audience_catalog",
+            "arguments": json.dumps({
+                "queries": ["coffee", "beverages", "office workers"],
+                "type": None,
+            }),
+        }]),
+        _response(text=(
+            "Tìm thấy INT131 và INT130; catalog chưa có nhóm khớp trực tiếp "
+            "với office workers. Em chưa chọn nhóm nào."
+        )),
+    ])
+
+    result = await engine.handle_openai_freeform(
+        "Bây giờ tìm giúp tôi các audience hiện có liên quan tới cà phê, đồ uống "
+        "và dân văn phòng. Cho tôi ID, khoảng size và độ mới dữ liệu, nhưng vẫn "
+        "chưa chọn nhóm nào.",
+        1,
+        "openai-multi-topic-audience",
+        client=client,
+    )
+
+    assert result.meta.tool == "search_audience_catalog"
+    assert "INT131" in result.text and "INT130" in result.text
+    assert await get_pending_proposal("openai-multi-topic-audience") is None
+    assert all(
+        tool["name"] != "propose_workspace_change"
+        for tool in client.responses.calls[0]["tools"]
+    )
+    final_input = client.responses.calls[1]["input"]
+    tool_output = next(
+        json.loads(item["output"])
+        for item in final_input
+        if item.get("type") == "function_call_output"
+    )
+    assert [item["query"] for item in tool_output["query_results"]] == [
+        "coffee", "beverages", "office workers",
+    ]
+    assert tool_output["unmatched_queries"] == ["office workers"]
+
+
+@pytest.mark.asyncio
 async def test_mutation_creates_visible_proposal_without_applying(monkeypatch):
     import openai_campaign.engine as engine
     from session import get_pending_proposal
@@ -198,6 +275,68 @@ async def test_mutation_creates_visible_proposal_without_applying(monkeypatch):
     assert result.blocks[0]["changes"]["proposal_id"]
     assert client.responses.calls[0]["tool_choice"] == "required"
     assert client.responses.calls[1]["tool_choice"] == "none"
+
+
+@pytest.mark.asyncio
+async def test_new_later_approval_request_creates_audience_proposal_when_none_pending(monkeypatch):
+    import openai_campaign.engine as engine
+    from session import get_pending_proposal
+    from workspace.service import get_workspace
+
+    session_id = "openai-create-later-audience"
+    decision = _decision(
+        turn_type="mixed",
+        user_goal="Explain overlap and create a two-audience proposal for later approval",
+        subrequests=[
+            {
+                "kind": "question", "description": "Explain audience overlap",
+                "requires_live_data": False, "requested_capability": "",
+            },
+            {
+                "kind": "mutation", "description": "Propose both audiences",
+                "requires_live_data": False, "requested_capability": "select_audience",
+            },
+        ],
+        faq_scope="none",
+        workflow_action="select_audience",
+        would_mutate_workspace=True,
+    )
+    monkeypatch.setattr(engine, "decide_turn", AsyncMock(return_value=decision))
+    client = _Client([
+        _response(output=[{
+            "type": "function_call", "call_id": "call-audience-proposal",
+            "name": "propose_workspace_change",
+            "arguments": json.dumps({
+                "field": "segment",
+                "value_json": json.dumps({"attrs": ["INT131", "INT130"]}),
+                "reason": "Create both audience selections for later confirmation",
+            }),
+        }]),
+        _response(text=(
+            "Hai nhóm có overlap vừa phải. Em đã tạo đề xuất chọn cả hai, "
+            "nhưng chưa áp dụng và đang chờ xác nhận."
+        )),
+    ])
+
+    result = await engine.handle_openai_freeform(
+        "Hai nhóm đó có bị overlap nhiều không? Hãy giải thích ngắn gọn, đồng "
+        "thời tạo đề xuất chọn cả hai cho campaign, nhưng chưa áp dụng cho tới "
+        "khi tôi xác nhận.",
+        1,
+        session_id,
+        client=client,
+    )
+
+    pending = await get_pending_proposal(session_id)
+    unchanged = await get_workspace(session_id)
+    assert pending["field"] == "segment"
+    assert [item["segmentId"] for item in pending["value"]["attrs"]] == [
+        "INT131", "INT130",
+    ]
+    assert unchanged["revision"] == 0
+    assert unchanged["artifacts"]["audience"]["status"] == "missing"
+    assert result.blocks[0]["type"] == "workspace_proposal"
+    assert result.workspace_update is None
 
 
 @pytest.mark.asyncio
@@ -289,6 +428,104 @@ async def test_semantic_approval_applies_only_existing_pending_proposal(monkeypa
     assert updated["artifacts"]["brief"]["value"]["brand"] == "Acme"
     assert await get_pending_proposal("openai-approve") is None
     assert result.workspace_update["field"] == "brief.brand"
+    assert client.responses.calls == []
+
+
+@pytest.mark.asyncio
+async def test_negated_approval_defers_then_later_applies_same_audience_proposal(monkeypatch):
+    import openai_campaign.engine as engine
+    from session import get_pending_proposal, set_pending_proposal
+    from workspace.service import create_proposal, get_workspace
+
+    session_id = "openai-defer-audience"
+    audience = {
+        "attrs": [
+            {
+                "_id": "catalog-coffee", "segmentId": "INT131",
+                "fullLabel": "Coffee (food & drink)",
+            },
+            {
+                "_id": "catalog-beverages", "segmentId": "INT130",
+                "fullLabel": "Beverages (food & drink)",
+            },
+        ],
+        "reach": {
+            "unique_reach": 6_900_219,
+            "range": {"min": 6_057_100, "max": 7_739_889},
+            "method": "calibrated_estimate",
+        },
+    }
+    workspace = await get_workspace(session_id)
+    proposal = await create_proposal(
+        session_id,
+        "segment",
+        audience,
+        base_revision=workspace["revision"],
+        actor="test",
+        reason="Select the two catalog-grounded audiences",
+    )
+    await set_pending_proposal(session_id, {
+        "field": "segment",
+        "value": audience,
+        "proposal_id": proposal["proposal_id"],
+    })
+    defer = _decision(
+        turn_type="workflow_action",
+        user_goal="Keep the proposal pending; do not apply it yet",
+        subrequests=[{
+            "kind": "mutation", "description": "Defer the pending proposal",
+            "requires_live_data": False, "requested_capability": "defer",
+        }],
+        faq_scope="none",
+        workflow_action="defer",
+        would_mutate_workspace=False,
+    )
+    approve = _decision(
+        turn_type="workflow_action",
+        user_goal="Apply the pending audience proposal now",
+        subrequests=[{
+            "kind": "mutation", "description": "Approve the pending proposal",
+            "requires_live_data": False, "requested_capability": "approve",
+        }],
+        faq_scope="none",
+        workflow_action="approve",
+        would_mutate_workspace=True,
+    )
+    monkeypatch.setattr(
+        engine, "decide_turn", AsyncMock(side_effect=[defer, approve]),
+    )
+    client = _Client([])
+
+    deferred = await engine.handle_openai_freeform(
+        "Tôi đồng ý với phần giải thích, nhưng chưa đồng ý áp dụng hai audience đó.",
+        1,
+        session_id,
+        client=client,
+    )
+
+    pending = await get_pending_proposal(session_id)
+    unchanged = await get_workspace(session_id)
+    assert deferred.meta.tool == "workspace_deferred"
+    assert "vẫn được giữ ở trạng thái chờ" in deferred.text
+    assert pending["proposal_id"] == proposal["proposal_id"]
+    assert unchanged["revision"] == 0
+    assert unchanged["artifacts"]["audience"]["status"] == "missing"
+    assert unchanged["artifacts"]["audience"]["value"] is None
+
+    applied = await engine.handle_openai_freeform(
+        "Xác nhận áp dụng đúng đề xuất audience đang chờ.",
+        1,
+        session_id,
+        client=client,
+    )
+
+    updated = await get_workspace(session_id)
+    selected = updated["artifacts"]["audience"]["value"]
+    assert updated["revision"] == 1
+    assert [item["segmentId"] for item in selected["attrs"]] == ["INT131", "INT130"]
+    assert applied.meta.tool == "workspace_confirmed"
+    assert applied.workspace_update["proposal_id"] == proposal["proposal_id"]
+    assert await get_pending_proposal(session_id) is None
     assert client.responses.calls == []
 
 

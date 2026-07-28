@@ -213,6 +213,102 @@ AD_FORMATS: dict[str, dict] = {
             "right side as plain, blank background space."
         ),
     },
+    "smoney-top-desktop": {
+        "label": "S-Money Top Promo Desktop (1440×108)",
+        "width": 1440, "height": 108,
+        "layoutDescription": (
+            "A very shallow finance-site banner with one concise headline, a restrained "
+            "market-data visual, a brand mark, and a compact call to action in one row."
+        ),
+        "safeZoneConstraint": (
+            "The final asset is exactly 1440x108. Keep all text and critical marks inside "
+            "a centered 1320x84 safe area and use no more than one short headline."
+        ),
+    },
+    "smoney-top-mobile": {
+        "label": "S-Money Top Promo Mobile (390×96)",
+        "width": 390, "height": 96,
+        "layoutDescription": (
+            "A compact mobile finance banner with a small brand mark, one short benefit, "
+            "and one simple visual cue. Prioritize readability at phone width."
+        ),
+        "safeZoneConstraint": (
+            "The final asset is exactly 390x96. Keep text large, use a 12-pixel edge margin, "
+            "and avoid detailed charts or secondary copy."
+        ),
+    },
+    "smoney-screener-desktop": {
+        "label": "S-Money Screener In-content Desktop (1090×280)",
+        "width": 1090, "height": 280,
+        "layoutDescription": (
+            "A premium finance in-content banner with a product or service visual on one side, "
+            "a concise value proposition, and a prominent action on the other."
+        ),
+        "safeZoneConstraint": (
+            "The final asset is exactly 1090x280. Keep critical content at least 28 pixels "
+            "from every edge and preserve strong contrast against a clean background."
+        ),
+    },
+    "smoney-screener-mobile": {
+        "label": "S-Money Screener In-content Mobile (387×387)",
+        "width": 387, "height": 387,
+        "layoutDescription": (
+            "A square mobile finance creative with one central visual, a short headline, "
+            "one supporting benefit, and a clear bottom call to action."
+        ),
+        "safeZoneConstraint": (
+            "The final asset is exactly 387x387. Keep all text at least 18 pixels from the "
+            "edges and avoid fine-print financial claims."
+        ),
+    },
+    "dicungcon-bridge-desktop": {
+        "label": "Đi Cùng Con Content Bridge Desktop (966×249)",
+        "width": 966, "height": 249,
+        "layoutDescription": (
+            "A warm family-oriented horizontal banner with a gentle illustration, a reassuring "
+            "short headline, one benefit, and a friendly call to action."
+        ),
+        "safeZoneConstraint": (
+            "The final asset is exactly 966x249. Keep critical content inside a 910x205 safe "
+            "area and do not imply the viewer is pregnant or has children."
+        ),
+    },
+    "dicungcon-bridge-mobile": {
+        "label": "Đi Cùng Con Content Bridge Mobile (343×88)",
+        "width": 343, "height": 88,
+        "layoutDescription": (
+            "A very compact family-safe mobile banner with a simple illustration, brand mark, "
+            "and one short message."
+        ),
+        "safeZoneConstraint": (
+            "The final asset is exactly 343x88. Use large type, a 10-pixel edge margin, and no "
+            "more than eight words of primary copy."
+        ),
+    },
+    "zagoo-interstitial-desktop": {
+        "label": "Zagoo Game Interstitial Desktop (512×512)",
+        "width": 512, "height": 512,
+        "layoutDescription": (
+            "A vivid square game-discovery interstitial with a strong key character or game "
+            "world, bold title treatment, and one clear play or discovery action."
+        ),
+        "safeZoneConstraint": (
+            "The final asset is exactly 512x512. Keep the top-right 44x44 area free for the "
+            "publisher close control and keep all text inside a 456x456 safe area."
+        ),
+    },
+    "zagoo-interstitial-mobile": {
+        "label": "Zagoo Game Interstitial Mobile (350×470)",
+        "width": 350, "height": 470,
+        "layoutDescription": (
+            "A portrait mobile game-discovery interstitial with the main character in the "
+            "upper two-thirds and a bold game title plus action in the lower third."
+        ),
+        "safeZoneConstraint": (
+            "The final asset is exactly 350x470. Keep the top-right 42x42 area free for the "
+            "publisher close control and all critical content 16 pixels from other edges."
+        ),
+    },
 }
 
 # ─── Prompt builder ───────────────────────────────────────────────────────────
@@ -496,7 +592,7 @@ async def handle_generate_image(
     if not fmt:
         return {"ok": False, "error": f"Unknown format_id: {format_id}"}
     if not config.OPENAI_IMAGE_ENABLED or not config.OPENAI_API_KEY:
-        return {"ok": False, "error": "OpenAI image generation is unavailable", "remaining": None}
+        return {"ok": False, "error": "Dịch vụ tạo ảnh đang tạm thời không khả dụng", "remaining": None}
 
     actor = actor or await actor_for_session(session_id)
     job_id = (idempotency_key or f"img_{uuid.uuid4().hex}").strip()
@@ -510,7 +606,13 @@ async def handle_generate_image(
     })
     if not reservation.get("ok"):
         await log_event(session_id, "image_gen_limit", {"format_id": format_id, "job_id": job_id})
-        return {"ok": False, "error": "Đã đạt giới hạn 20 ảnh trong ngày", "remaining": 0, "quota": reservation}
+        return {
+            "ok": False,
+            "status": "quota_exhausted",
+            "error": "Tạm thời chưa thể tạo thêm ảnh hôm nay",
+            "remaining": 0,
+            "quota": reservation,
+        }
     if reservation.get("duplicate"):
         current = await status(actor)
         return {
@@ -568,18 +670,18 @@ async def handle_generate_image(
                 await mark_ambiguous(job_id, f"OpenAI HTTP {response.status_code}")
             else:
                 await release(job_id, f"OpenAI rejected request with HTTP {response.status_code}")
-            return {"ok": False, "error": f"OpenAI image error {response.status_code}: {body}", "jobId": job_id}
+            return {"ok": False, "error": "Dịch vụ tạo ảnh chưa thể xử lý yêu cầu này", "jobId": job_id}
 
         data = response.json()
         image_b64 = (data.get("data") or [{}])[0].get("b64_json") or ""
         if not image_b64:
             await release(job_id, "OpenAI response contained no image")
-            return {"ok": False, "error": "OpenAI returned no image data", "jobId": job_id}
+            return {"ok": False, "error": "Dịch vụ tạo ảnh không trả về dữ liệu ảnh", "jobId": job_id}
         try:
             base64.b64decode(image_b64, validate=True)
         except Exception:
             await release(job_id, "OpenAI response contained invalid base64")
-            return {"ok": False, "error": "OpenAI returned invalid image data", "jobId": job_id}
+            return {"ok": False, "error": "Dữ liệu ảnh trả về không hợp lệ", "jobId": job_id}
 
         await succeed(job_id, {
             "request_id": request_id, "usage": data.get("usage"),

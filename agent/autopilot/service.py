@@ -21,7 +21,13 @@ APPROVAL_POLICIES = {
 }
 RUN_TERMINAL = {"completed", "failed", "cancelled"}
 TASK_TERMINAL = {"succeeded", "failed", "cancelled", "skipped"}
-AUTOPILOT_WORKSPACE_ACTORS = {"autopilot_worker", "autopilot_review"}
+AUTOPILOT_WORKSPACE_ACTORS = {
+    "autopilot_worker",
+    "autopilot_review",
+    # Creative Intel commits the canonical VLM verdict asynchronously on
+    # behalf of the active Autopilot task. It is not an operator edit.
+    "creative_intel_worker",
+}
 
 # Workspace artifacts do not map one-to-one to plan outputs. Brief and creative
 # are user-owned inputs, while an externally corrected order must be verified
@@ -55,11 +61,11 @@ STANDARD_PLAN: tuple[dict[str, Any], ...] = (
     {"key": "generate_strategy", "capability": "generate_strategy_options",
      "deps": ["validate_brief"], "artifact": "strategy", "review": "stage"},
     {"key": "retrieve_audience", "capability": "retrieve_and_rank_audience",
-     "deps": ["generate_strategy"], "artifact": "audience", "review": "stage"},
+     "deps": ["generate_strategy"], "artifact": "audience", "review": "critical"},
     {"key": "derive_targeting", "capability": "derive_targeting_and_exclusions",
-     "deps": ["retrieve_audience"], "artifact": "targeting", "review": "stage"},
+     "deps": ["retrieve_audience"], "artifact": "targeting", "review": "critical"},
     {"key": "plan_placement_intent", "capability": "plan_placement_intent",
-     "deps": ["derive_targeting"], "artifact": "placement_intent", "review": "stage"},
+     "deps": ["derive_targeting"], "artifact": "placement_intent", "review": "critical"},
     {"key": "plan_creative_formats", "capability": "plan_creative_formats",
      "deps": ["plan_placement_intent"], "artifact": "creative_format_plan",
      "review": "stage"},
@@ -67,13 +73,13 @@ STANDARD_PLAN: tuple[dict[str, Any], ...] = (
      "deps": ["plan_creative_formats"], "artifact": "creative", "review": "none"},
     {"key": "analyze_creatives", "capability": "analyze_creatives",
      "deps": ["generate_strategy", "prepare_creatives"],
-     "artifact": "creative_verdict", "review": "critical"},
+     "artifact": "creative_verdict", "review": "stage"},
     {"key": "rank_placements", "capability": "rank_available_placements",
      "deps": ["plan_placement_intent", "analyze_creatives"],
      "artifact": "placements", "review": "stage"},
     {"key": "assign_creatives", "capability": "assign_creatives_to_placements",
      "deps": ["analyze_creatives", "rank_placements"], "artifact": "assignments",
-     "review": "stage"},
+     "review": "critical"},
     {"key": "forecast", "capability": "forecast_reach_cost_and_risk",
      "deps": ["derive_targeting", "assign_creatives"], "artifact": "forecast",
      "review": "stage"},
@@ -268,6 +274,15 @@ async def create_run(
     workspace = await get_workspace(session_id)
     from identity import get_conversation_model_for_session
     model_lock = await get_conversation_model_for_session(session_id)
+    from quality.versioning import get_version_manifest
+    quality_version_manifest = get_version_manifest(
+        engine=(
+            "openai"
+            if model_lock["conversation_model"] == "openai"
+            else "greennode"
+        ),
+        approval_policy=approval_policy,
+    )
     run_id = f"run_{uuid.uuid4().hex}"
     request_id = get_request_id()
     trace_id = request_id if request_id != "-" else f"trace_{uuid.uuid4().hex[:16]}"
@@ -284,6 +299,7 @@ async def create_run(
         "conversation_id": model_lock.get("conversation_id"),
         "conversation_model": model_lock["conversation_model"],
         "conversation_model_version": model_lock["conversation_model_version"],
+        "quality_version_manifest": quality_version_manifest,
         "idempotency_key": key, "cancel_requested": False,
         "pause_requested": False, "current_task_id": None,
         "created_at": now, "updated_at": now,
@@ -962,8 +978,20 @@ async def review_task(
             )
         task = await tasks.find_one({"_id": task_id, "run_id": run_id}) if tasks is not None \
             else _mem_tasks.get(task_id)
-        if not task or task["status"] != "waiting_review":
-            raise RunConflict("task is no longer waiting for review")
+    if not task or task["status"] != "waiting_review":
+        raise RunConflict("task is no longer waiting for review")
+    if (
+        approved
+        and task.get("key") == "retrieve_audience"
+        and (
+            ((task.get("pending_artifact") or {}).get("value") or {}).get(
+                "selection_required"
+            )
+        )
+    ):
+        raise RunConflict(
+            "audience review requires at least one selected segment"
+        )
     if approved and task.get("pending_artifact") and not retry_after_review:
         from workspace.service import commit_artifact_result
         pending = task["pending_artifact"]
@@ -995,6 +1023,167 @@ async def review_task(
     await _refresh_run_status(run_id)
     if retry_after_review:
         await reconcile_workspace_changes(run_id)
+    return await get_run(run_id)
+
+
+async def rerun_review_task(
+    run_id: str,
+    task_id: str,
+    *,
+    actor: str = "campaign_operator",
+    reason: str = "",
+) -> dict:
+    """Replace an unapproved audience proposal by rerunning its task."""
+    _, tasks, _ = await _collections()
+    task = (
+        await tasks.find_one({"_id": task_id, "run_id": run_id})
+        if tasks is not None
+        else _mem_tasks.get(task_id)
+    )
+    if not task or task.get("run_id") != run_id:
+        raise KeyError(f"task not found: {task_id}")
+    if task.get("status") != "waiting_review":
+        raise RunConflict("task is not waiting for review")
+    if task.get("key") != "retrieve_audience":
+        raise RunConflict("only the audience review can be recommended again")
+
+    run = await get_run(run_id)
+    if run.get("status") in RUN_TERMINAL:
+        raise RunConflict("audience cannot be rerun after the run is terminal")
+    if any(
+        item.get("key") == "create_order" and item.get("status") == "succeeded"
+        for item in run.get("tasks", [])
+    ):
+        raise RunConflict("audience cannot be rerun after order creation")
+
+    now = _now()
+    updates = {
+        "status": "queued",
+        "result": None,
+        "evidence": [],
+        "pending_artifact": None,
+        "review_decision": {
+            "approved": None,
+            "actor": actor,
+            "reason": reason.strip() or "Audience recommendation requested again",
+            "created_at": now,
+        },
+        "completed_at": None,
+        "lease_owner": None,
+        "lease_expires_at": None,
+        "updated_at": now,
+    }
+    if tasks is not None:
+        await tasks.update_one({"_id": task_id}, {"$set": updates})
+    else:
+        _mem_tasks[task_id].update(updates)
+    await _emit(run_id, "task_retry_scheduled", {
+        "task_id": task_id,
+        "actor": actor,
+        "reason": updates["review_decision"]["reason"],
+        "explicit_review_rerun": True,
+    })
+    await _refresh_run_status(run_id)
+    return await get_run(run_id)
+
+
+async def select_audience_recommendations(
+    run_id: str,
+    segment_ids: list[str],
+    *,
+    actor: str = "campaign_operator",
+    reason: str = "",
+) -> dict:
+    """Select reviewed direct/adjacent catalog rows without approving the gate."""
+    from audience_reach import audience_selection
+
+    run = await get_run(run_id)
+    if run["status"] in RUN_TERMINAL:
+        raise RunConflict("audience selection cannot change after the run is terminal")
+    task = next(
+        (item for item in run["tasks"] if item["key"] == "retrieve_audience"),
+        None,
+    )
+    if not task or task["status"] != "waiting_review":
+        raise RunConflict("audience recommendation is not waiting for review")
+    pending = deepcopy(task.get("pending_artifact") or {})
+    if pending.get("artifact") != "audience":
+        raise RunConflict("audience review has no pending artifact")
+
+    value = deepcopy(pending.get("value") or {})
+    candidates = (
+        value.get("recommendations")
+        or [*(value.get("attrs") or []), *(value.get("adjacent_attrs") or [])]
+    )
+
+    def identity(item: dict) -> str:
+        return str(
+            item.get("segmentId")
+            or item.get("_id")
+            or item.get("code")
+            or item.get("fullLabel")
+            or item.get("name")
+            or ""
+        ).strip()
+
+    by_id = {
+        identity(item): item
+        for item in candidates
+        if isinstance(item, dict) and identity(item)
+    }
+    selected_ids = list(dict.fromkeys(
+        str(item).strip() for item in segment_ids if str(item).strip()
+    ))
+    if not selected_ids:
+        raise ValueError("select at least one audience segment")
+    if len(selected_ids) > 12:
+        raise ValueError("select at most 12 audience segments")
+    unknown = [segment_id for segment_id in selected_ids if segment_id not in by_id]
+    if unknown:
+        raise ValueError(
+            "audience is not in the reviewed recommendation: "
+            + ", ".join(unknown)
+        )
+
+    selected = [deepcopy(by_id[segment_id]) for segment_id in selected_ids]
+    selection = audience_selection(selected)
+    selection_reason = reason.strip() or "Operator adjusted the reviewed audience"
+    value.update({
+        **selection,
+        "selection_required": False,
+        "selection": {
+            "source": "operator",
+            "actor": actor,
+            "reason": selection_reason,
+            "selected_at": _now(),
+            "selected_count": len(selected),
+        },
+    })
+    pending["value"] = value
+    evidence = deepcopy(task.get("evidence") or [])
+    evidence.append({
+        "type": "audience_selection_updated",
+        "actor": actor,
+        "selected_count": len(selected),
+        "segment_ids": selected_ids,
+        "reason": selection_reason,
+    })
+    updates = {
+        "result": value,
+        "pending_artifact": pending,
+        "evidence": evidence,
+        "updated_at": _now(),
+    }
+    _, tasks, _ = await _collections()
+    if tasks is not None:
+        await tasks.update_one({"_id": task["task_id"]}, {"$set": updates})
+    else:
+        _mem_tasks[task["task_id"]].update(updates)
+    await _emit(run_id, "audience_selection_updated", {
+        "task_id": task["task_id"],
+        "actor": actor,
+        "selected_count": len(selected),
+    })
     return await get_run(run_id)
 
 
@@ -1079,6 +1268,158 @@ async def select_placement_intent(
         "selected_count": len(selected_ids),
     })
     return await get_run(run_id)
+
+
+async def generate_missing_creative_formats(
+    run_id: str,
+    format_ids: list[str] | None = None,
+    *,
+    actor: str = "campaign_operator",
+    reason: str = "",
+) -> dict:
+    """Generate exact-size repair assets for a recoverable creative mismatch.
+
+    This is an explicit operator recovery action. It does not change the run's
+    original creative-source choice: generated assets are merged into the
+    canonical creative artifact, then normal workspace reconciliation reruns
+    Creative Intelligence and placement compatibility.
+    """
+    run = await get_run(run_id)
+    if run["status"] in RUN_TERMINAL:
+        raise RunConflict("creative recovery cannot change a terminal run")
+    if any(
+        task["key"] == "create_order" and task["status"] == "succeeded"
+        for task in run["tasks"]
+    ):
+        raise RunConflict("creative recovery cannot run after order creation")
+
+    waiting = next(
+        (task for task in run["tasks"] if task["status"] == "waiting_review"),
+        None,
+    )
+    allowed_waiting_tasks = {"prepare_creatives", "rank_placements"}
+    if not waiting or waiting.get("key") not in allowed_waiting_tasks:
+        raise RunConflict(
+            "creative recovery is available only at a creative compatibility review"
+        )
+
+    workspace = await get_workspace(run["session_id"])
+    artifacts = workspace.get("artifacts", {})
+    format_plan = deepcopy(
+        artifacts.get("creative_format_plan", {}).get("value") or {}
+    )
+    planned = list(format_plan.get("formats") or [])
+    if not planned:
+        raise RunConflict("creative recovery has no planned formats")
+
+    creative = deepcopy(artifacts.get("creative", {}).get("value") or {})
+    files = list(creative.get("files") or [])
+    from tools.creative_match import match_file_to_format
+
+    missing = [
+        item for item in planned
+        if not any(match_file_to_format(file, item).get("matched") for file in files)
+    ]
+    requested = list(dict.fromkeys(
+        str(value).strip() for value in (format_ids or []) if str(value).strip()
+    ))
+    planned_by_id = {
+        str(item.get("format_id")): item
+        for item in planned if item.get("format_id")
+    }
+    unknown = [value for value in requested if value not in planned_by_id]
+    if unknown:
+        raise ValueError(
+            "format is not in the current creative plan: " + ", ".join(unknown)
+        )
+    missing_ids = {str(item.get("format_id")) for item in missing}
+    selected = [
+        item for item in missing
+        if not requested or str(item.get("format_id")) in requested
+    ]
+    if requested and not selected:
+        return {
+            "ok": True,
+            "generated_count": 0,
+            "failed_formats": [],
+            "already_covered": requested,
+            "run": run,
+        }
+    if len(selected) > config.AUTOPILOT_MAX_GENERATED_ASSETS:
+        selected = selected[:config.AUTOPILOT_MAX_GENERATED_ASSETS]
+
+    from autopilot.creative_generation import generate_creatives
+
+    generated, failures = await generate_creatives(
+        run,
+        workspace,
+        {**format_plan, "formats": selected},
+        concurrency=config.AUTOPILOT_CREATIVE_GENERATION_CONCURRENCY,
+    )
+    if not generated:
+        return {
+            "ok": False,
+            "generated_count": 0,
+            "failed_formats": [
+                item.get("format_id") for item in failures
+            ],
+            "message": (
+                "Chưa thể tạo creative cho các format còn thiếu. "
+                "Bạn có thể crop/scale ảnh hiện có hoặc thử lại."
+            ),
+            "run": await get_run(run_id),
+        }
+
+    merged_by_id = {
+        str(file.get("id") or file.get("_id") or file.get("url") or index): file
+        for index, file in enumerate(files)
+    }
+    for file in generated:
+        key = str(file.get("id") or file.get("url"))
+        merged_by_id[key] = file
+    merged_files = list(merged_by_id.values())
+
+    from workspace.service import apply_mutation
+
+    generated_ids = sorted(
+        str((file.get("generation") or {}).get("idempotencyKey") or file.get("id"))
+        for file in generated
+    )
+    await apply_mutation(
+        run["session_id"],
+        "creative",
+        {
+            **creative,
+            "files": merged_files,
+            "uploaded": True,
+            "source": "mixed_recovery",
+        },
+        base_revision=workspace["revision"],
+        actor=actor,
+        reason=reason.strip() or (
+            "Operator requested exact-format creative generation during placement recovery"
+        ),
+        idempotency_key=(
+            f"{run_id}:creative-recovery:r{workspace['revision']}:"
+            + "|".join(generated_ids)
+        ),
+    )
+    reconciliation = await reconcile_workspace_changes(run_id)
+    await _emit(run_id, "creative_recovery_generated", {
+        "actor": actor,
+        "generated_count": len(generated),
+        "format_ids": [file.get("formatId") for file in generated],
+        "failed_formats": [item.get("format_id") for item in failures],
+        "requested_missing_formats": sorted(missing_ids),
+    })
+    return {
+        "ok": True,
+        "generated_count": len(generated),
+        "generated_format_ids": [file.get("formatId") for file in generated],
+        "failed_formats": [item.get("format_id") for item in failures],
+        "workspace_revision": reconciliation["run"].get("workspace_revision"),
+        "run": await get_run(run_id),
+    }
 
 
 async def select_strategy(

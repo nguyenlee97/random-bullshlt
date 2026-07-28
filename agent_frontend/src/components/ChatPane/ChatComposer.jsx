@@ -55,7 +55,8 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack, policy
   }
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key !== 'Enter' || e.nativeEvent?.isComposing) return
+    if (e.ctrlKey || e.metaKey) {
       e.preventDefault()
       handleSend()
     }
@@ -70,7 +71,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack, policy
       ? 'Nhập “Đồng ý” hoặc “Từ chối”…'
       : policy.mode === 'readonly'
         ? 'Hỏi Agent về audience, creative, forecast, placement hoặc order…'
-        : 'Trao đổi với agent về bước hiện tại... (Shift+Enter xuống dòng)'
+        : 'Trao đổi với agent về bước hiện tại...'
 
   return (
     <div
@@ -145,10 +146,16 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack, policy
           className="h-10 w-10 flex-shrink-0 self-end"
           id="chat-send-btn"
           aria-label={busy ? 'Advertising Agent đang xử lý' : 'Gửi tin nhắn'}
+          title={busy ? 'Advertising Agent đang xử lý' : 'Gửi tin nhắn (Ctrl/⌘+Enter)'}
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </Button>
       </div>
+      {!locked && (
+        <p className="mt-1.5 hidden text-right text-[10px] text-muted-foreground sm:block">
+          Enter để xuống dòng · Ctrl/⌘+Enter để gửi
+        </p>
+      )}
     </div>
   )
 }

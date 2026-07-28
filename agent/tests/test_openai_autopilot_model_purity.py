@@ -101,6 +101,65 @@ async def test_completed_openai_autopilot_qa_never_calls_greennode(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_openai_review_question_is_read_only_and_never_approves(monkeypatch):
+    import autopilot.chat as chat
+    import autopilot.service as service
+    import workspace.service as workspace_service
+    from campaign_models import OPENAI_GPT_5_4_MINI
+
+    decisions = []
+    openai = AsyncMock(return_value=(
+        "Logo có xuất hiện; text đọc được; không thấy claim ngoài brief.",
+        {"provider": "openai", "model": "gpt-5.4-mini"},
+    ))
+
+    async def fake_review(*args, **kwargs):
+        decisions.append(kwargs)
+
+    monkeypatch.setattr(chat, "_answer_openai_autopilot_question", openai)
+    monkeypatch.setattr(chat, "_answer_greennode_autopilot_question", AsyncMock(
+        side_effect=AssertionError("GreenNode Q&A was called"),
+    ))
+    monkeypatch.setattr(chat, "add_message", AsyncMock())
+    monkeypatch.setattr(service, "review_task", fake_review)
+    monkeypatch.setattr(workspace_service, "get_workspace", AsyncMock(return_value={
+        "experience_mode": "autopilot",
+        "artifacts": {
+            "creative_verdict": {"value": {
+                "files": [{"required_assets_present": True, "text_readable": True}],
+            }},
+        },
+    }))
+    monkeypatch.setattr(service, "get_latest_run", AsyncMock(return_value={
+        "run_id": "run-openai-review",
+        "status": "waiting_review",
+        "conversation_model": OPENAI_GPT_5_4_MINI,
+        "conversation_model_version": "gpt-5.4-mini",
+        "tasks": [{
+            "task_id": "run-openai-review:launch_approval",
+            "key": "launch_approval",
+            "title": "Duyệt launch",
+            "status": "waiting_review",
+            "result": {"message": "Kiểm tra order draft."},
+        }],
+    }))
+
+    response = await chat.route_autopilot_chat(
+        "Kiểm tra logo và text giúp tôi. Tôi đang hỏi để review, "
+        "chưa phê duyệt creative.",
+        "openai-review-question",
+        4,
+    )
+
+    assert response.meta.tool == "autopilot_review_qa"
+    assert "checkpoint vẫn đang chờ quyết định" in response.text
+    assert decisions == []
+    context = openai.await_args.kwargs["context"]
+    assert context["review_checkpoint"]["key"] == "launch_approval"
+    assert context["artifacts"]["creative_verdict"]["files"][0]["text_readable"] is True
+
+
+@pytest.mark.asyncio
 async def test_openai_autopilot_failure_does_not_cross_fallback(monkeypatch):
     import autopilot.chat as chat
     import autopilot.service as service

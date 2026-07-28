@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ALL_ZONES, getRecommendedZones, calcImpressions } from '@/data/zones'
-import { Sparkles, ChevronDown, ChevronUp, Check, RefreshCw, ArrowRight, Eye, BarChart2, MousePointerClick, DollarSign, AlertTriangle } from 'lucide-react'
+import { Sparkles, ChevronDown, ChevronUp, Check, RefreshCw, ArrowRight, Eye, BarChart2, MousePointerClick, DollarSign, AlertTriangle, ExternalLink, Search } from 'lucide-react'
 import { fmtVnd, fmtImp } from './setupUtils'
 
 function Stat({ icon: Icon, value, color }) {
@@ -19,6 +19,25 @@ function Stat({ icon: Icon, value, color }) {
 function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
   const estImp = budgetPerZoneM > 0 ? calcImpressions(zone, budgetPerZoneM) : null
   const conflict = zone.conflict || null
+  const contextEvidence = [
+    ...(zone.topic_relevance?.matched_keywords || []),
+    ...(zone.topic_relevance?.matched_segments || []),
+    ...(zone.topic_relevance?.matched_subcategories || []),
+    ...(zone.topic_relevance?.matched_categories || []),
+  ].filter((value, index, values) => value && values.indexOf(value) === index).slice(0, 3)
+  const isContextRecommendation = (
+    zone.recommendation_basis?.mode === 'audience_context'
+    && zone.recommendation_basis?.context_match
+  )
+  const isSemanticRecommendation = (
+    isContextRecommendation
+    && zone.recommendation_basis?.semantic_match
+  )
+  const recommendationScore = (
+    zone.recommendation_relevance
+    ?? zone.topic_relevance?.score
+    ?? 0
+  )
 
   return (
     <button
@@ -58,15 +77,17 @@ function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
             )}
           </div>
           <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-            {[zone.platform || zone.channel || zone.id.split('_')[0], zone.format, zone.size].filter(Boolean).map(t => (
+            {[zone.publisher || zone.platform || zone.channel || zone.id.split('_')[0], zone.placementFamily || zone.format, zone.size].filter(Boolean).map(t => (
               <Badge key={t} variant="muted" className="text-[10px] h-4 px-1.5">{t}</Badge>
             ))}
+            {zone.topicId && <Badge className="text-[9px] h-4 px-1.5 bg-sky-50 text-sky-700 border-sky-200">{TOPIC_LABELS[zone.topicId] || zone.topicId.replaceAll('_', ' ')}</Badge>}
+            {zone.comparisonGroupId && <Badge className="text-[9px] h-4 px-1.5 bg-violet-50 text-violet-700 border-violet-200">So sánh publisher</Badge>}
           </div>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 pl-6">
-        <Stat icon={Eye} value={zone.reach >= 1_000_000 ? `${(zone.reach / 1_000_000).toFixed(0)}M` : `${zone.reach}M`} color="text-blue-600" />
+        <Stat icon={Eye} value={fmtImp(zone.reach || 0)} color="text-blue-600" />
         <Stat icon={BarChart2} value={`VI ${zone.vi}%`} color="text-violet-600" />
         <Stat icon={MousePointerClick} value={`CTR ${zone.ctr}%`} color="text-green-600" />
         <Stat icon={DollarSign} value={`CPM ${fmtVnd(zone.cpm)}đ`} color="text-amber-600" />
@@ -77,9 +98,8 @@ function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
         <div className="pl-6 flex items-start gap-1.5">
           <AlertTriangle className="w-3 h-3 text-red-500 flex-shrink-0 mt-0.5" />
           <p className="text-[10px] text-red-600 leading-tight">
-            Zone này đã được đặt bởi chiến dịch{' '}
-            <span className="font-bold">&ldquo;{conflict.campaignName}&rdquo;</span>{' '}
-            trong khoảng thời gian {conflict.startDate} → {conflict.endDate}.
+            Zone này đã được đặt bởi một chiến dịch khác trong khoảng thời gian{' '}
+            {conflict.startDate} → {conflict.endDate}.
             Chọn zone này có thể gây xung đột khi tạo chiến dịch.
           </p>
         </div>
@@ -88,15 +108,91 @@ function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
       {isReco && !conflict && zone.reason && (
         <p className="text-[10px] text-amber-700 italic pl-6 leading-tight">{zone.reason}</p>
       )}
+      {isReco && !conflict && (
+        <div className={cn(
+          'ml-6 rounded-md px-2 py-1.5 text-[10px] leading-tight',
+          isContextRecommendation
+            ? 'bg-sky-100/80 text-sky-800'
+            : 'bg-slate-100 text-slate-600',
+        )}>
+          <span className="font-bold">
+            {isSemanticRecommendation
+              ? 'RAG semantic khớp brief/audience'
+              : isContextRecommendation
+                ? 'Khớp nội dung brief/audience'
+                : 'Xếp hạng theo hiệu suất dự phòng'}
+          </span>
+          {isContextRecommendation && (
+            <>
+              {' · '}{TOPIC_LABELS[zone.topicId] || zone.topicId?.replaceAll('_', ' ')}
+              {' · '}{Math.round(recommendationScore * 100)}%
+              {isSemanticRecommendation && (zone.recommendation_basis?.topic_rerank_rank || zone.recommendation_basis?.retrieval_rank)
+                ? ` · RAG #${zone.recommendation_basis.topic_rerank_rank || zone.recommendation_basis.retrieval_rank}`
+                : ''}
+              {contextEvidence.length ? ` · ${contextEvidence.join(', ')}` : ''}
+            </>
+          )}
+        </div>
+      )}
       {estImp && selected && (
         <p className="text-[10px] font-semibold text-brand-600 pl-6">≈ {fmtImp(estImp)} hiển thị ước tính</p>
+      )}
+      {zone.siteUrl && (
+        <span
+          role="link"
+          tabIndex={0}
+          onClick={(event) => {
+            event.stopPropagation()
+            window.open(zone.siteUrl, '_blank', 'noopener,noreferrer')
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.stopPropagation()
+              window.open(zone.siteUrl, '_blank', 'noopener,noreferrer')
+            }
+          }}
+          className="ml-6 inline-flex w-fit items-center gap-1 text-[10px] font-bold text-brand-600 hover:text-brand-800"
+        >
+          <ExternalLink className="w-3 h-3" /> Xem ad placement
+        </span>
       )}
     </button>
   )
 }
 
+const TOPIC_LABELS = {
+  business_finance: 'Kinh doanh & Tài chính',
+  health_wellness: 'Sức khỏe & Wellness',
+  sports_outdoors: 'Thể thao & Ngoài trời',
+  technology_science: 'Công nghệ & Khoa học',
+  entertainment_culture: 'Giải trí & Văn hóa',
+  lifestyle_food_shopping: 'Lifestyle, Ẩm thực & Mua sắm',
+  family_parenting: 'Gia đình & Nuôi dạy con',
+  education_careers: 'Giáo dục & Nghề nghiệp',
+  travel_hospitality: 'Du lịch & Lưu trú',
+  automotive_mobility: 'Ô tô, Xe máy & Di chuyển',
+  home_property_architecture: 'Nhà ở, BĐS & Kiến trúc',
+  society_news_law: 'Xã hội, Thời sự & Pháp luật',
+  marketing_digital_business: 'Marketing & Kinh doanh số',
+  fitness_active_living: 'Fitness & Sống khỏe',
+  soccer_fandom: 'Bóng đá & Người hâm mộ',
+  gaming_esports: 'Game & Esports',
+  movies_tv_streaming: 'Phim, Truyền hình & Streaming',
+  music_live_events: 'Âm nhạc & Sự kiện',
+  books_reading: 'Sách & Văn hóa đọc',
+  arts_crafts_photography: 'Nghệ thuật, Sáng tạo & Nhiếp ảnh',
+  food_dining: 'Ẩm thực, Nấu ăn & Nhà hàng',
+  fashion_beauty: 'Thời trang & Làm đẹp',
+  shopping_ecommerce: 'Mua sắm & Thương mại điện tử',
+  home_garden_diy: 'Nhà, Vườn & DIY',
+  pets_animals: 'Thú cưng & Động vật',
+  legacy_other: 'Trang chủ & inventory hiện có',
+}
+
 export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) {
   const [expanded, setExpanded] = useState(false)
+  const [query, setQuery] = useState('')
+  const [publisher, setPublisher] = useState('all')
 
   const selectedIds = data.selectedZoneIds || []
   const recoZones = data.recoZones || []
@@ -106,7 +202,34 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
   const recoIds = new Set(recoZones.map(z => z.id))
   // Use real API zones for the full list; fall back to static ALL_ZONES
   const catalog = allZones?.length ? allZones : ALL_ZONES
+  const publisherOptions = useMemo(() => (
+    [...new Set(catalog
+      .map((zone) => zone.publisher || zone.platform || zone.siteId)
+      .filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right, 'vi'))
+  ), [catalog])
   const otherZones = catalog.filter(z => !recoIds.has(z.id))
+  const groupedZones = useMemo(() => {
+    const foldedQuery = query.trim().toLowerCase()
+    const filtered = otherZones.filter((zone) => {
+      if (publisher !== 'all' && (zone.publisher || zone.platform || zone.siteId) !== publisher) return false
+      if (!foldedQuery) return true
+      return [
+        zone.id, zone.name, zone.topicId, zone.placementFamily,
+        zone.publisher, zone.channel,
+      ].filter(Boolean).join(' ').toLowerCase().includes(foldedQuery)
+    })
+    return Object.entries(filtered.reduce((groups, zone) => {
+      const key = zone.topicId || 'legacy_other'
+      groups[key] ||= []
+      groups[key].push(zone)
+      return groups
+    }, {})).sort(([left], [right]) => {
+      if (left === 'legacy_other') return 1
+      if (right === 'legacy_other') return -1
+      return (TOPIC_LABELS[left] || left).localeCompare(TOPIC_LABELS[right] || right, 'vi')
+    })
+  }, [otherZones, publisher, query])
 
   const toggleZone = (id) => {
     const next = selectedIds.includes(id)
@@ -176,17 +299,62 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
       </Button>
 
       {expanded && (
-        <div className="flex flex-col gap-2">
-          {otherZones.map(zone => (
-            <ZoneCard
-              key={zone.id}
-              zone={zone}
-              selected={selectedIds.includes(zone.id)}
-              onToggle={toggleZone}
-              isReco={false}
-              budgetPerZoneM={budgetPerZone}
-            />
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-2">
+            <label className="relative">
+              <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Tìm topic, publisher hoặc format..."
+                className="h-9 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-xs outline-none focus:border-brand-400"
+              />
+            </label>
+            <select
+              value={publisher}
+              onChange={(event) => setPublisher(event.target.value)}
+              className="h-9 rounded-lg border border-border bg-white px-3 text-xs outline-none focus:border-brand-400"
+            >
+              <option value="all">Tất cả publisher</option>
+              {publisherOptions.map((publisherName) => (
+                <option key={publisherName} value={publisherName}>{publisherName}</option>
+              ))}
+            </select>
+          </div>
+          {groupedZones.map(([topicId, zones]) => (
+            <section key={topicId} className="rounded-xl border border-border bg-slate-50/70 overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-white">
+                <div>
+                  <p className="text-xs font-bold text-slate-800">{TOPIC_LABELS[topicId] || topicId.replaceAll('_', ' ')}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {zones.length} placements
+                    {topicId !== 'legacy_other' ? ' · ZNews và BaoMoi có thể so sánh cùng topic/format' : ''}
+                  </p>
+                </div>
+                <Badge variant="muted" className="text-[10px]">{topicId}</Badge>
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 p-2">
+                {zones
+                  .sort((left, right) => (
+                    `${left.placementFamily || ''}:${left.publisher || ''}:${left.id}`
+                      .localeCompare(`${right.placementFamily || ''}:${right.publisher || ''}:${right.id}`)
+                  ))
+                  .map(zone => (
+                    <ZoneCard
+                      key={zone.id}
+                      zone={zone}
+                      selected={selectedIds.includes(zone.id)}
+                      onToggle={toggleZone}
+                      isReco={false}
+                      budgetPerZoneM={budgetPerZone}
+                    />
+                  ))}
+              </div>
+            </section>
           ))}
+          {!groupedZones.length && (
+            <p className="py-8 text-center text-xs text-muted-foreground">Không có placement phù hợp bộ lọc.</p>
+          )}
         </div>
       )}
 

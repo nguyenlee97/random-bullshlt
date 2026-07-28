@@ -1,0 +1,1579 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NP-6 Placement Recommendation Experiment</title><style>
+:root{color-scheme:light;--ink:#10233e;--muted:#65748b;--line:#dbe5f0;--blue:#1769e0;
+--cyan:#0d99b5;--green:#14804a;--red:#c23b3b;--amber:#a56505;--paper:#fff;--bg:#f3f7fb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
+font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:linear-gradient(130deg,#071a35,#0d3f79 58%,#0f7790);color:white;padding:38px max(24px,calc((100vw - 1440px)/2))}
+header h1{margin:0 0 8px;font-size:30px}header p{max-width:1050px;margin:4px 0;color:#dbeafe}
+main{max-width:1440px;margin:auto;padding:24px}.card{background:var(--paper);border:1px solid var(--line);
+border-radius:16px;padding:18px;margin-bottom:18px;box-shadow:0 8px 30px rgba(15,50,90,.05)}
+h2{font-size:20px;margin:0 0 12px}h3{font-size:15px;margin:0 0 8px}.muted{color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.metric-grid{display:grid;
+grid-template-columns:repeat(6,minmax(130px,1fr));gap:10px}.metric{border:1px solid var(--line);border-radius:12px;padding:12px;background:#f9fbfd}
+.metric b{display:block;font-size:21px}.metric small{color:var(--muted)}table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#edf4fb;position:sticky;top:0}
+.pass{color:var(--green);font-weight:800}.fail{color:var(--red);font-weight:800}.warn{color:var(--amber);font-weight:700}
+.variant{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfdff;min-width:0}.variant.best{border-color:#7bd4a8;background:#f1fbf6}
+.pill{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800;background:#e8f1ff;color:#1556ad;margin:2px}
+.rank-row{display:grid;grid-template-columns:27px 1fr;gap:7px;padding:5px 0;border-bottom:1px dashed #e5edf5}.rank-row:last-child{border:0}
+.rank{width:24px;height:24px;border-radius:7px;background:#e8f1ff;display:grid;place-items:center;font-weight:900;color:#1556ad}
+details.case{border:1px solid var(--line);background:white;border-radius:13px;margin:10px 0;overflow:hidden}
+details.case summary{cursor:pointer;padding:13px 15px;font-weight:800;background:#f9fbfd;display:flex;gap:10px;align-items:center}
+details.case[open] summary{border-bottom:1px solid var(--line)}.case-body{padding:14px}.brief{padding:10px 12px;background:#f5f8fb;border-left:4px solid var(--cyan);margin-bottom:12px}
+.judgment-must_include{color:#0f7b45;font-weight:800}.judgment-acceptable{color:#1769e0}.judgment-must_exclude{color:#c23b3b;font-weight:900}
+.legend{display:flex;gap:12px;flex-wrap:wrap}.callout{border-left:5px solid var(--blue);background:#edf5ff;padding:12px 14px;border-radius:8px}
+code{background:#eaf0f6;padding:2px 5px;border-radius:5px}.footer{color:var(--muted);font-size:12px;padding:20px 0 40px}
+@media(max-width:980px){.grid{grid-template-columns:1fr}.metric-grid{grid-template-columns:repeat(2,1fr)}main{padding:14px}header{padding:28px 18px}}
+</style></head><body>
+<header><h1>NP-6 Placement Recommendation Experiment</h1><p>Deterministic baseline vs dense + BM25 vs dense + BM25 + GPT-5.4-nano</p></header>
+<main>
+    <section class="card"><h2>Decision</h2><div class="callout">
+    <b>Selected setup: Dense semantic + BM25 + GPT-5.4-nano topic reranking.</b>
+    It reached 100% top-1 and top-3 accuracy across all 43 cases, including
+    direct topic, semantic-synonym, and audience-only cases. The cost is latency: p95
+    12.6s versus
+    0.077s for the baseline.
+    Deterministic performance, creative compatibility, and availability checks remain final guards.
+    </div></section>
+    <section class="card"><h2>Test design</h2>
+    <p>Production build observed before the experiment: <code>2026-07-27.1</code>.
+    Catalog: 258 placements across 25 topic documents.
+    The labeled suite contains 23 direct topic cases, 10 paraphrased semantic cases, and 10
+    audience-only cases. Every configuration received the same catalog and campaign inputs.</p>
+    <div class="legend"><span class="pill">Baseline: catalog keyword/context score + performance</span>
+    <span class="pill">Hybrid: text-embedding-3-small + in-process BM25 + RRF</span>
+    <span class="pill">Nano: bounded topic reorder; known IDs only</span></div></section>
+    <section class="card"><h2>Aggregate quality</h2><div style="overflow:auto"><table><thead><tr>
+    <th>Configuration</th><th>Top-1</th><th>Top-3</th><th>Semantic top-1</th><th>MRR</th><th>p95 latency</th><th>Rerank applied</th>
+    </tr></thead><tbody><tr><td><b>Deterministic contextual baseline</b></td>
+        <td>76.7%</td>
+        <td>81.4%</td>
+        <td>10.0%</td>
+        <td>0.791</td>
+        <td>0.077s</td>
+        <td>0/43</td></tr><tr><td><b>Dense semantic + BM25 retrieval</b></td>
+        <td>81.4%</td>
+        <td>86.1%</td>
+        <td>20.0%</td>
+        <td>0.835</td>
+        <td>1.184s</td>
+        <td>0/43</td></tr><tr><td><b>Dense semantic + BM25 + GPT-5.4-nano reranking</b></td>
+        <td>100.0%</td>
+        <td>100.0%</td>
+        <td>100.0%</td>
+        <td>1</td>
+        <td>12.6s</td>
+        <td>43/43</td></tr></tbody></table></div>
+    <p class="muted">Top-1 measures the expected topic at rank 1. Top-3 allows comparison alternatives.
+    MRR rewards earlier expected-topic placement. Latency includes retrieval/reranking but not inventory API time.</p></section>
+    <section class="card"><h2>Per-case output comparison</h2>
+    <p class="muted">Open a row to compare the actual top three distinct topics side by side.</p>
+    <details class="case"><summary><span class="pill">baseline</span>
+            business · expected <code>business_finance</code></summary>
+            <div class="case-body"><div class="brief"><b>FinGrow</b> —
+            Ứng dụng đầu tư, ngân hàng và quản lý tài chính
+            <br><span class="muted">Audience: Investors</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.504s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>business_finance</b><br><span class="muted">
+                S-Money · SMoney_StockScreener_InContent_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 3.89s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>business_finance</b><br><span class="muted">
+                BaoMoi · BaoMoi_BusinessFinance_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 11.058s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>business_finance</b><br><span class="muted">
+                BaoMoi · BaoMoi_BusinessFinance_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            health · expected <code>health_wellness</code></summary>
+            <div class="case-body"><div class="brief"><b>WellCare</b> —
+            Dinh dưỡng và chăm sóc sức khỏe chủ động
+            <br><span class="muted">Audience: Wellness audiences</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.06s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>fitness_active_living</b><br><span class="muted">
+                BaoMoi · BaoMoi_FitnessActiveLiving_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.016s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>fitness_active_living</b><br><span class="muted">
+                BaoMoi · BaoMoi_FitnessActiveLiving_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.4s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>fitness_active_living</b><br><span class="muted">
+                BaoMoi · BaoMoi_FitnessActiveLiving_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            sports · expected <code>sports_outdoors</code></summary>
+            <div class="case-body"><div class="brief"><b>TrailPro</b> —
+            Thiết bị cho người yêu thể thao ngoài trời và leo núi
+            <br><span class="muted">Audience: Outdoor enthusiasts</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.154s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.87s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>soccer_fandom</b><br><span class="muted">
+                BaoMoi · BaoMoi_SoccerFandom_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 11.265s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>fitness_active_living</b><br><span class="muted">
+                BaoMoi · BaoMoi_FitnessActiveLiving_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            technology · expected <code>technology_science</code></summary>
+            <div class="case-body"><div class="brief"><b>CloudAI</b> —
+            Phần mềm AI và thiết bị công nghệ cho người dùng số
+            <br><span class="muted">Audience: Technology enthusiasts</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.059s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.159s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.12s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            family · expected <code>family_parenting</code></summary>
+            <div class="case-body"><div class="brief"><b>Bé Khỏe</b> —
+            Dinh dưỡng và chăm sóc cho mẹ và bé
+            <br><span class="muted">Audience: Parents with young children</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.058s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                Đi Cùng Con · DiCungCon_ContentBridge_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.908s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                Đi Cùng Con · DiCungCon_ContentBridge_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.411s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                BaoMoi · BaoMoi_FamilyParenting_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            education · expected <code>education_careers</code></summary>
+            <div class="case-body"><div class="brief"><b>SkillUp</b> —
+            Khóa học kỹ năng và cơ hội nghề nghiệp
+            <br><span class="muted">Audience: Career development</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.059s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>business_finance</b><br><span class="muted">
+                S-Money · SMoney_StockScreener_InContent_Mobile
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.893s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>business_finance</b><br><span class="muted">
+                BaoMoi · BaoMoi_BusinessFinance_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 11.01s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>business_finance</b><br><span class="muted">
+                BaoMoi · BaoMoi_BusinessFinance_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            travel · expected <code>travel_hospitality</code></summary>
+            <div class="case-body"><div class="brief"><b>StayGo</b> —
+            Đặt khách sạn và trải nghiệm du lịch
+            <br><span class="muted">Audience: Frequent travelers</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.068s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.241s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>food_dining</b><br><span class="muted">
+                BaoMoi · BaoMoi_FoodDining_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 11.431s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            automotive · expected <code>automotive_mobility</code></summary>
+            <div class="case-body"><div class="brief"><b>EV Now</b> —
+            Xe điện, ô tô và giải pháp di chuyển mới
+            <br><span class="muted">Audience: Vehicle shoppers</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.077s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>automotive_mobility</b><br><span class="muted">
+                BaoMoi · BaoMoi_AutomotiveMobility_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.797s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>automotive_mobility</b><br><span class="muted">
+                BaoMoi · BaoMoi_AutomotiveMobility_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.473s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>automotive_mobility</b><br><span class="muted">
+                BaoMoi · BaoMoi_AutomotiveMobility_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            property · expected <code>home_property_architecture</code></summary>
+            <div class="case-body"><div class="brief"><b>HomeSpace</b> —
+            Căn hộ, nội thất và đầu tư bất động sản
+            <br><span class="muted">Audience: Property interests</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.056s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>business_finance</b><br><span class="muted">
+                S-Money · SMoney_StockScreener_InContent_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>home_garden_diy</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomeGardenDiy_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.991s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>business_finance</b><br><span class="muted">
+                BaoMoi · BaoMoi_BusinessFinance_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>home_garden_diy</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomeGardenDiy_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.265s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>business_finance</b><br><span class="muted">
+                BaoMoi · BaoMoi_BusinessFinance_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>home_garden_diy</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomeGardenDiy_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            society · expected <code>society_news_law</code></summary>
+            <div class="case-body"><div class="brief"><b>SafeCity</b> —
+            An toàn giao thông và kiến thức pháp luật
+            <br><span class="muted">Audience: News readers</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.056s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                BaoMoi · BaoMoi_SocietyNewsLaw_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>business_finance</b><br><span class="muted">
+                S-Money · SMoney_StockScreener_InContent_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.976s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                BaoMoi · BaoMoi_SocietyNewsLaw_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>business_finance</b><br><span class="muted">
+                BaoMoi · BaoMoi_BusinessFinance_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.195s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>automotive_mobility</b><br><span class="muted">
+                BaoMoi · BaoMoi_AutomotiveMobility_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>business_finance</b><br><span class="muted">
+                S-Money · SMoney_StockScreener_InContent_Mobile
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            marketing · expected <code>marketing_digital_business</code></summary>
+            <div class="case-body"><div class="brief"><b>GrowthLab</b> —
+            Quảng cáo, thương hiệu và marketing cho doanh nghiệp số
+            <br><span class="muted">Audience: Digital marketing</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.058s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>business_finance</b><br><span class="muted">
+                S-Money · SMoney_StockScreener_InContent_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.322s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.253s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>business_finance</b><br><span class="muted">
+                BaoMoi · BaoMoi_BusinessFinance_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            fitness · expected <code>fitness_active_living</code></summary>
+            <div class="case-body"><div class="brief"><b>RunFit</b> —
+            Ứng dụng gym, yoga và tập luyện hàng ngày
+            <br><span class="muted">Audience: Gyms</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.065s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>fitness_active_living</b><br><span class="muted">
+                BaoMoi · BaoMoi_FitnessActiveLiving_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.184s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>fitness_active_living</b><br><span class="muted">
+                BaoMoi · BaoMoi_FitnessActiveLiving_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.036s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>fitness_active_living</b><br><span class="muted">
+                BaoMoi · BaoMoi_FitnessActiveLiving_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            soccer · expected <code>soccer_fandom</code></summary>
+            <div class="case-body"><div class="brief"><b>FanPass</b> —
+            Ưu đãi cho người hâm mộ bóng đá và giải Ngoại hạng Anh
+            <br><span class="muted">Audience: Premier League</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.067s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>soccer_fandom</b><br><span class="muted">
+                BaoMoi · BaoMoi_SoccerFandom_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.004s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>soccer_fandom</b><br><span class="muted">
+                BaoMoi · BaoMoi_SoccerFandom_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.577s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>soccer_fandom</b><br><span class="muted">
+                BaoMoi · BaoMoi_SoccerFandom_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            gaming · expected <code>gaming_esports</code></summary>
+            <div class="case-body"><div class="brief"><b>Arena</b> —
+            Thẻ game và giải đấu esports cho game thủ
+            <br><span class="muted">Audience: Esports</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.063s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>soccer_fandom</b><br><span class="muted">
+                BaoMoi · BaoMoi_SoccerFandom_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.027s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.917s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            movies · expected <code>movies_tv_streaming</code></summary>
+            <div class="case-body"><div class="brief"><b>CinePass</b> —
+            Nền tảng xem phim và truyền hình trực tuyến
+            <br><span class="muted">Audience: Streaming television</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.058s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                Zagoo · Zagoo_Interstitial_Mobile
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.839s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 16.401s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            music · expected <code>music_live_events</code></summary>
+            <div class="case-body"><div class="brief"><b>LiveStage</b> —
+            Vé concert, ca sĩ và lễ hội âm nhạc
+            <br><span class="muted">Audience: Live events</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.052s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                Zagoo · Zagoo_Interstitial_Mobile
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.977s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 11.027s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            books · expected <code>books_reading</code></summary>
+            <div class="case-body"><div class="brief"><b>ReadMore</b> —
+            Sách, ebook, tác giả và văn hóa đọc
+            <br><span class="muted">Audience: Reading</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.054s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>books_reading</b><br><span class="muted">
+                BaoMoi · BaoMoi_BooksReading_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                Zagoo · Zagoo_Interstitial_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.074s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>books_reading</b><br><span class="muted">
+                BaoMoi · BaoMoi_BooksReading_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.546s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>books_reading</b><br><span class="muted">
+                BaoMoi · BaoMoi_BooksReading_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                Zagoo · Zagoo_Interstitial_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            arts · expected <code>arts_crafts_photography</code></summary>
+            <div class="case-body"><div class="brief"><b>CreatorKit</b> —
+            Dụng cụ nhiếp ảnh, thiết kế và thủ công sáng tạo
+            <br><span class="muted">Audience: Arts and crafts</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.062s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.102s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>fashion_beauty</b><br><span class="muted">
+                BaoMoi · BaoMoi_FashionBeauty_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 11.52s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            food · expected <code>food_dining</code></summary>
+            <div class="case-body"><div class="brief"><b>TasteBox</b> —
+            Khám phá món ngon, nấu ăn và nhà hàng
+            <br><span class="muted">Audience: Food</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.06s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>food_dining</b><br><span class="muted">
+                BaoMoi · BaoMoi_FoodDining_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.104s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>food_dining</b><br><span class="muted">
+                BaoMoi · BaoMoi_FoodDining_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 12.621s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>food_dining</b><br><span class="muted">
+                BaoMoi · BaoMoi_FoodDining_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            fashion · expected <code>fashion_beauty</code></summary>
+            <div class="case-body"><div class="brief"><b>GlowUp</b> —
+            Mỹ phẩm, chăm sóc da và thời trang
+            <br><span class="muted">Audience: Cosmetics</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.06s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>fashion_beauty</b><br><span class="muted">
+                BaoMoi · BaoMoi_FashionBeauty_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.86s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>fashion_beauty</b><br><span class="muted">
+                BaoMoi · BaoMoi_FashionBeauty_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.906s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>fashion_beauty</b><br><span class="muted">
+                BaoMoi · BaoMoi_FashionBeauty_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            shopping · expected <code>shopping_ecommerce</code></summary>
+            <div class="case-body"><div class="brief"><b>MegaMall</b> —
+            Khuyến mãi mua sắm và thương mại điện tử
+            <br><span class="muted">Audience: Engaged shoppers</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.056s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.969s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 4.302s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>fashion_beauty</b><br><span class="muted">
+                BaoMoi · BaoMoi_FashionBeauty_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            home-garden · expected <code>home_garden_diy</code></summary>
+            <div class="case-body"><div class="brief"><b>GreenHome</b> —
+            Dụng cụ làm vườn, cải tạo nhà và dự án DIY
+            <br><span class="muted">Audience: Home improvement</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.059s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>home_garden_diy</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomeGardenDiy_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.794s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>home_garden_diy</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomeGardenDiy_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.548s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>home_garden_diy</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomeGardenDiy_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">baseline</span>
+            pets · expected <code>pets_animals</code></summary>
+            <div class="case-body"><div class="brief"><b>PetCare</b> —
+            Thức ăn và dịch vụ chăm sóc chó mèo
+            <br><span class="muted">Audience: Dogs</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.048s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.026s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 8.93s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>food_dining</b><br><span class="muted">
+                BaoMoi · BaoMoi_FoodDining_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">semantic_synonym</span>
+            family-synonym · expected <code>family_parenting</code></summary>
+            <div class="case-body"><div class="brief"><b>FirstSteps</b> —
+            Sản phẩm hỗ trợ giấc ngủ và phát triển giai đoạn đầu đời cho em bé
+            </div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.051s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>soccer_fandom</b><br><span class="muted">
+                BaoMoi · BaoMoi_SoccerFandom_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.824s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                BaoMoi · BaoMoi_FamilyParenting_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>soccer_fandom</b><br><span class="muted">
+                BaoMoi · BaoMoi_SoccerFandom_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.712s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                BaoMoi · BaoMoi_FamilyParenting_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">semantic_synonym</span>
+            automotive-synonym · expected <code>automotive_mobility</code></summary>
+            <div class="case-body"><div class="brief"><b>ChargeFlow</b> —
+            Giải pháp sạc pin và phương tiện không phát thải cho đô thị
+            </div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.048s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.828s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.265s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>automotive_mobility</b><br><span class="muted">
+                BaoMoi · BaoMoi_AutomotiveMobility_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">semantic_synonym</span>
+            travel-synonym · expected <code>travel_hospitality</code></summary>
+            <div class="case-body"><div class="brief"><b>WeekendAway</b> —
+            Kỳ nghỉ ven biển và nơi ở cuối tuần cho các cặp đôi
+            </div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.049s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.726s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 8.371s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>food_dining</b><br><span class="muted">
+                BaoMoi · BaoMoi_FoodDining_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">semantic_synonym</span>
+            pets-synonym · expected <code>pets_animals</code></summary>
+            <div class="case-body"><div class="brief"><b>CompanionCare</b> —
+            Dinh dưỡng cao cấp cho người bạn bốn chân trong gia đình
+            </div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="fail">MISS · expected #3</span> · 0.056s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                Đi Cùng Con · DiCungCon_ContentBridge_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="fail">MISS · expected #3</span> · 1.095s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                BaoMoi · BaoMoi_FamilyParenting_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.865s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                BaoMoi · BaoMoi_FamilyParenting_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">semantic_synonym</span>
+            books-synonym · expected <code>books_reading</code></summary>
+            <div class="case-body"><div class="brief"><b>LongRead</b> —
+            Thiết bị đọc nội dung dài và kho truyện chữ cho người ham học
+            </div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.059s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.89s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.788s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>books_reading</b><br><span class="muted">
+                BaoMoi · BaoMoi_BooksReading_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">semantic_synonym</span>
+            shopping-synonym · expected <code>shopping_ecommerce</code></summary>
+            <div class="case-body"><div class="brief"><b>DealDay</b> —
+            Ngày hội săn deal, nhận hàng tận cửa và thanh toán tiện lợi
+            </div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.049s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.753s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 6.214s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">semantic_synonym</span>
+            music-synonym · expected <code>music_live_events</code></summary>
+            <div class="case-body"><div class="brief"><b>Backstage</b> —
+            Trải nghiệm sân khấu trực tiếp cùng nghệ sĩ và cộng đồng người hâm mộ
+            </div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="fail">MISS · expected #5</span> · 0.053s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>soccer_fandom</b><br><span class="muted">
+                BaoMoi · BaoMoi_SoccerFandom_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="fail">MISS · expected #3</span> · 0.806s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.02s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">semantic_synonym</span>
+            property-synonym · expected <code>home_property_architecture</code></summary>
+            <div class="case-body"><div class="brief"><b>SmartSpace</b> —
+            Không gian sống thông minh và thiết kế căn hộ cho gia đình trẻ
+            </div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.052s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                Đi Cùng Con · DiCungCon_ContentBridge_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.951s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 11.715s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>home_property_architecture</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomePropertyArchitecture_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                BaoMoi · BaoMoi_FamilyParenting_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">semantic_synonym</span>
+            business-synonym · expected <code>business_finance</code></summary>
+            <div class="case-body"><div class="brief"><b>CashPilot</b> —
+            Công cụ quản lý dòng tiền và vận hành dành cho chủ cửa hàng
+            </div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.069s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="fail">MISS · expected #not in top 5</span> · 0.692s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 7.363s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>business_finance</b><br><span class="muted">
+                BaoMoi · BaoMoi_BusinessFinance_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">semantic_synonym</span>
+            arts-synonym · expected <code>arts_crafts_photography</code></summary>
+            <div class="case-body"><div class="brief"><b>MakeStory</b> —
+            Bộ dụng cụ ghi lại khoảnh khắc và tạo tác phẩm thủ công
+            </div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.054s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="fail">MISS · expected #4</span> · 0.821s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>sports_outdoors</b><br><span class="muted">
+                ZNews · Znews_SportsOutdoors_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.973s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>home_garden_diy</b><br><span class="muted">
+                BaoMoi · BaoMoi_HomeGardenDiy_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">audience_only</span>
+            audience-only-music · expected <code>music_live_events</code></summary>
+            <div class="case-body"><div class="brief"><b>NovaPass</b> —
+            Ra mắt dịch vụ thành viên mới và cần tăng nhận diện.
+            <br><span class="muted">Audience: Live events</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.058s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.902s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.527s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">audience_only</span>
+            audience-only-gaming · expected <code>gaming_esports</code></summary>
+            <div class="case-body"><div class="brief"><b>NovaPass</b> —
+            Khuyến khích người dùng khám phá ưu đãi mới.
+            <br><span class="muted">Audience: Esports</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.053s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.898s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>soccer_fandom</b><br><span class="muted">
+                BaoMoi · BaoMoi_SoccerFandom_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.918s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">audience_only</span>
+            audience-only-movies · expected <code>movies_tv_streaming</code></summary>
+            <div class="case-body"><div class="brief"><b>NovaPass</b> —
+            Giới thiệu gói nội dung giải trí mới.
+            <br><span class="muted">Audience: Streaming television</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.058s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                Zagoo · Zagoo_Interstitial_Mobile
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.05s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>gaming_esports</b><br><span class="muted">
+                BaoMoi · BaoMoi_GamingEsports_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 7.321s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>movies_tv_streaming</b><br><span class="muted">
+                BaoMoi · BaoMoi_MoviesTvStreaming_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>entertainment_culture</b><br><span class="muted">
+                ZNews · Znews_GiaiTri_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">audience_only</span>
+            audience-only-books · expected <code>books_reading</code></summary>
+            <div class="case-body"><div class="brief"><b>NovaPass</b> —
+            Thúc đẩy lượt đăng ký cho sản phẩm nội dung số.
+            <br><span class="muted">Audience: E-books</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.054s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>books_reading</b><br><span class="muted">
+                BaoMoi · BaoMoi_BooksReading_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>music_live_events</b><br><span class="muted">
+                ZingMP3 · ZingMP3_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.93s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>books_reading</b><br><span class="muted">
+                BaoMoi · BaoMoi_BooksReading_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.285s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>books_reading</b><br><span class="muted">
+                BaoMoi · BaoMoi_BooksReading_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>arts_crafts_photography</b><br><span class="muted">
+                BaoMoi · BaoMoi_ArtsCraftsPhotography_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>education_careers</b><br><span class="muted">
+                BaoMoi · BaoMoi_EducationCareers_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">audience_only</span>
+            audience-only-family · expected <code>family_parenting</code></summary>
+            <div class="case-body"><div class="brief"><b>An Tâm</b> —
+            Tăng nhận biết cho dòng sản phẩm chăm sóc hằng ngày.
+            <br><span class="muted">Audience: Parents with young children</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.065s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                Đi Cùng Con · DiCungCon_ContentBridge_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.903s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                Đi Cùng Con · DiCungCon_ContentBridge_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 14.91s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>family_parenting</b><br><span class="muted">
+                BaoMoi · BaoMoi_FamilyParenting_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>fashion_beauty</b><br><span class="muted">
+                BaoMoi · BaoMoi_FashionBeauty_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">audience_only</span>
+            audience-only-food · expected <code>food_dining</code></summary>
+            <div class="case-body"><div class="brief"><b>Daily+</b> —
+            Thúc đẩy dùng thử và đặt hàng trong tuần ra mắt.
+            <br><span class="muted">Audience: Food</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.084s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>food_dining</b><br><span class="muted">
+                BaoMoi · BaoMoi_FoodDining_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>health_wellness</b><br><span class="muted">
+                BaoMoi · BaoMoi_HealthWellness_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.786s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>food_dining</b><br><span class="muted">
+                BaoMoi · BaoMoi_FoodDining_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 8.643s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>food_dining</b><br><span class="muted">
+                BaoMoi · BaoMoi_FoodDining_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">audience_only</span>
+            audience-only-fashion · expected <code>fashion_beauty</code></summary>
+            <div class="case-body"><div class="brief"><b>Daily+</b> —
+            Giới thiệu bộ sưu tập mới đến nhóm khách hàng quan tâm.
+            <br><span class="muted">Audience: Cosmetics</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.061s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>fashion_beauty</b><br><span class="muted">
+                BaoMoi · BaoMoi_FashionBeauty_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.981s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>fashion_beauty</b><br><span class="muted">
+                BaoMoi · BaoMoi_FashionBeauty_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 9.924s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>fashion_beauty</b><br><span class="muted">
+                BaoMoi · BaoMoi_FashionBeauty_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>lifestyle_food_shopping</b><br><span class="muted">
+                ZNews · Znews_DoiSong_Background
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">audience_only</span>
+            audience-only-travel · expected <code>travel_hospitality</code></summary>
+            <div class="case-body"><div class="brief"><b>GoMore</b> —
+            Tăng lượt đặt dịch vụ trong đợt ưu đãi cuối tháng.
+            <br><span class="muted">Audience: Frequent travelers</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.058s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 1.02s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.842s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">audience_only</span>
+            audience-only-automotive · expected <code>automotive_mobility</code></summary>
+            <div class="case-body"><div class="brief"><b>Move+</b> —
+            Thu hút khách hàng tìm hiểu sản phẩm mới tại đô thị.
+            <br><span class="muted">Audience: Vehicle shoppers</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="fail">MISS · expected #2</span> · 0.056s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>travel_hospitality</b><br><span class="muted">
+                BaoMoi · BaoMoi_TravelHospitality_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>automotive_mobility</b><br><span class="muted">
+                BaoMoi · BaoMoi_AutomotiveMobility_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.895s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>automotive_mobility</b><br><span class="muted">
+                BaoMoi · BaoMoi_AutomotiveMobility_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 10.292s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>automotive_mobility</b><br><span class="muted">
+                BaoMoi · BaoMoi_AutomotiveMobility_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>society_news_law</b><br><span class="muted">
+                ZNews · ZingNews_Masthead
+                </span></div></div></section></div></div></details><details class="case"><summary><span class="pill">audience_only</span>
+            audience-only-marketing · expected <code>marketing_digital_business</code></summary>
+            <div class="case-body"><div class="brief"><b>Scale+</b> —
+            Tăng số lượt đăng ký dùng thử nền tảng cho doanh nghiệp.
+            <br><span class="muted">Audience: Digital marketing</span></div>
+            <div class="grid"><section class="variant"><h3>Deterministic contextual baseline</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.059s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>business_finance</b><br><span class="muted">
+                S-Money · SMoney_StockScreener_InContent_Mobile
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>pets_animals</b><br><span class="muted">
+                BaoMoi · BaoMoi_PetsAnimals_Masthead
+                </span></div></div></section><section class="variant"><h3>Dense semantic + BM25 retrieval</h3>
+                <p><span class="pass">PASS · expected #1</span> · 0.971s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>shopping_ecommerce</b><br><span class="muted">
+                BaoMoi · BaoMoi_ShoppingEcommerce_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div></section><section class="variant best"><h3>Dense semantic + BM25 + GPT-5.4-nano reranking</h3>
+                <p><span class="pass">PASS · expected #1</span> · 12.6s</p><div class="rank-row"><span class="rank">1</span><div>
+                <b>marketing_digital_business</b><br><span class="muted">
+                BaoMoi · BaoMoi_MarketingDigitalBusiness_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">2</span><div>
+                <b>technology_science</b><br><span class="muted">
+                ZNews · Znews_TechnologyScience_Masthead
+                </span></div></div><div class="rank-row"><span class="rank">3</span><div>
+                <b>business_finance</b><br><span class="muted">
+                BaoMoi · BaoMoi_BusinessFinance_Masthead
+                </span></div></div></section></div></div></details></section><div class="footer">Generated 2026-07-27T02:13:43 ·
+Static evidence document; raw JSON remains under <code>eval/reports</code>.</div></main></body></html>

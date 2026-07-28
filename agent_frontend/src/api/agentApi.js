@@ -1,6 +1,7 @@
 import { fmt, generateId } from '@/lib/utils'
 import log from '@/lib/logger'
 import { normalizeDmpAttr } from '@/lib/audience'
+import { isRetryableCreativeAnalysisFailure } from '@/lib/creativeIntel'
 
 export { normalizeDmpAttr } from '@/lib/audience'
 
@@ -27,6 +28,8 @@ const storageSet = (key, value) => {
 let LEGACY_ANONYMOUS_TOKEN = typeof window !== 'undefined' ? storageGet('anonymous-token') : ''
 let CURRENT_CONVERSATION_ID = typeof window !== 'undefined' ? storageGet('conversation-id') : ''
 const STORED_SESSION_ID = typeof window !== 'undefined' ? storageGet('session-id') : ''
+let IDENTITY_BOOTSTRAP_PROMISE = null
+let IDENTITY_BOOTSTRAP_RESULT = null
 
 const cookieGet = name => {
   if (typeof document === 'undefined') return ''
@@ -756,17 +759,29 @@ function conversationMessages(context) {
 }
 
 async function bootstrapIdentity() {
-  const response = await agentFetch(`${AGENT_URL}/api/agent/auth/anonymous`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(5000),
-  })
-  if (!response.ok) throw new Error('Không thể khởi tạo danh tính ẩn danh.')
-  const identity = await response.json()
-  // The response has now installed an HttpOnly cookie. Remove any credential
-  // left by the short-lived pre-cookie development build.
-  LEGACY_ANONYMOUS_TOKEN = ''
-  storageSet('anonymous-token', '')
-  return identity
+  if (IDENTITY_BOOTSTRAP_RESULT) return IDENTITY_BOOTSTRAP_RESULT
+  if (IDENTITY_BOOTSTRAP_PROMISE) return IDENTITY_BOOTSTRAP_PROMISE
+
+  IDENTITY_BOOTSTRAP_PROMISE = (async () => {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/auth/anonymous`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!response.ok) throw new Error('Không thể khởi tạo danh tính ẩn danh.')
+    const identity = await response.json()
+    // The response has now installed an HttpOnly cookie. Remove any credential
+    // left by the short-lived pre-cookie development build.
+    LEGACY_ANONYMOUS_TOKEN = ''
+    storageSet('anonymous-token', '')
+    IDENTITY_BOOTSTRAP_RESULT = identity
+    return identity
+  })()
+
+  try {
+    return await IDENTITY_BOOTSTRAP_PROMISE
+  } finally {
+    IDENTITY_BOOTSTRAP_PROMISE = null
+  }
 }
 
 async function fetchConversation(conversationId) {
@@ -932,8 +947,13 @@ function mergeCreativeIntel(files, docs) {
       analysisId: doc.analysis_id,
       analysisStatus: doc.effective_status || doc.status,
       reviewReasons: doc.review_reasons || [],
+      generationAdvisories: doc.generation_advisories || [],
       deterministic,
       vlm: doc.vlm || {},
+      vlmError: doc.vlm_error || null,
+      vlmProvider: doc.vlm_provider || '',
+      vlmModel: doc.vlm_model || '',
+      vlmRouteKey: doc.vlm_route_key || '',
       override: doc.override || {},
       width: deterministic.width || file.width,
       height: deterministic.height || file.height,
@@ -969,9 +989,14 @@ export async function prepareCreativeFiles(files, onProgress = () => {}) {
   // verdicts. Creating a new batch here would erase the visible review state
   // and send the operator back to "Đang chờ phân tích".
   prepared = mergeCreativeIntel(prepared, await getCreativeIntel())
-  if (prepared.length && prepared.every(file =>
+  if (!prepared.length) {
+    throw new Error('Chưa có creative để phân tích. Hãy tải hoặc tạo ít nhất một creative rồi thử lại.')
+  }
+  const allTerminal = prepared.length && prepared.every(file =>
     ['auto_approved', 'needs_review', 'approved_override'].includes(file.analysisStatus)
-  )) {
+  )
+  const hasRetryableFailure = prepared.some(isRetryableCreativeAnalysisFailure)
+  if (allTerminal && !hasRetryableFailure) {
     onProgress(prepared)
     return prepared
   }
@@ -1003,7 +1028,11 @@ export async function prepareCreativeFiles(files, onProgress = () => {}) {
     url: file.url,
   })))
   if (!(queued.jobs || []).length) {
-    throw new Error('Creative intelligence chưa được bật trên agent')
+    throw new Error(
+      queued.note === 'USE_VLM_CREATIVE=false'
+        ? 'Tính năng phân tích creative hiện chưa sẵn sàng'
+        : 'Không thể tạo tác vụ phân tích cho các creative đã chọn'
+    )
   }
   prepared = prepared.map(file => {
     const job = queued.jobs.find(item => item.url === file.url || item.name === file.name)
@@ -1128,6 +1157,16 @@ function serviceUnavailable(content, step) {
 
 
 export const AgentAPI = {
+  async getDebugLogs(limit = 500) {
+    const sessionId = SESSION_ID
+    const res = await agentFetch(
+      `${AGENT_URL}/api/agent/logs/${encodeURIComponent(sessionId)}?limit=${Math.max(1, Math.min(1000, Number(limit) || 500))}`,
+      { signal: AbortSignal.timeout(15000) },
+    )
+    if (!res.ok) throw new Error(`Không thể tải backend logs (HTTP ${res.status})`)
+    return res.json()
+  },
+
 
   /**
    * Bootstrap the anonymous device identity. Restoring the previous campaign
@@ -1333,6 +1372,23 @@ export const AgentAPI = {
     return CURRENT_CONVERSATION_ID
   },
 
+  async submitFeedback(payload) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        session_id: payload.session_id || SESSION_ID,
+        workspace_revision: payload.workspace_revision ?? WORKSPACE_REVISION,
+      }),
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) {
+      throw await responseError(response, 'Không thể lưu phản hồi. Vui lòng thử lại.')
+    }
+    return withRequestId(await response.json(), response)
+  },
+
   async boot() {
     const real = await callAgent({ session_id: SESSION_ID, step: -1, message: '' })
     return real ?? safeDemoFallback(AGENT_SCENARIOS.boot())
@@ -1407,6 +1463,8 @@ export const AgentAPI = {
         reviewReasons: file.reviewReasons, deterministic: file.deterministic,
         vlm: file.vlm, override: file.override, formatId: file.formatId,
         intendedFormat: file.intendedFormat,
+        source: file.source, derivedFromFileId: file.derivedFromFileId,
+        repairMethod: file.repairMethod,
       })),
     }
     const real = await callAgent({
@@ -1726,6 +1784,23 @@ export const AgentAPI = {
     }
   },
 
+  async rerunAutopilotAudience(runId, taskId, reason = '') {
+    try {
+      const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/rerun`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor: 'campaign_operator',
+          reason: reason || 'Operator requested a new audience recommendation',
+        }),
+        signal: AbortSignal.timeout(10000),
+      })
+      const data = await res.json().catch(() => ({}))
+      return res.ok ? withRequestId(data, res) : { ok: false, status: res.status, ...(data.detail || data) }
+    } catch (e) {
+      return { ok: false, detail: e.message }
+    }
+  },
+
   async selectAutopilotStrategy(runId, optionId, reason = '') {
     try {
       const res = await agentFetch(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/strategy`, {
@@ -1754,11 +1829,35 @@ export const AgentAPI = {
     }
   },
 
+  async generateAutopilotCreativeRecovery(runId, formatIds = []) {
+    try {
+      const res = await agentFetch(
+        `${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/creative-recovery/generate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            format_ids: formatIds,
+            actor: 'campaign_operator',
+            reason: 'Operator requested missing-format creative recovery',
+          }),
+          signal: AbortSignal.timeout(240000),
+        },
+      )
+      const data = await res.json().catch(() => ({}))
+      return res.ok
+        ? withRequestId(data, res)
+        : { ok: false, status: res.status, ...(data.detail || data) }
+    } catch (e) {
+      return { ok: false, detail: e.message }
+    }
+  },
+
   subscribeAutopilot(runId, onEvent) {
     if (typeof EventSource === 'undefined') return () => {}
     const source = new EventSource(`${AGENT_URL}/api/agent/autopilot/runs/${encodeURIComponent(runId)}/events`)
     const handler = () => onEvent?.()
-    ;['run_created', 'task_started', 'task_completed', 'task_waiting_review', 'task_approved', 'task_rejected', 'task_retry_scheduled', 'task_failed', 'strategy_selected', 'placement_selection_updated', 'run_paused', 'run_resumed', 'run_cancelled'].forEach(type => source.addEventListener(type, handler))
+    ;['run_created', 'task_started', 'task_completed', 'task_waiting_review', 'task_approved', 'task_rejected', 'task_retry_scheduled', 'task_failed', 'strategy_selected', 'placement_selection_updated', 'creative_recovery_generated', 'run_paused', 'run_resumed', 'run_cancelled'].forEach(type => source.addEventListener(type, handler))
     source.onerror = () => source.close()
     return () => source.close()
   },
@@ -1955,6 +2054,8 @@ export const AgentAPI = {
           asset_ids: options.assetIds || [],
           prompt_spec: options.promptSpec || null,
           quality: options.quality || 'medium',
+          campaign_flow: options.campaignFlow || '',
+          audience_context: options.audienceContext || {},
           idempotency_key: options.idempotencyKey || `guided:${SESSION_ID}:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
         }),
         signal: AbortSignal.timeout(180000),  // AI image gen — up to 3 min
@@ -2030,7 +2131,7 @@ export const AgentAPI = {
 
   /**
    * Capture a full-page screenshot of a live test-site URL via Playwright.
-   * Only works for whitelisted staging domains (znews-stg, baomoi-stg, zingmp3-stg).
+   * Only works for whitelisted NP-6 staging publisher domains.
    *
    * @param {string}   siteUrl  - e.g. "https://znews-stg.pawgrammers.io.vn"
    * @param {string[]} zoneIds  - DOM element IDs to capture (from selectedZoneIds).

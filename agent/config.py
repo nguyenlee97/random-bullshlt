@@ -76,6 +76,54 @@ class Config:
     OPENAI_CAMPAIGN_MAX_TOOL_CALLS: int = int(
         os.getenv("OPENAI_CAMPAIGN_MAX_TOOL_CALLS", "4")
     )
+    # NP-6 placement reranking is an independent, bounded experiment. It does
+    # not select or change either campaign conversation engine.
+    PLACEMENT_RERANK_ENABLED: bool = (
+        os.getenv("PLACEMENT_RERANK_ENABLED", "false").lower() == "true"
+    )
+    PLACEMENT_RERANK_MODEL: str = os.getenv(
+        "PLACEMENT_RERANK_MODEL", "gpt-5.4-nano"
+    )
+    PLACEMENT_RERANK_REASONING_EFFORT: str = os.getenv(
+        "PLACEMENT_RERANK_REASONING_EFFORT", "low"
+    )
+    PLACEMENT_RERANK_CANDIDATE_LIMIT: int = int(
+        os.getenv("PLACEMENT_RERANK_CANDIDATE_LIMIT", "12")
+    )
+    PLACEMENT_RERANK_MAX_OUTPUT_TOKENS: int = int(
+        os.getenv("PLACEMENT_RERANK_MAX_OUTPUT_TOKENS", "3000")
+    )
+    PLACEMENT_RERANK_TIMEOUT_SECONDS: float = float(
+        os.getenv("PLACEMENT_RERANK_TIMEOUT_SECONDS", "20")
+    )
+    # Placement retrieval is intentionally independent from audience RAG and
+    # from both campaign conversation engines. The catalog is small enough to
+    # keep a versioned dense+BM25 index in process; failures fall back to the
+    # existing deterministic scorer.
+    PLACEMENT_RAG_ENABLED: bool = (
+        os.getenv("PLACEMENT_RAG_ENABLED", "false").lower() == "true"
+    )
+    PLACEMENT_RAG_RETRIEVE_LIMIT: int = int(
+        os.getenv("PLACEMENT_RAG_RETRIEVE_LIMIT", "30")
+    )
+    PLACEMENT_RAG_CONTEXT_LIMIT: int = int(
+        os.getenv("PLACEMENT_RAG_CONTEXT_LIMIT", "6")
+    )
+    PLACEMENT_RAG_SEMANTIC_THRESHOLD: float = float(
+        os.getenv("PLACEMENT_RAG_SEMANTIC_THRESHOLD", "0.42")
+    )
+    PLACEMENT_RAG_MAX_QUERIES: int = int(
+        os.getenv("PLACEMENT_RAG_MAX_QUERIES", "4")
+    )
+    PLACEMENT_RAG_EMBEDDING_MODEL: str = os.getenv(
+        "PLACEMENT_RAG_EMBEDDING_MODEL", "text-embedding-3-small"
+    )
+    PLACEMENT_RAG_EMBEDDING_TIMEOUT_SECONDS: float = float(
+        os.getenv("PLACEMENT_RAG_EMBEDDING_TIMEOUT_SECONDS", "30")
+    )
+    PLACEMENT_RAG_TOPIC_RERANK_THRESHOLD: float = float(
+        os.getenv("PLACEMENT_RAG_TOPIC_RERANK_THRESHOLD", "0.35")
+    )
     OPENAI_IMAGE_ENABLED: bool = (
         os.getenv("OPENAI_IMAGE_ENABLED", "true").lower() == "true"
     )
@@ -84,7 +132,7 @@ class Config:
     OPENAI_IMAGE_TIMEOUT_SECONDS: float = float(
         os.getenv("OPENAI_IMAGE_TIMEOUT_SECONDS", "180")
     )
-    OPENAI_VLM_MODEL: str = os.getenv("OPENAI_VLM_MODEL", "gpt-5.4-nano")
+    OPENAI_VLM_MODEL: str = os.getenv("OPENAI_VLM_MODEL", "gpt-5.4-mini")
     DEFAULT_CONVERSATION_MODEL: str = os.getenv(
         "DEFAULT_CONVERSATION_MODEL", "greennode_minimax"
     )
@@ -142,6 +190,48 @@ class Config:
     AUTH_LOGIN_IP_LIMIT: int = int(os.getenv("AUTH_LOGIN_IP_LIMIT", "20"))
     AUTH_LOGIN_ACCOUNT_LIMIT: int = int(
         os.getenv("AUTH_LOGIN_ACCOUNT_LIMIT", "10")
+    )
+
+    # ── Additive quality data + staged guardrails ─────────────────────────
+    # Quality writes never control campaign execution. Existing deterministic
+    # guard enforcement remains independently enabled.
+    QUALITY_DATA_ENABLED: bool = (
+        os.getenv("QUALITY_DATA_ENABLED", "true").lower() == "true"
+    )
+    QUALITY_EVENT_TIMEOUT_MS: int = int(
+        os.getenv("QUALITY_EVENT_TIMEOUT_MS", "250")
+    )
+    QUALITY_INTERACTION_RETENTION_DAYS: int = int(
+        os.getenv("QUALITY_INTERACTION_RETENTION_DAYS", "90")
+    )
+    QUALITY_EVENT_RETENTION_DAYS: int = int(
+        os.getenv("QUALITY_EVENT_RETENTION_DAYS", "90")
+    )
+    QUALITY_FEEDBACK_RETENTION_DAYS: int = int(
+        os.getenv("QUALITY_FEEDBACK_RETENTION_DAYS", "180")
+    )
+    QUALITY_FEEDBACK_ALLOW_MEMORY_FALLBACK: bool = (
+        os.getenv("QUALITY_FEEDBACK_ALLOW_MEMORY_FALLBACK", "false").lower()
+        == "true"
+    )
+    GUARDRAIL_MODE: str = os.getenv("GUARDRAIL_MODE", "enforce").lower()
+    GUARDRAIL_POLICY_VERSION: str = os.getenv(
+        "GUARDRAIL_POLICY_VERSION", "guard-policy-v1"
+    )
+    GUARDRAIL_NEW_RULE_MODE: str = os.getenv(
+        "GUARDRAIL_NEW_RULE_MODE", "shadow"
+    ).lower()
+    GUARDRAIL_MAX_FINDINGS: int = int(
+        os.getenv("GUARDRAIL_MAX_FINDINGS", "5")
+    )
+    GUARDRAIL_MAX_EXCERPT_CHARS: int = int(
+        os.getenv("GUARDRAIL_MAX_EXCERPT_CHARS", "500")
+    )
+    GUARDRAIL_TOOL_OUTPUT_SHADOW: bool = (
+        os.getenv("GUARDRAIL_TOOL_OUTPUT_SHADOW", "false").lower() == "true"
+    )
+    GUARDRAIL_FINAL_OUTPUT_SHADOW: bool = (
+        os.getenv("GUARDRAIL_FINAL_OUTPUT_SHADOW", "false").lower() == "true"
     )
 
     # Zalo Login uses the Social OAuth v4 endpoints.  It deliberately mints the
@@ -328,6 +418,34 @@ class Config:
     RAG_DENSE_MODEL: str = os.getenv(
         "RAG_DENSE_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     RAG_SPARSE_MODEL: str = os.getenv("RAG_SPARSE_MODEL", "Qdrant/bm25")
+    AUDIENCE_RAG_RETRIEVAL_MODE: str = os.getenv(
+        "AUDIENCE_RAG_RETRIEVAL_MODE", "hybrid_dense_bm25"
+    )
+    AUDIENCE_RERANK_MODE: str = os.getenv(
+        "AUDIENCE_RERANK_MODE",
+        "legacy" if os.getenv("RAG_USE_RERANK", "false").lower() == "true" else "off",
+    ).lower()
+    AUDIENCE_NANO_RERANK_MODEL: str = os.getenv(
+        "AUDIENCE_NANO_RERANK_MODEL", "gpt-5.4-nano"
+    )
+    AUDIENCE_NANO_RERANK_REASONING_EFFORT: str = os.getenv(
+        "AUDIENCE_NANO_RERANK_REASONING_EFFORT", "low"
+    )
+    AUDIENCE_NANO_RERANK_CANDIDATE_LIMIT: int = int(
+        os.getenv("AUDIENCE_NANO_RERANK_CANDIDATE_LIMIT", "30")
+    )
+    AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS: int = int(
+        os.getenv("AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS", "3500")
+    )
+    AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS: float = float(
+        os.getenv("AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS", "30")
+    )
+    OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE: float = float(
+        os.getenv("OPENAI_AUDIENCE_MIN_RELEVANCE_SCORE", "0.50")
+    )
+    OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT: int = int(
+        os.getenv("OPENAI_AUDIENCE_RERANK_CANDIDATE_LIMIT", "30")
+    )
     RAG_TOP_RETRIEVE: int = int(os.getenv("RAG_TOP_RETRIEVE", "50"))
     RAG_TOP_FINAL: int = int(os.getenv("RAG_TOP_FINAL", "25"))
     # Keep model-assisted ranking stages independently controllable. Retrieval
@@ -377,3 +495,21 @@ class Config:
 
 
 config = Config()
+
+if config.GUARDRAIL_MODE not in {"off", "shadow", "enforce"}:
+    raise ValueError("GUARDRAIL_MODE must be off, shadow, or enforce")
+if config.GUARDRAIL_NEW_RULE_MODE not in {"off", "shadow", "enforce"}:
+    raise ValueError("GUARDRAIL_NEW_RULE_MODE must be off, shadow, or enforce")
+if config.QUALITY_EVENT_TIMEOUT_MS < 10:
+    raise ValueError("QUALITY_EVENT_TIMEOUT_MS must be at least 10")
+if config.AUDIENCE_RAG_RETRIEVAL_MODE not in {
+    "bm25_only", "dense_only", "hybrid_dense_bm25"
+}:
+    raise ValueError(
+        "AUDIENCE_RAG_RETRIEVAL_MODE must be bm25_only, dense_only, "
+        "or hybrid_dense_bm25"
+    )
+if config.AUDIENCE_RERANK_MODE not in {"off", "legacy", "openai_nano"}:
+    raise ValueError(
+        "AUDIENCE_RERANK_MODE must be off, legacy, or openai_nano"
+    )

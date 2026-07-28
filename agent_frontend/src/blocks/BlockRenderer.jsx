@@ -376,6 +376,8 @@ function WorkspaceProposalBlock({ block }) {
       ) : <div className="flex gap-2 px-3 pb-3">
         <button
           onClick={handleConfirm}
+          data-demo="workspace-proposal-confirm"
+          data-workspace-field={field}
           className="flex-1 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
         >
           {isAudience ? '✅ Áp dụng tất cả segments' : isSetup ? '✅ Duyệt các zones này' : '✅ Đồng ý, cập nhật'}

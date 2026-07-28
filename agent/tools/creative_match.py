@@ -161,6 +161,24 @@ def score_file_for_zone(file: dict, zone: dict) -> tuple[int, list[str]]:
         warnings.append("Creative đang chờ review (creative-intel) — kiểm tra trước khi book")
         score -= 3
 
+    if zone.get("creativeContractId"):
+        from autopilot.placement_planning import format_spec_for_zone
+
+        spec = format_spec_for_zone(zone)
+        if not spec:
+            return -5, ["Creative contract của placement chưa được hỗ trợ"]
+        match = match_file_to_format(file, spec)
+        if match.get("matched"):
+            mode = match.get("mode")
+            score += 10 if mode in {"exact_size", "strong_ratio"} else 7
+        else:
+            score -= 7
+            warnings.append(
+                f"Creative không khớp contract {zone.get('creativeContractId')} "
+                f"({match.get('mode')})"
+            )
+        return score, warnings
+
     # Skin zones — measured layout first, filename hack last
     is_skin_zone = zone.get("format") == "skin" or zone.get("size") == "skin"
     if is_skin_zone:

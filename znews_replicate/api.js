@@ -21,7 +21,8 @@ const AD_API_BASE = _isVPS
 
 const AD_SITE_ID  = 'znews.vn';
 const AD_TIMEOUT  = 4000; // ms before giving up on backend
-const ALLOW_FALLBACK_ADS = window.__ADSTACK_CONFIG__?.allowFallbackAds ?? _isVPS;
+const EVIDENCE_MODE = new URLSearchParams(window.location.search).get('evidence') === '1';
+const ALLOW_FALLBACK_ADS = window.__ADSTACK_CONFIG__?.allowFallbackAds ?? (_isVPS || EVIDENCE_MODE);
 
 // ── Impression / Click Tracking ──────────────────────────────────────────────
 /**
@@ -160,6 +161,10 @@ function fetchWithTimeout(url, options = {}, timeout = AD_TIMEOUT) {
  * @returns {Promise<{hasAd, html, campaignId, brand, targetUrl}>}
  */
 async function fetchAdForZone(zoneId) {
+    if (EVIDENCE_MODE) {
+        console.log(`[AdAgent] Rendering labelled screenshot fixture for zone: ${zoneId}`);
+        return getFallbackMockAd(zoneId);
+    }
     console.log(`[AdAgent] Requesting ad for zone: ${zoneId} from ${AD_API_BASE}`);
 
     try {
@@ -188,7 +193,8 @@ async function fetchAdForZone(zoneId) {
             };
         }
 
-        // Local verification must never look successful because of a canned ad.
+        // Normal local verification stays honest. The explicit screenshot-evidence
+        // mode may render the labelled synthetic fixture so every mount is visible.
         console.log(`[AdAgent] No live campaign for ${zoneId}.`);
         return ALLOW_FALLBACK_ADS
             ? getFallbackMockAd(zoneId)
@@ -280,6 +286,9 @@ function getFallbackMockAd(zoneId) {
             } else if (zoneId.includes('SidebarBox')) {
                 return { hasAd: true, targetUrl: 'https://example.com/sidebar',
                     html: `<a href="https://example.com/sidebar" target="_blank" style="display:block;width:100%;height:100%;"><img src="ad-pic/side-banner.jpg" style="width:100%;height:100%;object-fit:cover;border:none;display:block;" alt="Sidebar Ad"></a>` };
+            } else if (zoneId.includes('Masthead')) {
+                return { hasAd: true, targetUrl: 'https://example.com/masthead',
+                    html: `<a href="https://example.com/masthead" target="_blank" style="display:block;width:100%;height:100%;"><img src="ad-pic/top-banner.jpg" style="width:100%;height:100%;object-fit:cover;border:none;display:block;" alt="Category Masthead Ad"></a>` };
             }
             return { hasAd: false };
     }

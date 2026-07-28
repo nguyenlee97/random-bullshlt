@@ -367,6 +367,17 @@ def _explicit_advisory_missing_fields(
     """
     if provided_fields is not None:
         provided = set(provided_fields)
+        # OpenAI opts into deterministic transcript evidence so a stochastic
+        # classifier omission cannot make it re-ask a fact from an earlier
+        # user turn. GreenNode does not set this state flag.
+        if state.get("merge_explicit_text_evidence"):
+            user_text = _all_user_text(state)
+            if _OBJECTIVE_SIGNAL_RE.search(user_text):
+                provided.add("objective")
+            if _KPI_SIGNAL_RE.search(user_text):
+                provided.add("kpi")
+            if _NOTES_SIGNAL_RE.search(user_text):
+                provided.add("notes")
         return [
             field for field in ("objective", "kpi", "notes")
             if field not in provided
@@ -604,7 +615,13 @@ async def brief_collector_node(
         }
 
     canonical = await get_workspace(session_id)
-    if canonical.get("artifacts", {}).get("brief", {}).get("value"):
+    current_brief = canonical.get("artifacts", {}).get("brief", {}).get("value")
+    _, current_errors = validate_brief_value(
+        current_brief, today=campaign_today(),
+    )
+    if current_brief and not (
+        state.get("replace_incomplete_brief") and current_errors
+    ):
         reply = (
             "Workspace đã có Brief được duyệt trong lúc em tổng hợp. "
             "Anh/chị tải lại workspace trước khi yêu cầu thay đổi nhé."

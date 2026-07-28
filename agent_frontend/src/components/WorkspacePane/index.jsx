@@ -25,7 +25,7 @@ const STEP_DESCS = [
 ]
 
 const WorkspacePane = forwardRef(function WorkspacePane(
-  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, conversationModel = 'greennode_minimax', autopilotMode = false, autopilotEditorArtifact = null, onAutopilotSave, onReturnToAutopilot },
+  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false, autopilotEditorArtifact = null, onAutopilotSave, onReturnToAutopilot, openaiCampaignFlow = false },
   ref
 ) {
   const bodyRef = useRef(null)
@@ -66,8 +66,8 @@ const WorkspacePane = forwardRef(function WorkspacePane(
   const renderStep = () => {
     switch (currentStep) {
       case 0: return <BriefStep data={formState.brief} onChange={v => updateFormSlice('brief', v)} isDone={isReadOnly} />
-      case 1: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isReadOnly} brief={formState.brief} recoFromChat={recoFromChat} expandTargeting={autopilotMode && autopilotEditorArtifact === 'targeting'} />
-      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isReadOnly} brief={formState.brief} segment={formState.segment} formatPlan={creativeFormatPlan} autopilotMode={autopilotMode} />
+      case 1: return <AudienceStep data={formState.segment} onChange={v => updateFormSlice('segment', v)} isDone={isReadOnly} brief={formState.brief} recoFromChat={recoFromChat} expandTargeting={autopilotMode && autopilotEditorArtifact === 'targeting'} openaiCampaignFlow={openaiCampaignFlow} />
+      case 2: return <CreativeStep data={formState.creative} onChange={updateCreative} isDone={isReadOnly} brief={formState.brief} segment={formState.segment} formatPlan={creativeFormatPlan} autopilotMode={autopilotMode} onRepairSave={autopilotMode ? saveAutopilotEditor : undefined} openaiCampaignFlow={openaiCampaignFlow} />
       case 3: return (
         <SetupStep
           data={formState.setup}
@@ -93,6 +93,13 @@ const WorkspacePane = forwardRef(function WorkspacePane(
             ...formState.setup,
             creativeFiles: formState.creative.files || [],
           }}
+          feedbackTarget={{
+            sessionId: window.__AGENT_SESSION_ID__,
+            targetKind: 'conversation',
+            surface: 'guided_result',
+            step: 4,
+            workspaceRevision,
+          }}
         />
       )
       case 5: return <ReportStep data={formState.report} onChange={v => updateFormSlice('report', v)} isDone={isDone} formState={formState} onSendChat={onSendChat} />
@@ -112,9 +119,9 @@ const WorkspacePane = forwardRef(function WorkspacePane(
     }
   }
 
-  const saveAutopilotEditor = async () => {
+  const saveAutopilotEditor = async (creativeOverride = null) => {
     setAutopilotSaveMessage('')
-    const result = await onAutopilotSave?.()
+    const result = await onAutopilotSave?.(creativeOverride)
     if (!result?.shouldAdvance) {
       setAutopilotSaveMessage(
         String(result?.response?.content || 'Chưa thể lưu thay đổi. Kiểm tra thông tin trong form rồi thử lại.')
@@ -137,21 +144,31 @@ const WorkspacePane = forwardRef(function WorkspacePane(
 
       {/* Stepper */}
       {autopilotMode ? (
-        <nav aria-label="Điều hướng campaign artifacts" className="flex gap-2 overflow-x-auto border-b border-border bg-slate-50/80 px-3 py-2 sm:px-5">
-          {steps.slice(0, 4).map((item, index) => {
-            const status = stepStatuses[index]
-            const active = index === currentStep
-            return (
-              <button key={item.id || item.title} type="button" disabled={busy} onClick={() => onStepJump(index)}
-                className={cn('inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
-                  active ? 'border-brand-300 bg-brand-50 text-brand-700' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200',
-                  busy && 'cursor-wait opacity-60')}>
-                <span className={cn('h-2 w-2 rounded-full', status === 'done' ? 'bg-green-500' : status === 'stale' ? 'bg-amber-500' : 'bg-slate-300')} />
-                {item.title}
-              </button>
-            )
-          })}
-        </nav>
+        <div className="relative border-b border-border bg-slate-50/80">
+          <nav
+            aria-label="Điều hướng campaign artifacts"
+            data-demo="artifact-nav-scroll"
+            className="flex snap-x gap-2 overflow-x-auto overscroll-x-contain px-3 py-2 pr-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:px-5 sm:pr-5"
+          >
+            {steps.slice(0, 4).map((item, index) => {
+              const status = stepStatuses[index]
+              const active = index === currentStep
+              return (
+                <button key={item.id || item.title} type="button" disabled={busy} onClick={() => onStepJump(index)}
+                  className={cn('inline-flex shrink-0 snap-start items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
+                    active ? 'border-brand-300 bg-brand-50 text-brand-700' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200',
+                    busy && 'cursor-wait opacity-60')}>
+                  <span className={cn('h-2 w-2 rounded-full', status === 'done' ? 'bg-green-500' : status === 'stale' ? 'bg-amber-500' : 'bg-slate-300')} />
+                  {item.title}
+                </button>
+              )
+            })}
+          </nav>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 w-9 bg-gradient-to-l from-slate-50 via-slate-50/90 to-transparent sm:hidden"
+          />
+        </div>
       ) : (
         <Stepper
           steps={steps}
@@ -240,7 +257,6 @@ const WorkspacePane = forwardRef(function WorkspacePane(
         onApprove={onApprove}
         onBack={() => onStepJump(currentStep - 1)}
         onNext={() => onStepJump(currentStep + 1)}
-        conversationModel={conversationModel}
         approveLabel={currentStep === 2
           ? (creativeReviewState(formState.creative?.files || []) === 'ready'
             ? 'Xác nhận & sang Setup'
@@ -267,7 +283,8 @@ const WorkspacePane = forwardRef(function WorkspacePane(
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
                 Quay lại chưa lưu
               </button>
-              <button type="button" onClick={saveAutopilotEditor} disabled={!canApprove || busy}
+              <button type="button" onClick={() => saveAutopilotEditor()} disabled={!canApprove || busy}
+                data-demo="autopilot-editor-save"
                 className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-bold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50">
                 {busy
                   ? (currentStep === 2 ? 'Đang phân tích & lưu…' : 'Đang lưu…')

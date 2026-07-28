@@ -92,3 +92,42 @@ async def test_reply_renderer_is_grounded_in_server_tool_result(monkeypatch):
     assert text == "Doraemon đang hoạt động."
     context = json.loads(client.responses.calls[0]["input"])
     assert context["tool_result"] == "Campaign Doraemon status=active"
+
+
+@pytest.mark.asyncio
+async def test_pending_brief_decision_uses_typed_output_without_principals(monkeypatch):
+    import zalo_openai
+    from config import config
+
+    parsed = zalo_openai.ZaloPendingBriefDecision(
+        intent="approve",
+        explicit=True,
+        evidence="làm luôn theo brief này",
+    )
+    client = _FakeClient(parsed)
+    monkeypatch.setattr(config, "ZALO_OPENAI_ENABLED", True)
+    monkeypatch.setattr(config, "OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setattr(config, "ZALO_CHAT_MODEL", "gpt-5.4-mini")
+    monkeypatch.setattr(zalo_openai, "_client", client)
+
+    result = await zalo_openai.classify_pending_brief_decision(
+        message="Được, làm luôn theo brief này nhé",
+        pending={
+            "kind": "confirm_autopilot_brief",
+            "mode": "semi_automatic",
+            "brief": {"brand": "GreenFarm", "budget": 50},
+            "external_uid": "must-not-leak",
+        },
+        history=[{"role": "assistant", "content": "Brief đang chờ duyệt."}],
+        thread_id="zth-secret",
+    )
+
+    assert result is parsed
+    call = client.responses.calls[0]
+    assert call["text_format"] is zalo_openai.ZaloPendingBriefDecision
+    assert call["model"] == "gpt-5.4-mini"
+    assert call["store"] is False
+    context = json.loads(call["input"])
+    assert context["pending_state"]["brief"]["brand"] == "GreenFarm"
+    assert "must-not-leak" not in call["input"]
+    assert "zth-secret" not in call["safety_identifier"]

@@ -18,6 +18,21 @@ const placementSchema = new mongoose.Schema(
     testSiteZone: { type: String, default: null }, // if this maps to a real test site zone id
     siteId:       { type: String, default: null }, // 'znews' | 'baomoi' | 'zingmp3'
     siteUrl:      { type: String, default: null }, // direct URL to the test site page where this ad shows
+    publisher:    { type: String, default: null },
+    subFormat:    { type: String, default: null },
+    flexible:     { type: Boolean, default: false },
+    pageTemplate: { type: String, default: null },
+    topicId:      { type: String, default: null },
+    placementFamily:   { type: String, default: null },
+    comparisonGroupId: { type: String, default: null },
+    device:             [{ type: String }],
+    creativeContractId: { type: String, default: null },
+    catalogVersion:     { type: String, default: null },
+    recordRevision:     { type: Number, default: 1 },
+    lifecycleStatus:    { type: String, default: 'active' },
+    renderer:           { type: mongoose.Schema.Types.Mixed, default: null },
+    audienceContext:    { type: mongoose.Schema.Types.Mixed, default: null },
+    provenance:         { type: mongoose.Schema.Types.Mixed, default: null },
   },
   { _id: false }
 );
@@ -50,6 +65,12 @@ const zoneCatalogSchema = new mongoose.Schema(
     groups:     [groupSchema],
     channels:   { type: mongoose.Schema.Types.Mixed, default: {} },
     placements: [placementSchema],
+    catalogVersion:    { type: String, default: 'legacy-35' },
+    taxonomyVersion:   { type: String, default: null },
+    revision:          { type: Number, default: 1 },
+    previousVersion:   { type: String, default: null },
+    creativeContracts: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    topicTaxonomy:     { type: [mongoose.Schema.Types.Mixed], default: [] },
   },
   { collection: 'zones', timestamps: true }
 );

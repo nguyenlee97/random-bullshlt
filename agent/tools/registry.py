@@ -1,7 +1,8 @@
+import hashlib
 import json
 from tools.audience_library import search_audience
 from tools.zone_catalog import get_all_zones
-from tools.order_api import fetch_order, fetch_all_orders, fetch_zone_conflicts
+from tools.order_api import fetch_order, fetch_zone_conflicts, public_conflict_details
 from tools.targeting_options import get_targeting_options
 
 TOOL_DEFINITIONS = [
@@ -26,7 +27,8 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "search_zones",
             "description": (
-                "Tìm kiếm ad zones theo từ khoá, objective, format hoặc platform. Có tổng 35 zones. "
+                "Tìm kiếm ad zones theo từ khoá, objective, format, publisher hoặc chủ đề. "
+                "Luôn dùng catalog hiện tại thay vì giả định số lượng zone cố định. "
                 "Dùng khi người dùng hỏi 'zone nào phù hợp cho awareness', 'zone ZingNews', "
                 "'zone banner 300x250', 'zone có VI% cao', 'zone rẻ nhất'. "
                 "Luôn truyền start_date và end_date từ brief để lọc zone bị đặt trước. "
@@ -107,11 +109,11 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "get_order_status",
-            "description": "Xem trạng thái campaign đã tạo.",
+            "description": "Xem trạng thái campaign thuộc tài khoản hoặc phiên hiện tại.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "order_id": {"type": "string", "description": "VD: ORD-2026-005. Optional — nếu trống trả all."},
+                    "order_id": {"type": "string", "description": "VD: ORD-2026-005. Optional — nếu trống trả các campaign gần đây trong phạm vi truy cập."},
                 },
                 "required": [],
             },
@@ -127,6 +129,36 @@ TOOL_DEFINITIONS = [
     },
 ]
 
+
+def _record_authorization_denial(
+    session_id: str | None,
+    *,
+    tool: str,
+    resource: str = "",
+) -> None:
+    """Capture denial evidence asynchronously without storing raw identifiers."""
+    if not session_id:
+        return
+    from quality.events import enqueue_quality_event
+
+    enqueue_quality_event(
+        "guard_decision",
+        session_id=session_id,
+        surface="tool_authorization",
+        payload={
+            "decision": "block",
+            "reason": "not_found_or_forbidden",
+            "tool": tool,
+            "resource_sha256": (
+                hashlib.sha256(resource.encode("utf-8")).hexdigest()
+                if resource else None
+            ),
+            "workspace_mutated": False,
+            "order_created": False,
+        },
+    )
+
+
 _STEP_EXPLANATIONS = {
     "brief":    "Bước Brief: Anh/chị điền brand, objective (awareness/consideration/conversion/retention), KPI, ngân sách, thời gian và ghi chú. Em phân tích và đề xuất audience phù hợp.",
     "audience": "Bước Audience: Chọn DMP segments (310+ segments). Server trả unique reach ước lượng theo range catalog, có confidence và luôn giới hạn trong universe 60 triệu. Anh/Chị có thể tìm theo từ khoá hoặc để em gợi ý.",
@@ -136,19 +168,30 @@ _STEP_EXPLANATIONS = {
 }
 
 
-async def execute_tool(name: str, args: dict) -> dict:
+async def execute_tool(
+    name: str,
+    args: dict,
+    *,
+    session_id: str | None = None,
+) -> dict:
     """Single dispatcher for all tool calls — metrics recorded here (Phase 0 B4)."""
     from metrics import TOOL_CALLS
+    from security import redact_pii
     try:
-        result = await _execute_tool_inner(name, args)
+        result = await _execute_tool_inner(name, args, session_id=session_id)
         TOOL_CALLS.labels(tool=name, outcome="ok").inc()
-        return result
+        return redact_pii(result)
     except Exception:
         TOOL_CALLS.labels(tool=name, outcome="error").inc()
         raise
 
 
-async def _execute_tool_inner(name: str, args: dict) -> dict:
+async def _execute_tool_inner(
+    name: str,
+    args: dict,
+    *,
+    session_id: str | None = None,
+) -> dict:
     if name == "get_zone_list":
         zones = await get_all_zones()
         obj = args.get("objective")
@@ -160,8 +203,11 @@ async def _execute_tool_inner(name: str, args: dict) -> dict:
             "reach": z["reach"], "vi": z["vi"], "ctr": z["ctr"],
             "cpm": z["cpm"], "obj": z["obj"],
             "channel": z.get("channel", ""),
+            "publisher": z.get("publisher"),
+            "topicId": z.get("topicId"),
+            "placementFamily": z.get("placementFamily"),
             "is_booked": z["id"] in conflicts,
-            "conflict": conflicts.get(z["id"]),
+            "conflict": public_conflict_details(conflicts.get(z["id"])),
         } for z in zones]}
 
     elif name == "search_zones":
@@ -175,7 +221,14 @@ async def _execute_tool_inner(name: str, args: dict) -> dict:
         if query:
             results = [z for z in results if query in " ".join([
                 z.get("id", ""), z.get("channel", ""), z.get("format", ""),
-                z.get("size", ""), z.get("obj", ""),
+                z.get("size", ""), z.get("obj", ""), z.get("publisher", ""),
+                z.get("topicId", ""), z.get("placementFamily", ""),
+                *(
+                    (z.get("audienceContext") or {}).get("keywordsVi") or []
+                ),
+                *(
+                    (z.get("audienceContext") or {}).get("keywordsEn") or []
+                ),
             ]).lower()]
 
         conflicts = await fetch_zone_conflicts(args.get("start_date", ""), args.get("end_date", ""))
@@ -186,8 +239,12 @@ async def _execute_tool_inner(name: str, args: dict) -> dict:
                 "reach": z["reach"], "vi": z["vi"], "ctr": z["ctr"],
                 "cpm": z["cpm"], "obj": z["obj"],
                 "siteUrl": z.get("siteUrl", ""),
+                "publisher": z.get("publisher"),
+                "topicId": z.get("topicId"),
+                "placementFamily": z.get("placementFamily"),
+                "comparisonGroupId": z.get("comparisonGroupId"),
                 "is_booked": z["id"] in conflicts,
-                "conflict": conflicts.get(z["id"]),
+                "conflict": public_conflict_details(conflicts.get(z["id"])),
             } for z in results[:15]],
             "total": len(results),
             "note": "Không tìm thấy zone nào." if not results else f"Tìm thấy {len(results)} zone ({sum(1 for z in results[:15] if z['id'] in conflicts)} bị đặt trước).",
@@ -229,18 +286,55 @@ async def _execute_tool_inner(name: str, args: dict) -> dict:
         return {"explanation": _STEP_EXPLANATIONS.get(step, "Bước không tìm thấy.")}
 
     elif name == "get_order_status":
-        oid = args.get("order_id")
+        from campaign_ownership import (
+            list_authorized_campaign_references_for_session,
+            session_can_access_campaign,
+        )
+
+        oid = str(args.get("order_id") or "").strip()
         if oid:
+            if not session_id or not await session_can_access_campaign(
+                session_id, oid
+            ):
+                _record_authorization_denial(
+                    session_id, tool=name, resource=oid
+                )
+                return {
+                    "ok": False,
+                    "error": "not_found_or_forbidden",
+                    "message": (
+                        "Không tìm thấy campaign trong phạm vi truy cập "
+                        "của phiên hiện tại."
+                    ),
+                }
             order = await fetch_order(oid)
-            return {"order": {
+            return {"ok": True, "order": {
                 "id": order.get("id"), "status": order.get("status"),
                 "brand": order.get("brand"), "placements": order.get("placements", []),
             }}
-        else:
-            orders = await fetch_all_orders()
-            return {"orders": [{
-                "id": o.get("id"), "status": o.get("status"), "brand": o.get("brand"),
-            } for o in orders[:5]]}
+
+        if not session_id:
+            _record_authorization_denial(session_id, tool=name)
+            return {
+                "ok": False,
+                "error": "not_found_or_forbidden",
+                "message": "Phiên hiện tại không có quyền truy cập campaign.",
+            }
+        references = await list_authorized_campaign_references_for_session(
+            session_id
+        )
+        orders = []
+        for reference in references[:5]:
+            try:
+                order = await fetch_order(reference["order_id"])
+            except Exception:
+                continue
+            orders.append({
+                "id": order.get("id"),
+                "status": order.get("status"),
+                "brand": order.get("brand"),
+            })
+        return {"ok": True, "orders": orders}
 
     elif name == "get_targeting_options":
         return await get_targeting_options()

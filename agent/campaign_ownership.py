@@ -204,6 +204,92 @@ async def list_owned_campaign_references(actor: dict) -> list[dict]:
     return [_public(item) for item in records]
 
 
+async def list_authorized_campaign_references_for_session(
+    session_id: str,
+) -> list[dict]:
+    """Resolve campaign references from server-owned session identity.
+
+    Owned conversations may read campaigns registered to the same account (or
+    anonymous actor). Legacy evaluator sessions have no conversation owner, so
+    they are restricted to order IDs already persisted in that exact session.
+    Browser/model input never contributes an owner identifier.
+    """
+    from identity import conversation_record_for_session
+    from session import get_or_create_session
+
+    conversation = await conversation_record_for_session(session_id)
+    references: list[dict] = []
+    if conversation:
+        actor = {
+            "user_id": conversation.get("owner_user_id"),
+            "anonymous_id": None if conversation.get("owner_user_id") else (
+                conversation.get("anonymous_id") or conversation.get("identity_id")
+            ),
+        }
+        references.extend(await list_owned_campaign_references(actor))
+
+    # Current-session order IDs are server-persisted evidence and cover
+    # pre-registry campaigns as well as ownerless evaluator sessions.
+    session = await get_or_create_session(session_id)
+    references.extend(
+        {
+            "order_id": str(order_id),
+            "session_id": session_id,
+            "source": "session",
+        }
+        for order_id in (session.get("created_order_ids") or [])
+        if str(order_id or "").strip()
+    )
+
+    deduped: dict[str, dict] = {}
+    for reference in references:
+        order_id = str(reference.get("order_id") or "").strip()
+        if order_id and order_id not in deduped:
+            deduped[order_id] = reference
+    return list(deduped.values())
+
+
+async def session_can_access_campaign(session_id: str, order_id: str) -> bool:
+    """Fail closed unless trusted session ownership proves campaign access."""
+    clean_order_id = str(order_id or "").strip()
+    if not clean_order_id or not session_id:
+        return False
+
+    from identity import conversation_record_for_session
+    from session import get_or_create_session
+
+    conversation = await conversation_record_for_session(session_id)
+    if conversation:
+        actor = {
+            "user_id": conversation.get("owner_user_id"),
+            "anonymous_id": None if conversation.get("owner_user_id") else (
+                conversation.get("anonymous_id") or conversation.get("identity_id")
+            ),
+        }
+        collection = await _collection()
+        if collection is not None:
+            record = await collection.find_one({
+                "order_id": clean_order_id,
+                **_owner_query(actor),
+            })
+        else:
+            candidate = _mem_campaigns.get(clean_order_id)
+            record = (
+                candidate
+                if candidate and _same_owner(candidate, conversation)
+                else None
+            )
+        if record:
+            return True
+
+    # Pre-registry and evaluator compatibility remains restricted to trusted
+    # server state for this exact session.
+    session = await get_or_create_session(session_id)
+    return clean_order_id in {
+        str(item) for item in (session.get("created_order_ids") or [])
+    }
+
+
 async def claim_campaigns(
     *, user_id: str, anonymous_id: str, conversation_ids: list[str] | None = None,
 ) -> int:

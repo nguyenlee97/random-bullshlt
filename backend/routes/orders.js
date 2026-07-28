@@ -53,9 +53,35 @@ async function getSeq() {
   return counter.seq;
 }
 
-async function getZonePlacements() {
+async function getPlacementSnapshot(placementIds = []) {
   const catalog = await ZoneCatalog.findOne({}).lean();
-  return catalog ? catalog.placements || [] : [];
+  if (!catalog) return { catalogVersion: null, placements: [], catalogPlacements: [] };
+  const selected = new Set(placementIds);
+  const snapshots = (catalog.placements || [])
+    .filter((placement) => selected.has(placement.id))
+    .map((placement) => ({
+      id: placement.id,
+      publisher: placement.publisher || null,
+      channel: placement.channel,
+      format: placement.format,
+      size: placement.size,
+      topicId: placement.topicId || null,
+      placementFamily: placement.placementFamily || null,
+      comparisonGroupId: placement.comparisonGroupId || null,
+      creativeContractId: placement.creativeContractId || null,
+      metricSource: placement.metricSource || null,
+      reach: placement.reach,
+      vi: placement.vi,
+      ctr: placement.ctr,
+      cpm: placement.cpm,
+      siteUrl: placement.siteUrl || null,
+      catalogVersion: placement.catalogVersion || catalog.catalogVersion || null,
+    }));
+  return {
+    catalogVersion: catalog.catalogVersion || 'legacy-35',
+    placements: snapshots,
+    catalogPlacements: catalog.placements || [],
+  };
 }
 
 /**
@@ -112,6 +138,8 @@ function formatOrder(doc) {
     creative:   doc.creative,
     creatives:  doc.creatives || [],
     placements: doc.placements,
+    catalogVersion: doc.catalogVersion || null,
+    placementSnapshots: doc.placementSnapshots || [],
     targeting:  doc.targeting,
     dmp:        doc.dmp,
     idempotencyKey: doc.idempotencyKey,
@@ -186,7 +214,8 @@ router.post('/', async (req, res) => {
     }
 
     const seq = await getSeq();
-    const placements = await getZonePlacements();
+    const snapshot = await getPlacementSnapshot(payload.placements || []);
+    const placements = snapshot.catalogPlacements;
 
     const sizeWarnings = validatePlacements(
       payload.placements || [],
@@ -226,6 +255,8 @@ router.post('/', async (req, res) => {
       creative:   payload.creative   || { name: '', size: '', url: '' },
       creatives:  payload.creatives  || [],
       placements: payload.placements || [],
+      catalogVersion: snapshot.catalogVersion,
+      placementSnapshots: snapshot.placements,
       targeting:  payload.targeting  || {},
       dmp:        payload.dmp        || { include: [], exclude: [] },
       idempotencyKey: payload.idempotencyKey || undefined,
@@ -263,8 +294,9 @@ router.put('/:id', async (req, res) => {
     if (!order) return res.status(404).json({ error: `Order "${req.params.id}" not found` });
 
     // Re-validate zone compatibility if placements or creative changed
-    const placements = await getZonePlacements();
     const targetPlacements = patch.placements  || order.placements;
+    const snapshot = await getPlacementSnapshot(targetPlacements);
+    const placements = snapshot.catalogPlacements;
     const targetCreative   = patch.creative    || order.creative;
     const targetStart      = patch.startDate   !== undefined ? patch.startDate : order.startDate;
     const targetEnd        = patch.endDate     !== undefined ? patch.endDate   : order.endDate;
@@ -291,6 +323,10 @@ router.put('/:id', async (req, res) => {
     const allowed = ['brand','advertiser','objective','status','budget','daily','rate','rateType',
                      'startDate','endDate','creative','creatives','placements','targeting','dmp'];
     allowed.forEach((k) => { if (patch[k] !== undefined) order[k] = patch[k]; });
+    if (patch.placements !== undefined) {
+      order.catalogVersion = snapshot.catalogVersion;
+      order.placementSnapshots = snapshot.placements;
+    }
     order.warnings = warnings;
 
     await order.save();

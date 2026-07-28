@@ -6,15 +6,17 @@ GreenNode model client.
 """
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 import json
 from typing import Any
 
 from audience_reach import estimate_unique_reach
+from autopilot.capabilities import validate_brief_value
 from openai_campaign.knowledge import search_ad_knowledge
 from session import set_pending_proposal
 from tools.audience_library import get_all_segments, search_audience
-from tools.order_api import fetch_zone_conflicts
+from tools.order_api import fetch_zone_conflicts, public_conflict_details
 from tools.registry import execute_tool
 from tools.zone_catalog import get_all_zones
 from workspace.intent import InvalidWorkspaceIntent, resolve_legacy_update
@@ -70,15 +72,31 @@ OPENAI_TOOL_DEFINITIONS = [
     {
         "type": "function",
         "name": "search_audience_catalog",
-        "description": "Search current authoritative DMP segments by topic or name.",
+        "description": (
+            "Search current authoritative DMP segments for one or more audience "
+            "topics. For a multi-topic request, put each distinct concept in a "
+            "separate query instead of joining them into one phrase."
+        ),
         "strict": True,
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Audience topic or segment name."},
+                "queries": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "maxItems": 6,
+                    "description": (
+                        "One concise English catalog search phrase per user "
+                        "concept. Translate Vietnamese concepts for the primarily "
+                        "English catalog; for example: ['coffee', 'beverages', "
+                        "'office workers']. Never combine independent concepts "
+                        "into one query."
+                    ),
+                },
                 "type": _nullable_string("Optional DMP segment type.", enum=["Behavior", "Interest"]),
             },
-            "required": ["query", "type"],
+            "required": ["queries", "type"],
             "additionalProperties": False,
         },
     },
@@ -271,7 +289,7 @@ OPENAI_TOOL_DEFINITIONS = [
     {
         "type": "function",
         "name": "get_order_status",
-        "description": "Read the current status of one campaign order or recent orders.",
+        "description": "Read one campaign order or recent orders owned by the current actor.",
         "strict": True,
         "parameters": {
             "type": "object",
@@ -335,11 +353,42 @@ async def _execute_read_tool(name: str, args: dict) -> dict:
     if name == "search_ad_knowledge":
         return search_ad_knowledge(str(args.get("query") or ""))
     if name == "search_audience_catalog":
-        segments = await search_audience(
-            str(args.get("query") or ""), type_filter=args.get("type"), limit=15,
-        )
+        queries = list(dict.fromkeys(
+            str(item).strip()
+            for item in args.get("queries") or []
+            if str(item).strip()
+        ))[:6]
+        if not queries:
+            raise ValueError("At least one audience catalog query is required")
+
+        # Each query is one semantic concept chosen by the model. Search them
+        # independently because the DMP API treats q as one regex phrase, then
+        # merge authoritative rows without changing the current selection.
+        result_sets = await asyncio.gather(*(
+            search_audience(query, type_filter=args.get("type"), limit=10)
+            for query in queries
+        ))
+        merged: dict[str, dict] = {}
+        matched_queries: dict[str, list[str]] = {}
+        query_results: list[dict] = []
+        for query, items in zip(queries, result_sets):
+            ids: list[str] = []
+            for item in items:
+                identity = _segment_id(item)
+                if not identity:
+                    continue
+                ids.append(identity)
+                merged.setdefault(identity, item)
+                matched_queries.setdefault(identity, []).append(query)
+            query_results.append({"query": query, "segment_ids": ids})
+
+        segments = list(merged.values())[:30]
         return {
             "catalog": "dmp_attributes", "catalog_freshness": "live_query",
+            "query_results": query_results,
+            "unmatched_queries": [
+                item["query"] for item in query_results if not item["segment_ids"]
+            ],
             "segments": [{
                 "segment_id": _segment_id(item),
                 "name": item.get("fullLabel") or item.get("name"),
@@ -347,6 +396,7 @@ async def _execute_read_tool(name: str, args: dict) -> dict:
                 "size_min": item.get("sizeMin"), "size_max": item.get("sizeMax"),
                 "size_updated_at": item.get("sizeEstimatedAt"),
                 "size_version": item.get("sizeEstimateVersion"),
+                "matched_queries": matched_queries.get(_segment_id(item), []),
             } for item in segments],
             "no_result": not segments,
         }
@@ -377,7 +427,7 @@ async def _execute_read_tool(name: str, args: dict) -> dict:
             "availability": "booked" if item in conflicts else (
                 "available" if start_date and end_date else "unknown_dates_required"
             ),
-            "conflict": conflicts.get(item),
+            "conflict": public_conflict_details(conflicts.get(item)),
         } for item in requested if item in zone_map]
         return {
             "zones": entries, "start_date": start_date or None, "end_date": end_date or None,
@@ -434,6 +484,9 @@ def _proposal_suggestions(field: str) -> list[dict]:
 
 
 def _bounded_json(value: Any) -> str:
+    from security import redact_pii
+
+    value = redact_pii(value)
     payload = json.dumps(value, ensure_ascii=False, default=str)
     if len(payload) <= MAX_TOOL_RESULT_CHARS:
         return payload
@@ -465,7 +518,9 @@ async def execute_openai_tool(
         }:
             result = await _execute_read_tool(name, safe_args)
         else:
-            result = await execute_tool(name, safe_args)
+            result = await execute_tool(
+                name, safe_args, session_id=session_id
+            )
         return {"output": _bounded_json(result), "ui": None, "mutated": False}
 
     if name != MUTATION_TOOL_NAME:
@@ -484,6 +539,13 @@ async def execute_openai_tool(
         str(args.get("reason") or ""),
         source_message=message,
     )
+    if field.startswith("brief.") and validate_brief_value(
+        canonical.get("artifacts", {}).get("brief", {}).get("value")
+    )[1]:
+        raise InvalidWorkspaceIntent(
+            "Brief ban đầu chưa đầy đủ; phải đề xuất toàn bộ field `brief` "
+            "thay vì một field con."
+        )
     proposal = await create_proposal(
         session_id,
         field,

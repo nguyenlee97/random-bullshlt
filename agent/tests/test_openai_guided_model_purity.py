@@ -217,45 +217,39 @@ async def test_openai_dmp_full_catalog_never_uses_legacy_selector(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_openai_rag_injects_openai_rewriter_and_selector(monkeypatch):
+async def test_openai_rag_uses_one_scored_specialist_without_selector(monkeypatch):
     import openai_campaign.guided as guided
 
     captured = {}
 
     async def fake_rag(session_id, brief, **kwargs):
         captured.update(kwargs)
-        rewritten = await kwargs["query_rewriter"](brief)
-        selected, model = await kwargs["selector"]("candidate prompt")
         return {
             "recommendations": [{
-                "segmentId": "INT158", "fullLabel": selected[0]["fullLabel"],
-                "reason": selected[0]["reason"],
+                "segmentId": "INT158", "fullLabel": "Fast food",
+                "reason": "Relevant",
             }],
             "total_segments": 310,
-            "rag": {"queries": rewritten, "selector": model},
+            "rag": {"queries": ["Mixifood"], "selector": "openai_nano_scores"},
         }
 
     import rag.recommend as rag_recommend
     monkeypatch.setattr(rag_recommend, "recommend_rag", fake_rag)
     monkeypatch.setattr(guided.config, "USE_RAG_AUDIENCE", True)
     monkeypatch.setattr(
-        guided, "_rewrite_rag_queries",
-        AsyncMock(return_value=["food lovers"]),
+        guided.config, "AUDIENCE_RERANK_MODE", "openai_nano"
     )
-    monkeypatch.setattr(
-        guided, "_select_dmp_candidates",
-        AsyncMock(return_value=([{
-            "fullLabel": "Fast food", "reason": "Relevant",
-        }], "gpt-5.4-mini")),
-    )
-
     result = await guided.handle_openai_dmp_recommend(
         "openai-rag-pure",
         brief_override={"brand": "Mixifood", "objective": "awareness"},
     )
 
     assert captured["provider"] == "openai"
-    assert captured["use_reranker"] is False
-    assert callable(captured["selector"])
+    assert captured["rerank_mode"] == "openai_nano"
+    assert captured["use_focused_query"] is True
+    assert captured["enable_query_rewrite"] is True
+    assert captured["include_raw_query"] is False
+    assert captured["select_from_rerank_scores"] is True
+    assert "selector" not in captured
     assert callable(captured["query_rewriter"])
-    assert result["rag"]["queries"] == ["food lovers"]
+    assert result["rag"]["queries"] == ["Mixifood"]

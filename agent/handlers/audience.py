@@ -555,7 +555,19 @@ async def _grounded_audience_entry(session_id: str, brief: dict) -> dict:
         "need_more_info": False,
         "text": reply_text,
         "blocks": blocks,
-        "meta": {"tool": "audience_entry", "model": selected_model, "step": 1},
+        "meta": {
+            "tool": "audience_entry",
+            "model": selected_model,
+            "step": 1,
+            "retrieval": {
+                "applied": bool(diagnostics.get("applied")),
+                "mode": diagnostics.get("mode", "legacy_full_catalog"),
+                "candidates": diagnostics.get("candidates"),
+                "reranked": bool(diagnostics.get("reranked")),
+                "rerank_mode": diagnostics.get("rerank_mode", "off"),
+                "rerank_model": diagnostics.get("rerank_model"),
+            },
+        },
         "suggestions": [
             {"label": "✅ Áp dụng tất cả", "action": "send", "text": "đồng ý, áp dụng tất cả segments này"},
             {"label": "🗑️ Bỏ bớt segment", "action": "prefill", "text": "Bỏ segment "},

@@ -73,6 +73,12 @@ async def test_run_start_is_idempotent_and_has_fixed_plan():
     assert all(task["status"] == "pending" for task in first["tasks"][1:])
     assert first["trace_id"] == second["trace_id"]
     assert first["creative_source"] == "upload"
+    assert first["quality_version_manifest"]["quality_schema_version"] == "quality-v1"
+    assert (
+        first["quality_version_manifest"]["approval_policy"]
+        == "critical_only"
+    )
+    assert first["quality_version_manifest"] == second["quality_version_manifest"]
     assert [task["plan_index"] for task in first["tasks"]] == list(
         range(len(service.STANDARD_PLAN))
     )
@@ -232,6 +238,39 @@ def test_valid_brief_is_not_a_redundant_strict_review_checkpoint():
     assert not service._needs_review(validate_spec, "review_every_stage")
 
 
+def test_critical_policy_stops_at_the_five_operator_checkpoints():
+    expected = {
+        "retrieve_audience",
+        "derive_targeting",
+        "plan_placement_intent",
+        "assign_creatives",
+        "launch_approval",
+    }
+    actual = {
+        spec["key"]
+        for spec in service.STANDARD_PLAN
+        if service._needs_review(spec, "critical_only")
+    }
+    assert actual == expected
+
+
+def test_creative_intel_commit_is_internal_autopilot_work():
+    workspace = {
+        "events": [{
+            "revision": 2,
+            "artifact": "creative_verdict",
+            "actor": "creative_intel_worker",
+        }],
+        "artifacts": {
+            "creative_verdict": {
+                "revision": 2,
+                "updated_by": "creative_intel_worker",
+            },
+        },
+    }
+    assert service._external_workspace_changes(workspace, 1) == []
+
+
 @pytest.mark.asyncio
 async def test_auto_build_still_requires_launch_review():
     assert service._needs_review({"review": "launch"}, "auto_build_draft")
@@ -367,6 +406,105 @@ async def test_operator_can_select_pending_strategy_before_review():
 
 
 @pytest.mark.asyncio
+async def test_operator_can_rerun_unapproved_audience_review():
+    await _seed("audience-rerun")
+    run = await service.create_run(
+        "audience-rerun",
+        approval_policy="review_every_stage",
+        idempotency_key="audience-rerun",
+    )
+    task_id = f"{run['run_id']}:retrieve_audience"
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result={"attrs": [{"segmentId": "INT020", "fullLabel": "Books"}]},
+        evidence=[{"type": "audience_pipeline"}],
+        pending_artifact={
+            "session_id": "audience-rerun",
+            "artifact": "audience",
+            "value": {"attrs": [{"segmentId": "INT020", "fullLabel": "Books"}]},
+            "input_revisions": {},
+            "base_artifact_revision": 0,
+        },
+    )
+
+    rerun = await service.rerun_review_task(
+        run["run_id"],
+        task_id,
+        actor="test",
+        reason="recommend again",
+    )
+
+    task = next(item for item in rerun["tasks"] if item["task_id"] == task_id)
+    assert task["status"] == "queued"
+    assert task["result"] is None
+    assert task["evidence"] == []
+    assert task["pending_artifact"] is None
+    assert (await get_workspace("audience-rerun"))["artifacts"]["audience"]["status"] == "missing"
+
+
+@pytest.mark.asyncio
+async def test_adjacent_only_audience_requires_explicit_selection_before_review():
+    await _seed("audience-adjacent-review")
+    run = await service.create_run(
+        "audience-adjacent-review",
+        approval_policy="review_every_stage",
+        idempotency_key="audience-adjacent-review",
+    )
+    context = await get_task_context("audience-adjacent-review", "audience")
+    task_id = f"{run['run_id']}:retrieve_audience"
+    related = [
+        {
+            "_id": "INT006", "segmentId": "INT006",
+            "fullLabel": "Construction", "tier": "adjacent",
+            "sizeMin": 1_000_000, "sizeMax": 2_000_000,
+        },
+        {
+            "_id": "INT020", "segmentId": "INT020",
+            "fullLabel": "Management", "tier": "adjacent",
+            "sizeMin": 2_000_000, "sizeMax": 3_000_000,
+        },
+    ]
+    value = {
+        "attrs": [],
+        "adjacent_attrs": related,
+        "recommendations": related,
+        "selection_required": True,
+        "size": 0,
+    }
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result=value,
+        pending_artifact={
+            "session_id": "audience-adjacent-review",
+            "artifact": "audience",
+            "value": value,
+            "input_revisions": context["input_revisions"],
+            "base_artifact_revision": context["artifact_revision"],
+        },
+    )
+
+    with pytest.raises(service.RunConflict, match="at least one selected"):
+        await service.review_task(run["run_id"], task_id, approved=True)
+
+    selected = await service.select_audience_recommendations(
+        run["run_id"], ["INT020"], reason="Management is an acceptable proxy"
+    )
+    selected_task = next(
+        item for item in selected["tasks"] if item["task_id"] == task_id
+    )
+    selected_value = selected_task["pending_artifact"]["value"]
+    assert [item["segmentId"] for item in selected_value["attrs"]] == ["INT020"]
+    assert selected_value["selection_required"] is False
+
+    await service.review_task(run["run_id"], task_id, approved=True)
+    committed = await get_workspace("audience-adjacent-review")
+    assert [
+        item["segmentId"]
+        for item in committed["artifacts"]["audience"]["value"]["attrs"]
+    ] == ["INT020"]
+
+
+@pytest.mark.asyncio
 async def test_reach_first_placement_intent_prioritizes_reach(monkeypatch):
     async def fake_rank_zones(**_kwargs):
         return [
@@ -386,6 +524,58 @@ async def test_reach_first_placement_intent_prioritizes_reach(monkeypatch):
     }}
     result = await _plan_placement_intent({"session_id": "reach-first"}, workspace)
     assert result.value["candidate_zone_ids"] == ["premium-large", "mid", "cheap-small"]
+
+
+@pytest.mark.asyncio
+async def test_openai_placement_intent_limits_one_topic_without_changing_greennode(monkeypatch):
+    from campaign_models import GREENNODE_MINIMAX, OPENAI_GPT_5_4_MINI
+
+    zones = [
+        {
+            "id": f"home-{index}",
+            "topicId": "home_garden_diy",
+            "placementFamily": f"family-{index % 3}",
+            "reach": 1_000_000 - index,
+            "score": 100 - index,
+        }
+        for index in range(10)
+    ] + [
+        {
+            "id": f"tech-{index}",
+            "topicId": "technology_science",
+            "placementFamily": f"tech-family-{index}",
+            "reach": 500_000 - index,
+            "score": 80 - index,
+        }
+        for index in range(2)
+    ]
+
+    async def fake_rank_zones(**_kwargs):
+        return zones
+
+    async def fake_conflicts(_start, _end):
+        return {}
+
+    monkeypatch.setattr("tools.zone_ranker.rank_zones", fake_rank_zones)
+    monkeypatch.setattr("tools.order_api.fetch_zone_conflicts", fake_conflicts)
+    workspace = {"artifacts": {
+        "brief": {"value": BRIEF},
+        "strategy": {"value": {"selected": "balanced"}},
+    }}
+
+    openai = await _plan_placement_intent(
+        {"session_id": "openai-zones", "conversation_model": OPENAI_GPT_5_4_MINI},
+        workspace,
+    )
+    greennode = await _plan_placement_intent(
+        {"session_id": "greennode-zones", "conversation_model": GREENNODE_MINIMAX},
+        workspace,
+    )
+
+    openai_topics = [zone["topicId"] for zone in openai.value["candidates"]]
+    assert openai_topics.count("home_garden_diy") == 6
+    assert openai_topics.count("technology_science") == 2
+    assert len(greennode.value["candidates"]) == 12
 
 
 @pytest.mark.asyncio
@@ -1132,12 +1322,119 @@ async def test_no_compatible_placement_requests_new_creative(monkeypatch):
     monkeypatch.setattr(order_api, "fetch_zone_conflicts", no_conflicts)
     workspace = {"artifacts": {
         "brief": {"value": BRIEF},
-        "creative": {"value": {"files": [{"name": "bad.png"}]}},
+        "creative": {"value": {"files": [{
+            "name": "bad.png", "type": "image/png",
+            "width": 700, "height": 700,
+        }]}},
+        "creative_format_plan": {"value": {"formats": [{
+            "format_id": "znews-masthead-1160x250",
+            "width": 1160, "height": 250, "zone_ids": ["BAD"],
+        }]}},
     }}
     result = await _rank_placements({"session_id": "incompatible"}, workspace)
     assert result.force_review is True
     assert result.value["reason"] == "no_compatible_placements"
     assert result.value["review_action"] == "retry"
+    assert result.value["recovery"] == {
+        "kind": "creative_format_mismatch",
+        "can_adapt_existing": True,
+        "can_generate_missing": True,
+        "existing_image_count": 1,
+        "target_formats": [{
+            "format_id": "znews-masthead-1160x250",
+            "width": 1160,
+            "height": 250,
+            "intended_format": None,
+            "zone_ids": ["BAD"],
+        }],
+        "recommended_action": "adapt_existing",
+    }
+    assert "crop/scale" in result.value["message"]
+
+
+@pytest.mark.asyncio
+async def test_creative_recovery_generates_missing_formats_and_replans(monkeypatch):
+    import autopilot.creative_generation as creative_generation
+    import workspace.service as workspace_service
+
+    run = {
+        "run_id": "run-repair",
+        "session_id": "repair-session",
+        "status": "waiting_review",
+        "tasks": [
+            {"key": "rank_placements", "status": "waiting_review"},
+            {"key": "create_order", "status": "pending"},
+        ],
+    }
+    workspace = {
+        "revision": 7,
+        "artifacts": {
+            "creative": {"value": {"files": [{
+                "id": "source", "name": "square.png", "type": "image/png",
+                "width": 700, "height": 700,
+            }]}},
+            "creative_format_plan": {"value": {"formats": [{
+                "format_id": "znews-masthead-1160x250",
+                "width": 1160, "height": 250, "zone_ids": ["ZONE-A"],
+            }]}},
+        },
+    }
+    generated = {
+        "id": "generated",
+        "name": "masthead.png",
+        "url": "https://example.test/masthead.png",
+        "type": "image/png",
+        "width": 1160,
+        "height": 250,
+        "formatId": "znews-masthead-1160x250",
+        "generation": {"idempotencyKey": "repair-key"},
+    }
+    mutations = []
+    events = []
+
+    async def fake_get_run(_run_id):
+        return run
+
+    async def fake_get_workspace(_session_id):
+        return workspace
+
+    async def fake_generate(_run, _workspace, plan, **_kwargs):
+        assert [item["format_id"] for item in plan["formats"]] == [
+            "znews-masthead-1160x250"
+        ]
+        return [generated], []
+
+    async def fake_apply_mutation(session_id, field, value, **kwargs):
+        mutations.append((session_id, field, value, kwargs))
+        return {"ok": True, "workspace_revision": 8}
+
+    async def fake_reconcile(_run_id):
+        return {"changed": True, "run": {**run, "workspace_revision": 8}}
+
+    async def fake_emit(_run_id, event_type, data):
+        events.append((event_type, data))
+
+    monkeypatch.setattr(service, "get_run", fake_get_run)
+    monkeypatch.setattr(service, "get_workspace", fake_get_workspace)
+    monkeypatch.setattr(
+        creative_generation, "generate_creatives", fake_generate
+    )
+    monkeypatch.setattr(workspace_service, "apply_mutation", fake_apply_mutation)
+    monkeypatch.setattr(service, "reconcile_workspace_changes", fake_reconcile)
+    monkeypatch.setattr(service, "_emit", fake_emit)
+
+    result = await service.generate_missing_creative_formats(
+        "run-repair", ["znews-masthead-1160x250"]
+    )
+
+    assert result["ok"] is True
+    assert result["generated_count"] == 1
+    assert mutations[0][0:2] == ("repair-session", "creative")
+    assert [item["id"] for item in mutations[0][2]["files"]] == [
+        "source", "generated"
+    ]
+    assert mutations[0][2]["source"] == "mixed_recovery"
+    assert events[0][0] == "creative_recovery_generated"
 
 
 @pytest.mark.asyncio

@@ -52,8 +52,9 @@ async def handle_setup_entry(session_id: str) -> dict:
     Returns {skip: True} if zones already selected.
     """
     import asyncio
+    from tools.placement_relevance import build_placement_context
     from tools.zone_catalog import get_all_zones
-    from tools.order_api import fetch_zone_conflicts
+    from tools.order_api import fetch_zone_conflicts, public_conflict_details
 
     session = await get_or_create_session(session_id)
     brief = session["form_state"].get("brief", {})
@@ -84,6 +85,7 @@ async def handle_setup_entry(session_id: str) -> dict:
         budget=brief.get("budget", 0),
         kpi=brief.get("kpi", ""),
         creative_files=creative.get("files", []),
+        placement_context=build_placement_context(brief, segment),
         limit=len(all_zones_raw),
     )
 
@@ -95,7 +97,7 @@ async def handle_setup_entry(session_id: str) -> dict:
     top_zones = [z for z in ranked if z["id"] in top_set]
 
     for z in ranked:
-        z["conflict"] = conflict_map.get(z["id"])
+        z["conflict"] = public_conflict_details(conflict_map.get(z["id"]))
         z["recommended"] = z["id"] in top_set
 
     await update_form_state(session_id, "reco_zones", top_zones)
@@ -187,15 +189,19 @@ async def handle_setup_entry(session_id: str) -> dict:
 
 
 async def _zone_recommend(setup: SetupData, session_id: str) -> AgentResponse:
+    from tools.placement_relevance import build_placement_context
+
     session = await get_or_create_session(session_id)
     brief = session["form_state"].get("brief", {})
     creative = session["form_state"].get("creative", {})
+    segment = session["form_state"].get("segment", {})
 
     ranked = await rank_zones(
         objective=brief.get("objective", "awareness"),
         budget=brief.get("budget", 0),
         kpi=brief.get("kpi", ""),
         creative_files=creative.get("files", []),
+        placement_context=build_placement_context(brief, segment),
         limit=6,
     )
 
@@ -237,11 +243,13 @@ async def handle_zone_recommend_api(session_id: str) -> dict:
     with a `conflict` object and excluded from AI recommendations.
     """
     from tools.zone_catalog import get_all_zones
-    from tools.order_api import fetch_zone_conflicts
+    from tools.order_api import fetch_zone_conflicts, public_conflict_details
+    from tools.placement_relevance import build_placement_context
 
     session = await get_or_create_session(session_id)
     brief = session["form_state"].get("brief", {})
     creative = session["form_state"].get("creative", {})
+    segment = session["form_state"].get("segment", {})
 
     start_date = brief.get("startDate", "")
     end_date = brief.get("endDate", "")
@@ -259,12 +267,13 @@ async def handle_zone_recommend_api(session_id: str) -> dict:
         budget=brief.get("budget", 0),
         kpi=brief.get("kpi", ""),
         creative_files=creative.get("files", []),
+        placement_context=build_placement_context(brief, segment),
         limit=len(all_zones),  # return all zones, sorted
     )
 
     # Annotate each zone with conflict info (if any)
     for z in ranked:
-        z["conflict"] = conflict_map.get(z["id"])
+        z["conflict"] = public_conflict_details(conflict_map.get(z["id"]))
 
     # Recommend top 6 available zones only (skip conflicted)
     available = [z for z in ranked if not z["conflict"]]

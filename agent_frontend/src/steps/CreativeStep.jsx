@@ -1,12 +1,14 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { Upload, FileText, X, ZoomIn, CheckCircle2, AlertCircle, Sparkles, Wand2, Loader2 } from 'lucide-react'
+import { Upload, FileText, X, ZoomIn, CheckCircle2, AlertCircle, Sparkles, Wand2, Loader2, Crop } from 'lucide-react'
 import AdImageGenerator from './creative/AdImageGenerator'
+import ImageCropModal from './creative/ImageCropModal'
 import { overrideCreative } from '@/api/agentApi'
 import { inferIntendedFormat, matchPlannedFormat } from '@/lib/creativeCompatibility'
+import { creativeReviewState, TERMINAL_CREATIVE_STATUSES } from '@/lib/creativeIntel'
 
 function fmtSize(bytes) {
   if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
@@ -30,6 +32,44 @@ function readResolution(file, dataUrl) {
       resolve({})
     }
   })
+}
+
+function readAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function repairSource(file) {
+  if (String(file?.dataUrl || '').startsWith('data:')) return file.dataUrl
+  const url = file?.url || file?.dataUrl
+  if (!url) throw new Error('Creative này không còn nguồn ảnh để crop.')
+  const response = await fetch(url, { credentials: 'omit' })
+  if (!response.ok) throw new Error('Không thể tải ảnh gốc để crop.')
+  return readAsDataUrl(await response.blob())
+}
+
+function repairableImage(file) {
+  const type = String(file?.type || file?.mimeType || '').toLowerCase()
+  const source = String(file?.url || file?.dataUrl || '').toLowerCase()
+  return type.startsWith('image/')
+    || /\.(png|jpe?g|webp|gif)(?:$|\?)/.test(source)
+}
+
+function repairFileKey(file) {
+  return String(file?.id || file?._id || file?.url || file?.dataUrl || file?.name || '')
+}
+
+function nearestRatioFile(files, format) {
+  const targetRatio = Number(format.width || 0) / Number(format.height || 1)
+  return [...files].sort((left, right) => {
+    const leftRatio = Number(left.width || 0) / Number(left.height || 1)
+    const rightRatio = Number(right.width || 0) / Number(right.height || 1)
+    return Math.abs(leftRatio - targetRatio) - Math.abs(rightRatio - targetRatio)
+  })[0]
 }
 
 // ─── File card (shared between upload + AI gallery) ───────────────────────────
@@ -256,7 +296,17 @@ function TabBar({ tab, setTab }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function CreativeStep({ data, onChange, isDone, brief, segment, formatPlan, autopilotMode = false }) {
+export default function CreativeStep({
+  data,
+  onChange,
+  isDone,
+  brief,
+  segment,
+  formatPlan,
+  autopilotMode = false,
+  onRepairSave,
+  openaiCampaignFlow = false,
+}) {
   const fileInputRef = useRef(null)
   const [lightboxFile, setLightboxFile] = useState(null)
   const [dragging, setDragging] = useState(false)
@@ -264,8 +314,24 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
   const [bulkOverrideReason, setBulkOverrideReason] = useState('')
   const [bulkOverrideError, setBulkOverrideError] = useState('')
   const [bulkOverriding, setBulkOverriding] = useState(false)
+  const [repairSourceIds, setRepairSourceIds] = useState({})
+  const [repairTarget, setRepairTarget] = useState(null)
+  const [repairLoadingId, setRepairLoadingId] = useState('')
+  const [repairError, setRepairError] = useState('')
+  const [repairSaving, setRepairSaving] = useState(false)
+  const [repairNotice, setRepairNotice] = useState('')
   const files = data.files || []
   const reviewFiles = files.filter(file => file.analysisStatus === 'needs_review')
+  const missingFormats = useMemo(
+    () => (formatPlan?.formats || []).filter(
+      item => !files.some(file => matchPlannedFormat(file, item).matched),
+    ),
+    [files, formatPlan],
+  )
+  const repairImages = useMemo(
+    () => files.filter(repairableImage),
+    [files],
+  )
 
   const processFiles = async (rawFiles) => {
     const toRead = Array.from(rawFiles).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'))
@@ -371,6 +437,86 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
     setTab('upload')
   }
 
+  const openFormatRepair = async (format, sourceFile) => {
+    if (!sourceFile || repairLoadingId) return
+    setRepairLoadingId(format.format_id)
+    setRepairError('')
+    try {
+      setRepairTarget({
+        format,
+        sourceFile,
+        src: await repairSource(sourceFile),
+      })
+    } catch (error) {
+      setRepairError(error.message)
+    } finally {
+      setRepairLoadingId('')
+    }
+  }
+
+  const finishFormatRepair = async (dataUrl, method) => {
+    if (!repairTarget || repairSaving) return
+    const { format, sourceFile } = repairTarget
+    const timestamp = Date.now()
+    const baseName = String(sourceFile.name || 'creative').replace(/\.[^.]+$/, '')
+    const adapted = {
+      id: `adapted-${format.format_id}-${timestamp}`,
+      name: `${baseName}-${format.format_id}-${format.width}x${format.height}.png`,
+      type: 'image/png',
+      size: Math.round(dataUrl.length * 0.75),
+      dataUrl,
+      width: Number(format.width),
+      height: Number(format.height),
+      formatId: format.format_id,
+      intendedFormat: format.intended_format
+        || (format.format_id === 'znews-Background' ? 'skin' : 'banner'),
+      source: 'operator_adapted',
+      derivedFromFileId: sourceFile.id || sourceFile._id || '',
+      repairMethod: method,
+    }
+    const nextCreative = {
+      ...data,
+      files: [
+        ...(data.files || []).filter(file => !(
+          (file.source === 'operator_adapted'
+            || String(file.id || '').startsWith('adapted-'))
+          && file.formatId === format.format_id
+        )),
+        adapted,
+      ],
+      uploaded: true,
+    }
+    onChange(nextCreative)
+    setRepairTarget(null)
+    setTab('upload')
+    setRepairError('')
+    setRepairNotice(
+      autopilotMode && onRepairSave
+        ? 'Đang tải, phân tích và lưu creative vào workspace…'
+        : `Đã thêm bản ${format.width}×${format.height}.`,
+    )
+    if (!autopilotMode || !onRepairSave) return
+
+    setRepairSaving(true)
+    try {
+      const result = await onRepairSave(nextCreative)
+      if (!result?.shouldAdvance) {
+        setRepairNotice('')
+        setRepairError(
+          String(
+            result?.response?.content
+            || 'Creative đã được lưu nhưng cần bạn kiểm tra kết quả phân tích trước khi tiếp tục.',
+          ).replaceAll('**', ''),
+        )
+      }
+    } catch (error) {
+      setRepairNotice('')
+      setRepairError(error.message || 'Không thể lưu creative đã crop vào workspace.')
+    } finally {
+      setRepairSaving(false)
+    }
+  }
+
   if (isDone) {
     return (
       <div className="space-y-3">
@@ -408,7 +554,17 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
   }
 
   return (
-    <div className="space-y-4">
+    <div
+      className="space-y-4"
+      data-demo="creative-review-state"
+      data-review-state={creativeReviewState(files)}
+      data-review-terminal={
+        files.length > 0
+        && files.every(file => TERMINAL_CREATIVE_STATUSES.has(file.analysisStatus))
+          ? 'true'
+          : 'false'
+      }
+    >
       {formatPlan?.formats?.length > 0 && (
         <Card className="border-brand-200 bg-brand-50/70">
           <CardContent className="py-3">
@@ -434,6 +590,83 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+      {autopilotMode && missingFormats.length > 0 && files.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50/70" data-demo="creative-format-recovery">
+          <CardContent className="space-y-3 py-3">
+            <div className="flex items-start gap-2">
+              <Crop className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+              <div>
+                <p className="text-xs font-black text-amber-950">Khắc phục format còn thiếu từ creative hiện có</p>
+                <p className="mt-1 text-[10px] leading-4 text-amber-900">
+                  Chọn ảnh nguồn cho từng format rồi crop hoặc scale. Crop là lựa chọn khuyến nghị vì giữ đúng tỷ lệ mà không làm méo ảnh; hãy kiểm tra logo và text trong khung xem trước.
+                </p>
+              </div>
+            </div>
+            {repairImages.length > 0 ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {missingFormats.map(format => {
+                  const preferred = nearestRatioFile(repairImages, format)
+                  const selectedId = repairSourceIds[format.format_id]
+                    || repairFileKey(preferred)
+                  const selectedFile = repairImages.find(
+                    file => repairFileKey(file) === String(selectedId),
+                  ) || preferred
+                  return (
+                    <article key={format.format_id} className="rounded-xl border border-amber-200 bg-white p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-black text-slate-900">{format.width} × {format.height}px</p>
+                          <p className="mt-0.5 text-[10px] text-slate-500">
+                            Phủ {(format.zone_ids || []).length || 1} placement
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-amber-100 px-2 py-1 text-[9px] font-bold text-amber-800">Còn thiếu</span>
+                      </div>
+                      <select
+                        value={selectedId || ''}
+                        onChange={event => setRepairSourceIds(previous => ({
+                          ...previous,
+                          [format.format_id]: event.target.value,
+                        }))}
+                        className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-[10px] text-slate-700"
+                        aria-label={`Ảnh nguồn cho format ${format.width} × ${format.height}`}
+                      >
+                        {repairImages.map(file => (
+                          <option key={repairFileKey(file)} value={repairFileKey(file)}>
+                            {file.name} · {file.width || '?'}×{file.height || '?'}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => openFormatRepair(format, selectedFile)}
+                        disabled={!selectedFile || Boolean(repairLoadingId)}
+                        className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber-700 px-3 py-2 text-[10px] font-bold text-white hover:bg-amber-800 disabled:opacity-50"
+                      >
+                        {repairLoadingId === format.format_id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Crop className="h-3.5 w-3.5" />}
+                        Crop/scale từ ảnh đã chọn
+                      </button>
+                    </article>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-[10px] leading-4 text-amber-900">
+                Creative hiện tại không phải ảnh có thể crop. Hãy tải ảnh khác hoặc quay lại Autopilot để chọn tạo asset đúng format.
+              </p>
+            )}
+            {repairNotice && (
+              <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-brand-700" role="status">
+                {repairSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {repairNotice}
+              </p>
+            )}
+            {repairError && <p className="text-[10px] font-semibold text-red-600" role="alert">{repairError}</p>}
           </CardContent>
         </Card>
       )}
@@ -479,7 +712,10 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
                 </button>
               </div>
               {reviewFiles.length > 0 && (
-                <Card className="mb-3 border-amber-300 bg-amber-50">
+                <Card
+                  className="mb-3 border-amber-300 bg-amber-50"
+                  data-demo="creative-manual-review"
+                >
                   <CardContent className="space-y-2 py-3">
                     <div>
                       <p className="text-xs font-bold text-amber-900">
@@ -491,12 +727,14 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <input
+                        id="creative-manual-review-reason"
                         value={bulkOverrideReason}
                         onChange={event => setBulkOverrideReason(event.target.value)}
                         placeholder="Ví dụ: Đã kiểm tra thủ công nội dung và thương hiệu"
                         className="min-w-0 flex-1 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs outline-none focus:border-amber-500"
                       />
                       <button
+                        id="creative-manual-review-approve"
                         type="button"
                         onClick={approveAllForManualReview}
                         disabled={bulkOverriding}
@@ -547,9 +785,25 @@ export default function CreativeStep({ data, onChange, isDone, brief, segment, f
 
       {/* ── AI Tạo Ảnh tab ── */}
       {tab === 'ai' && (
-        <AdImageGenerator brief={brief} segment={segment} onAddToCreative={handleAddAiImages} />
+        <AdImageGenerator
+          brief={brief}
+          segment={segment}
+          onAddToCreative={handleAddAiImages}
+          openaiCampaignFlow={openaiCampaignFlow}
+        />
       )}
 
+      {repairTarget && (
+        <ImageCropModal
+          src={repairTarget.src}
+          targetW={Number(repairTarget.format.width)}
+          targetH={Number(repairTarget.format.height)}
+          label={`${repairTarget.format.width}×${repairTarget.format.height}`}
+          onConfirm={dataUrl => finishFormatRepair(dataUrl, 'crop')}
+          onScale={dataUrl => finishFormatRepair(dataUrl, 'scale')}
+          onCancel={() => setRepairTarget(null)}
+        />
+      )}
       <Lightbox file={lightboxFile} onClose={() => setLightboxFile(null)} />
     </div>
   )

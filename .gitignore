@@ -1,5 +1,9 @@
 chat-session
 docs
+!docs/
+docs/*
+!docs/copy-review/
+!docs/copy-review/**
 prototype-n8n-build
 test-ad-image
 greennode-ref
@@ -15,3 +19,4 @@ ds-bundle/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+output

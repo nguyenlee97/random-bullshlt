@@ -239,16 +239,22 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
         session_id=run["session_id"],
         brief_override=brief,
     )
-    attrs = recommendation.get("recommendations") or []
-    if not attrs:
+    attrs = (recommendation.get("recommendations") or [])[:15]
+    adjacent_attrs = (recommendation.get("adjacent_recommendations") or [])[:15]
+    if not attrs and not adjacent_attrs:
         raise RuntimeError("audience retrieval returned no catalog-backed segments")
-    attrs = attrs[:15]
     size = sum(
         int(((item.get("sizeMin") or 0) + (item.get("sizeMax") or 0)) / 2)
         for item in attrs
     )
-    diagnostics = dict(
+    raw_diagnostics = (
         recommendation.get("rag") or recommendation.get("retrieval") or {}
+    )
+    diagnostics = dict(raw_diagnostics)
+    diagnostics.setdefault("applied", bool(raw_diagnostics))
+    diagnostics.setdefault(
+        "mode",
+        "legacy_full_catalog" if not raw_diagnostics else "hybrid_dense_bm25",
     )
     diagnostics.setdefault(
         "catalog_segments", recommendation.get("total_segments", len(attrs))
@@ -257,7 +263,14 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
         "candidates", recommendation.get("total_segments", len(attrs))
     )
     return CapabilityResult(
-        value={"attrs": attrs, "size": size, "retrieval": diagnostics},
+        value={
+            "attrs": attrs,
+            "adjacent_attrs": adjacent_attrs,
+            "recommendations": [*attrs, *adjacent_attrs],
+            "selection_required": not bool(attrs),
+            "size": size,
+            "retrieval": diagnostics,
+        },
         evidence=[{
             "type": "catalog_segments", "count": len(attrs),
             "ids": [item.get("_id") for item in attrs if item.get("_id")],
@@ -267,13 +280,18 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
             "conversation_model_version": run.get("conversation_model_version"),
             "provider": (recommendation.get("provenance") or {}).get("provider"),
             "provider_model": (recommendation.get("provenance") or {}).get("model"),
+            "retrieval_applied": bool(diagnostics.get("applied")),
+            "retrieval_mode": diagnostics.get("mode"),
             "retrieval_candidates": diagnostics.get("candidates", recommendation.get("total_segments", 0)),
             "rerank_enabled": bool(diagnostics.get("rerank_enabled")),
             "reranked": bool(diagnostics.get("reranked")),
             "selector": diagnostics.get("selector", "legacy"),
+            "recommended_count": len(attrs),
+            "adjacent_count": len(adjacent_attrs),
             "strategy_id": selected,
             "stage_ms": diagnostics.get("stage_ms", {}),
         }],
+        force_review=not bool(attrs),
     )
 
 
@@ -302,17 +320,75 @@ async def _derive_targeting(run: dict, workspace: dict) -> CapabilityResult:
     )
 
 
+def _diverse_openai_placement_candidates(
+    zones: list[dict],
+    *,
+    limit: int = 12,
+    max_per_topic: int = 6,
+    max_per_topic_family: int = 2,
+) -> list[dict]:
+    """Keep the ranked order while preventing one page topic from dominating."""
+    selected: list[dict] = []
+    topic_counts: dict[str, int] = {}
+    family_counts: dict[tuple[str, str], int] = {}
+
+    def topic(zone: dict) -> str:
+        return str(
+            zone.get("topicId")
+            or zone.get("siteId")
+            or f"legacy:{zone.get('id') or id(zone)}"
+        )
+
+    for zone in zones:
+        topic_id = topic(zone)
+        family = str(
+            zone.get("placementFamily")
+            or zone.get("inventoryTier")
+            or zone.get("format")
+            or "other"
+        )
+        family_key = (topic_id, family)
+        if topic_counts.get(topic_id, 0) >= max_per_topic:
+            continue
+        if family_counts.get(family_key, 0) >= max_per_topic_family:
+            continue
+        selected.append(zone)
+        topic_counts[topic_id] = topic_counts.get(topic_id, 0) + 1
+        family_counts[family_key] = family_counts.get(family_key, 0) + 1
+        if len(selected) >= limit:
+            return selected
+
+    # If family diversity made the list too small, backfill different formats
+    # from the same relevant topics while retaining the per-topic ceiling.
+    selected_ids = {str(zone.get("id")) for zone in selected}
+    for zone in zones:
+        if str(zone.get("id")) in selected_ids:
+            continue
+        topic_id = topic(zone)
+        if topic_counts.get(topic_id, 0) >= max_per_topic:
+            continue
+        selected.append(zone)
+        selected_ids.add(str(zone.get("id")))
+        topic_counts[topic_id] = topic_counts.get(topic_id, 0) + 1
+        if len(selected) >= limit:
+            break
+    return selected
+
+
 async def _plan_placement_intent(run: dict, workspace: dict) -> CapabilityResult:
     """Rank inventory before creative exists; no compatibility decision is made here."""
     from tools.order_api import fetch_zone_conflicts
-    from tools.zone_ranker import rank_zones
+    from tools.placement_relevance import build_placement_context
+    from tools.zone_ranker import rank_zones, sort_ranked_zones_for_strategy
 
     brief = _artifact(workspace, "brief", {})
+    audience = _artifact(workspace, "audience", {})
     ranked = await rank_zones(
         objective=brief.get("objective", "awareness"),
         budget=brief.get("budget", 0),
         kpi=brief.get("kpi", ""),
         creative_files=[],
+        placement_context=build_placement_context(brief, audience),
         limit=100,
     )
     conflicts = await fetch_zone_conflicts(
@@ -321,24 +397,14 @@ async def _plan_placement_intent(run: dict, workspace: dict) -> CapabilityResult
     available = [zone for zone in ranked if not conflicts.get(zone["id"])]
     strategy = _artifact(workspace, "strategy", {})
     selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
-    if selected == "reach_first":
-        available.sort(
-            key=lambda zone: (
-                -float(zone.get("reach") or 0),
-                float(zone.get("cpm") or 10**12),
-                -float(zone.get("score") or 0),
-            )
-        )
-    elif selected == "quality_first":
-        available.sort(
-            key=lambda zone: (
-                float(zone.get("viewability") or zone.get("vi") or 0),
-                float(zone.get("ctr") or 0),
-                float(zone.get("score") or 0),
-            ),
-            reverse=True,
-        )
-    candidates = available[:12]
+    available = sort_ranked_zones_for_strategy(available, selected)
+    from campaign_models import OPENAI_GPT_5_4_MINI
+
+    candidates = (
+        _diverse_openai_placement_candidates(available)
+        if run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+        else available[:12]
+    )
     if not candidates:
         return CapabilityResult(
             value={
@@ -358,7 +424,7 @@ async def _plan_placement_intent(run: dict, workspace: dict) -> CapabilityResult
         "strategy_id": selected,
         "inventory_checked_at": now,
         "expires_at": now + timedelta(minutes=10),
-        "selection_method": "creative_agnostic_zone_rank_v1",
+        "selection_method": "context_retrieval_then_strategy_rank_v2",
     }
     return CapabilityResult(
         value=value,
@@ -605,7 +671,11 @@ async def _prepare_creatives(run: dict, workspace: dict) -> CapabilityResult:
 
 
 async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
-    from creative_intel.service import enqueue_analysis, get_intel
+    from creative_intel.service import (
+        enqueue_analysis,
+        get_intel,
+        sync_generation_vlm_reviews,
+    )
     creative = _artifact(workspace, "creative", {})
     files = creative.get("files", []) if isinstance(creative, dict) else []
     if not files:
@@ -624,6 +694,7 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
     if pending_files:
         await enqueue_analysis(run["session_id"], pending_files)
         docs = await get_intel(run["session_id"])
+    docs = await sync_generation_vlm_reviews(run["session_id"], files)
     statuses = {doc.get("effective_status") for doc in docs}
     if statuses & {"queued", "analyzing", "committing"}:
         return CapabilityResult(
@@ -672,10 +743,12 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
 
 async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
     from creative_intel.service import get_intel
-    from tools.creative_match import enrich_files_with_intel
+    from tools.creative_match import enrich_files_with_intel, match_file_to_format
     from tools.order_api import fetch_zone_conflicts
-    from tools.zone_ranker import rank_zones
+    from tools.placement_relevance import build_placement_context
+    from tools.zone_ranker import rank_zones, sort_ranked_zones_for_strategy
     brief = _artifact(workspace, "brief", {})
+    audience = _artifact(workspace, "audience", {})
     creative = _artifact(workspace, "creative", {})
     files = enrich_files_with_intel(
         (creative or {}).get("files", []), await get_intel(run["session_id"])
@@ -685,7 +758,9 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
     ranked = await rank_zones(
         objective=brief.get("objective", "awareness"),
         budget=brief.get("budget", 0), kpi=brief.get("kpi", ""),
-        creative_files=files, limit=100,
+        creative_files=files,
+        placement_context=build_placement_context(brief, audience),
+        limit=100,
     )
     conflicts = await fetch_zone_conflicts(
         brief.get("startDate", ""), brief.get("endDate", "")
@@ -698,42 +773,93 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
         "exact_size", "strong_ratio", "same_ratio", "acceptable_ratio",
         "skin_match",
     }
-    available = [
+    ranked_candidates = [
         zone for zone in ranked
-        if (not candidate_ids or zone["id"] in candidate_ids)
-        and not conflicts.get(zone["id"])
-        and zone.get("match_mode") in compatible_modes
+        if not candidate_ids or zone["id"] in candidate_ids
+    ]
+    unconflicted_candidates = [
+        zone for zone in ranked_candidates if not conflicts.get(zone["id"])
+    ]
+    available = [
+        zone for zone in unconflicted_candidates
+        if zone.get("match_mode") in compatible_modes
     ]
     strategy = _artifact(workspace, "strategy", {})
     selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
-    if selected == "reach_first":
-        available.sort(
-            key=lambda zone: (
-                -float(zone.get("reach") or 0),
-                float(zone.get("cpm") or 10**12),
-                -float(zone.get("score") or 0),
-            )
-        )
-    elif selected == "quality_first":
-        available.sort(
-            key=lambda zone: (
-                float(zone.get("viewability") or zone.get("vi") or 0),
-                float(zone.get("ctr") or 0),
-                float(zone.get("score") or 0),
-            ),
-            reverse=True,
-        )
+    available = sort_ranked_zones_for_strategy(available, selected)
     available = available[:6]
     if not available:
+        format_plan = _artifact(workspace, "creative_format_plan", {})
+        planned_formats = list(format_plan.get("formats") or []) \
+            if isinstance(format_plan, dict) else []
+        missing_formats = [
+            {
+                "format_id": item.get("format_id"),
+                "width": item.get("width"),
+                "height": item.get("height"),
+                "intended_format": item.get("intended_format"),
+                "zone_ids": item.get("zone_ids") or [],
+            }
+            for item in planned_formats
+            if not any(match_file_to_format(file, item).get("matched") for file in files)
+        ]
+        target_formats = missing_formats or [
+            {
+                "format_id": item.get("format_id"),
+                "width": item.get("width"),
+                "height": item.get("height"),
+                "intended_format": item.get("intended_format"),
+                "zone_ids": item.get("zone_ids") or [],
+            }
+            for item in planned_formats
+        ]
+        image_files = [
+            file for file in files
+            if str(file.get("type") or file.get("mimeType") or "").startswith("image/")
+        ]
+        inventory_blocked = not unconflicted_candidates
+        message = (
+            "Các placement trong shortlist hiện không còn trống. "
+            "Hãy cập nhật shortlist hoặc thời gian chạy rồi kiểm tra lại."
+            if inventory_blocked else
+            "Creative hiện tại chưa đúng tỷ lệ/định dạng của placement đang trống. "
+            "Bạn có thể crop/scale ảnh hiện có hoặc tạo asset đúng các format còn thiếu."
+        )
         return CapabilityResult(
             value={
                 "selectedZoneIds": [], "zones": [], "phase": "zones",
-                "reason": "no_compatible_placements", "review_action": "retry",
-                "message": "Chưa có placement trống tương thích với kích thước/định dạng creative.",
+                "reason": (
+                    "no_available_placements"
+                    if inventory_blocked else "no_compatible_placements"
+                ),
+                "review_action": "retry",
+                "message": message,
+                "recovery": {
+                    "kind": (
+                        "inventory_unavailable"
+                        if inventory_blocked else "creative_format_mismatch"
+                    ),
+                    "can_adapt_existing": bool(image_files) and bool(target_formats),
+                    "can_generate_missing": bool(target_formats) and not inventory_blocked,
+                    "existing_image_count": len(image_files),
+                    "target_formats": target_formats,
+                    "recommended_action": (
+                        "update_inventory"
+                        if inventory_blocked else
+                        "adapt_existing" if image_files else "generate_missing"
+                    ),
+                },
             },
             evidence=[{
                 "type": "creative_placement_compatibility", "passed": False,
-                "ranked": len(ranked), "conflicts": len(conflicts),
+                "ranked": len(ranked),
+                "shortlist_candidates": len(ranked_candidates),
+                "unconflicted_candidates": len(unconflicted_candidates),
+                "compatible_candidates": 0,
+                "conflicts": len(conflicts),
+                "missing_format_ids": [
+                    item.get("format_id") for item in target_formats
+                ],
             }],
             force_review=True,
         )

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { authReturnTo, hasAgentIntent } from '../src/lib/publicExperience.js'
 import { AUTOPILOT_TOUR_STEPS } from '../src/demo/autopilotTour.js'
+import { buildAutopilotLiveSteps } from '../src/demo/autopilotWalkthrough.js'
 import { getDemoDateRange, pickRandomBrief } from '../src/demo/demoScripts.js'
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -11,7 +12,17 @@ const engine = read('../src/demo/DemoEngine.jsx')
 const scripts = read('../src/demo/demoScripts.js')
 const app = read('../src/App.jsx')
 const home = read('../src/components/ExperienceSelector.jsx')
+const overlay = read('../src/demo/DemoOverlay.jsx')
 const autopilot = read('../src/components/AutopilotPanel.jsx')
+const autopilotReview = read('../src/components/AutopilotReview.jsx')
+const audienceStep = read('../src/steps/AudienceStep.jsx')
+const targetingPanel = read('../src/components/TargetingPanel.jsx')
+const workspacePane = read('../src/components/WorkspacePane/index.jsx')
+const assignmentEditor = read('../src/steps/setup/CreativeAssignPhase.jsx')
+const imageGenerator = read('../src/steps/creative/AdImageGenerator.jsx')
+const creativeStep = read('../src/steps/CreativeStep.jsx')
+const cropModal = read('../src/steps/creative/ImageCropModal.jsx')
+const topBar = read('../src/components/TopBar.jsx')
 const docs = read('../public/tech-docs.html')
 const styles = read('../src/index.css')
 
@@ -83,6 +94,52 @@ test('Copilot demo is restored as a spotlight tour over the real interface', () 
   assert.match(app, /ref=\{appShellRef\} className="fixed inset-0 flex h-screen flex-col overflow-clip/)
 })
 
+test('Copilot creative walkthrough teaches assets and prompt composition without exposing provider or quota details', () => {
+  assert.match(imageGenerator, /data-demo="creative-reference-assets"/)
+  assert.match(scripts, /data-demo="creative-reference-assets"/)
+  assert.match(scripts, /target: '#btn-compose-creative-prompt'/)
+  assert.match(scripts, /target: '\[data-testid="creative-prompt-spec"\]'/)
+  assert.doesNotMatch(imageGenerator, /image-quota-counter|image-quota-consent|image-quota-checkbox|GPT Image|OpenAI Creative/)
+  assert.doesNotMatch(scripts, /image-quota-counter|image-quota-consent|image-quota-checkbox|GPT Image|quota/)
+  assert.match(imageGenerator, /disabled=\{!selectedFormatId \|\| generating\}/)
+})
+
+test('Copilot creative walkthrough waits for analysis and handles manual review before Setup', () => {
+  for (const marker of [
+    'data-demo="creative-review-state"',
+    'data-review-terminal=',
+    'data-demo="creative-manual-review"',
+    'id="creative-manual-review-reason"',
+    'id="creative-manual-review-approve"',
+  ]) {
+    assert.match(creativeStep, new RegExp(marker))
+  }
+
+  assert.match(engine, /case 'WAIT_FOR_CREATIVE_REVIEW'/)
+  assert.match(engine, /step\.whenReviewState/)
+  assert.match(engine, /currentCreativeReviewState/)
+  assert.match(engine, /isCreativeReviewTerminal\(\) && reviewStates\.includes\(state\)/)
+  assert.match(scripts, /whenReviewState: 'blocked'/)
+  assert.match(engine, /if \(step\.autoAdvance && inputEl\)/)
+
+  const analyzeIndex = scripts.indexOf("title: '🔎 Phân tích Creative Intelligence'")
+  const terminalWaitIndex = scripts.indexOf("type: 'WAIT_FOR_CREATIVE_REVIEW'", analyzeIndex)
+  const manualReasonIndex = scripts.indexOf("target: '#creative-manual-review-reason'", terminalWaitIndex)
+  const manualAutoAdvanceIndex = scripts.indexOf('autoAdvance: true', manualReasonIndex)
+  const readyWaitIndex = scripts.indexOf("reviewStates: ['ready']", manualReasonIndex)
+  const confirmIndex = scripts.indexOf("title: '✅ Phân tích hoàn tất — tiếp tục sang Setup'", readyWaitIndex)
+  const setupIndex = scripts.indexOf("metaTool: 'setup_entry'", confirmIndex)
+
+  assert.ok(analyzeIndex >= 0)
+  assert.ok(terminalWaitIndex > analyzeIndex)
+  assert.ok(manualReasonIndex > terminalWaitIndex)
+  assert.ok(manualAutoAdvanceIndex > manualReasonIndex)
+  assert.ok(manualAutoAdvanceIndex < readyWaitIndex)
+  assert.ok(readyWaitIndex > manualReasonIndex)
+  assert.ok(confirmIndex > readyWaitIndex)
+  assert.ok(setupIndex > confirmIndex)
+})
+
 test('every live walkthrough uses yesterday through seven days later', () => {
   const now = new Date(2026, 6, 20, 12, 0, 0)
   assert.deepEqual(getDemoDateRange(now), {
@@ -117,11 +174,138 @@ test('Autopilot guided tour maps every entry decision to the actual canvas', () 
   assert.match(autopilot, /Upload khi đã có asset chính thức/)
 })
 
-test('technical document removes part 10 and forces a reliable Agent navigation', () => {
+test('Autopilot walkthrough explains internals, edits real review artifacts, and stops before launch', () => {
+  const brief = pickRandomBrief(new Date(2026, 6, 23, 12, 0, 0))
+  const live = buildAutopilotLiveSteps(brief, { creativeSource: 'ai_generate' })
+  const types = live.map(step => step.type)
+
+  assert.ok(types.includes('APPLY_AUTOPILOT_BRIEF'))
+  assert.ok(types.includes('WAIT_FOR_AUTOPILOT_TASK'))
+  assert.ok(types.includes('TRIM_AUTOPILOT_AUDIENCE'))
+  assert.ok(types.includes('CHANGE_AUTOPILOT_TARGETING'))
+  assert.ok(types.includes('TRIM_AUTOPILOT_PLACEMENTS'))
+  assert.match(JSON.stringify(live), /Duyệt từng giai đoạn/)
+  assert.match(JSON.stringify(live), /human-in-the-loop/)
+  assert.match(JSON.stringify(live), /Tự xây dựng bản nháp/)
+  assert.match(JSON.stringify(live), /autopilot-plan-details/)
+  assert.match(JSON.stringify(live), /autopilot-strategy-calculation/)
+  assert.match(JSON.stringify(live), /autopilot-technical-details/)
+  assert.doesNotMatch(JSON.stringify(live), /OpenAI|GPT Image|quota|VLM/)
+
+  const waits = live
+    .filter(step => step.type === 'WAIT_FOR_AUTOPILOT_TASK')
+    .flatMap(step => step.taskKeys)
+  for (const checkpoint of [
+    'retrieve_audience',
+    'derive_targeting',
+    'plan_placement_intent',
+    'assign_creatives',
+    'launch_approval',
+  ]) {
+    assert.ok(waits.includes(checkpoint), `missing ${checkpoint} checkpoint`)
+  }
+
+  assert.match(engine, /isOpenAIWalkthroughModel\(conversationModelRef\.current\)/)
+  assert.match(engine, /buildAutopilotLiveSteps/)
+  assert.match(engine, /whenAutopilotTask/)
+  assert.match(engine, /case 'WAIT_FOR_AUTOPILOT_TASK'/)
+  assert.match(engine, /case 'TRIM_AUTOPILOT_AUDIENCE'/)
+  assert.match(engine, /case 'CHANGE_AUTOPILOT_TARGETING'/)
+  assert.match(engine, /case 'TRIM_AUTOPILOT_PLACEMENTS'/)
+
+  assert.match(audienceStep, /data-demo="autopilot-audience-option"/)
+  assert.match(targetingPanel, /data-demo="autopilot-targeting-option"/)
+  assert.match(autopilotReview, /data-demo="autopilot-placement-option"/)
+  assert.match(workspacePane, /data-demo="autopilot-editor-save"/)
+  assert.match(assignmentEditor, /data-demo="autopilot-creative-assignment-editor"/)
+  assert.match(autopilot, /data-demo="autopilot-review-approve"/)
+  assert.match(autopilot, /data-demo="autopilot-plan-details"/)
+  assert.match(autopilot, /data-demo="autopilot-technical-details"/)
+
+  const launchWait = live.findIndex(
+    step => step.type === 'WAIT_FOR_AUTOPILOT_TASK' && step.taskKeys.includes('launch_approval'),
+  )
+  assert.ok(launchWait >= 0)
+  assert.equal(
+    live.slice(launchWait).some(
+      step => step.type === 'CLICK_EL'
+        && step.target?.includes('autopilot-review-approve')
+        && step.target?.includes('launch_approval'),
+    ),
+    false,
+  )
+})
+
+test('Autopilot walkthrough can use every pre-generated scenario creative without image generation', () => {
+  const brief = pickRandomBrief(new Date(2026, 6, 23, 12, 0, 0))
+  const live = buildAutopilotLiveSteps(brief, { creativeSource: 'upload' })
+  const uploadChoice = live.find(step => step.target === '[data-demo="autopilot-source-upload"]')
+  const injections = live.filter(step => step.type === 'INJECT_DEMO_CREATIVES')
+  const uploadedCheckpoint = live.find(
+    step => step.type === 'WAIT_FOR_AUTOPILOT_TASK' && step.taskKeys.includes('prepare_creatives'),
+  )
+
+  assert.ok(uploadChoice)
+  assert.equal(injections.length, 2)
+  assert.ok(injections.every(step => step.briefId === brief.id))
+  assert.ok(injections.every(step => step.title && step.text))
+  assert.ok(uploadedCheckpoint)
+  assert.ok(live.some(step => step.target === '#creative-drop-zone'))
+  assert.ok(live.some(step => step.type === 'WAIT_FOR_CREATIVE_REVIEW'))
+  assert.equal(live.some(step => step.target === '[data-demo="autopilot-source-ai"]'), false)
+  assert.match(engine, /id: `demo-\$\{briefId\}-\$\{formatId\}`/)
+  assert.match(overlay, /Đang xử lý…/)
+  assert.match(overlay, /role="status"/)
+})
+
+test('Autopilot demo lets users choose UI tour or interactive walkthrough immediately', () => {
+  assert.match(engine, /title: 'Khởi động tour Campaign Autopilot'/)
+  assert.match(engine, /\{ label: 'Tour giao diện', variant: 'outline', action: 'tour' \}/)
+  assert.match(engine, /\{ label: 'Walkthrough tương tác', variant: 'primary', action: 'live' \}/)
+  assert.match(
+    engine,
+    /setSteps\(tourModeRef\.current === 'autopilot'[\s\S]*?\[\.\.\.AUTOPILOT_TOUR_STEPS\][\s\S]*?\[\.\.\.STAGE1_STEPS\]/,
+  )
+})
+
+test('mobile tour guidance uses target-aware docking with manual move and collapse controls', () => {
+  assert.match(overlay, /data-demo="mobile-guide-box"/)
+  assert.match(overlay, /data-mobile-dock=\{resolvedDock\}/)
+  assert.match(overlay, /targetMidpoint < vh \/ 2 \? 'bottom' : 'top'/)
+  assert.match(overlay, /window\.visualViewport\?\.addEventListener\('resize'/)
+  assert.match(overlay, /ResizeObserver/)
+  assert.match(overlay, /Di chuyển hướng dẫn xuống dưới/)
+  assert.match(overlay, /Thu gọn hướng dẫn/)
+  assert.match(overlay, /max-h-\[36dvh\]/)
+  assert.match(overlay, /!manualDock && targetRect && dock === 'bottom'/)
+  assert.doesNotMatch(overlay, /setPos\(\{ top: 10, left \}\)/)
+})
+
+test('narrow mobile workspaces keep header, crop actions, review dock, and artifact navigation reachable', () => {
+  assert.match(topBar, /px-2 sm:gap-3 sm:px-5/)
+  assert.match(topBar, /hidden min-\[400px\]:inline/)
+  assert.match(cropModal, /sm:flex-row/)
+  assert.match(cropModal, /onPointerDown/)
+  assert.match(cropModal, /window\.addEventListener\('pointermove'/)
+  assert.match(autopilot, /Hướng dẫn review/)
+  assert.match(autopilot, /hidden max-w-3xl text-xs leading-5 text-amber-800 sm:block/)
+  assert.match(workspacePane, /data-demo="artifact-nav-scroll"/)
+  assert.match(workspacePane, /bg-gradient-to-l from-slate-50/)
+})
+
+test('technical document keeps the removed evidence content out and provides reliable Agent navigation', () => {
   assert.doesNotMatch(docs, /id="evidence"/)
-  assert.doesNotMatch(docs, /<span class="n">10<\/span>/)
   assert.match(docs, /href="\/agent\?from=docs" id="agent-entry-link"/)
   assert.doesNotMatch(docs, /agent-entry-link.*preventDefault|window\.location\.assign/)
+})
+
+test('technical document distinguishes the live feedback foundation from later learning stages', () => {
+  assert.match(docs, /id="feedback-loop"/)
+  assert.match(docs, /Feedback tại điểm quyết định/)
+  assert.match(docs, /HITL adjudication/)
+  assert.match(docs, /SFT · DPO · RLHF \/ RLAIF/)
+  assert.match(docs, /Feedback hiện tại không tự sửa campaign/)
+  assert.match(docs, /Review queue, automated dataset-candidate pipeline/)
 })
 
 test('public experience is responsive and honors reduced motion', () => {

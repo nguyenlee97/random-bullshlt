@@ -108,3 +108,23 @@ def test_turn_schema_preserves_question_and_mutation_as_separate_subrequests():
         "confidence": 0.9,
     })
     assert [item.kind for item in decision.subrequests] == ["question", "mutation"]
+
+
+def test_turn_schema_represents_delayed_approval_as_defer():
+    from openai_campaign.schemas import TurnDecision
+
+    decision = TurnDecision.model_validate({
+        "turn_type": "workflow_action",
+        "user_goal": "Keep the audience proposal pending for later",
+        "subrequests": [{
+            "kind": "mutation",
+            "description": "Defer the pending proposal without applying or rejecting it",
+        }],
+        "faq_scope": "none",
+        "workflow_action": "defer",
+        "would_mutate_workspace": False,
+        "confidence": 0.98,
+    })
+
+    assert decision.workflow_action == "defer"
+    assert decision.would_mutate_workspace is False

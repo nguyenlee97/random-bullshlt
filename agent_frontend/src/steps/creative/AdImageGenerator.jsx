@@ -140,13 +140,17 @@ function GenLightbox({ img, onClose }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
+export default function AdImageGenerator({
+  brief,
+  segment,
+  onAddToCreative,
+  openaiCampaignFlow = false,
+}) {
   const [selectedFormatId, setSelectedFormatId] = useState(null)
   const [generating, setGenerating]             = useState(false)
   const [error, setError]                       = useState('')
   const [generatedImages, setGeneratedImages]   = useState([])
   const [selectedIds, setSelectedIds]           = useState(new Set())
-  const [remaining, setRemaining]               = useState(20)
   const [briefExpanded, setBriefExpanded]       = useState(false)
   const [lightboxImg, setLightboxImg]           = useState(null)
   const [customPrompt, setCustomPrompt]         = useState('')
@@ -157,35 +161,36 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
   const [assetUploading, setAssetUploading]      = useState(false)
   const [promptSpec, setPromptSpec]              = useState(null)
   const [composingPrompt, setComposingPrompt]    = useState(false)
-  const [quotaConfirmed, setQuotaConfirmed]      = useState(false)
 
   // Pending crop: raw response waiting for user crop action
   // { b64, formatId, width, height }
   const [pendingCrop, setPendingCrop] = useState(null)
 
-  // Fetch initial quota
   useEffect(() => {
-    AgentAPI.getImageGenStatus().then(s => setRemaining(s.remaining ?? 20))
     AgentAPI.listCreativeAssets().then(setAssets)
   }, [])
 
   const handleGenerate = useCallback(async () => {
-    if (!selectedFormatId || generating || remaining <= 0) return
+    if (!selectedFormatId || generating) return
     setGenerating(true)
     setError('')
 
     const result = await AgentAPI.generateAdImage(brief, selectedFormatId, customPrompt, {
       assetIds: [...selectedAssetIds], promptSpec, quality: promptSpec?.quality || 'medium',
+      campaignFlow: openaiCampaignFlow ? 'openai' : '',
+      audienceContext: openaiCampaignFlow ? segment : {},
     })
 
     if (!result.ok) {
-      setError(result.error || 'Tạo ảnh thất bại — hãy thử lại')
+      const unavailableToday = result.remaining === 0
+        || result.status === 'quota_exhausted'
+        || result.quota?.status === 'quota_exhausted'
+      setError(unavailableToday
+        ? 'Tạm thời chưa thể tạo thêm ảnh hôm nay. Vui lòng thử lại vào ngày mai.'
+        : (result.error || 'Tạo ảnh thất bại — hãy thử lại'))
       setGenerating(false)
       return
     }
-
-    // Update quota from server response
-    setRemaining(result.remaining ?? Math.max(0, remaining - 1))
 
     // Open crop modal instead of auto-cropping
     setPendingCrop({
@@ -205,9 +210,8 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
         assetIds: [...selectedAssetIds],
       },
     })
-    setQuotaConfirmed(false)
     setGenerating(false)
-  }, [selectedFormatId, generating, remaining, brief, customPrompt, selectedAssetIds, promptSpec])
+  }, [selectedFormatId, generating, brief, customPrompt, selectedAssetIds, promptSpec, openaiCampaignFlow, segment])
 
   const handleFormatSelect = useCallback((formatId) => {
     setSelectedFormatId(formatId)
@@ -276,8 +280,14 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       generation,
     }
     setGeneratedImages(prev => [newImg, ...prev])
+    if (openaiCampaignFlow) {
+      // A generated image is a draft, not an approved artifact, but it must be
+      // lifted into the parent Creative form immediately so step navigation
+      // cannot unmount and discard it.
+      onAddToCreative([newImg])
+    }
     setPendingCrop(null)
-  }, [])
+  }, [onAddToCreative, openaiCampaignFlow])
 
   const handleCropConfirm = useCallback((croppedDataUrl) => {
     if (!pendingCrop) return
@@ -315,11 +325,6 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
     setSelectedIds(new Set())
   }
 
-  // Quota display helpers
-  const quotaColor = remaining === 0 ? 'text-red-600 bg-red-50 border-red-200'
-                   : remaining <= 3  ? 'text-amber-700 bg-amber-50 border-amber-200'
-                   : 'text-violet-700 bg-violet-50 border-violet-200'
-
   // Brief preview — only visually-relevant fields (mirrors backend)
   const briefLines = [
     brief?.brand && `🏷 Brand: ${brief.brand}`,
@@ -354,15 +359,6 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
           onCancel={handleCropCancel}
         />
       )}
-
-      {/* Quota counter */}
-      <div className={cn('flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold', quotaColor)}>
-        <div className="flex items-center gap-1.5">
-          <Wand2 className="w-3.5 h-3.5" />
-          <span>OpenAI Creative Studio · GPT Image 2</span>
-        </div>
-        <span>{remaining}/20 lượt hôm nay</span>
-      </div>
 
       {/* Brief preview (collapsed by default) */}
       <Card className="border-slate-200 bg-slate-50">
@@ -426,7 +422,11 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       </div>
 
       {/* Named brand/reference assets */}
-      <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3 space-y-3" data-testid="creative-asset-pack">
+      <div
+        className="rounded-xl border border-sky-200 bg-sky-50/40 p-3 space-y-3"
+        data-testid="creative-asset-pack"
+        data-demo="creative-reference-assets"
+      >
         <div>
           <p className="text-xs font-bold text-sky-800">Brand & reference assets</p>
           <p className="text-[10px] text-sky-700 mt-0.5">Đặt tên cho logo, sản phẩm hoặc ảnh tham khảo và mô tả chính xác cách dùng trong creative.</p>
@@ -531,15 +531,10 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
         </div>
       )}
 
-      {/* Generate button */}
-      <label className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3 text-[11px] text-violet-900">
-        <input type="checkbox" className="mt-0.5" checked={quotaConfirmed}
-          onChange={event => setQuotaConfirmed(event.target.checked)} disabled={generating || remaining <= 0} />
-        <span>Tôi xác nhận tạo 1 output sẽ dùng <strong>1 trong 20 lượt/ngày</strong> của tài khoản hoặc thiết bị này. Soạn prompt không dùng quota.</span>
-      </label>
+      {/* The server still enforces the per-actor daily generation limit. */}
       <Button
         onClick={handleGenerate}
-        disabled={!selectedFormatId || !quotaConfirmed || generating || remaining <= 0}
+        disabled={!selectedFormatId || generating}
         className="w-full gap-2"
         id="btn-ai-generate"
       >
@@ -547,11 +542,6 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
             Đang tạo ảnh... (có thể mất 30-60 giây)
-          </>
-        ) : remaining <= 0 ? (
-          <>
-            <AlertCircle className="w-4 h-4" />
-            Hết lượt tạo ảnh hôm nay (20/20)
           </>
         ) : (
           <>

@@ -77,7 +77,7 @@ async def test_generate_creative_resizes_uploads_and_records_provenance(monkeypa
     }, {"model": "gpt-5.4-mini"})))
     monkeypatch.setattr(generation, "inspect_generated_creative", lambda *_args, **_kwargs: _async_value(({
         "acceptable": True, "confidence": "high",
-    }, {"model": "gpt-5.4-nano"})))
+    }, {"model": "gpt-5.4-mini"})))
     monkeypatch.setattr(generation, "get_workspace", fake_workspace)
     monkeypatch.setattr(generation.httpx, "AsyncClient", FakeClient)
     monkeypatch.setattr(generation.config, "BACKEND_URL", "http://backend:3000")

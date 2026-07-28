@@ -13,7 +13,7 @@ import { defaultPlacementSelection, mergeCreativeVerdicts } from '@/lib/creative
 const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
 
 const POLICY_OPTIONS = [
-  { value: 'critical_only', label: 'Duyệt các bước quan trọng', note: 'Khuyến nghị' },
+  { value: 'critical_only', label: 'Duyệt các bước quan trọng', note: '5 checkpoint · Khuyến nghị' },
   { value: 'review_every_stage', label: 'Duyệt từng giai đoạn', note: 'Kiểm soát tối đa' },
   { value: 'auto_build_draft', label: 'Tự xây dựng bản nháp', note: 'Dừng trước launch' },
 ]
@@ -22,7 +22,7 @@ const TASK_LABELS = {
   normalize_brief: 'Chuẩn hóa brief', validate_brief: 'Kiểm tra brief',
   generate_strategy: 'Xây dựng chiến lược', retrieve_audience: 'Tìm audience',
   derive_targeting: 'Thiết lập targeting',
-  plan_placement_intent: 'Đề xuất placement sơ bộ',
+  plan_placement_intent: 'Ad zone đề xuất ban đầu',
   plan_creative_formats: 'Lập kế hoạch format',
   prepare_creatives: 'Chuẩn bị creative',
   analyze_creatives: 'Phân tích creative',
@@ -74,7 +74,7 @@ const audienceName = item => item.fullLabel || item.label || item.name || item.c
 
 const ARTIFACT_LABELS = {
   brief: 'brief', strategy: 'chiến lược', audience: 'audience',
-  targeting: 'targeting', placement_intent: 'placement sơ bộ',
+  targeting: 'targeting', placement_intent: 'ad zone ban đầu',
   creative_format_plan: 'kế hoạch format', creative: 'creative',
   creative_verdict: 'creative verdict',
   placements: 'placements', assignments: 'phân bổ creative', forecast: 'dự báo',
@@ -95,7 +95,10 @@ const taskIcon = status => {
 }
 
 const evidenceText = evidence => {
-  if (evidence.type === 'audience_pipeline') return `RAG ${evidence.retrieval_candidates || 0} candidates → rerank ${evidence.reranked ? 'đã áp dụng' : evidence.rerank_enabled ? 'không khả dụng' : 'tắt'} → ${evidence.selector || 'selector'}`
+  if (evidence.type === 'audience_pipeline') {
+    if (!evidence.retrieval_applied) return `Legacy full-catalog → ${evidence.selector || 'selector'}`
+    return `RAG ${evidence.retrieval_mode || 'hybrid'} · ${evidence.retrieval_candidates || 0} candidates → rerank ${evidence.reranked ? 'đã áp dụng' : evidence.rerank_enabled ? 'không khả dụng' : 'tắt'} → ${evidence.selector || 'selector'}`
+  }
   if (evidence.type === 'catalog_segments') return `${evidence.count || 0} segment catalog: ${(evidence.ids || []).slice(0, 6).join(', ')}${(evidence.ids || []).length > 6 ? '…' : ''}`
   if (evidence.type === 'order_guard') return `Order guard: ${evidence.passed ? 'PASS' : 'BLOCKED'}`
   if (evidence.type === 'order_draft') return `Order draft: ${evidence.placements || 0} placements · idempotency ${evidence.idempotency_key || '—'}`
@@ -104,7 +107,7 @@ const evidenceText = evidence => {
   if (evidence.type === 'forecast_inputs') return `${evidence.method || 'forecast'} · ${evidence.zone_count || 0} placement · CPM ${formatNumber(evidence.average_cpm)} ₫ · tần suất ${evidence.frequency || '—'}`
   if (evidence.type === 'creative_source') return `Creative ${evidence.source === 'ai_generate' ? 'AI tự tạo' : 'do người dùng tải lên'} · ${evidence.count || 0} file${evidence.reused ? ' · tái sử dụng' : ''}`
   if (evidence.type === 'creative_format_coverage') return `Creative phủ ${evidence.covered || 0}/${evidence.required || 0} format · còn thiếu ${(evidence.missing || []).map(item => `${item.width}×${item.height}`).join(', ') || 'không'}`
-  if (evidence.type === 'placement_intent') return `${evidence.candidate_count || 0} placement sơ bộ · ${evidence.conflict_count || 0} conflict · chưa lọc theo creative`
+  if (evidence.type === 'placement_intent') return `${evidence.candidate_count || 0} ad zone ban đầu · ${evidence.conflict_count || 0} conflict · chưa lọc theo creative`
   if (evidence.type === 'creative_format_plan') return `${evidence.format_count || 0} format: ${(evidence.format_ids || []).join(', ')} · tối đa ${evidence.max_assets || 0} asset · ${evidence.estimated_provider_calls || 0} provider call`
   if (evidence.type === 'creative_generation') return `AI tạo ${evidence.count || 0} creative: ${(evidence.format_ids || []).join(', ')}${(evidence.failed_formats || []).length ? ` · lỗi ${(evidence.failed_formats || []).join(', ')}` : ''}`
   if (evidence.type === 'creative_verdicts') return `${evidence.count || 0} creative verdict · ${evidence.revalidated ? 'đã revalidate' : 'hiện hành'}`
@@ -330,6 +333,25 @@ export default function AutopilotPanel({
     }
   }
 
+  const rerunAudience = async task => {
+    if (!run?.run_id || task?.key !== 'retrieve_audience' || loading) return
+    setLoading(true)
+    setError('')
+    try {
+      const next = await AgentAPI.rerunAutopilotAudience(
+        run.run_id,
+        task.task_id,
+        'Operator requested a new audience recommendation from review',
+      )
+      if (!next?.run_id) throw new Error(next?.detail || 'Không thể gợi ý lại audience.')
+      setRun(next)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const openEditor = editor => {
     setError('')
     editor?.()
@@ -351,6 +373,31 @@ export default function AutopilotPanel({
       await onWorkspaceRefresh?.()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const generateCreativeRecovery = async formatIds => {
+    if (!run?.run_id || loading) return
+    setLoading(true)
+    setError('')
+    try {
+      const result = await AgentAPI.generateAutopilotCreativeRecovery(
+        run.run_id,
+        formatIds,
+      )
+      if (!result?.ok) {
+        throw new Error(
+          result?.message
+          || result?.detail
+          || 'Chưa thể chuẩn bị creative cho format còn thiếu.',
+        )
+      }
+      if (result.run) setRun(result.run)
+      await loadPrerequisites()
+    } catch (generationError) {
+      setError(generationError.message)
     } finally {
       setLoading(false)
     }
@@ -394,6 +441,8 @@ export default function AutopilotPanel({
   const creativeCoverage = creativePlacementCoverage(creativeFiles, assignmentResult)
   const placementResult = taskByKey.rank_placements?.result || taskByKey.rank_placements?.pending_artifact?.value || {}
   const audienceResult = taskByKey.retrieve_audience?.result || taskByKey.retrieve_audience?.pending_artifact?.value || {}
+  const audienceReviewReady = waiting?.key !== 'retrieve_audience'
+    || Boolean((audienceResult.attrs || []).length)
   const audienceCatalogCount = audienceResult.retrieval?.catalog_segments || audienceResult.retrieval?.total_segments || 0
   const forecastResult = taskByKey.forecast?.result || taskByKey.forecast?.pending_artifact?.value || {}
   const orderResult = taskByKey.verify_order?.result?.order || taskByKey.create_order?.result?.order || null
@@ -433,6 +482,10 @@ export default function AutopilotPanel({
     creativeSource === 'ai_generate' && !creativeDirection.trim() ? 'creative direction cho AI' : null,
   ].filter(Boolean)
   const retryAction = waiting?.result?.review_action === 'retry'
+  const placementRecovery = waiting?.key === 'rank_placements'
+    ? waiting?.result?.recovery
+    : null
+  const recoveryFormats = placementRecovery?.target_formats || []
   const briefRetry = retryAction && waiting?.key === 'validate_brief'
   const retryReady = !briefRetry || (Boolean(canonicalBrief) && briefErrors.length === 0 && !pendingBrief)
   const waitingMessage = waiting?.result?.message
@@ -465,7 +518,27 @@ export default function AutopilotPanel({
             { label: 'Tải creative mới', action: onOpenCreative },
           ]
         : ['prepare_creatives', 'analyze_creatives', 'rank_placements'].includes(waiting?.key)
-          ? [{ label: waiting?.result?.reason === 'missing_creative' ? 'Tải creative lên' : 'Chỉnh hoặc thay creative', action: onOpenCreative }]
+          ? waiting?.key === 'rank_placements' && placementRecovery?.kind === 'creative_format_mismatch'
+            ? [
+                placementRecovery.can_adapt_existing
+                  ? { label: 'Crop/scale ảnh hiện có', action: onOpenCreative }
+                  : null,
+                placementRecovery.can_generate_missing
+                  ? {
+                      label: `Tạo ${recoveryFormats.length} asset đúng format`,
+                      action: () => generateCreativeRecovery(
+                        recoveryFormats.map(item => item.format_id).filter(Boolean),
+                      ),
+                    }
+                  : null,
+                { label: 'Tải creative khác', action: onOpenCreative },
+              ].filter(Boolean)
+            : [{
+                label: waiting?.result?.reason === 'missing_creative'
+                  ? 'Tải creative lên'
+                  : 'Chỉnh hoặc thay creative',
+                action: onOpenCreative,
+              }]
           : []
 
   useEffect(() => {
@@ -491,7 +564,13 @@ export default function AutopilotPanel({
   }, [onStatusChange, progress, run?.status, waiting?.task_id, waiting?.key, waitingMessage])
 
   return (
-    <section data-demo="autopilot-canvas" className="h-full w-full overflow-y-auto bg-slate-50/70 p-3 sm:p-5" aria-label="Không gian Campaign Autopilot">
+    <section
+      data-demo="autopilot-canvas"
+      data-autopilot-status={run?.status || 'not_started'}
+      data-autopilot-waiting-task={waiting?.key || ''}
+      className="h-full w-full overflow-y-auto bg-slate-50/70 p-3 sm:p-5"
+      aria-label="Không gian Campaign Autopilot"
+    >
       {!run ? (
         <div className="mx-auto max-w-5xl space-y-4 pb-6">
           <div data-demo="autopilot-intro" className="overflow-hidden rounded-3xl border border-brand-100 bg-[radial-gradient(circle_at_top_right,_#dcebff_0,_#ffffff_48%)] p-5 shadow-sm sm:p-7">
@@ -552,6 +631,7 @@ export default function AutopilotPanel({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <button type="button" onClick={() => chooseCreativeSource('upload')}
+                data-demo="autopilot-source-upload"
                 aria-pressed={creativeSource === 'upload'}
                 className={`rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${creativeSource === 'upload' ? 'border-brand-400 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-brand-200 hover:bg-brand-50/50'}`}>
                 <span className="flex items-center gap-2 text-sm font-bold text-slate-900"><Upload className="h-4 w-4 text-brand-600" /> Tôi sẽ tải creative lên</span>
@@ -559,6 +639,7 @@ export default function AutopilotPanel({
                 {creativeSource === 'upload' && <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đã chọn</span>}
               </button>
               <button type="button" onClick={() => chooseCreativeSource('ai_generate')}
+                data-demo="autopilot-source-ai"
                 aria-pressed={creativeSource === 'ai_generate'}
                 className={`rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${creativeSource === 'ai_generate' ? 'border-brand-400 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-brand-200 hover:bg-brand-50/50'}`}>
                 <span className="flex items-center gap-2 text-sm font-bold text-slate-900"><Sparkles className="h-4 w-4 text-brand-600" /> Để AI tự tạo creative</span>
@@ -572,6 +653,7 @@ export default function AutopilotPanel({
             <div><p className="text-sm font-black text-slate-900">Creative direction & assets cho Autopilot</p>
               <p className="mt-1 text-xs text-slate-500">Thông tin này được khóa vào run; Agent tự soạn prompt riêng cho từng format.</p></div>
             <textarea value={creativeDirection} onChange={event => setCreativeDirection(event.target.value)} rows={3}
+              data-demo="autopilot-creative-direction"
               placeholder="Ví dụ: trẻ trung, màu đỏ thương hiệu, logo ở góc trái, tô bún bò là hero visual, không tự thêm giá…"
               className="w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs" />
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -601,6 +683,7 @@ export default function AutopilotPanel({
               <div className="grid gap-2 sm:grid-cols-3">
                 {POLICY_OPTIONS.map(item => (
                   <button key={item.value} type="button" onClick={() => setPolicy(item.value)}
+                    data-demo={`autopilot-policy-${item.value}`}
                     aria-pressed={policy === item.value}
                     className={`min-h-24 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${policy === item.value ? 'border-brand-400 bg-brand-50 text-brand-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50/50'}`}>
                     <span className="block text-xs font-bold leading-5">{item.label}</span>
@@ -609,9 +692,18 @@ export default function AutopilotPanel({
                   </button>
                 ))}
               </div>
+              {policy === 'critical_only' && (
+                <p className="mt-3 rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-2 text-[11px] leading-5 text-brand-800">
+                  Agent sẽ dừng tại: Tìm audience → Thiết lập targeting → Ad zone đề xuất ban đầu → Gán creative → Duyệt launch. Creative có rủi ro sẽ luôn dừng để review.
+                </p>
+              )}
             </div>
 
-            <aside data-demo="autopilot-brief-status" className={`rounded-2xl border p-4 shadow-sm ${briefReady ? 'border-green-200 bg-green-50/70' : 'border-amber-200 bg-amber-50/70'}`}>
+            <aside
+              data-demo="autopilot-brief-status"
+              data-ready={briefReady ? 'true' : 'false'}
+              className={`rounded-2xl border p-4 shadow-sm ${briefReady ? 'border-green-200 bg-green-50/70' : 'border-amber-200 bg-amber-50/70'}`}
+            >
               <div className="flex items-center gap-2">
                 {briefReady ? <Check className="h-4 w-4 text-green-700" /> : <AlertTriangle className="h-4 w-4 text-amber-700" />}
                 <p className={`text-xs font-black uppercase tracking-wide ${briefReady ? 'text-green-800' : 'text-amber-900'}`}>
@@ -643,6 +735,7 @@ export default function AutopilotPanel({
               )}
             </div>
             <button type="button" disabled={loading || prerequisitesLoading} onClick={start}
+              data-demo="autopilot-start-run"
               aria-describedby={startBlockers.length ? 'autopilot-start-requirements' : undefined}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-500 px-6 text-sm font-bold text-white shadow-sm hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
@@ -682,7 +775,7 @@ export default function AutopilotPanel({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+          <div data-demo="autopilot-execution-plan" className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-black uppercase tracking-wide text-slate-500">Tiến độ thực thi</p>
@@ -704,7 +797,7 @@ export default function AutopilotPanel({
                 </li>
               ))}
             </ol>
-            <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
+            <details data-demo="autopilot-plan-details" className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
               <summary className="cursor-pointer text-[11px] font-bold text-slate-700">Xem toàn bộ {orderedTasks.length} bước theo thứ tự</summary>
               <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {orderedTasks.map((task, index) => (
@@ -742,7 +835,7 @@ export default function AutopilotPanel({
           />
 
           {(formatPlan?.formats?.length > 0 || creativeFiles.length > 0) && (
-            <section className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm" aria-label="Kế hoạch định dạng creative">
+            <section data-demo="autopilot-creative-plan" className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm" aria-label="Kế hoạch định dạng creative">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-wide text-brand-700">Kế hoạch creative theo placement</p>
@@ -788,7 +881,9 @@ export default function AutopilotPanel({
                             </div>
                             <span className="rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-bold text-green-700">{taskByKey.analyze_creatives?.status === 'succeeded' ? 'Đã phân tích' : 'Đã tạo'}</span>
                           </div>
-                          <p className="mt-2 text-[10px] text-slate-500">Phủ {creativeCoverage[index]?.length || 0} placement · {file.generation?.model || 'file tải lên'}</p>
+                          <p className="mt-2 text-[10px] text-slate-500">
+                            Phủ {creativeCoverage[index]?.length || 0} placement · {file.aiGenerated || file.generation ? 'Creative được tạo tự động' : 'Creative tải lên'}
+                          </p>
                           {file.url && <a href={file.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-brand-700 hover:underline">Mở ảnh gốc <ExternalLink className="h-3 w-3" /></a>}
                         </div>
                       </article>
@@ -809,6 +904,8 @@ export default function AutopilotPanel({
               onSendReportQuestion={onSendReportQuestion}
               onReportActivate={onReportActivate}
               onReportExit={onReportExit}
+              runId={run.run_id}
+              sessionId={run.session_id || window.__AGENT_SESSION_ID__}
             />
           ) : <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="autopilot-results-title">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -826,9 +923,7 @@ export default function AutopilotPanel({
               <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Audience</p>
                 <p className="mt-1 text-lg font-black text-slate-900">{audienceResult.attrs?.length || 0} segment</p>
-                <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                  {audienceCatalogCount ? `${audienceCatalogCount} catalog` : 'Catalog hiện hành'} → {audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || audienceResult.retrieval?.retrieval_candidates || 0} ứng viên RAG · {audienceResult.retrieval?.reranked ? 'đã rerank' : 'selector an toàn'}
-                </p>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">Các segment đã được người dùng hoặc Autopilot xác nhận.</p>
               </article>
               <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Placement</p>
@@ -854,9 +949,6 @@ export default function AutopilotPanel({
                     <summary className="cursor-pointer text-xs font-black text-slate-900">
                       Audience đã chọn · {audienceResult.attrs.length} segment
                     </summary>
-                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                      {audienceCatalogCount ? `Catalog có ${audienceCatalogCount} segment.` : 'Run cũ chưa lưu tổng số catalog.'} RAG truy xuất {audienceResult.retrieval?.candidates || audienceResult.retrieval?.candidate_count || 0} ứng viên liên quan trước khi selector an toàn chọn kết quả cuối.
-                    </p>
                     <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                       {audienceResult.attrs.map((item, index) => (
                         <li key={item._id || item.code || index} className="rounded-lg bg-slate-50 px-2.5 py-2">
@@ -917,7 +1009,7 @@ export default function AutopilotPanel({
               </div>
             )}
 
-            <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
+            <details data-demo="autopilot-technical-details" className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
               <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-bold text-slate-700">
                 <Activity className="h-4 w-4 text-brand-500" /> Chi tiết kỹ thuật
                 <span className="font-normal text-slate-500">trace · RAG/rerank · guard · idempotency</span>
@@ -939,31 +1031,68 @@ export default function AutopilotPanel({
               label={TASK_LABELS[waiting.key] || waiting.key}
               brief={displayBrief}
               formatPlan={formatPlan}
+              creativeFiles={creativeFiles}
+              placementValue={placementResult}
               selectedPlacementIds={placementSelection}
               onPlacementSelectionChange={waiting.key === 'plan_placement_intent' ? setPlacementSelection : undefined}
             />
           )}
 
           {waiting && (
-            <div className="sticky bottom-2 z-10 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50/95 p-3 shadow-[0_12px_36px_rgba(120,80,0,0.18)] backdrop-blur-md sm:flex-row sm:items-center">
-              <ShieldCheck className="h-5 w-5 shrink-0 text-amber-700" />
-              <div className="flex-1">
-                <p className="text-xs font-bold text-amber-900">Cần bạn review: {TASK_LABELS[waiting.key]}</p>
-                <p className="mt-0.5 text-xs text-amber-800">{waitingMessage}</p>
-                <a href="#autopilot-review-artifact" className="mt-1 inline-block text-[11px] font-bold text-amber-900 underline underline-offset-2">Xem nội dung cần review ngay phía trên</a>
-                {briefRetry && !retryReady && (
-                  <p className="mt-1 text-[11px] font-semibold text-amber-900">
-                    {pendingBrief ? 'Duyệt hoặc hủy đề xuất Brief trong Chat trước.' : `Sửa Brief trước khi kiểm tra lại: ${briefErrors.join(', ')}.`}
-                  </p>
-                )}
+            <div
+              data-demo="autopilot-review-dock"
+              className="sticky bottom-2 z-10 rounded-2xl border border-amber-300 bg-amber-50/95 p-3 shadow-[0_12px_36px_rgba(120,80,0,0.18)] backdrop-blur-md max-sm:bottom-1 sm:p-4"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white text-amber-700 shadow-sm sm:h-9 sm:w-9">
+                  <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-700">Cần bạn review</p>
+                  <p className="mt-0.5 text-sm font-black leading-5 text-amber-950">{TASK_LABELS[waiting.key]}</p>
+                  <p className="mt-1 hidden max-w-3xl text-xs leading-5 text-amber-800 sm:block">{waitingMessage}</p>
+                  <details className="mt-1 sm:hidden">
+                    <summary className="cursor-pointer text-[11px] font-bold text-amber-900 underline underline-offset-2">
+                      Hướng dẫn review
+                    </summary>
+                    <p className="mt-1.5 text-[11px] leading-4 text-amber-800">{waitingMessage}</p>
+                  </details>
+                  <a href="#autopilot-review-artifact" className="mt-1.5 inline-flex text-[11px] font-bold text-amber-900 underline underline-offset-2">Xem nội dung cần review ngay phía trên</a>
+                  {briefRetry && !retryReady && (
+                    <p className="mt-1 text-[11px] font-semibold text-amber-900">
+                      {pendingBrief ? 'Duyệt hoặc hủy đề xuất Brief trong Chat trước.' : `Sửa Brief trước khi kiểm tra lại: ${briefErrors.join(', ')}.`}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {briefRetry && pendingBrief && <button onClick={onOpenChat} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Mở Chat để duyệt</button>}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-amber-200 pt-2 sm:mt-3 sm:gap-2 sm:pl-12 sm:pt-3">
+                {briefRetry && pendingBrief && <button onClick={onOpenChat} className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 sm:min-w-0 sm:flex-none">Mở Chat để duyệt</button>}
                 {waitingEdits.map(edit => edit.action && (
-                  <button key={edit.label} onClick={() => openEditor(edit.action)} disabled={loading} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">{edit.label}</button>
+                  <button
+                    key={edit.label}
+                    data-demo={`autopilot-edit-${waiting.key}`}
+                    onClick={() => openEditor(edit.action)}
+                    disabled={loading}
+                    className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 sm:min-w-0 sm:flex-none"
+                  >{edit.label}</button>
                 ))}
-                <button onClick={cancelRunWithConfirmation} disabled={loading} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700">Hủy run</button>
-                <button onClick={() => review(waiting, true)} disabled={loading || (retryAction && !retryReady) || (waiting.key === 'plan_placement_intent' && !placementSelection.length)} className={`rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}>
+                {waiting.key === 'retrieve_audience' && !retryAction && (
+                  <button
+                    onClick={() => rerunAudience(waiting)}
+                    disabled={loading}
+                    className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-brand-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50 sm:min-w-0 sm:flex-none"
+                  >
+                    Gợi ý lại audience
+                  </button>
+                )}
+                <button onClick={cancelRunWithConfirmation} disabled={loading} className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:min-w-0 sm:flex-none">Hủy run</button>
+                <button
+                  data-demo="autopilot-review-approve"
+                  data-autopilot-task={waiting.key}
+                  onClick={() => review(waiting, true)}
+                  disabled={loading || (retryAction && !retryReady) || !audienceReviewReady || (waiting.key === 'plan_placement_intent' && !placementSelection.length)}
+                  className={`min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 sm:min-w-0 sm:flex-none ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}
+                >
                   {retryAction ? 'Kiểm tra lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}
                 </button>
               </div>

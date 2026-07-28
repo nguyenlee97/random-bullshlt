@@ -98,7 +98,8 @@ def _needs_proposal(decision: TurnDecision) -> bool:
     return bool(
         decision.would_mutate_workspace
         and decision.workflow_action in {
-            "update_brief", "select_audience", "select_zone", "other",
+            "update_brief", "select_audience", "rerun_audience",
+            "select_zone", "other",
         }
     )
 
@@ -127,7 +128,12 @@ async def _handle_pending_decision(
     message: str,
     step: int,
 ) -> AgentResponse | None:
-    if decision.workflow_action not in {"approve", "reject"}:
+    if decision.workflow_action not in {"approve", "reject", "defer"}:
+        return None
+    # Defer is only a disposition of an existing proposal. If a planner ever
+    # emits it without one, let the normal answer/tool loop handle the turn
+    # instead of claiming that a newly requested proposal does not exist.
+    if decision.workflow_action == "defer" and not pending:
         return None
     if not pending:
         reply = (
@@ -148,6 +154,22 @@ async def _handle_pending_decision(
     proposal_id = pending.get("proposal_id")
     field = str(pending.get("field") or "")
     value = pending.get("value")
+    if decision.workflow_action == "defer":
+        reply = (
+            f"Đề xuất cho `{field}` vẫn được giữ ở trạng thái chờ. "
+            "Workspace chưa bị thay đổi; anh/chị có thể xác nhận áp dụng hoặc "
+            "hủy đề xuất ở lượt sau."
+        )
+        await _persist_reply(session_id, message, reply)
+        return AgentResponse(
+            text=reply,
+            blocks=[{"type": "info", "text": reply}],
+            meta=ResponseMeta(
+                tool="workspace_deferred",
+                model=config.OPENAI_CAMPAIGN_MODEL,
+                step=step,
+            ),
+        )
     if decision.workflow_action == "reject":
         if proposal_id:
             from workspace.service import reject_proposal
@@ -399,22 +421,36 @@ async def _handle_openai_freeform_impl(
             duration_ms=int((time.perf_counter() - decision_started) * 1000),
         )
 
-        # Match the established Copilot contract for an uncommitted initial
-        # Brief. The semantic coordinator decides whether this is a Brief
-        # action; the OpenAI-owned typed collector gathers every hard fact,
-        # asks for missing operator fields, and creates one atomic proposal.
-        if (
-            step == 0
-            and pending is None
-            and decision.workflow_action in {"update_brief", "approve"}
-        ):
+        # At the Brief step, the typed collector is the sole writer until a
+        # complete canonical Brief exists. A factual continuation/correction
+        # may be labelled "clarification" by the semantic planner; generic
+        # chat must not lose it or create a partial ``brief.notes`` proposal.
+        # FAQ-only turns remain on the read-only answer path.
+        if step == 0 and pending is None:
+            from autopilot.capabilities import validate_brief_value
             from workspace.service import get_workspace
 
             canonical = await get_workspace(session_id)
             current_brief = (
                 canonical.get("artifacts", {}).get("brief", {}).get("value")
             )
-            if not current_brief:
+            _, brief_errors = validate_brief_value(current_brief)
+            has_mutation_subrequest = any(
+                item.kind == "mutation" for item in decision.subrequests
+            )
+            is_brief_collection_turn = (
+                decision.turn_type == "clarification"
+                or (
+                    not decision.requires_clarification()
+                    and (
+                        decision.turn_type == "workflow_action"
+                        or decision.workflow_action in {"update_brief", "approve"}
+                        or decision.would_mutate_workspace
+                        or has_mutation_subrequest
+                    )
+                )
+            )
+            if brief_errors and is_brief_collection_turn:
                 from openai_campaign.brief import handle_openai_brief_intake
 
                 return await handle_openai_brief_intake(
@@ -439,6 +475,52 @@ async def _handle_openai_freeform_impl(
                     model=config.OPENAI_CAMPAIGN_MODEL,
                     step=step,
                 ),
+            )
+
+        if decision.workflow_action == "rerun_audience":
+            if step != 1:
+                reply = (
+                    "Chỉ có thể gợi ý lại audience khi campaign đang ở bước "
+                    "Audience. Workspace chưa bị thay đổi."
+                )
+                await _persist_reply(session_id, message, reply)
+                return AgentResponse(
+                    text=reply,
+                    blocks=[{"type": "info", "text": reply}],
+                    meta=ResponseMeta(
+                        tool="audience_rerun_unavailable",
+                        model=config.OPENAI_CAMPAIGN_MODEL,
+                        step=step,
+                    ),
+                )
+            from openai_campaign.guided import handle_openai_audience_entry
+
+            await add_message(session_id, "user", message)
+            result = await handle_openai_audience_entry(
+                session_id,
+                client=api,
+                force=True,
+            )
+            proposal = next(
+                (
+                    block.get("changes")
+                    for block in result.get("blocks", [])
+                    if block.get("type") == "workspace_proposal"
+                    and block.get("changes", {}).get("field") == "segment"
+                ),
+                None,
+            )
+            meta = result.get("meta") or {}
+            return AgentResponse(
+                text=result.get("text") or "",
+                blocks=result.get("blocks") or [],
+                meta=ResponseMeta(
+                    tool=meta.get("tool", "openai_audience_rerun"),
+                    model=meta.get("model", config.OPENAI_CAMPAIGN_MODEL),
+                    step=meta.get("step", step),
+                ),
+                workspace_update=proposal,
+                suggestions=result.get("suggestions") or [],
             )
 
         pending_response = await _handle_pending_decision(
@@ -503,8 +585,8 @@ async def _handle_openai_freeform_impl(
             "state_changed": False,
         })
         reply = (
-            "Luồng OpenAI đang tạm thời không phản hồi. Campaign vẫn giữ nguyên "
-            "model đã chọn và không có dữ liệu nào bị thay đổi."
+            "Agent đang tạm thời không phản hồi. Campaign vẫn giữ nguyên trạng thái "
+            "hiện tại và không có dữ liệu nào bị thay đổi."
         )
         return AgentResponse(
             text=reply,

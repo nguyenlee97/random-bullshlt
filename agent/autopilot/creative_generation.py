@@ -98,7 +98,9 @@ async def generate_creative(
     filename = f"creative_ai_{digest}.png"
     stored_url = f"{config.BACKEND_URL.rstrip('/')}/uploads/{filename}"
     actor = await actor_for_session(run["session_id"])
-    assets = await get_assets(actor, run.get("creative_asset_ids") or [])
+    assets = await get_assets(
+        actor, run.get("creative_asset_ids") or [], run["session_id"],
+    )
     provenance = generation_provenance(
         brief, format_id, run.get("creative_direction") or "",
         assets=assets,

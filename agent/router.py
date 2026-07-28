@@ -3,6 +3,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from models import ChatRequest, AgentResponse, ResponseMeta
+from quality.models import FeedbackRequest, FeedbackResponse
 from ratelimit import limiter, CHAT_LIMIT, RECOMMEND_LIMIT
 from handlers.boot import handle_boot
 from handlers.brief import handle_brief
@@ -497,36 +498,87 @@ async def delete_session(session_id: str, request: Request):
 @agent_router.post("/chat", response_model=AgentResponse)
 @limiter.limit(CHAT_LIMIT)
 async def chat(request: Request, req: ChatRequest) -> AgentResponse:
+    import time
+    from quality.events import enqueue_chat_interaction
+
+    started_at = time.time()
+    response = await _dispatch_chat(request, req)
+    enqueue_chat_interaction(
+        session_id=req.session_id or "default",
+        step=req.step,
+        response=response,
+        started_at=started_at,
+        workspace_revision_before=req.workspace_revision,
+        guard_summary=getattr(request.state, "guard_summary", None),
+    )
+    return response
+
+
+async def _dispatch_chat(request: Request, req: ChatRequest) -> AgentResponse:
     sid = req.session_id or "default"
     await _assert_session_access(request, sid)
 
     # Treat every browser-provided string as data, never as control text. A
     # flagged request cannot reach a model or mutation handler.
-    from prompt_guard import scan_untrusted_payload
+    from guardrails.models import GuardDecision
+    from guardrails.service import evaluate_payload, event_payload
     untrusted = {
         "message": req.message,
         "formData": req.formData.model_dump() if req.formData else None,
         "workspace_events": req.workspace_events,
     }
-    injection = scan_untrusted_payload(untrusted, "chat")
-    if injection:
-        from metrics import INJECTION_FLAGGED
-        from session import log_event
-        surface, finding = injection
-        INJECTION_FLAGGED.labels(surface=surface, rule=finding.rule).inc()
-        await log_event(sid, "prompt_injection_blocked", {
-            "surface": surface,
-            "rule": finding.rule,
-        })
-        return AgentResponse(
-            text=(
-                "Em đã chặn nội dung có dấu hiệu cố thay đổi quy tắc hoặc ép hệ thống "
-                "thực thi công cụ. Anh/chị hãy gửi lại yêu cầu campaign thuần túy; "
-                "workspace chưa bị thay đổi."
-            ),
-            blocks=[],
-            meta=ResponseMeta(tool="prompt_guard", model="none", step=req.step),
+    guard_result = evaluate_payload(untrusted, "chat")
+    request.state.guard_summary = {
+        "decision": guard_result.decision.value,
+        "finding_count": len(guard_result.findings),
+        "policy_version": guard_result.policy_version,
+    }
+    if guard_result.findings:
+        from metrics import (
+            GUARDRAIL_DECISIONS,
+            GUARDRAIL_PROTECTED_STATE,
+            INJECTION_FLAGGED,
         )
+        from quality.events import enqueue_quality_event
+        from session import log_event
+        first = guard_result.findings[0]
+        severity = guard_result.highest_severity.value
+        for located in guard_result.findings:
+            INJECTION_FLAGGED.labels(
+                surface=located.path, rule=located.finding.rule
+            ).inc()
+        GUARDRAIL_DECISIONS.labels(
+            surface=first.path,
+            mode=_cfg.GUARDRAIL_MODE,
+            decision=guard_result.decision.value,
+            severity=severity,
+        ).inc()
+        await log_event(sid, "prompt_injection_detected", {
+            "surface": first.path,
+            "rules": [item.finding.rule for item in guard_result.findings],
+            "decision": guard_result.decision.value,
+        })
+        enqueue_quality_event(
+            "guard_decision",
+            session_id=sid,
+            surface=first.path,
+            payload=event_payload(guard_result, untrusted),
+        )
+        if guard_result.decision == GuardDecision.block:
+            GUARDRAIL_PROTECTED_STATE.labels(
+                surface=first.path,
+                workspace_mutated="false",
+                order_created="false",
+            ).inc()
+            return AgentResponse(
+                text=(
+                    "Em đã chặn nội dung có dấu hiệu cố thay đổi quy tắc hoặc ép hệ thống "
+                    "thực thi công cụ. Anh/chị hãy gửi lại yêu cầu campaign thuần túy; "
+                    "workspace chưa bị thay đổi."
+                ),
+                blocks=[],
+                meta=ResponseMeta(tool="prompt_guard", model="none", step=req.step),
+            )
 
     # ── Boot ──────────────────────────────────────────────────────────────────
     if req.step == -1 or (req.step == 0 and not req.formData and not req.message):
@@ -596,17 +648,25 @@ async def chat(request: Request, req: ChatRequest) -> AgentResponse:
         # locked while executing, decision-only at review gates, and read-only
         # after the run has ended.
         from autopilot.chat import route_autopilot_chat
-        autopilot_response = await route_autopilot_chat(req.message, sid, req.step)
+        active_report_tab = (
+            (req.formData or {}).get("activeReportTab", "daily_ops")
+            if req.formData else "daily_ops"
+        )
+        autopilot_response = await route_autopilot_chat(
+            req.message,
+            sid,
+            req.step,
+            active_report_tab=active_report_tab,
+        )
         if autopilot_response is not None:
             return autopilot_response
 
         # Step 5 (Report): route to report chat handler with context isolation
         if req.step == 5:
-            active_tab = (req.formData or {}).get("activeReportTab", "daily_ops") if req.formData else "daily_ops"
             from identity import get_conversation_model_for_session
             model_lock = await get_conversation_model_for_session(sid)
             return await handle_report_chat(
-                req.message, sid, active_tab,
+                req.message, sid, active_report_tab,
                 conversation_model=model_lock["conversation_model"],
             )
 
@@ -635,6 +695,71 @@ async def chat(request: Request, req: ChatRequest) -> AgentResponse:
         text="Em chưa hiểu yêu cầu. Anh/Chị thử mô tả rõ hơn hoặc tương tác với form ở panel phải nhé!",
         blocks=[],
         meta={"tool": None, "model": "none", "step": req.step},
+    )
+
+
+@agent_router.post(
+    "/feedback",
+    response_model=FeedbackResponse,
+    status_code=201,
+)
+@limiter.limit("20/minute")
+async def feedback_create(
+    request: Request, response: Response, body: FeedbackRequest,
+) -> FeedbackResponse:
+    """Record owned run/conversation feedback without changing campaign state."""
+    from metrics import FEEDBACK_WRITES
+    from quality.feedback import record_feedback
+
+    actor = await _request_actor(request)
+    from identity import require_session_access
+    try:
+        conversation = await require_session_access(actor, body.session_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=404, detail="feedback target not found") from exc
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="feedback target not found")
+
+    run = None
+    if body.target_kind == "run":
+        run = await _assert_run_access(request, body.run_id or "")
+        if run.get("session_id") != body.session_id:
+            raise HTTPException(status_code=404, detail="feedback target not found")
+        if body.task_id and not any(
+            task.get("task_id") == body.task_id for task in run.get("tasks", [])
+        ):
+            raise HTTPException(status_code=422, detail="task is not part of this run")
+    if body.request_id:
+        from quality.store import interaction_belongs_to_session
+        if not await interaction_belongs_to_session(
+            body.session_id, body.request_id
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="request_id is not part of this conversation",
+            )
+
+    from workspace.service import get_workspace
+    workspace_revision = (await get_workspace(body.session_id)).get("revision")
+
+    try:
+        stored, created = await record_feedback(
+            body,
+            actor=actor,
+            conversation=conversation,
+            run=run,
+            workspace_revision=workspace_revision,
+        )
+    except Exception as exc:
+        FEEDBACK_WRITES.labels(outcome="error").inc()
+        raise HTTPException(
+            status_code=503,
+            detail="feedback could not be stored; please retry",
+        ) from exc
+    response.status_code = 201 if created else 200
+    return FeedbackResponse(
+        feedback_id=stored["_id"],
+        request_id=request.state.request_id,
     )
 
 
@@ -1113,6 +1238,10 @@ class _AutopilotPlacementRequest(_AutopilotActionRequest):
     zone_ids: list[str]
 
 
+class _AutopilotCreativeRecoveryRequest(_AutopilotActionRequest):
+    format_ids: list[str] = []
+
+
 def _autopilot_error(exc: Exception) -> HTTPException:
     from autopilot.service import RunConflict
     if isinstance(exc, KeyError):
@@ -1143,7 +1272,9 @@ async def autopilot_start(raw_request: Request, request: _AutopilotStartRequest)
     actor_identity = await _request_actor(raw_request)
     if request.creative_asset_ids:
         from creative_assets import get_assets
-        owned_assets = await get_assets(actor_identity, request.creative_asset_ids)
+        owned_assets = await get_assets(
+            actor_identity, request.creative_asset_ids, request.session_id,
+        )
         if len(owned_assets) != len(set(request.creative_asset_ids)):
             raise HTTPException(status_code=404, detail="one or more creative assets were not found")
     _require_autopilot_worker()
@@ -1222,6 +1353,27 @@ async def autopilot_review(
         raise _autopilot_error(exc) from exc
 
 
+@agent_router.post("/autopilot/runs/{run_id}/tasks/{task_id}/rerun")
+async def autopilot_rerun_review_task(
+    run_id: str,
+    task_id: str,
+    raw_request: Request,
+    request: _AutopilotActionRequest,
+):
+    from autopilot.service import RunConflict, rerun_review_task
+    try:
+        await _assert_run_access(raw_request, run_id)
+        _require_autopilot_worker()
+        return await rerun_review_task(
+            run_id,
+            task_id,
+            actor=request.actor,
+            reason=request.reason,
+        )
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
 @agent_router.post("/autopilot/runs/{run_id}/strategy")
 async def autopilot_select_strategy(
     run_id: str, raw_request: Request, request: _AutopilotStrategyRequest
@@ -1245,6 +1397,26 @@ async def autopilot_select_placement_intent(
         await _assert_run_access(raw_request, run_id)
         return await select_placement_intent(
             run_id, request.zone_ids, actor=request.actor, reason=request.reason,
+        )
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.post("/autopilot/runs/{run_id}/creative-recovery/generate")
+async def autopilot_generate_creative_recovery(
+    run_id: str,
+    raw_request: Request,
+    request: _AutopilotCreativeRecoveryRequest,
+):
+    from autopilot.service import RunConflict, generate_missing_creative_formats
+    try:
+        await _assert_run_access(raw_request, run_id)
+        _require_autopilot_worker()
+        return await generate_missing_creative_formats(
+            run_id,
+            request.format_ids,
+            actor=request.actor,
+            reason=request.reason,
         )
     except (KeyError, ValueError, RunConflict) as exc:
         raise _autopilot_error(exc) from exc
@@ -1289,6 +1461,8 @@ class GenerateImageRequest(BaseModel):
     prompt_spec: dict | None = None
     idempotency_key: str = ""
     quality: str = "medium"
+    campaign_flow: str = ""
+    audience_context: dict = {}
 
 
 class CreativeAssetRequest(BaseModel):
@@ -1349,12 +1523,47 @@ async def generate_image_route(request: Request, req: GenerateImageRequest):
     await _assert_session_access(request, req.session_id)
     actor = await _request_actor(request)
     from creative_assets import get_assets
-    assets = await get_assets(actor, req.asset_ids)
+    assets = await get_assets(actor, req.asset_ids, req.session_id)
     if len(assets) != len(set(req.asset_ids)):
         raise HTTPException(status_code=404, detail="one or more creative assets were not found")
+    creative_brief = dict(req.brief or {})
+    use_openai_context = False
+    if req.campaign_flow == "openai":
+        from campaign_models import OPENAI_GPT_5_4_MINI
+        from identity import get_conversation_model_for_session
+
+        model_lock = await get_conversation_model_for_session(req.session_id)
+        use_openai_context = (
+            model_lock["conversation_model"] == OPENAI_GPT_5_4_MINI
+        )
+    if use_openai_context:
+        attrs = (req.audience_context or {}).get("attrs") or []
+        names = [
+            str(
+                item.get("fullLabel") or item.get("name")
+                or item.get("code") or item.get("segmentId") or ""
+            ).strip()
+            for item in attrs[:12]
+            if isinstance(item, dict)
+        ]
+        targeting = (req.audience_context or {}).get("targeting") or {}
+        targeting_parts = [
+            f"{key}: {', '.join(map(str, value)) if isinstance(value, list) else value}"
+            for key, value in list(targeting.items())[:12]
+            if value
+        ] if isinstance(targeting, dict) else []
+        audience_parts = [
+            f"Selected DMP segments: {', '.join(filter(None, names))}"
+            if any(names) else "",
+            f"Targeting: {'; '.join(targeting_parts)}" if targeting_parts else "",
+        ]
+        audience_summary = "\n".join(filter(None, audience_parts))[:4000]
+        if audience_summary:
+            creative_brief["audience_summary"] = audience_summary
+
     return await handle_generate_image(
         session_id=req.session_id,
-        brief=req.brief,
+        brief=creative_brief,
         format_id=req.format_id,
         custom_prompt=req.custom_prompt,
         actor=actor,
@@ -1392,14 +1601,18 @@ async def creative_asset_create(request: Request, req: CreativeAssetRequest):
 async def creative_asset_list(request: Request, session_id: str):
     await _assert_session_access(request, session_id)
     from creative_assets import list_assets
-    return {"assets": await list_assets(await _request_actor(request))}
+    return {
+        "assets": await list_assets(await _request_actor(request), session_id),
+    }
 
 
 @agent_router.delete("/creative/assets/{asset_id}")
 async def creative_asset_delete(asset_id: str, request: Request, session_id: str):
     await _assert_session_access(request, session_id)
     from creative_assets import delete_asset
-    if not await delete_asset(await _request_actor(request), asset_id):
+    if not await delete_asset(
+        await _request_actor(request), asset_id, session_id,
+    ):
         raise HTTPException(status_code=404, detail="creative asset not found")
     return {"ok": True, "asset_id": asset_id}
 
@@ -1410,7 +1623,7 @@ async def creative_prompt_spec_route(request: Request, req: CreativePromptReques
     actor = await _request_actor(request)
     from creative_assets import get_assets
     from creative_prompt import compose_prompt_spec
-    assets = await get_assets(actor, req.asset_ids)
+    assets = await get_assets(actor, req.asset_ids, req.session_id)
     if len(assets) != len(set(req.asset_ids)):
         raise HTTPException(status_code=404, detail="one or more creative assets were not found")
     try:
@@ -1443,7 +1656,7 @@ async def screenshot_route(
 ):
     """
     Capture a zone-aware screenshot of a live test-site URL using Playwright.
-    Only allowed for whitelisted staging domains (znews-stg, baomoi-stg, zingmp3-stg).
+    Only allowed for the whitelisted NP-6 staging publisher domains.
 
     Query params:
         url       — full URL to capture (must be in ALLOWED_DOMAINS)

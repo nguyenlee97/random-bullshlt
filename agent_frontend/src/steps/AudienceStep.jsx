@@ -6,18 +6,22 @@ import { Button } from '@/components/ui/button'
 import { cn, fmt } from '@/lib/utils'
 import { AgentAPI, fetchDmpAttributes } from '@/api/agentApi'
 import { dedupeDmpAttrs, enrichAudienceSelection, normalizeDmpAttr } from '@/lib/audience'
-import { Users, Check, Search, Loader2, Sparkles, ChevronDown, ChevronUp, BrainCircuit } from 'lucide-react'
+import { Users, Check, Search, Loader2, Sparkles, ChevronDown, ChevronUp, BrainCircuit, X } from 'lucide-react'
 import TargetingPanel from '@/components/TargetingPanel'
 
 function getUid(a) { return a._uid || a.code || a.name || '' }
 
-function AttrCard({ attr, selected, onToggle, reason, isReco }) {
+function AttrCard({ attr, selected, onToggle, reason, isReco, tier = 'recommended' }) {
   const sel = selected
+  const adjacent = isReco && tier === 'adjacent'
   return (
     <button onClick={() => onToggle(attr)}
+      data-demo="autopilot-audience-option"
+      aria-pressed={selected}
       className={cn('flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all duration-150 w-full',
         sel && 'border-brand-400 bg-brand-50 shadow-sm',
-        !sel && isReco && 'border-amber-300 bg-amber-50/60 hover:border-amber-400',
+        !sel && isReco && !adjacent && 'border-amber-300 bg-amber-50/60 hover:border-amber-400',
+        !sel && adjacent && 'border-sky-300 bg-sky-50/60 hover:border-sky-400',
         !sel && !isReco && 'border-border bg-white hover:border-brand-300 hover:bg-brand-50/50',
       )} id={`attr-${getUid(attr)}`}>
       <div className={cn('w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-0.5 border transition-all',
@@ -27,9 +31,10 @@ function AttrCard({ attr, selected, onToggle, reason, isReco }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <p className="text-xs font-semibold text-foreground leading-tight">{attr.name}</p>
-          {isReco && <Badge className="text-[9px] h-4 px-1 bg-amber-100 text-amber-700 border-amber-300">⭐ Gợi ý</Badge>}
+          {isReco && !adjacent && <Badge className="text-[9px] h-4 px-1 bg-amber-100 text-amber-700 border-amber-300">⭐ Đề xuất</Badge>}
+          {adjacent && <Badge className="text-[9px] h-4 px-1 bg-sky-100 text-sky-700 border-sky-300">↗ Liên quan</Badge>}
         </div>
-        {isReco && reason && <p className="text-[10px] text-amber-700 mt-0.5 leading-tight italic">{reason}</p>}
+        {isReco && reason && <p className={cn('text-[10px] mt-0.5 leading-tight italic', adjacent ? 'text-sky-700' : 'text-amber-700')}>{reason}</p>}
         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
           {attr.code && <Badge variant="muted" className="text-[10px] h-4 px-1.5">{attr.code}</Badge>}
           {attr.category && <Badge variant="muted" className="text-[10px] h-4 px-1.5">{attr.category}</Badge>}
@@ -47,7 +52,10 @@ function AttrCard({ attr, selected, onToggle, reason, isReco }) {
   )
 }
 
-export default function AudienceStep({ data, onChange, isDone, brief, recoFromChat, expandTargeting = false }) {
+export default function AudienceStep({
+  data, onChange, isDone, brief, recoFromChat, expandTargeting = false,
+  openaiCampaignFlow = false,
+}) {
 
   const [allAttrs, setAllAttrs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -132,6 +140,14 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
   }, [data.attrs, recoFromChat])
 
   const recoUids = useMemo(() => new Set(recoAttrs.map(a => a._uid)), [recoAttrs])
+  const directReco = useMemo(
+    () => recoAttrs.filter(attr => attr.tier !== 'adjacent' && attr.match_tier !== 'adjacent'),
+    [recoAttrs],
+  )
+  const adjacentReco = useMemo(
+    () => recoAttrs.filter(attr => attr.tier === 'adjacent' || attr.match_tier === 'adjacent'),
+    [recoAttrs],
+  )
 
   const isSelected = (attr) => {
     const uid = getUid(attr)
@@ -211,6 +227,37 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
         </CardContent>
       </Card>
 
+      {openaiCampaignFlow && data.attrs.length > 0 && (
+        <div
+          className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-2.5"
+          data-demo="selected-audience-shelf"
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <Check className="h-3.5 w-3.5 text-brand-600" />
+            <span className="text-xs font-bold text-brand-700">Segment đã chọn</span>
+            <Badge variant="green" className="ml-auto">{data.attrs.length}</Badge>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {data.attrs.map(attr => (
+              <button
+                key={getUid(attr)}
+                type="button"
+                onClick={() => toggleAttr(attr)}
+                title={`Bỏ chọn ${attr.name}`}
+                aria-label={`Bỏ chọn ${attr.name}`}
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-brand-200 bg-white px-2 py-1 text-[11px] font-semibold text-brand-700 shadow-sm transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+              >
+                <span className="truncate">{attr.name}</span>
+                <X className="h-3 w-3 flex-shrink-0" />
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-brand-600">
+            Luôn hiển thị tại đây, kể cả khi segment nằm sâu trong danh sách đầy đủ.
+          </p>
+        </div>
+      )}
+
       {/* Targeting Parameters from AI */}
       <TargetingPanel
         targeting={data.targeting || {}}
@@ -239,10 +286,34 @@ export default function AudienceStep({ data, onChange, isDone, brief, recoFromCh
             Không tìm thấy segment phù hợp — thử xem thêm bên dưới.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2">
-            {recoAttrs.map(attr => (
-              <AttrCard key={attr._uid} attr={attr} selected={isSelected(attr)} onToggle={toggleAttr} reason={attr.reason} isReco />
-            ))}
+          <div className="space-y-3 p-2">
+            {directReco.length > 0 ? (
+              <div>
+                <p className="mb-2 px-1 text-[10px] font-black uppercase tracking-wide text-amber-800">Đề xuất trực tiếp · chọn sẵn</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {directReco.map(attr => (
+                    <AttrCard key={attr._uid} attr={attr} selected={isSelected(attr)} onToggle={toggleAttr} reason={attr.reason} isReco tier="recommended" />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="rounded-lg bg-white/70 px-3 py-2 text-xs text-amber-800">
+                Catalog chưa có segment khớp trực tiếp; Agent không tự chọn một kết quả yếu.
+              </p>
+            )}
+            {adjacentReco.length > 0 && (
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-sky-800">Liên quan để mở rộng · chưa chọn</p>
+                  <span className="text-[10px] text-sky-700">Chỉ chọn khi phù hợp với chiến lược</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {adjacentReco.map(attr => (
+                    <AttrCard key={attr._uid} attr={attr} selected={isSelected(attr)} onToggle={toggleAttr} reason={attr.reason} isReco tier="adjacent" />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

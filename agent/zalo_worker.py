@@ -223,7 +223,13 @@ _MILESTONE_TASKS = {
 }
 
 
-def _progress_message(run: dict, event: dict) -> str | None:
+def _progress_message(
+    run: dict,
+    event: dict,
+    *,
+    workspace: dict | None = None,
+    workspace_url: str | None = None,
+) -> str | None:
     event_type = event.get("type")
     payload = event.get("payload") or {}
     if event_type == "run_created":
@@ -233,6 +239,17 @@ def _progress_message(run: dict, event: dict) -> str | None:
     if event_type == "task_completed" and task and task.get("key") in _MILESTONE_TASKS:
         return f"Autopilot {run['run_id']}: {_MILESTONE_TASKS[task['key']]}"
     if event_type == "task_waiting_review" and task:
+        from campaign_models import OPENAI_GPT_5_4_MINI
+
+        if run.get("conversation_model") == OPENAI_GPT_5_4_MINI:
+            from openai_campaign.zalo_review import render_openai_review_message
+
+            return render_openai_review_message(
+                run,
+                task,
+                workspace=workspace,
+                workspace_url=workspace_url,
+            )
         label = task.get("title") or task.get("key")
         if task.get("key") == "launch_approval":
             return (
@@ -268,18 +285,139 @@ async def _process_progress_once() -> bool:
                 {"_id": subscription["_id"]}, {"$set": {"status": "orphaned", "updated_at": _now()}}
             )
             return True
+        from campaign_models import OPENAI_GPT_5_4_MINI
+
+        is_openai_run = run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+        workspace = {}
+        workspace_loaded = False
+        conversation_id = (
+            thread.get("active_campaign_conversation_id")
+            or thread.get("conversation_id")
+        )
+        workspace_url = str(config.ZALO_WEB_WORKSPACE_URL).rstrip("/")
+        if conversation_id:
+            workspace_url += f"/?conversation={conversation_id}"
+        review_markers = set(subscription.get("review_summary_markers") or [])
+        new_review_markers: list[str] = []
+
+        async def review_message(task: dict, event: dict) -> str | None:
+            nonlocal workspace, workspace_loaded
+            if is_openai_run and not workspace_loaded:
+                workspace_loaded = True
+                try:
+                    from workspace.service import get_workspace
+
+                    workspace = await get_workspace(run["session_id"])
+                except Exception:
+                    workspace = {}
+            return _progress_message(
+                run,
+                event,
+                workspace=workspace,
+                workspace_url=workspace_url,
+            )
+
         new_ids = []
         for event in events:
             event_id = event["event_id"]
             if event_id in delivered:
                 continue
             new_ids.append(event_id)
-            text = _progress_message(run, event)
+            payload = event.get("payload") or {}
+            event_task_id = str(payload.get("task_id") or "")
+            event_task = next(
+                (item for item in run.get("tasks", []) if item.get("task_id") == event_task_id),
+                None,
+            )
+            marker = f"openai-review-v2:{event_task_id}"
+            if (
+                is_openai_run
+                and event.get("type") == "task_waiting_review"
+                and event_task
+            ):
+                if marker in review_markers:
+                    continue
+                text = await review_message(event_task, event)
+                idempotency_key = f"run-review-summary:{marker}"
+                review_markers.add(marker)
+                new_review_markers.append(marker)
+            else:
+                text = _progress_message(
+                    run,
+                    event,
+                    workspace_url=workspace_url,
+                )
+                idempotency_key = f"run-event:{event_id}"
             if text:
                 await enqueue_text(
                     thread=thread, text=text,
-                    idempotency_key=f"run-event:{event_id}", run_id=run["run_id"],
+                    idempotency_key=idempotency_key, run_id=run["run_id"],
                 )
+                if (
+                    is_openai_run
+                    and event_task
+                    and event_task.get("key") == "assign_creatives"
+                ):
+                    from openai_campaign.zalo_review import assignment_media_parts
+
+                    assignment_value = (
+                        (event_task.get("pending_artifact") or {}).get("value")
+                        or event_task.get("result")
+                        or {}
+                    )
+                    for image_index, part in enumerate(
+                        assignment_media_parts(assignment_value, workspace), 1
+                    ):
+                        await enqueue_image(
+                            thread=thread,
+                            image_url=part["image_url"],
+                            idempotency_key=(
+                                f"{idempotency_key}:creative:{image_index}"
+                            ),
+                        )
+
+        # Existing subscriptions may already have delivered the old generic
+        # waiting-review event. Emit the richer v2 summary once without replaying
+        # or changing the checkpoint.
+        waiting_task = next(
+            (item for item in run.get("tasks", []) if item.get("status") == "waiting_review"),
+            None,
+        )
+        if is_openai_run and waiting_task:
+            marker = f"openai-review-v2:{waiting_task.get('task_id')}"
+            if marker not in review_markers:
+                synthetic_event = {
+                    "type": "task_waiting_review",
+                    "payload": {"task_id": waiting_task.get("task_id")},
+                }
+                text = await review_message(waiting_task, synthetic_event)
+                if text:
+                    await enqueue_text(
+                        thread=thread,
+                        text=text,
+                        idempotency_key=f"run-review-summary:{marker}",
+                        run_id=run["run_id"],
+                    )
+                    if waiting_task.get("key") == "assign_creatives":
+                        from openai_campaign.zalo_review import assignment_media_parts
+
+                        assignment_value = (
+                            (waiting_task.get("pending_artifact") or {}).get("value")
+                            or waiting_task.get("result")
+                            or {}
+                        )
+                        for image_index, part in enumerate(
+                            assignment_media_parts(assignment_value, workspace), 1
+                        ):
+                            await enqueue_image(
+                                thread=thread,
+                                image_url=part["image_url"],
+                                idempotency_key=(
+                                    f"run-review-summary:{marker}:creative:{image_index}"
+                                ),
+                            )
+                review_markers.add(marker)
+                new_review_markers.append(marker)
         terminal_key = f"terminal:{run.get('status')}"
         terminal_sent = set(subscription.get("terminal_markers") or [])
         terminal_markers = []
@@ -293,6 +431,8 @@ async def _process_progress_once() -> bool:
         update = {"updated_at": _now()}
         if new_ids:
             update["delivered_event_ids"] = list(delivered.union(new_ids))[-300:]
+        if new_review_markers:
+            update["review_summary_markers"] = list(review_markers)[-100:]
         if terminal_markers:
             update["terminal_markers"] = list(terminal_sent.union(terminal_markers))
             update["status"] = "completed"

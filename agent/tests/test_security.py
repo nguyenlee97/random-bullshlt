@@ -66,6 +66,7 @@ async def test_delete_session_data_cleans_in_memory_agent_artifacts_only():
     import session
     from autopilot import service as autopilot
     from creative_intel import service as creative
+    from quality import store as quality
     from workspace import service as workspace
 
     sid = "delete_security_test"
@@ -78,6 +79,13 @@ async def test_delete_session_data_cleans_in_memory_agent_artifacts_only():
     autopilot._mem_runs[run_id] = {"run_id": run_id, "session_id": sid}
     autopilot._mem_tasks["task_delete"] = {"run_id": run_id}
     autopilot._mem_events.append({"run_id": run_id})
+    quality._mem_interactions["interaction_delete"] = {"session_id": sid}
+    quality._mem_events["event_delete"] = {"session_id": sid}
+    quality._mem_feedback["feedback_delete"] = {
+        "submission_id": "submission_delete",
+        "target": {"session_id": sid},
+    }
+    quality._mem_feedback_by_submission[":submission_delete"] = "feedback_delete"
 
     deleted = await session.delete_session_data(sid)
 
@@ -89,4 +97,39 @@ async def test_delete_session_data_cleans_in_memory_agent_artifacts_only():
     assert run_id not in autopilot._mem_runs
     assert "task_delete" not in autopilot._mem_tasks
     assert all(item.get("run_id") != run_id for item in autopilot._mem_events)
+    assert "interaction_delete" not in quality._mem_interactions
+    assert "event_delete" not in quality._mem_events
+    assert "feedback_delete" not in quality._mem_feedback
+    assert ":submission_delete" not in quality._mem_feedback_by_submission
     assert deleted["agent_runs"] == 1
+    assert deleted["agent_interactions"] == 1
+    assert deleted["agent_quality_events"] == 1
+    assert deleted["agent_feedback"] == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_session_drains_pending_quality_writes(monkeypatch):
+    import asyncio
+    import session
+    from quality import events, store
+
+    sid = "delete_pending_quality_test"
+    session._mem[sid] = session._default_session(sid)
+
+    async def delayed_insert(doc):
+        await asyncio.sleep(0.01)
+        store._mem_events["event_pending_delete"] = doc
+        return doc
+
+    monkeypatch.setattr(events, "insert_event", delayed_insert)
+    events.enqueue_quality_event(
+        "feedback_recorded",
+        session_id=sid,
+        surface="guided_result",
+        payload={"test": True},
+    )
+
+    deleted = await session.delete_session_data(sid)
+
+    assert "event_pending_delete" not in store._mem_events
+    assert deleted["agent_quality_events"] == 1

@@ -17,21 +17,20 @@ test('new campaigns send one explicit immutable conversational model', () => {
 
 test('homepage shows both model choices and disables unavailable engines', () => {
   assert.match(selector, /conversation-model-selector/)
-  assert.match(selector, /OpenAI · GPT-5\.4 mini/)
-  assert.match(selector, /GreenNode · MiniMax M2\.5/)
+  assert.match(selector, /model\.label/)
+  assert.match(selector, /model\.description/)
   assert.match(selector, /disabled=\{!model\.available \|\| busy\}/)
   assert.match(selector, /onSelect\(mode\.id, selectedModel\)/)
 })
 
-test('resume displays the stored model but exposes no mid-run switch', () => {
-  assert.match(selector, /modelLabel\(item\.conversation_model\)/)
+test('resume keeps the stored model internal and exposes no mid-run switch', () => {
+  assert.doesNotMatch(selector, /modelLabel\(item\.conversation_model\)/)
+  assert.doesNotMatch(selector, /item\.conversation_model/)
   assert.doesNotMatch(api, /updateConversationModel|setConversationModel/)
 })
 
-test('workspace provenance displays the immutable conversation model', () => {
-  assert.match(app, /conversationModel=\{currentConversationModel\}/)
-  assert.match(workspace, /conversationModel=\{conversationModel\}/)
-  assert.match(workFoot, /OpenAI · GPT-5\.4 mini/)
-  assert.match(workFoot, /GreenNode · MiniMax M2\.5/)
-  assert.doesNotMatch(workFoot, />\s*Minimax-M2\.5\s*</)
+test('workspace keeps model routing internal after the homepage choice', () => {
+  assert.doesNotMatch(workspace, /conversationModel=\{conversationModel\}/)
+  assert.doesNotMatch(workFoot, /OpenAI|GPT-5|GreenNode|MiniMax|conversationModel/)
+  assert.match(workFoot, /Current workflow tool/)
 })

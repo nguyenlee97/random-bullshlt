@@ -33,6 +33,12 @@ services:
         condition: service_healthy
       zingmp3:
         condition: service_healthy
+      smoney:
+        condition: service_healthy
+      dicungcon:
+        condition: service_healthy
+      zagoo:
+        condition: service_healthy
     restart: unless-stopped
 
   agent:
@@ -80,6 +86,9 @@ services:
       - LOCAL_ZNEWS_URL=http://localhost:5176
       - LOCAL_BAOMOI_URL=http://localhost:5177
       - LOCAL_ZINGMP3_URL=http://localhost:5178
+      - LOCAL_SMONEY_URL=http://localhost:5179
+      - LOCAL_DICUNGCON_URL=http://localhost:5180
+      - LOCAL_ZAGOO_URL=http://localhost:5181
     depends_on:
       mongo:
         condition: service_healthy
@@ -140,6 +149,54 @@ services:
     ports: ["127.0.0.1:5178:80"]
     volumes:
       - ./zingmp3_replicate:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  smoney:
+    image: nginx:1.27-alpine
+    ports: ["127.0.0.1:5179:80"]
+    volumes:
+      - ./smoney_replicate:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  dicungcon:
+    image: nginx:1.27-alpine
+    ports: ["127.0.0.1:5180:80"]
+    volumes:
+      - ./dicungcon_replicate:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  zagoo:
+    image: nginx:1.27-alpine
+    ports: ["127.0.0.1:5181:80"]
+    volumes:
+      - ./zagoo_replicate:/usr/share/nginx/html:ro
       - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       backend:

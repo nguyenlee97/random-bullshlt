@@ -180,7 +180,7 @@ export const STAGE1_STEPS = [
     target: '#chat-input',
     position: 'top',
     title: '⌨️ Ô nhập chat',
-    text: 'Hoặc gõ trực tiếp — agent hiểu tiếng Việt tự nhiên. Nhấn Enter để gửi.',
+    text: 'Hoặc gõ trực tiếp — agent hiểu tiếng Việt tự nhiên. Enter để xuống dòng; Ctrl/⌘+Enter để gửi, hoặc bấm nút gửi.',
   },
   {
     type: 'TOOLTIP',
@@ -466,7 +466,7 @@ export function buildStage2Steps(brief) {
       target: '#btn-ai-generate',
       position: 'top',
       title: '🎨 Bảng điều khiển AI Tạo Ảnh',
-      text: 'Panel AI có **3 phần chính**:\n① **Chọn định dạng** — kích thước & tỉ lệ ảnh đầu ra\n② **Prompt tuỳ chỉnh** — hướng dẫn thêm về phong cách, màu sắc (tùy chọn)\n③ **Tạo ảnh** — AI sinh ảnh theo brief + prompt, kết quả hiện ngay bên dưới',
+      text: 'Panel AI có **4 phần chính**:\n① **Chọn định dạng** — kích thước & tỉ lệ ảnh đầu ra\n② **Reference assets** — logo, sản phẩm và hướng dẫn sử dụng\n③ **Creative direction & prompt spec** — Agent kết hợp brief, format và assets\n④ **Tạo ảnh** — kết quả hiện ngay bên dưới để bạn crop, scale và review',
     },
 
     // ── Explain the format picker ───────────────────────────────────────────
@@ -489,6 +489,15 @@ export function buildStage2Steps(brief) {
         text: 'Đang chọn định dạng **Display Box** cho ví dụ này...',
       },
       delay: 400,
+    },
+
+    // ── Introduce conversation-scoped reference assets ─────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="creative-reference-assets"]',
+      position: 'left',
+      title: '🏷️ Brand & reference assets',
+      text: 'Tại đây bạn có thể thêm **logo, packshot, sản phẩm, nhân vật hoặc ảnh tham khảo** cho creative.\n\nMỗi asset có:\n- **Tên riêng** để nhắc lại trong creative direction\n- **Loại asset**\n- Hướng dẫn **cách sử dụng**\n- Quy tắc **Bắt buộc xuất hiện**\n\nAsset chỉ thuộc **cuộc trò chuyện hiện tại**; chat mới sẽ có bộ asset riêng, không lẫn dữ liệu của campaign khác.',
     },
 
     // ── Open custom prompt accordion ─────────────────────────────────────
@@ -519,6 +528,40 @@ export function buildStage2Steps(brief) {
       charDelay: 14,
       title: '⌨️ Nhập Prompt tùy chỉnh',
       text: 'Đang nhập yêu cầu sáng tạo...\n\nPrompt này hướng AI tập trung vào **hình ảnh thương hiệu** rõ nét, tối giản chữ và phù hợp với đối tượng mục tiêu đã xác định ở bước Audience.',
+    },
+
+    // ── Compose a structured prompt from format, assets and direction ───────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#btn-compose-creative-prompt',
+      position: 'top',
+      title: '🪄 AI soạn prompt theo format & assets',
+      text: 'Sau khi chọn format, thêm asset (nếu có) và mô tả creative direction, nút này sẽ tạo **prompt spec có cấu trúc** cho đúng kích thước quảng cáo.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '#btn-compose-creative-prompt',
+      tooltip: {
+        target: '#btn-compose-creative-prompt',
+        position: 'top',
+        title: '⏳ Đang soạn prompt spec...',
+        text: 'AI đang kết hợp brief, audience, format, creative direction và các reference assets của cuộc trò chuyện này.',
+      },
+      delay: 300,
+    },
+    {
+      type: 'WAIT_FOR_SELECTOR',
+      target: '[data-testid="creative-prompt-spec"]',
+      timeout: 90000,
+      title: '⏳ Đang chờ prompt spec...',
+      text: 'Bước này chuẩn bị prompt có cấu trúc trước khi tạo creative.',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-testid="creative-prompt-spec"]',
+      position: 'left',
+      title: '✅ Prompt spec đã sẵn sàng',
+      text: 'Bạn có thể review **direction, promise, CTA và kích thước đích** trước khi tạo ảnh. Prompt spec này sẽ được kết hợp với các reference assets đã chọn.',
     },
 
     // ── Click generate ─────────────────────────────────────────────────────
@@ -649,13 +692,13 @@ export function buildStage2Steps(brief) {
       ms: 400,
     },
 
-    // ── Highlight approve button ──────────────────────────────────────────────
+    // ── Analyze creative, then wait for the real terminal review state ───────
     {
       type: 'HIGHLIGHT_EL',
       target: '[data-demo="approve-btn"]',
       position: 'top',
-      title: '✅ Creative đã sẵn sàng!',
-      text: 'Creative workspace giờ có đầy đủ: **Box 300×250** (vừa tạo bằng AI) và **8 định dạng** được chuẩn bị sẵn cho tất cả vị trí quảng cáo. 🎉\n\nỞ bước Setup, AI sẽ gợi ý các vị trí quảng cáo còn trống — và chúng ta đã có creative phù hợp cho mọi vị trí được đề xuất!\n\nNhấn **Đồng ý & Tiếp tục** để xác nhận và chuyển sang bước **Setup Campaign**.',
+      title: '🔎 Phân tích Creative Intelligence',
+      text: 'Creative đã được thêm vào workspace, nhưng chưa được phép đi tiếp ngay. Nhấn **Phân tích creative** để hệ thống kiểm tra từng ảnh, rồi walkthrough sẽ chờ đến khi tất cả creative có kết quả cuối cùng.\n\nBước này chỉ chạy phân tích; nó **chưa xác nhận chuyển sang Setup**.',
     },
     {
       type: 'CLICK_EL',
@@ -663,8 +706,70 @@ export function buildStage2Steps(brief) {
       tooltip: {
         target: '[data-demo="approve-btn"]',
         position: 'top',
-        title: '⏳ Xác nhận Creative...',
-        text: 'Đang xác nhận creative và chuyển sang bước Setup...',
+        title: '⏳ Đang phân tích creative...',
+        text: 'Creative Intelligence đang xử lý từng ảnh. Walkthrough sẽ chờ kết quả thay vì chạy trước sang Setup.',
+      },
+    },
+    {
+      type: 'WAIT_FOR_CREATIVE_REVIEW',
+      reviewStates: ['ready', 'blocked'],
+      timeout: 120000,
+      title: '⏳ Chờ kết quả Creative Intelligence...',
+      text: 'Hệ thống đang chờ tất cả creative hoàn tất phân tích. Nếu có ảnh cần con người xem lại, walkthrough sẽ hướng dẫn bước phê duyệt thủ công.',
+    },
+
+    // ── Conditional manual-review branch ─────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="creative-manual-review"]',
+      whenReviewState: 'blocked',
+      position: 'top',
+      title: '⚠️ Creative cần duyệt thủ công',
+      text: 'Ít nhất một creative cần con người kiểm tra. Hãy đọc bằng chứng phân tích, nhập lý do phê duyệt, rồi xác nhận thủ công. Walkthrough sẽ không bỏ qua hàng rào an toàn này.',
+    },
+    {
+      type: 'TYPE_INPUT',
+      target: '#creative-manual-review-reason',
+      whenReviewState: 'blocked',
+      inputText: 'Đã kiểm tra thủ công nội dung, thương hiệu và chấp nhận sử dụng trong demo.',
+      charDelay: 12,
+      autoAdvance: true,
+    },
+    {
+      type: 'CLICK_EL',
+      target: '#creative-manual-review-approve',
+      whenReviewState: 'blocked',
+      tooltip: {
+        target: '#creative-manual-review-approve',
+        position: 'top',
+        title: '⏳ Ghi nhận phê duyệt thủ công...',
+        text: 'Đang lưu lý do phê duyệt cho các creative cần xem lại.',
+      },
+    },
+    {
+      type: 'WAIT_FOR_CREATIVE_REVIEW',
+      reviewStates: ['ready'],
+      timeout: 60000,
+      title: '⏳ Chờ creative sẵn sàng...',
+      text: 'Walkthrough chỉ tiếp tục khi mọi creative đã được tự động duyệt hoặc có phê duyệt thủ công hợp lệ.',
+    },
+
+    // ── Explicit operator confirmation after review ─────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="approve-btn"]',
+      position: 'top',
+      title: '✅ Phân tích hoàn tất — tiếp tục sang Setup',
+      text: 'Tất cả creative đã có kết quả hợp lệ. Bây giờ nút đổi thành **Xác nhận & sang Setup**.\n\nĐây là lần bấm thứ hai, dành riêng cho quyết định của người vận hành sau khi đã xem kết quả phân tích.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '[data-demo="approve-btn"]',
+      tooltip: {
+        target: '[data-demo="approve-btn"]',
+        position: 'top',
+        title: '⏳ Xác nhận kết quả creative...',
+        text: 'Đang xác nhận kết quả đã duyệt và chuyển sang bước Setup Campaign.',
       },
     },
 

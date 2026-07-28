@@ -48,7 +48,7 @@ function SectionHeader({ icon: Icon, label, color = 'slate' }) {
 }
 
 // ─── Multi-toggle chip row ─────────────────────────────────────────────────────
-function ChipRow({ options, selected = [], onChange, compact = false }) {
+function ChipRow({ options, selected = [], onChange, compact = false, dimension = '' }) {
   return (
     <div className="flex flex-wrap gap-1">
       {options.map(opt => {
@@ -57,6 +57,10 @@ function ChipRow({ options, selected = [], onChange, compact = false }) {
           <button
             key={opt}
             onClick={() => onChange(toggleValue(selected, opt))}
+            data-demo="autopilot-targeting-option"
+            data-targeting-dimension={dimension}
+            data-targeting-value={opt}
+            aria-pressed={active}
             className={cn(
               'px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all duration-100',
               active
@@ -231,19 +235,19 @@ export default function TargetingForm({ targeting = {}, onChange, autoExpand = f
 
               {/* Age */}
               <SectionHeader icon={Users} label="Độ tuổi" />
-              <ChipRow options={opts.age} selected={get('age')} onChange={v => set('age', v)} />
+              <ChipRow dimension="age" options={opts.age} selected={get('age')} onChange={v => set('age', v)} />
 
               {/* Gender */}
               <SectionHeader icon={Users} label="Giới tính" />
-              <ChipRow options={opts.gender} selected={get('gender')} onChange={v => set('gender', v)} />
+              <ChipRow dimension="gender" options={opts.gender} selected={get('gender')} onChange={v => set('gender', v)} />
 
               {/* Device OS */}
               <SectionHeader icon={Smartphone} label="Device OS" />
-              <ChipRow options={opts.deviceOS} selected={get('deviceOS')} onChange={v => set('deviceOS', v)} />
+              <ChipRow dimension="deviceOS" options={opts.deviceOS} selected={get('deviceOS')} onChange={v => set('deviceOS', v)} />
 
               {/* Device Brand */}
               <SectionHeader icon={Smartphone} label="Device Brand" />
-              <ChipRow options={opts.deviceBrand} selected={get('deviceBrand')} onChange={v => set('deviceBrand', v)} compact />
+              <ChipRow dimension="deviceBrand" options={opts.deviceBrand} selected={get('deviceBrand')} onChange={v => set('deviceBrand', v)} compact />
 
               {/* ── ADVANCED TARGETING ───────────────────────────── */}
               <button
@@ -260,25 +264,25 @@ export default function TargetingForm({ targeting = {}, onChange, autoExpand = f
               {advExpanded && (
                 <>
                   <SectionHeader icon={Heart} label="Tình trạng hôn nhân" />
-                  <ChipRow options={opts.marital} selected={get('marital')} onChange={v => set('marital', v)} />
+                  <ChipRow dimension="marital" options={opts.marital} selected={get('marital')} onChange={v => set('marital', v)} />
 
                   <SectionHeader icon={Baby} label="Tình trạng con cái" />
-                  <ChipRow options={opts.parental} selected={get('parental')} onChange={v => set('parental', v)} compact />
+                  <ChipRow dimension="parental" options={opts.parental} selected={get('parental')} onChange={v => set('parental', v)} compact />
 
                   <SectionHeader icon={GraduationCap} label="Học vấn" />
-                  <ChipRow options={opts.education} selected={get('education')} onChange={v => set('education', v)} />
+                  <ChipRow dimension="education" options={opts.education} selected={get('education')} onChange={v => set('education', v)} />
 
                   <SectionHeader icon={DollarSign} label="Thu nhập" />
-                  <ChipRow options={opts.income} selected={get('income')} onChange={v => set('income', v)} compact />
+                  <ChipRow dimension="income" options={opts.income} selected={get('income')} onChange={v => set('income', v)} compact />
 
                   <SectionHeader icon={Briefcase} label="Nghề nghiệp" />
-                  <ChipRow options={opts.career} selected={get('career')} onChange={v => set('career', v)} compact />
+                  <ChipRow dimension="career" options={opts.career} selected={get('career')} onChange={v => set('career', v)} compact />
 
                   <SectionHeader icon={Tag} label="Sở thích" />
-                  <ChipRow options={opts.interest} selected={get('interest')} onChange={v => set('interest', v)} compact />
+                  <ChipRow dimension="interest" options={opts.interest} selected={get('interest')} onChange={v => set('interest', v)} compact />
 
                   <SectionHeader icon={Cloud} label="Thời tiết" />
-                  <ChipRow options={opts.weather} selected={get('weather')} onChange={v => set('weather', v)} />
+                  <ChipRow dimension="weather" options={opts.weather} selected={get('weather')} onChange={v => set('weather', v)} />
                 </>
               )}
             </>

@@ -63,31 +63,45 @@ function StrategyReview({ value }) {
 
 function AudienceReview({ value }) {
   const attrs = value.attrs || []
-  const retrieval = value.retrieval || {}
-  const catalog = retrieval.catalog_segments || retrieval.catalog_count || retrieval.total_segments || 0
-  const candidates = retrieval.candidates || retrieval.candidate_count || retrieval.retrieval_candidates || 0
+  const adjacent = value.adjacent_attrs || []
+  const cards = (items, tone) => (
+    <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((item, index) => (
+        <li
+          key={item._id || item.segmentId || index}
+          className={`rounded-xl border px-3 py-2.5 ${tone === 'direct'
+            ? 'border-green-200 bg-green-50/50'
+            : 'border-sky-200 bg-sky-50/50'}`}
+        >
+          <p className="text-xs font-bold text-slate-900">{audienceName(item)}</p>
+          {(item.reason || item.description) && <p className="mt-1 text-[10px] leading-4 text-slate-600">{item.reason || item.description}</p>}
+        </li>
+      ))}
+    </ul>
+  )
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{catalog ? `${number(catalog)} trong catalog` : 'Toàn bộ catalog hiện hành'}</span>
-        <span className="text-slate-400">→</span>
-        <span className="rounded-full bg-brand-50 px-2.5 py-1 text-brand-700">{number(candidates)} ứng viên RAG</span>
-        <span className="text-slate-400">→</span>
-        <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-700">{attrs.length} segment đã chọn</span>
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-[11px] font-black uppercase tracking-wide text-green-700">Đề xuất trực tiếp</p>
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">{attrs.length} đã chọn</span>
+        </div>
+        {attrs.length
+          ? cards(attrs, 'direct')
+          : <Empty>Catalog chưa có segment khớp trực tiếp. Agent chưa tự chọn audience cho brief này.</Empty>}
       </div>
-      <p className="text-[11px] leading-5 text-slate-500">
-        Catalog không bị cắt còn {candidates}. Đây là tập ứng viên liên quan được truy xuất cho riêng brief này sau query rewrite, gộp trùng và bộ lọc an toàn.
-      </p>
-      {attrs.length ? (
-        <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {attrs.map((item, index) => (
-            <li key={item._id || item.segmentId || index} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <p className="text-xs font-bold text-slate-900">{audienceName(item)}</p>
-              {(item.reason || item.description) && <p className="mt-1 text-[10px] leading-4 text-slate-500">{item.reason || item.description}</p>}
-            </li>
-          ))}
-        </ul>
-      ) : <Empty>Chưa có segment để review.</Empty>}
+      {adjacent.length > 0 && (
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-black uppercase tracking-wide text-sky-700">Liên quan để mở rộng</p>
+            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">{adjacent.length} chưa tự chọn</span>
+          </div>
+          {cards(adjacent, 'adjacent')}
+          <p className="mt-2 text-[10px] leading-4 text-sky-800">
+            Nhóm này chỉ là proxy rộng hoặc có liên hệ một phần. Mở “Chỉnh audience” để chọn nếu phù hợp; Autopilot không tự áp dụng.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -127,12 +141,12 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
         {final
           ? 'Các placement dưới đây đã qua kiểm tra inventory, conflict và độ tương thích với creative.'
           : editable
-            ? 'Agent chọn sẵn 6 placement xếp hạng cao nhất trong shortlist 12 vị trí. Bạn có thể chọn thêm hoặc bỏ bớt trực tiếp bên dưới; cần giữ lại ít nhất một placement.'
-            : 'Đây là shortlist inventory trước khi có creative. Kích thước creative sẽ được dùng để lọc lại ở bước Xếp hạng placements.'}
+            ? 'Đây là các ad zone Agent đề xuất cho brief. Bạn có thể chọn thêm hoặc bỏ bớt trực tiếp bên dưới; cần giữ lại ít nhất một zone. Sau khi có creative, Agent sẽ kiểm tra lại độ tương thích trước khi phân bổ.'
+            : 'Đây là các ad zone ứng viên ban đầu trước khi có creative. Kích thước creative sẽ được dùng để lọc lại ở bước xếp hạng cuối.'}
       </p>
       {editable && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2">
-          <p className="text-[11px] font-bold text-brand-800">Đã chọn {activeIds.size}/{zones.length} placement · mặc định top 6</p>
+          <p className="text-[11px] font-bold text-brand-800">Đã chọn {activeIds.size}/{zones.length} ad zone</p>
           <p className="text-[10px] text-brand-700">Thay đổi chỉ được lưu khi bấm “Duyệt & tiếp tục”.</p>
         </div>
       )}
@@ -141,6 +155,7 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
           <button
             type="button"
             key={zone.id || index}
+            data-demo="autopilot-placement-option"
             disabled={!editable}
             aria-pressed={activeIds.has(zone.id)}
             onClick={() => toggle(zone.id)}
@@ -168,6 +183,49 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
       )}
     </div>
   ) : <Empty>Chưa có placement để review.</Empty>
+}
+
+function PlacementRecoveryReview({ value }) {
+  const recovery = value.recovery || {}
+  const formats = recovery.target_formats || []
+  const inventoryBlocked = recovery.kind === 'inventory_unavailable'
+  return (
+    <div className="space-y-3">
+      <div className={`rounded-xl border px-3 py-3 ${inventoryBlocked ? 'border-amber-200 bg-amber-50' : 'border-brand-200 bg-brand-50'}`}>
+        <p className="text-xs font-black text-slate-900">
+          {inventoryBlocked
+            ? 'Shortlist placement cần được cập nhật'
+            : 'Có thể xử lý ngay mà không phải hủy run'}
+        </p>
+        <p className="mt-1 text-[11px] leading-5 text-slate-700">
+          {inventoryBlocked
+            ? 'Creative không phải blocker chính: inventory trong shortlist không còn trống. Hãy cập nhật placement hoặc thời gian chạy rồi kiểm tra lại.'
+            : `Creative hiện có chưa đúng tỷ lệ của placement đang trống. Hệ thống tìm thấy ${recovery.existing_image_count || 0} ảnh có thể dùng làm nguồn crop/scale, hoặc có thể chuẩn bị asset mới đúng format.`}
+        </p>
+      </div>
+      {!inventoryBlocked && formats.length > 0 && (
+        <div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+            Format cần bổ sung
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {formats.map((item, index) => (
+              <article key={item.format_id || index} className="rounded-xl border border-amber-200 bg-white px-3 py-2.5">
+                <p className="text-sm font-black text-slate-900">{item.width} × {item.height}px</p>
+                <p className="mt-1 truncate text-[10px] text-slate-500">{item.format_id || 'Format'}</p>
+                <p className="mt-1 text-[10px] font-bold text-amber-800">
+                  Phủ {(item.zone_ids || []).length || 1} placement
+                </p>
+              </article>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] leading-4 text-slate-500">
+            Crop giữ đúng tỷ lệ và cho phép chọn vùng ảnh. Scale giữ toàn bộ ảnh nhưng có thể làm biến dạng nội dung; luôn xem lại kết quả phân tích trước khi tiếp tục.
+          </p>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function FormatReview({ value }) {
@@ -224,7 +282,65 @@ function CreativeReview({ value, formatPlan }) {
   )
 }
 
-function GenericReview({ task, value }) {
+function AssignmentReview({ value, creativeFiles = [], placementValue = {} }) {
+  const assignments = value.assignments || {}
+  const zones = placementValue.zones || placementValue.candidates || []
+  const zoneById = new Map(zones.map(zone => [String(zone.id), zone]))
+  const uniqueIndexes = [...new Set(Object.values(assignments).filter(Number.isInteger))]
+  const creativeLabel = new Map(uniqueIndexes.map((fileIndex, index) => [fileIndex, `Creative ${String.fromCharCode(65 + index)}`]))
+  const statusLabels = {
+    auto_approved: 'Đạt kiểm tra',
+    approved_override: 'Đã duyệt thủ công',
+    needs_review: 'Cần duyệt thủ công',
+  }
+
+  if (!Object.keys(assignments).length) return <Empty>Chưa có mapping ad zone → creative hoàn chỉnh.</Empty>
+  return (
+    <div className="space-y-3">
+      <p className="text-xs leading-5 text-slate-600">
+        Kiểm tra ảnh, kích thước và trạng thái review cho từng ad zone trước khi duyệt phân bổ.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {Object.entries(assignments).map(([zoneId, fileIndex], index) => {
+          const zone = zoneById.get(String(zoneId))
+          const file = creativeFiles[Number(fileIndex)] || {}
+          const status = file.analysisStatus || file.intel?.effective_status || 'analysis_required'
+          const blocked = !['auto_approved', 'approved_override'].includes(status)
+          const reasons = file.reviewReasons || file.intel?.review_reasons || []
+          const advisories = file.generationAdvisories || file.intel?.generation_advisories || []
+          return (
+            <article key={zoneId} className={`overflow-hidden rounded-xl border ${blocked ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+              <div className="flex h-32 items-center justify-center bg-slate-50 p-2">
+                {file.url
+                  ? <img src={file.url} alt={`${creativeLabel.get(fileIndex) || `Creative ${index + 1}`} cho ${zoneName(zone || { id: zoneId })}`} className="max-h-full max-w-full object-contain" />
+                  : <FileImage className="h-8 w-8 text-slate-300" />}
+              </div>
+              <div className="space-y-1.5 p-3">
+                <p className="text-xs font-black text-slate-900">{zoneName(zone || { id: zoneId })}</p>
+                <p className="text-[11px] font-bold text-brand-700">
+                  → {creativeLabel.get(fileIndex) || `Creative #${fileIndex}`}
+                  {file.width && file.height ? ` · ${file.width}×${file.height}` : ''}
+                </p>
+                <p className={`text-[10px] font-bold ${blocked ? 'text-amber-800' : 'text-green-700'}`}>
+                  {statusLabels[status] || 'Chưa có kết quả kiểm tra'}
+                </p>
+                {reasons.length > 0 && blocked && (
+                  <p className="text-[10px] leading-4 text-amber-800">{reasons.slice(0, 2).join(' · ')}</p>
+                )}
+                {!blocked && advisories.length > 0 && (
+                  <p className="text-[10px] leading-4 text-slate-500">Lưu ý QA: {advisories.slice(0, 2).join(' · ')}</p>
+                )}
+                {file.url && <a href={file.url} target="_blank" rel="noreferrer" className="inline-flex text-[10px] font-bold text-brand-700 hover:underline">Mở ảnh gốc</a>}
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function GenericReview({ task, value, creativeFiles, placementValue }) {
   if (task.key === 'forecast') {
     return <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
       <Stat label="Reach dự kiến" value={number(value.estimated_reach)} />
@@ -240,8 +356,7 @@ function GenericReview({ task, value }) {
     </div>
   }
   if (task.key === 'assign_creatives') {
-    const assignments = value.assignments || {}
-    return <Empty>{Object.keys(assignments).length} placement đã được gán creative. Mở “Kế hoạch creative theo placement” để đối chiếu asset và format.</Empty>
+    return <AssignmentReview value={value} creativeFiles={creativeFiles} placementValue={placementValue} />
   }
   if (task.key === 'analyze_creatives') {
     const files = value.files || []
@@ -259,7 +374,16 @@ function GenericReview({ task, value }) {
   return <Empty>{value.message || 'Đầu ra của bước này đã sẵn sàng để duyệt.'}</Empty>
 }
 
-export default function AutopilotReview({ task, label, brief, formatPlan, selectedPlacementIds, onPlacementSelectionChange }) {
+export default function AutopilotReview({
+  task,
+  label,
+  brief,
+  formatPlan,
+  creativeFiles,
+  placementValue,
+  selectedPlacementIds,
+  onPlacementSelectionChange,
+}) {
   if (!task) return null
   const value = taskValue(task)
   let content
@@ -275,11 +399,22 @@ export default function AutopilotReview({ task, label, brief, formatPlan, select
   }
   else if (task.key === 'plan_creative_formats') { content = <FormatReview value={value} />; icon = <FileImage className="h-4 w-4" /> }
   else if (task.key === 'prepare_creatives') { content = <CreativeReview value={value} formatPlan={formatPlan} />; icon = <FileImage className="h-4 w-4" /> }
-  else if (task.key === 'rank_placements') { content = <PlacementReview value={value} final />; icon = <MapPin className="h-4 w-4" /> }
-  else content = <GenericReview task={task} value={value} />
+  else if (task.key === 'rank_placements') {
+    content = value.recovery
+      ? <PlacementRecoveryReview value={value} />
+      : <PlacementReview value={value} final />
+    icon = <MapPin className="h-4 w-4" />
+  }
+  else content = <GenericReview task={task} value={value} creativeFiles={creativeFiles} placementValue={placementValue} />
 
   return (
-    <section id="autopilot-review-artifact" className="scroll-mt-24 rounded-2xl border-2 border-amber-300 bg-white p-4 shadow-sm" aria-labelledby="autopilot-review-title">
+    <section
+      id="autopilot-review-artifact"
+      data-demo="autopilot-review-artifact"
+      data-autopilot-task={task.key}
+      className="scroll-mt-24 rounded-2xl border-2 border-amber-300 bg-white p-4 shadow-sm"
+      aria-labelledby="autopilot-review-title"
+    >
       <div className="mb-3 flex items-start gap-2">
         <span className="mt-0.5 rounded-lg bg-amber-100 p-1.5 text-amber-800">{icon}</span>
         <div>

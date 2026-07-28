@@ -19,6 +19,9 @@ import { cn } from '@/lib/utils'
 export default function ImageCropModal({ src, targetW, targetH, label, onConfirm, onScale, onCancel }) {
   const containerRef = useRef(null)
   const imgRef       = useRef(null)
+  const imageSrc = /^(data:|https?:|blob:)/i.test(String(src || ''))
+    ? src
+    : `data:image/png;base64,${src}`
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 })
   const [display,    setDisplay]    = useState({ w: 0, h: 0, offsetX: 0, offsetY: 0 })
 
@@ -78,10 +81,11 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
     return { x, y, w, h }
   }, [TARGET_RATIO])
 
-  const onMouseDown = useCallback((e, mode) => {
+  const onPointerDown = useCallback((e, mode) => {
     e.preventDefault()
     dragState.current = {
       mode,
+      pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
       origBox: { ...box },
@@ -91,7 +95,8 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
   useEffect(() => {
     const onMove = (e) => {
       if (!dragState.current || !box) return
-      const { mode, startX, startY, origBox } = dragState.current
+      const { mode, pointerId, startX, startY, origBox } = dragState.current
+      if (pointerId != null && e.pointerId !== pointerId) return
       const dx = e.clientX - startX
       const dy = e.clientY - startY
 
@@ -126,13 +131,18 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
       setBox(clampBox(next, display.w, display.h))
     }
 
-    const onUp = () => { dragState.current = null }
+    const onUp = (e) => {
+      if (dragState.current?.pointerId != null && e.pointerId !== dragState.current.pointerId) return
+      dragState.current = null
+    }
 
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup',   onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
     return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup',   onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
     }
   }, [box, display, clampBox, TARGET_RATIO])
 
@@ -156,8 +166,8 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH)
       onConfirm(canvas.toDataURL('image/png'))
     }
-    img.src = `data:image/png;base64,${src}`
-  }, [box, imgNatural, display, targetW, targetH, src, onConfirm])
+    img.src = imageSrc
+  }, [box, imgNatural, display, targetW, targetH, imageSrc, onConfirm])
 
   // ── Handle scale-stretch ──────────────────────────────────────────────────────
   const handleScale = useCallback(() => {
@@ -170,10 +180,10 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
       ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, targetW, targetH)
       onScale(canvas.toDataURL('image/png'))
     }
-    img.src = `data:image/png;base64,${src}`
-  }, [src, targetW, targetH, onScale])
+    img.src = imageSrc
+  }, [imageSrc, targetW, targetH, onScale])
 
-  const dataUrl = `data:image/png;base64,${src}`
+  const dataUrl = imageSrc
 
   // ── Handle window resize ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -183,39 +193,40 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
   }, [handleImgLoad])
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-2 backdrop-blur-sm sm:p-3">
       <div
         ref={containerRef}
-        className="relative bg-[#0f0f0f] rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[95vh] overflow-hidden"
+        className="relative flex max-h-[calc(100dvh-16px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-[#0f0f0f] shadow-2xl sm:max-h-[95vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 flex-shrink-0">
-          <div>
-            <p className="text-white font-semibold text-sm flex items-center gap-2">
+        <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-white/10 px-3 py-2.5 sm:items-center sm:px-4 sm:py-3">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-semibold text-white">
               <Crop className="w-4 h-4 text-violet-400" />
-              Crop ảnh — <span className="text-violet-300">{label}</span>
+              <span className="min-w-0 truncate">Crop ảnh — <span className="text-violet-300">{label}</span></span>
             </p>
-            <p className="text-white/50 text-xs mt-0.5">
+            <p className="mt-0.5 text-[11px] leading-4 text-white/50 sm:text-xs">
               Tỉ lệ cố định {targetW}:{targetH} · Kéo góc để resize, kéo giữa để di chuyển
             </p>
           </div>
           <button
             onClick={onCancel}
-            className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            aria-label="Đóng cửa sổ crop"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Image area */}
-        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-[#0a0a0a]">
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#0a0a0a] p-2 sm:p-4">
           <div className="relative" style={{ width: display.w || 'auto', height: display.h || 'auto' }}>
             {/* Raw image */}
             <img
               ref={imgRef}
               src={dataUrl}
-              alt="Generated"
+              alt="Creative cần crop"
               onLoad={handleImgLoad}
               className="block select-none pointer-events-none"
               style={{ width: display.w, height: display.h }}
@@ -247,9 +258,9 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
             {/* Crop box */}
             {box && (
               <div
-                className="absolute border-2 border-violet-400 cursor-move"
+                className="absolute cursor-move touch-none border-2 border-violet-400"
                 style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
-                onMouseDown={e => onMouseDown(e, 'move')}
+                onPointerDown={e => onPointerDown(e, 'move')}
               >
                 {/* Rule-of-thirds grid */}
                 <div className="absolute inset-0 pointer-events-none opacity-30">
@@ -268,9 +279,9 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
                 ].map(({ mode, style }) => (
                   <div
                     key={mode}
-                    className="absolute w-3 h-3 bg-violet-400 rounded-sm border border-white/60 shadow"
+                    className="absolute h-3 w-3 touch-none rounded-sm border border-white/60 bg-violet-400 shadow"
                     style={style}
-                    onMouseDown={e => { e.stopPropagation(); onMouseDown(e, mode) }}
+                    onPointerDown={e => { e.stopPropagation(); onPointerDown(e, mode) }}
                   />
                 ))}
 
@@ -284,11 +295,11 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
         </div>
 
         {/* Footer actions */}
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-white/10 flex-shrink-0 bg-[#0f0f0f]">
+        <div className="flex flex-shrink-0 flex-col items-stretch gap-2 border-t border-white/10 bg-[#0f0f0f] px-3 py-2.5 sm:flex-row sm:items-center sm:px-4 sm:py-3">
           <Button
             onClick={handleConfirm}
             disabled={!box}
-            className="flex-1 gap-1.5 bg-violet-600 hover:bg-violet-500 text-white"
+            className="w-full flex-1 gap-1.5 bg-violet-600 text-white hover:bg-violet-500"
             id="btn-crop-confirm"
           >
             <Crop className="w-3.5 h-3.5" />
@@ -297,11 +308,11 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
           <Button
             onClick={handleScale}
             variant="outline"
-            className="flex-1 gap-1.5 bg-transparent border-white/30 text-white hover:bg-white/10 hover:text-white hover:border-white/50"
+            className="w-full flex-1 gap-1.5 border-white/30 bg-transparent text-white hover:border-white/50 hover:bg-white/10 hover:text-white"
             id="btn-crop-scale"
           >
             <Maximize2 className="w-3.5 h-3.5" />
-            Giữ nguyên & Scale
+            Scale toàn ảnh <span className="hidden sm:inline">(có thể méo)</span>
           </Button>
         </div>
       </div>

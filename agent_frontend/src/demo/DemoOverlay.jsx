@@ -5,7 +5,17 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
-import { X, ChevronRight, SkipForward, Loader2, Play } from 'lucide-react'
+import {
+  X,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  SkipForward,
+  Loader2,
+  Play,
+  ArrowDown,
+  ArrowUp,
+} from 'lucide-react'
 
 // ─── Spotlight mask ──────────────────────────────────────────────────────────
 function Spotlight({ rect }) {
@@ -88,27 +98,80 @@ function TooltipBubble({
   const ref = useRef(null)
   const [tooltipSize, setTooltipSize] = useState({ width: 340, height: 200 })
   const [pos, setPos] = useState({ top: 0, left: 0 })
+  const [manualDock, setManualDock] = useState(null)
+  const [resolvedDock, setResolvedDock] = useState('top')
+  const [collapsed, setCollapsed] = useState(false)
+  const [viewportRevision, setViewportRevision] = useState(0)
 
   useEffect(() => {
-    if (ref.current) {
-      const { width, height } = ref.current.getBoundingClientRect()
+    const node = ref.current
+    if (!node) return undefined
+
+    const measure = () => {
+      const { width, height } = node.getBoundingClientRect()
       setTooltipSize({ width, height })
     }
-  }, [title, text])
+    measure()
+
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [title, text, collapsed])
 
   useEffect(() => {
-    // Mobile: pin to the top of the screen so the guide never sits in the
-    // middle of the chat/workspace content it's describing. Covering the logo
-    // and tab bar is fine — the demo blocks interaction there anyway.
+    // A manual override is scoped to the current step so the next target can
+    // return to automatic placement.
+    setManualDock(null)
+    setCollapsed(false)
+  }, [stepIdx])
+
+  useEffect(() => {
+    const refreshViewport = () => setViewportRevision(value => value + 1)
+    window.addEventListener('resize', refreshViewport)
+    window.visualViewport?.addEventListener('resize', refreshViewport)
+    window.visualViewport?.addEventListener('scroll', refreshViewport)
+    return () => {
+      window.removeEventListener('resize', refreshViewport)
+      window.visualViewport?.removeEventListener('resize', refreshViewport)
+      window.visualViewport?.removeEventListener('scroll', refreshViewport)
+    }
+  }, [])
+
+  useEffect(() => {
     if (window.innerWidth < 768) {
-      const left = Math.max(
-        8,
-        Math.min(
-          window.innerWidth / 2 - tooltipSize.width / 2,
-          window.innerWidth - tooltipSize.width - 8
-        )
-      )
-      setPos({ top: 10, left })
+      const vw = window.visualViewport?.width || window.innerWidth
+      const vh = window.visualViewport?.height || window.innerHeight
+      const viewportTop = window.visualViewport?.offsetTop || 0
+      const margin = 8
+      const gap = 12
+      const left = Math.max(margin, Math.min(
+        vw / 2 - tooltipSize.width / 2,
+        vw - tooltipSize.width - margin,
+      ))
+      const targetMidpoint = targetRect
+        ? targetRect.top + targetRect.height / 2
+        : vh / 2
+      const dock = manualDock || (targetRect && targetMidpoint < vh / 2 ? 'bottom' : 'top')
+      const topEdge = viewportTop + margin
+      const bottomEdge = viewportTop + vh - tooltipSize.height - margin
+      let top = dock === 'bottom' ? bottomEdge : topEdge
+
+      // Prefer sitting next to the highlighted target when there is room.
+      // Otherwise dock to the opposite viewport edge instead of covering it.
+      if (!manualDock && targetRect && dock === 'bottom') {
+        const belowTarget = targetRect.bottom + gap
+        if (belowTarget + tooltipSize.height <= viewportTop + vh - margin) top = belowTarget
+      } else if (!manualDock && targetRect && dock === 'top') {
+        const aboveTarget = targetRect.top - gap - tooltipSize.height
+        if (aboveTarget >= topEdge) top = aboveTarget
+      }
+
+      setResolvedDock(dock)
+      setPos({
+        top: Math.max(topEdge, Math.min(top, bottomEdge)),
+        left,
+      })
       return
     }
     if (targetRect) {
@@ -120,43 +183,73 @@ function TooltipBubble({
         left: window.innerWidth / 2 - tooltipSize.width / 2,
       })
     }
-  }, [targetRect, position, tooltipSize])
+  }, [targetRect, position, tooltipSize, manualDock, viewportRevision])
+
+  const moveGuide = () => {
+    setManualDock(resolvedDock === 'top' ? 'bottom' : 'top')
+  }
 
   return (
     <div
       ref={ref}
-      className="fixed z-[10000] w-[340px] max-w-[calc(100vw-24px)] animate-fade-in"
+      data-demo="mobile-guide-box"
+      data-mobile-dock={resolvedDock}
+      className="fixed z-[10000] box-border w-[340px] max-w-[calc(100vw-16px)] animate-fade-in"
       style={{ top: pos.top, left: pos.left }}
     >
       <div className="bg-white rounded-2xl shadow-2xl border border-brand-200 overflow-hidden">
         {/* Header — tighter on small phones */}
         <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 bg-gradient-to-r from-brand-500 to-brand-600">
           <Play className="w-3.5 h-3.5 text-white/80" />
-          <span className="text-xs font-bold text-white">Demo Guide</span>
+          <span className="min-w-0 truncate text-xs font-bold text-white">Demo Guide</span>
           <span className="ml-auto text-[10px] font-semibold text-white/70">
             {stepIdx + 1}/{totalSteps}
           </span>
           <button
+            type="button"
+            onClick={() => setCollapsed(value => !value)}
+            className="rounded p-0.5 transition-colors hover:bg-white/20 md:hidden"
+            title={collapsed ? 'Mở rộng hướng dẫn' : 'Thu gọn hướng dẫn'}
+            aria-label={collapsed ? 'Mở rộng hướng dẫn' : 'Thu gọn hướng dẫn'}
+          >
+            {collapsed
+              ? <ChevronDown className="h-3.5 w-3.5 text-white/85" />
+              : <ChevronUp className="h-3.5 w-3.5 text-white/85" />}
+          </button>
+          <button
+            type="button"
+            onClick={moveGuide}
+            className="rounded p-0.5 transition-colors hover:bg-white/20 md:hidden"
+            title={resolvedDock === 'top' ? 'Di chuyển hướng dẫn xuống dưới' : 'Di chuyển hướng dẫn lên trên'}
+            aria-label={resolvedDock === 'top' ? 'Di chuyển hướng dẫn xuống dưới' : 'Di chuyển hướng dẫn lên trên'}
+          >
+            {resolvedDock === 'top'
+              ? <ArrowDown className="h-3.5 w-3.5 text-white/85" />
+              : <ArrowUp className="h-3.5 w-3.5 text-white/85" />}
+          </button>
+          <button
+            type="button"
             onClick={onSkip}
             className="ml-1 p-0.5 rounded hover:bg-white/20 transition-colors"
             title="Thoát demo"
+            aria-label="Thoát demo"
           >
             <X className="w-3.5 h-3.5 text-white/80" />
           </button>
         </div>
 
         {/* Body — tighter padding + slightly smaller type on small phones */}
-        <div className="px-3 py-2 sm:px-4 sm:py-3">
+        {!collapsed && <div className="max-h-[36dvh] overflow-y-auto overscroll-contain px-3 py-2 sm:max-h-none sm:overflow-visible sm:px-4 sm:py-3">
           {title && (
             <h3 className="text-[13px] sm:text-sm font-bold text-foreground mb-0.5 sm:mb-1.5">{title}</h3>
           )}
           <div className="text-[11px] sm:text-xs text-muted-foreground leading-snug sm:leading-relaxed markdown-content [&_strong]:text-foreground [&_strong]:font-semibold">
             <ReactMarkdown>{text}</ReactMarkdown>
           </div>
-        </div>
+        </div>}
 
         {/* Footer — tighter on small phones */}
-        <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 border-t border-border bg-slate-50/50">
+        <div className="flex min-w-0 items-center gap-2 border-t border-border bg-slate-50/50 px-3 py-1.5 sm:px-4 sm:py-2.5">
           <button
             onClick={onSkip}
             className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
@@ -164,6 +257,12 @@ function TooltipBubble({
             <SkipForward className="w-3 h-3" />
             Bỏ qua
           </button>
+          {isWaiting && !showNext && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-bold text-brand-700" role="status">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Đang xử lý…
+            </span>
+          )}
           <div className="flex-1" />
           {/* Progress: dots on desktop, compact counter on mobile (dots get cramped) */}
           <div className="hidden md:flex gap-0.5">
@@ -214,17 +313,17 @@ function TooltipBubble({
 // variant: 'primary' | 'outline' | 'ghost'
 function DemoPopup({ title, text, buttons = [], onAction }) {
   return (
-    <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl border border-brand-200 w-[420px] max-w-[90vw] overflow-hidden">
-        <div className="px-6 py-4 bg-gradient-to-r from-brand-500 to-brand-600">
+    <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 p-2 animate-fade-in sm:p-4">
+      <div className="flex max-h-[calc(100dvh-16px)] w-[420px] max-w-full flex-col overflow-hidden rounded-2xl border border-brand-200 bg-white shadow-2xl sm:max-w-[90vw]">
+        <div className="bg-gradient-to-r from-brand-500 to-brand-600 px-4 py-3 sm:px-6 sm:py-4">
           <h2 className="text-base font-bold text-white">{title}</h2>
         </div>
-        <div className="px-6 py-4">
+        <div className="min-h-0 overflow-y-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="text-sm text-muted-foreground leading-relaxed markdown-content [&_strong]:text-foreground [&_strong]:font-semibold">
             <ReactMarkdown>{text}</ReactMarkdown>
           </div>
         </div>
-        <div className="flex flex-col gap-2 px-6 py-4 border-t border-border bg-slate-50/50">
+        <div className="flex flex-col gap-2 border-t border-border bg-slate-50/50 px-4 py-3 sm:px-6 sm:py-4">
           {buttons.map((btn, i) => (
             <button
               key={i}

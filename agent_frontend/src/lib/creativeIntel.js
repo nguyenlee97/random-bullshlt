@@ -17,6 +17,14 @@ export function creativeReviewState(files = []) {
   return 'analysis_required'
 }
 
+export function isRetryableCreativeAnalysisFailure(file = {}) {
+  if (file.analysisStatus !== 'needs_review') return false
+  if (file.vlmError) return true
+  return (file.reviewReasons || []).some(reason => (
+    String(reason).trim().toLocaleLowerCase('vi').startsWith('phân tích hình ảnh gặp lỗi')
+  ))
+}
+
 const terminalStatus = verdict => (
   TERMINAL_CREATIVE_STATUSES.has(verdict?.effective_status)
     ? verdict.effective_status
@@ -46,6 +54,10 @@ export function mergeCreativeVerdicts(creative = {}, verdictArtifact = {}) {
         reviewReasons: verdict.review_reasons || file.reviewReasons || [],
         deterministic,
         vlm: verdict.vlm || file.vlm || {},
+        vlmError: verdict.vlm_error || file.vlmError || null,
+        vlmProvider: verdict.vlm_provider || file.vlmProvider || '',
+        vlmModel: verdict.vlm_model || file.vlmModel || '',
+        vlmRouteKey: verdict.vlm_route_key || file.vlmRouteKey || '',
         override: verdict.override || file.override || {},
         width: deterministic.width || file.width,
         height: deterministic.height || file.height,

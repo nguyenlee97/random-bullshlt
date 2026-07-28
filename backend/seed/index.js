@@ -3,12 +3,14 @@
  * Source of truth: seed/data/Ads Zone.xlsx + seed/data/Audience Library.xlsx
  *
  * Strategy (E1 Zone Refinement):
- *   - 26 mock zones are FORCED-MAPPED to real test-site zone IDs.
+ *   - 23 mock zones are FORCED-MAPPED to real test-site zone IDs.
  *     Performance metrics (Reach/VI/CTR/CPM/Objective) kept from mock data.
  *     Format/size/channel changed to match real ad slots.
  *   - 12 unmapped real zone slots (category side strips) added as catalog-only entries.
  *   - Audio/video formats converted to banner/skin.
- *   - Total: 38 placements (26 mock-mapped + 12 real-only)
+ *   - Legacy baseline: 35 placements (23 mock-mapped + 12 real-only)
+ *   - NP-6 v2 adds 214 active topic placements plus 9 observed property
+ *     placements without changing legacy IDs (258 total).
  *
  * Usage:
  *   node seed/index.js              — skip collections that already have data
@@ -25,6 +27,7 @@ const ZoneCatalog      = require('../models/Zone');
 const Campaign         = require('../models/Campaign');
 const AnalyticsRecord  = require('../models/AnalyticsRecord');
 const AudienceLibrary  = require('../models/AudienceLibrary');
+const { applyNp6Catalog } = require('./np6-catalog');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // READ EXCEL FILES — relative paths (works on any OS)
@@ -169,7 +172,7 @@ function deriveInventoryMetrics(placement, channelReach) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-function buildZonesCatalog(mockRows) {
+function buildLegacyZonesCatalog(mockRows) {
   const groups = [
     // Real test-site groups only
     { id: 'znews-site',       name: 'ZNews Home',        desc: 'Znews homepage — znews-stg.pawgrammers.io.vn',              channels: ['znews-site'] },
@@ -258,6 +261,12 @@ function buildZonesCatalog(mockRows) {
   const placements = [...mappedPlacements, ...CATE_SIDE_STRIPS];
 
   return { groups, channels, placements };
+}
+
+function buildZonesCatalog(mockRows, options = {}) {
+  const { includeNp6 = true, ...np6Options } = options;
+  const legacyCatalog = buildLegacyZonesCatalog(mockRows);
+  return includeNp6 ? applyNp6Catalog(legacyCatalog, np6Options) : legacyCatalog;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -438,4 +447,11 @@ if (require.main === module) {
     });
 }
 
-module.exports = { runSeed, buildZonesCatalog, deriveInventoryMetrics, inventoryProfile };
+module.exports = {
+  runSeed,
+  readZonesFromExcel,
+  buildZonesCatalog,
+  buildLegacyZonesCatalog,
+  deriveInventoryMetrics,
+  inventoryProfile,
+};

@@ -48,3 +48,42 @@ def test_filename_cannot_override_incompatible_measured_ratio():
     score, warnings = score_file_for_zone(file, zone)
     assert score < 1
     assert any("không phù hợp" in warning for warning in warnings)
+
+
+def test_np6_side_contract_accepts_side_banner_not_background_skin():
+    zone = {
+        "id": "Znews_FamilyParenting_SideLeft",
+        "format": "skin",
+        "size": "skin",
+        "creativeContractId": "znews-category-side-left-v1",
+    }
+    side_file = {
+        "name": "family-side.png",
+        "formatId": "znews-side-banner",
+        "width": 736,
+        "height": 1456,
+        "intel": {
+            "width": 736,
+            "height": 1456,
+            "effective_status": "auto_approved",
+        },
+    }
+    background_file = {
+        "name": "family-background-skin.png",
+        "formatId": "znews-Background",
+        "intendedFormat": "skin",
+        "width": 1504,
+        "height": 704,
+        "intel": {
+            "width": 1504,
+            "height": 704,
+            "effective_status": "auto_approved",
+        },
+    }
+
+    side_score, side_warnings = score_file_for_zone(side_file, zone)
+    background_score, background_warnings = score_file_for_zone(background_file, zone)
+
+    assert side_score > background_score
+    assert side_warnings == []
+    assert background_warnings

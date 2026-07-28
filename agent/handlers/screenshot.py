@@ -5,9 +5,10 @@ and an annotated full-page image.
 
 Changes vs previous version:
   - Accepts `zone_ids` param to only capture zones the user actually selected
+  - Resolves catalog zone IDs through either DOM `id` or `data-zone`
+  - Reports inactive and missing requested zones separately
   - Forces sticky side-panel zones visible before querying bounding boxes
   - Clips screenshot height to deepest found zone (not full 8000px page)
-  - Falls back to JS getBoundingClientRect for elements hidden via display:none
   - Increases post-scroll wait to 1500ms for async ad API responses
 
 Resource safety: browser.close() is in try/finally — Chromium is ALWAYS killed.
@@ -22,6 +23,9 @@ ALLOWED_DOMAINS = {
     "znews-stg.pawgrammers.io.vn",
     "baomoi-stg.pawgrammers.io.vn",
     "zingmp3-stg.pawgrammers.io.vn",
+    "smoney-stg.pawgrammers.io.vn",
+    "dicungcon-stg.pawgrammers.io.vn",
+    "zagoo-stg.pawgrammers.io.vn",
 }
 
 # ── All possible ad zone DOM IDs per site domain ───────────────────────────────
@@ -44,6 +48,21 @@ SITE_ZONES = {
     ],
     "zingmp3-stg.pawgrammers.io.vn": [
         ("ZingMP3_Masthead", "Masthead Banner"),
+    ],
+    "smoney-stg.pawgrammers.io.vn": [
+        ("SMoney_TopPromo_Desktop", "Top Promo Desktop"),
+        ("SMoney_TopPromo_Mobile", "Top Promo Mobile"),
+        ("SMoney_StockScreener_InContent_Desktop", "Stock Screener Desktop"),
+        ("SMoney_StockScreener_InContent_Mobile", "Stock Screener Mobile"),
+    ],
+    "dicungcon-stg.pawgrammers.io.vn": [
+        ("DiCungCon_ContentBridge_Desktop", "Content Bridge Desktop"),
+        ("DiCungCon_ContentBridge_Mobile", "Content Bridge Mobile"),
+        ("DiCungCon_SidebarRail_Desktop", "Sidebar Rail Desktop"),
+    ],
+    "zagoo-stg.pawgrammers.io.vn": [
+        ("Zagoo_Interstitial_Desktop", "Game Interstitial Desktop"),
+        ("Zagoo_Interstitial_Mobile", "Game Interstitial Mobile"),
     ],
 }
 
@@ -113,6 +132,51 @@ def _host(url: str) -> str:
         return urlparse(url).hostname or ""
     except Exception:
         return ""
+
+
+def _is_background_zone(zone_id: str) -> bool:
+    return zone_id in _BACKGROUND_ZONE_IDS or zone_id.endswith("_Background")
+
+
+async def _read_zone_state(page, zone_id: str) -> dict:
+    """Resolve one catalog zone without assuming the catalog ID is the DOM ID."""
+    return await page.evaluate(
+        """(zoneId) => {
+            const byId = document.getElementById(zoneId);
+            const byDataZone = Array.from(document.querySelectorAll("[data-zone]"))
+                .find((node) => node.dataset.zone === zoneId);
+            const el = byId || byDataZone;
+            if (!el) return { found: false, reason: "not-found" };
+
+            const style = window.getComputedStyle(el);
+            const rect = el.getBoundingClientRect();
+            const opacity = Number.parseFloat(style.opacity || "1");
+            let reason = null;
+            if (style.display === "none") reason = "display-none";
+            else if (style.visibility === "hidden") reason = "visibility-hidden";
+            else if (Number.isFinite(opacity) && opacity <= 0) reason = "opacity-zero";
+            else if (rect.width < 2 || rect.height < 2) reason = "zero-sized";
+
+            return {
+                found: true,
+                reason,
+                style_active: (
+                    style.display !== "none"
+                    && style.visibility !== "hidden"
+                    && (!Number.isFinite(opacity) || opacity > 0)
+                ),
+                matched_by: byId ? "id" : "data-zone",
+                dom_id: el.id || null,
+                bbox: {
+                    x: rect.left + window.scrollX,
+                    y: rect.top + window.scrollY,
+                    width: rect.width,
+                    height: rect.height,
+                },
+            };
+        }""",
+        zone_id,
+    )
 
 
 def _b64(img_bytes: bytes) -> str:
@@ -257,6 +321,8 @@ async def handle_screenshot(url: str, session_id: str, zone_ids: list[str] | Non
             screenshot_bytes = None
             dims = {"width": VIEWPORT_WIDTH, "height": 0}
             raw_zones = []
+            inactive_zones = []
+            missing_zones = []
             clip_h = MAX_HEIGHT_PX
 
             try:
@@ -303,48 +369,42 @@ async def handle_screenshot(url: str, session_id: str, zone_ids: list[str] | Non
 
                 # ── Collect bounding boxes ─────────────────────────────────────
                 for idx, (zone_id, zone_label) in enumerate(zone_defs):
+                    try:
+                        state = await _read_zone_state(page, zone_id)
+                    except Exception:
+                        state = {"found": False, "reason": "inspection-failed"}
 
-                    # Special case: background/skin zones use a fixed top-of-page
-                    # bbox because the DOM element is a transparent click overlay
-                    # with 0px height. The background IS visible as body CSS.
-                    if zone_id in _BACKGROUND_ZONE_IDS:
+                    if not state.get("found"):
+                        missing_zones.append({
+                            "id": zone_id,
+                            "label": zone_label,
+                            "reason": state.get("reason") or "not-found",
+                        })
+                        continue
+
+                    # Background/skin mounts may be transparent overlays whose
+                    # visual is painted on the body. Only use fixed geometry
+                    # while the mount is active; this preserves the category
+                    # background/masthead mutual-exclusion contract.
+                    if _is_background_zone(zone_id) and state.get("style_active"):
                         raw_zones.append({
                             "id":    zone_id,
                             "label": zone_label,
                             "bbox":  {"x": 0, "y": 0, "width": VIEWPORT_WIDTH, "height": 700},
                             "color": ZONE_COLORS[idx % len(ZONE_COLORS)],
+                            "matched_by": state.get("matched_by"),
                         })
                         continue
 
-                    bbox = None
-                    try:
-                        el = page.locator(f"#{zone_id}")
-                        if await el.count() > 0:
-                            bbox = await el.first.bounding_box()
-                    except Exception:
-                        pass
-
-                    # Fallback for hidden elements (display:none, collapsed)
+                    bbox = state.get("bbox")
                     if bbox is None or bbox.get("width", 0) < 2 or bbox.get("height", 0) < 2:
-                        try:
-                            rect = await page.evaluate(f"""() => {{
-                                const el = document.getElementById('{zone_id}');
-                                if (!el) return null;
-                                const r = el.getBoundingClientRect();
-                                // For hidden elements, use offsetTop/offsetHeight
-                                return {{
-                                    x: el.offsetLeft || r.left,
-                                    y: el.offsetTop  || r.top,
-                                    width:  el.offsetWidth  || r.width,
-                                    height: el.offsetHeight || r.height,
-                                }};
-                            }}""")
-                            if rect and rect.get("width", 0) > 2 and rect.get("height", 0) > 2:
-                                bbox = rect
-                        except Exception:
-                            pass
-
-                    if bbox is None or bbox.get("width", 0) < 2 or bbox.get("height", 0) < 2:
+                        inactive_zones.append({
+                            "id": zone_id,
+                            "label": zone_label,
+                            "reason": state.get("reason") or "zero-sized",
+                            "matched_by": state.get("matched_by"),
+                            "dom_id": state.get("dom_id"),
+                        })
                         continue
 
                     raw_zones.append({
@@ -352,6 +412,7 @@ async def handle_screenshot(url: str, session_id: str, zone_ids: list[str] | Non
                         "label": zone_label,
                         "bbox":  bbox,
                         "color": ZONE_COLORS[idx % len(ZONE_COLORS)],
+                        "matched_by": state.get("matched_by"),
                     })
 
                 # ── Full-page screenshot (captures entire scroll height) ───────
@@ -394,6 +455,11 @@ async def handle_screenshot(url: str, session_id: str, zone_ids: list[str] | Non
             "full_b64":    _b64(annotated_bytes),
             "zones":       zone_results,
             "zone_count":  len(zone_results),
+            "requested_zone_count": len(zone_defs),
+            "inactive_zones": inactive_zones,
+            "inactive_zone_count": len(inactive_zones),
+            "missing_zones": missing_zones,
+            "missing_zone_count": len(missing_zones),
             "width":       dims["width"],
             "height":      dims["height"],
             "captured_at": datetime.now(timezone.utc).isoformat(),

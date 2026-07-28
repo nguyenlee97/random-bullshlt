@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +16,13 @@ class CreativeVLMVerdict(BaseModel):
     acceptable: bool
     composition_safe: bool
     text_readable: bool
+    blocking_issues: list[Literal[
+        "critical_crop",
+        "core_text_unreadable",
+        "missing_required_asset",
+        "material_unsupported_claim",
+        "safety_risk",
+    ]] = Field(default_factory=list, max_length=8)
     unexpected_text: list[str] = Field(default_factory=list, max_length=12)
     required_assets_present: list[str] = Field(default_factory=list, max_length=12)
     missing_required_assets: list[str] = Field(default_factory=list, max_length=12)
@@ -25,11 +33,23 @@ class CreativeVLMVerdict(BaseModel):
 
 INSTRUCTIONS = """
 Inspect one generated digital ad against its supplied brief, target format,
-crop-safe prompt spec, and named required assets. Be conservative. Mark
-acceptable false if critical content is visibly cropped, required named assets
-are missing, the image contains material unexpected wording/claims, or core text
-is unreadable. Do not infer off-image facts. This is a visual QA verdict, not a
-marketing rewrite.
+crop-safe prompt spec, and named required assets. The prompt_spec is the
+normalized creative authority. If raw brief notes conflict with prompt_spec,
+follow prompt_spec and mention the conflict in review_notes; do not reject the
+image solely for omitting an element that prompt_spec forbids.
+
+Populate blocking_issues only for:
+- critical_crop: important content is visibly cropped outside the safe area.
+- core_text_unreadable: brand, primary message, or CTA is unreadable.
+- missing_required_asset: a named required asset is visibly absent.
+- material_unsupported_claim: unexpected wording makes a concrete price,
+  legal, guarantee, certification, or technical-performance claim unsupported
+  by the normalized prompt spec. A generic slogan is not blocking.
+- safety_risk: visible content creates a material policy or brand-safety risk.
+
+acceptable must be false exactly when blocking_issues is non-empty. Other
+differences belong in review_notes as non-blocking advice. Do not infer
+off-image facts. This is a visual QA verdict, not a marketing rewrite.
 """.strip()
 
 
@@ -76,6 +96,15 @@ async def inspect_generated_creative(
     parsed = getattr(response, "output_parsed", None)
     if parsed is None:
         raise RuntimeError("OpenAI VLM returned no creative verdict")
+    blocking_issues = set(parsed.blocking_issues)
+    if not parsed.composition_safe:
+        blocking_issues.add("critical_crop")
+    if not parsed.text_readable:
+        blocking_issues.add("core_text_unreadable")
+    if parsed.missing_required_assets:
+        blocking_issues.add("missing_required_asset")
+    parsed.blocking_issues = sorted(blocking_issues)
+    parsed.acceptable = not parsed.blocking_issues
     usage = response_usage(response)
     provenance = {
         "provider": "openai", "model": config.OPENAI_VLM_MODEL,

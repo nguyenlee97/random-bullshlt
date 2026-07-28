@@ -237,6 +237,7 @@ def test_every_openai_campaign_responses_call_uses_the_shared_tracer():
 
     root = Path(__file__).parents[1] / "openai_campaign"
     expected = {
+        "audience_search.py": "trace_responses_call",
         "decision.py": "trace_responses_call",
         "structured.py": "trace_responses_call",
         "engine.py": "trace_responses_call",
