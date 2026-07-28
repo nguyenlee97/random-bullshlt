@@ -180,6 +180,28 @@ Smoke test: create one campaign through the UI end-to-end (order_guard must not
 block a legitimate order). Auth stays dormant (AGENT_API_KEY empty) until the
 frontend sends X-API-Key.
 
+### Frontend production CD
+
+Merges that change `agent_frontend/**` on `revamp/next-hackathon` are tested,
+built with `agent_frontend/.env.production`, and deployed automatically to
+`https://agent.pawgrammers.io.vn/` by
+`.github/workflows/deploy-frontend-production.yml`.
+
+Configure the GitHub `production` environment before the first deployment:
+
+- Required secret: `VPS_SSH_KEY` (private key authorized on the VPS).
+- Recommended secret: `VPS_KNOWN_HOSTS` (pinned `known_hosts` entry).
+- Optional variables: `VPS_HOST`, `VPS_PORT`, `VPS_USER`, and
+  `VPS_DEPLOY_PATH`. Defaults match the current VPS runbook.
+
+Each deployment is extracted to `/var/www/agent-releases/<git-sha>` and the
+`/var/www/agent` symlink is switched to that immutable release. To roll back,
+point the symlink to the previous release:
+
+```bash
+ln -sfn /var/www/agent-releases/<previous-git-sha> /var/www/agent
+```
+
 ## 7. Hand off to the executing model
 
 > Status 2026-07-04: Phase 0 Parts A+B fully executed and verified end-to-end
