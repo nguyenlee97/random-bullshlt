@@ -19,7 +19,7 @@ export function agentEntryUrl(locationLike, requestedMode = '') {
   params.delete('tour')
   if (requestedMode === 'copilot' || requestedMode === 'autopilot') {
     params.set('mode', requestedMode)
-  } else if (!agentEntryMode(locationLike)) {
+  } else {
     params.delete('mode')
   }
   const query = params.toString()

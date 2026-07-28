@@ -125,6 +125,7 @@ export default function App() {
   const account = useIdentity()
   const [showPublicLanding, setShowPublicLanding] = useState(() => !hasAgentIntent(window.location))
   const [pendingEntryMode, setPendingEntryMode] = useState(() => agentEntryMode(window.location))
+  const [pendingDemoMode, setPendingDemoMode] = useState('')
   const [autoStartDemoMode, setAutoStartDemoMode] = useState('')
   const [experienceMode, setExperienceMode] = useState(null)
   const [currentConversationModel, setCurrentConversationModel] = useState(null)
@@ -196,6 +197,7 @@ export default function App() {
     const syncEntryRoute = () => {
       landingEntryAttemptRef.current += 1
       pendingEntryStartRef.current = ''
+      setPendingDemoMode('')
       setShowPublicLanding(!hasAgentIntent(window.location))
       setPendingEntryMode(agentEntryMode(window.location))
     }
@@ -214,8 +216,14 @@ export default function App() {
     setShowPublicLanding(false)
   }, [])
 
+  const enterAgentForDemo = useCallback((mode) => {
+    setPendingDemoMode(mode === 'autopilot' ? 'autopilot' : 'copilot')
+    enterAgent()
+  }, [enterAgent])
+
   const returnToPublicLanding = useCallback(() => {
     window.history.pushState({}, '', '/')
+    setPendingDemoMode('')
     setShowPublicLanding(true)
   }, [])
 
@@ -1284,6 +1292,21 @@ export default function App() {
   }, [conversationModelCatalog, startCampaign])
 
   useEffect(() => {
+    if (!pendingDemoMode || showPublicLanding || !identityReady || identityError || experienceMode || modeSelectionBusy) return
+    const mode = pendingDemoMode
+    setPendingDemoMode('')
+    startGuidedDemo(mode)
+  }, [
+    experienceMode,
+    identityError,
+    identityReady,
+    modeSelectionBusy,
+    pendingDemoMode,
+    showPublicLanding,
+    startGuidedDemo,
+  ])
+
+  useEffect(() => {
     if (!pendingEntryMode || showPublicLanding || !identityReady || identityError || experienceMode || modeSelectionBusy) return
     const model = conversationModelCatalog.default_model
       || conversationModelCatalog.models.find(item => item.available)?.id
@@ -1782,7 +1805,7 @@ export default function App() {
     : null
 
   if (showPublicLanding) {
-    return <PublicLanding onEnterAgent={enterAgent} />
+    return <PublicLanding onEnterAgent={enterAgent} onOpenDemo={enterAgentForDemo} />
   }
 
   if (!identityReady) {

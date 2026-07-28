@@ -42,6 +42,10 @@ test('public landing preserves an explicit production mode when entering /agent'
     agentEntryUrl({ pathname: '/', search: '?tour=copilot', hash: '' }, 'autopilot'),
     '/agent?mode=autopilot',
   )
+  assert.equal(
+    agentEntryUrl({ pathname: '/', search: '?mode=copilot&tour=copilot', hash: '' }),
+    '/agent',
+  )
   assert.match(app, /<PublicLanding/)
   assert.match(app, /agentEntryUrl\(window\.location, mode\)/)
   assert.match(app, /pendingEntryMode/)
@@ -63,7 +67,7 @@ test('Zalo callback return path retains conversation and hash while removing cal
   )
 })
 
-test('landing v3 implements the handed-off structure, assets, modes, and local tour', () => {
+test('landing v3 implements the handed-off structure, assets, and production navigation', () => {
   assert.match(landing, /CampaignConstellation/)
   assert.match(landing, /campaign-stage/)
   assert.match(landing, /campaign-agent-core/)
@@ -90,11 +94,14 @@ test('landing v3 implements the handed-off structure, assets, modes, and local t
   assert.match(landing, /mode-visual-autopilot/)
   assert.match(landing, /<em>chuyển động\.<\/em>/)
   assert.doesNotMatch(landing, /310 segments/)
-  assert.match(landing, /new URLSearchParams\(window\.location\.search\)\.get\('tour'\)/)
-  assert.match(landing, /role="dialog"/)
-  assert.match(landing, /event\.key === 'Escape'/)
-  assert.match(landing, /event\.key !== 'Tab'/)
-  assert.match(landing, /scrollToModes/)
+  assert.match(landing, /\{ label: 'Ad Server', href: 'https:\/\/adspilot\.pawgrammers\.io\.vn' \}/)
+  assert.match(landing, /\{ label: 'Analytics', href: 'https:\/\/analytics\.pawgrammers\.io\.vn' \}/)
+  assert.doesNotMatch(landing, /\{ label: 'Audience', href:/)
+  assert.doesNotMatch(landing, /\{ label: 'Publisher', href:/)
+  assert.doesNotMatch(landing, /TourCompleteModal|Tour hoàn tất|updateTourQuery/)
+  assert.match(landing, /<LandingHero onEnterAgent=\{onEnterAgent\} onOpenDemo=\{onOpenDemo\} \/>/)
+  assert.match(landing, /<LandingModes onEnterAgent=\{enterMode\} onOpenDemo=\{onOpenDemo\} \/>/)
+  assert.match(landing, /<LandingFinalCta onEnterAgent=\{onEnterAgent\} \/>/)
   assert.match(landing, /onEnterAgent\(mode\)/)
   assert.match(landing, /data-ecosystem-index=\{index\}/)
   assert.match(landing, /\/tech-docs\.html/)
@@ -106,6 +113,9 @@ test('landing v3 implements the handed-off structure, assets, modes, and local t
   assert.match(landing, /closeOnOutsidePress/)
   assert.match(landing, /closeOnFocusOutside/)
   assert.match(app, /startGuidedDemo/)
+  assert.match(app, /pendingDemoMode/)
+  assert.match(app, /enterAgentForDemo/)
+  assert.match(app, /<PublicLanding onEnterAgent=\{enterAgent\} onOpenDemo=\{enterAgentForDemo\} \/>/)
   assert.doesNotMatch(app, /ProductDemo/)
 })
 

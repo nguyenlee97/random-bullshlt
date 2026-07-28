@@ -8,10 +8,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import mascotImageUrl from '../../public/brand/advertising-agent-mascot.png'
 
 const ecosystemLinks = [
-  { label: 'Ad Server', href: import.meta.env.VITE_ADSPILOT_URL || 'http://localhost:5173' },
-  { label: 'Audience', href: 'http://localhost:3000/api/dmp/attributes' },
-  { label: 'Analytics', href: 'http://localhost:5174' },
-  { label: 'Publisher', href: 'http://localhost:5176' },
+  { label: 'Ad Server', href: 'https://adspilot.pawgrammers.io.vn' },
+  { label: 'Analytics', href: 'https://analytics.pawgrammers.io.vn' },
 ]
 
 const orbitNodes = [
@@ -131,19 +129,6 @@ const technologies = [
     text: 'Campaign Result, Setup Report, bằng chứng screenshot và 6 góc nhìn báo cáo. Zalo OA đọc cùng một trạng thái campaign với web workspace.',
   },
 ]
-
-const tourCopy = {
-  copilot: {
-    name: 'Campaign Copilot',
-    other: 'Autopilot',
-    description: 'Copilot để bạn giữ tay lái: Agent mở rộng từng quyết định, nối ý tưởng với audience, creative và media ngay khi bạn làm việc — và bạn duyệt trước khi launch.',
-  },
-  autopilot: {
-    name: 'Campaign Autopilot',
-    other: 'Copilot',
-    description: 'Autopilot nhận brief, tự xây plan — chiến lược, audience, creative, media — và dừng đúng điểm cần bạn duyệt. Không gì launch khi chưa có phê duyệt cuối cùng của bạn.',
-  },
-}
 
 function useStandaloneReveal() {
   const ref = useRef(null)
@@ -660,66 +645,8 @@ export function LandingFooter({ onEnterAgent }) {
   )
 }
 
-function TourCompleteModal({ mode, onClose, onSwitch, onEnterAgent, returnFocusRef }) {
-  const modalRef = useRef(null)
-  const closeRef = useRef(null)
-  const copy = tourCopy[mode]
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    closeRef.current?.focus()
-
-    const onKeyDown = event => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onClose()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const focusable = [...modalRef.current.querySelectorAll('a[href], button:not([disabled])')]
-      if (!focusable.length) return
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.body.style.overflow = previousOverflow
-      document.removeEventListener('keydown', onKeyDown)
-      returnFocusRef.current?.focus()
-    }
-  }, [onClose, returnFocusRef])
-
-  return (
-    <div className="v3-tour-overlay" role="presentation" onMouseDown={event => event.target === event.currentTarget && onClose()}>
-      <div ref={modalRef} className="v3-tour-modal" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-description">
-        <div className="v3-tour-top"><p>Tour hoàn tất</p><button ref={closeRef} type="button" onClick={onClose} aria-label="Đóng"><X /></button></div>
-        <h2 id="tour-title">Bạn vừa xem {copy.name} hoạt động.</h2>
-        <p id="tour-description">{copy.description}</p>
-        <div className="v3-tour-actions">
-          <button type="button" className="is-primary" onClick={() => onEnterAgent(mode)}>Bắt đầu thật với {copy.name} <ArrowRight /></button>
-          <button type="button" onClick={onSwitch}>Xem tour {copy.other}</button>
-          <button type="button" className="is-close" onClick={onClose}>Đóng</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default function PublicLanding({ onEnterAgent }) {
+export default function PublicLanding({ onEnterAgent, onOpenDemo }) {
   const landingRef = useRef(null)
-  const returnFocusRef = useRef(null)
-  const [tourMode, setTourMode] = useState(() => {
-    const mode = new URLSearchParams(window.location.search).get('tour')
-    return mode === 'copilot' || mode === 'autopilot' ? mode : null
-  })
 
   useEffect(() => {
     const root = landingRef.current
@@ -745,68 +672,28 @@ export default function PublicLanding({ onEnterAgent }) {
     }
   }, [])
 
-  const updateTourQuery = useCallback(mode => {
-    const url = new URL(window.location.href)
-    if (mode) url.searchParams.set('tour', mode)
-    else url.searchParams.delete('tour')
-    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
-  }, [])
-
-  const openTour = useCallback((mode, trigger) => {
-    returnFocusRef.current = trigger || document.activeElement
-    const nextMode = mode === 'autopilot' ? 'autopilot' : 'copilot'
-    setTourMode(nextMode)
-    updateTourQuery(nextMode)
-  }, [updateTourQuery])
-
-  const closeTour = useCallback(() => {
-    setTourMode(null)
-    updateTourQuery(null)
-  }, [updateTourQuery])
-
-  const scrollToModes = useCallback(() => {
-    const target = document.getElementById('modes-anchor')
-    if (!target) return
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - 24, behavior: reducedMotion ? 'auto' : 'smooth' })
-  }, [])
-
   const enterMode = useCallback(mode => {
-    closeTour()
     onEnterAgent(mode === 'autopilot' ? 'autopilot' : 'copilot')
-  }, [closeTour, onEnterAgent])
+  }, [onEnterAgent])
 
   return (
     <div ref={landingRef} className="public-landing-v3">
       <a className="v3-skip-link" href="#landing-main">Bỏ qua đến nội dung chính</a>
       <div className="public-landing-v2 v3-hero-plane">
-        <LandingNav onEnterAgent={scrollToModes} />
-        <LandingHero onEnterAgent={scrollToModes} onOpenDemo={(mode) => openTour(mode)} />
+        <LandingNav onEnterAgent={onEnterAgent} />
+        <LandingHero onEnterAgent={onEnterAgent} onOpenDemo={onOpenDemo} />
       </div>
       <main id="landing-main">
         <LandingPain />
         <LandingAudience />
         <LandingHowItWorks />
         <div id="modes-anchor" className="v3-modes-plane">
-          <LandingModes onEnterAgent={enterMode} onOpenDemo={openTour} />
+          <LandingModes onEnterAgent={enterMode} onOpenDemo={onOpenDemo} />
         </div>
         <LandingTechnology />
-        <LandingFinalCta onEnterAgent={scrollToModes} />
+        <LandingFinalCta onEnterAgent={onEnterAgent} />
       </main>
-      <LandingFooter onEnterAgent={scrollToModes} />
-      {tourMode && (
-        <TourCompleteModal
-          mode={tourMode}
-          onClose={closeTour}
-          onSwitch={() => {
-            const nextMode = tourMode === 'copilot' ? 'autopilot' : 'copilot'
-            setTourMode(nextMode)
-            updateTourQuery(nextMode)
-          }}
-          onEnterAgent={enterMode}
-          returnFocusRef={returnFocusRef}
-        />
-      )}
+      <LandingFooter onEnterAgent={onEnterAgent} />
     </div>
   )
 }
