@@ -1,29 +1,73 @@
+const HOME_PATH = '/home'
 const AGENT_PATH = '/agent'
 
-export function hasAgentIntent(locationLike) {
+const publicMode = mode => mode === 'autopilot' ? 'autopilot' : 'copilot'
+
+export function agentPath(mode = 'copilot', conversationId = '') {
+  const normalizedMode = publicMode(mode)
+  const normalizedId = String(conversationId || '').trim()
+  const modePath = normalizedMode === 'autopilot' ? `${AGENT_PATH}/autopilot` : AGENT_PATH
+  if (!normalizedId) return modePath
+  const historyModePath = normalizedMode === 'autopilot'
+    ? `${AGENT_PATH}/autopilot`
+    : `${AGENT_PATH}/copilot`
+  return `${historyModePath}/${encodeURIComponent(normalizedId)}`
+}
+
+export function parseAppRoute(locationLike) {
   const pathname = locationLike?.pathname || '/'
   const params = new URLSearchParams(locationLike?.search || '')
-  return pathname === AGENT_PATH
-    || params.has('conversation')
-    || params.has('auth')
-    || params.has('auth_error')
+  const segments = pathname.split('/').filter(Boolean)
+  const legacyMode = params.get('mode')
+  const queryRequiresAgent = params.has('conversation') || params.has('auth') || params.has('auth_error')
+  const isAgentPath = segments[0] === 'agent'
+
+  if (!isAgentPath && !queryRequiresAgent) {
+    return { surface: 'home', mode: '', conversationId: '' }
+  }
+
+  const mode = segments[1] === 'autopilot'
+    ? 'autopilot'
+    : segments[1] === 'copilot'
+      ? 'copilot'
+      : legacyMode === 'autopilot'
+        ? 'autopilot'
+        : 'copilot'
+  const pathConversationId = (
+    segments[1] === 'copilot' || segments[1] === 'autopilot'
+  ) ? segments[2] : ''
+  const encodedConversationId = pathConversationId || params.get('conversation') || ''
+  let conversationId = encodedConversationId
+  try {
+    conversationId = decodeURIComponent(encodedConversationId)
+  } catch {
+    // Keep malformed legacy IDs intact so the API can return the normal error.
+  }
+
+  return { surface: 'agent', mode, conversationId }
+}
+
+export function hasAgentIntent(locationLike) {
+  return parseAppRoute(locationLike).surface === 'agent'
 }
 
 export function agentEntryMode(locationLike) {
-  const mode = new URLSearchParams(locationLike?.search || '').get('mode')
-  return mode === 'copilot' || mode === 'autopilot' ? mode : ''
+  const route = parseAppRoute(locationLike)
+  return route.surface === 'agent' && !route.conversationId ? route.mode : ''
 }
 
-export function agentEntryUrl(locationLike, requestedMode = '') {
+export function agentConversationId(locationLike) {
+  const route = parseAppRoute(locationLike)
+  return route.surface === 'agent' ? route.conversationId : ''
+}
+
+export function agentEntryUrl(locationLike, requestedMode = 'copilot', conversationId = '') {
   const params = new URLSearchParams(locationLike?.search || '')
   params.delete('tour')
-  if (requestedMode === 'copilot' || requestedMode === 'autopilot') {
-    params.set('mode', requestedMode)
-  } else {
-    params.delete('mode')
-  }
+  params.delete('mode')
+  params.delete('conversation')
   const query = params.toString()
-  return `${AGENT_PATH}${query ? `?${query}` : ''}${locationLike?.hash || ''}`
+  return `${agentPath(requestedMode, conversationId)}${query ? `?${query}` : ''}${locationLike?.hash || ''}`
 }
 
 export function authReturnTo(locationLike) {
@@ -34,4 +78,4 @@ export function authReturnTo(locationLike) {
   return `${locationLike?.pathname || AGENT_PATH}${query ? `?${query}` : ''}${locationLike?.hash || ''}`
 }
 
-export { AGENT_PATH }
+export { AGENT_PATH, HOME_PATH }

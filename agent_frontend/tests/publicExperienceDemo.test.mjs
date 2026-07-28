@@ -2,10 +2,13 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
+  agentConversationId,
   agentEntryMode,
   agentEntryUrl,
+  agentPath,
   authReturnTo,
   hasAgentIntent,
+  parseAppRoute,
 } from '../src/lib/publicExperience.js'
 import { AUTOPILOT_TOUR_STEPS } from '../src/demo/autopilotTour.js'
 import { buildAutopilotLiveSteps } from '../src/demo/autopilotWalkthrough.js'
@@ -31,16 +34,35 @@ const topBar = read('../src/components/TopBar.jsx')
 const docs = read('../public/tech-docs.html')
 const styles = read('../src/index.css')
 
-test('public landing preserves an explicit production mode when entering /agent', () => {
+test('public landing and agent modes have canonical SPA routes', () => {
   assert.equal(hasAgentIntent({ pathname: '/', search: '' }), false)
+  assert.equal(hasAgentIntent({ pathname: '/home', search: '' }), false)
   assert.equal(hasAgentIntent({ pathname: '/agent', search: '' }), true)
   assert.equal(hasAgentIntent({ pathname: '/', search: '?conversation=conv_123' }), true)
   assert.equal(hasAgentIntent({ pathname: '/', search: '?auth=success' }), true)
-  assert.equal(agentEntryMode({ search: '?mode=copilot' }), 'copilot')
-  assert.equal(agentEntryMode({ search: '?mode=unknown' }), '')
+  assert.equal(agentEntryMode({ pathname: '/agent', search: '' }), 'copilot')
+  assert.equal(agentEntryMode({ pathname: '/agent/autopilot', search: '' }), 'autopilot')
+  assert.equal(agentEntryMode({ pathname: '/agent', search: '?mode=copilot' }), 'copilot')
+  assert.equal(agentEntryMode({ pathname: '/', search: '?mode=unknown' }), '')
+  assert.equal(agentPath('guided'), '/agent')
+  assert.equal(agentPath('autopilot'), '/agent/autopilot')
+  assert.equal(agentPath('guided', 'conv / 123'), '/agent/copilot/conv%20%2F%20123')
+  assert.equal(agentPath('autopilot', 'conv_456'), '/agent/autopilot/conv_456')
+  assert.equal(
+    agentConversationId({ pathname: '/agent/autopilot/conv_456', search: '' }),
+    'conv_456',
+  )
+  assert.deepEqual(
+    parseAppRoute({ pathname: '/agent/copilot/conv%20123', search: '' }),
+    { surface: 'agent', mode: 'copilot', conversationId: 'conv 123' },
+  )
+  assert.deepEqual(
+    parseAppRoute({ pathname: '/agent/copilot/conv_123', search: '?mode=autopilot' }),
+    { surface: 'agent', mode: 'copilot', conversationId: 'conv_123' },
+  )
   assert.equal(
     agentEntryUrl({ pathname: '/', search: '?tour=copilot', hash: '' }, 'autopilot'),
-    '/agent?mode=autopilot',
+    '/agent/autopilot',
   )
   assert.equal(
     agentEntryUrl({ pathname: '/', search: '?mode=copilot&tour=copilot', hash: '' }),
@@ -48,22 +70,24 @@ test('public landing preserves an explicit production mode when entering /agent'
   )
   assert.match(app, /<PublicLanding/)
   assert.match(app, /agentEntryUrl\(window\.location, mode\)/)
+  assert.match(app, /agentPath\(context\.experience_mode, context\.conversation_id \|\| conversationId\)/)
   assert.match(app, /pendingEntryMode/)
   assert.match(app, /pendingEntryStartRef/)
   assert.match(app, /landingEntryAttemptRef/)
   assert.match(app, /entryIsStale/)
-  assert.match(app, /setPendingEntryMode\(agentEntryMode\(window\.location\)\)/)
-  assert.match(app, /searchParams\.delete\('mode'\)/)
+  assert.match(app, /setPendingConversationId\(route\.conversationId\)/)
   assert.match(app, /startCampaign\(mode === 'autopilot' \? 'autopilot' : 'guided', attempt\)/)
   assert.match(app, /archiveIfStale/)
   assert.match(app, /AgentAPI\.archiveConversation\(context\.conversation_id\)/)
-  assert.match(app, /pendingConversationDeepLinkRef/)
+  assert.match(app, /pendingConversationId/)
+  assert.match(app, /window\.history\.replaceState\(\{\}, '', `\$\{HOME_PATH\}/)
+  assert.match(app, /const handleReset[\s\S]*agentPath\(routeMode\)[\s\S]*newChat\(/)
 })
 
 test('Zalo callback return path retains conversation and hash while removing callback residue', () => {
   assert.equal(
-    authReturnTo({ pathname: '/agent', search: '?conversation=abc&auth=ok&theme=dark', hash: '#workspace' }),
-    '/agent?conversation=abc&theme=dark#workspace',
+    authReturnTo({ pathname: '/agent/copilot/abc', search: '?auth=ok&theme=dark', hash: '#workspace' }),
+    '/agent/copilot/abc?theme=dark#workspace',
   )
 })
 
@@ -115,7 +139,7 @@ test('landing v3 implements the handed-off structure, assets, and production nav
   assert.match(app, /startGuidedDemo/)
   assert.match(app, /pendingDemoMode/)
   assert.match(app, /enterAgentForDemo/)
-  assert.match(app, /setPendingDemoMode\(mode === 'autopilot' \? 'autopilot' : 'copilot'\)[\s\S]*?setExperienceMode\(null\)[\s\S]*?enterAgent\(\)/)
+  assert.match(app, /window\.history\.pushState\(\{\}, '', agentEntryUrl\(window\.location, demoMode\)\)/)
   assert.match(app, /<PublicLanding onEnterAgent=\{enterAgent\} onOpenDemo=\{enterAgentForDemo\} \/>/)
   assert.doesNotMatch(app, /ProductDemo/)
 })
@@ -135,7 +159,8 @@ test('Copilot demo is restored as a spotlight tour over the real interface', () 
   assert.match(engine, /data-demo="chat-pane"/)
   assert.match(scripts, /Brief → Audience → Creative → Setup → Launch review/)
   assert.doesNotMatch(scripts, /type: 'CLICK_EL', target: '#create-campaign-btn'/)
-  assert.match(app, /onPrepareLive=\{handleReset\}/)
+  assert.match(app, /onPrepareLive=\{prepareGuidedTour\}/)
+  assert.match(app, /const prepareGuidedTour[\s\S]*agentPath\(routeMode\)[\s\S]*return handleReset\(\)/)
   assert.match(engine, /await onPrepareLive\?\.\(\)/)
   assert.doesNotMatch(app, /demo:new_chat/)
   assert.doesNotMatch(engine, /demo:new_chat/)
@@ -334,6 +359,15 @@ test('mobile tour guidance uses target-aware docking with manual move and collap
 test('narrow mobile workspaces keep header, crop actions, review dock, and artifact navigation reachable', () => {
   assert.match(topBar, /px-2 sm:gap-3 sm:px-5/)
   assert.match(topBar, /hidden min-\[400px\]:inline/)
+  assert.match(topBar, /aria-label="Về trang chủ"/)
+  assert.doesNotMatch(topBar, /tech-docs-btn|new-chat-btn|>Docs<|>Trang chủ</)
+  const tourIndex = topBar.indexOf('id="demo-btn"')
+  const historyIndex = topBar.indexOf('id="conversation-history-btn"')
+  const resetIndex = topBar.indexOf('data-demo="reset-btn"')
+  const accountIndex = topBar.lastIndexOf('<AccountMenu')
+  assert.ok(tourIndex >= 0 && historyIndex > tourIndex)
+  assert.ok(resetIndex > historyIndex)
+  assert.ok(accountIndex > resetIndex)
   assert.match(cropModal, /sm:flex-row/)
   assert.match(cropModal, /onPointerDown/)
   assert.match(cropModal, /window\.addEventListener\('pointermove'/)
@@ -345,6 +379,7 @@ test('narrow mobile workspaces keep header, crop actions, review dock, and artif
 
 test('technical document keeps the removed evidence content out and provides reliable Agent navigation', () => {
   assert.doesNotMatch(docs, /id="evidence"/)
+  assert.match(docs, /href="\/home">← <span>Trang giới thiệu<\/span>/)
   assert.match(docs, /href="\/agent\?from=docs" id="agent-entry-link"/)
   assert.doesNotMatch(docs, /agent-entry-link.*preventDefault|window\.location\.assign/)
 })

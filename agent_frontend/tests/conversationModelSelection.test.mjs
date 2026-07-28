@@ -45,7 +45,7 @@ test('homepage hides model choice and only exposes Copilot or Autopilot', () => 
 })
 
 test('landing, direct entry, and both tours share the hidden engine policy', () => {
-  assert.match(app, /startCampaign\(demoMode === 'autopilot' \? 'autopilot' : 'guided'\)/)
+  assert.match(app, /startCampaign\([\s\S]*?demoMode === 'autopilot' \? 'autopilot' : 'guided',[\s\S]*?landingEntryAttempt/)
   assert.match(app, /startCampaign\(mode === 'autopilot' \? 'autopilot' : 'guided', attempt\)/)
   assert.doesNotMatch(app, /models\.find\(item => item\.available\)/)
   assert.doesNotMatch(app, /conversationModelCatalog\.default_model\s*\|\|/)
