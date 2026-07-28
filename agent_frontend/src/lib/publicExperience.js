@@ -11,7 +11,7 @@ export function agentPath(mode = 'copilot', conversationId = '') {
   const historyModePath = normalizedMode === 'autopilot'
     ? `${AGENT_PATH}/autopilot`
     : `${AGENT_PATH}/copilot`
-  return `${historyModePath}/${encodeURIComponent(normalizedId)}`
+  return `${historyModePath}/history/${encodeURIComponent(normalizedId)}`
 }
 
 export function parseAppRoute(locationLike) {
@@ -34,8 +34,9 @@ export function parseAppRoute(locationLike) {
         ? 'autopilot'
         : 'copilot'
   const pathConversationId = (
-    segments[1] === 'copilot' || segments[1] === 'autopilot'
-  ) ? segments[2] : ''
+    (segments[1] === 'copilot' || segments[1] === 'autopilot')
+    && segments[2] === 'history'
+  ) ? segments[3] : ''
   const encodedConversationId = pathConversationId || params.get('conversation') || ''
   let conversationId = encodedConversationId
   try {

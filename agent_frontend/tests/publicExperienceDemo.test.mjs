@@ -32,6 +32,7 @@ const creativeStep = read('../src/steps/CreativeStep.jsx')
 const cropModal = read('../src/steps/creative/ImageCropModal.jsx')
 const topBar = read('../src/components/TopBar.jsx')
 const docs = read('../public/tech-docs.html')
+const nginx = read('../nginx.conf')
 const styles = read('../src/index.css')
 
 test('public landing and agent modes have canonical SPA routes', () => {
@@ -46,18 +47,18 @@ test('public landing and agent modes have canonical SPA routes', () => {
   assert.equal(agentEntryMode({ pathname: '/', search: '?mode=unknown' }), '')
   assert.equal(agentPath('guided'), '/agent')
   assert.equal(agentPath('autopilot'), '/agent/autopilot')
-  assert.equal(agentPath('guided', 'conv / 123'), '/agent/copilot/conv%20%2F%20123')
-  assert.equal(agentPath('autopilot', 'conv_456'), '/agent/autopilot/conv_456')
+  assert.equal(agentPath('guided', 'conv / 123'), '/agent/copilot/history/conv%20%2F%20123')
+  assert.equal(agentPath('autopilot', 'conv_456'), '/agent/autopilot/history/conv_456')
   assert.equal(
-    agentConversationId({ pathname: '/agent/autopilot/conv_456', search: '' }),
+    agentConversationId({ pathname: '/agent/autopilot/history/conv_456', search: '' }),
     'conv_456',
   )
   assert.deepEqual(
-    parseAppRoute({ pathname: '/agent/copilot/conv%20123', search: '' }),
+    parseAppRoute({ pathname: '/agent/copilot/history/conv%20123', search: '' }),
     { surface: 'agent', mode: 'copilot', conversationId: 'conv 123' },
   )
   assert.deepEqual(
-    parseAppRoute({ pathname: '/agent/copilot/conv_123', search: '?mode=autopilot' }),
+    parseAppRoute({ pathname: '/agent/copilot/history/conv_123', search: '?mode=autopilot' }),
     { surface: 'agent', mode: 'copilot', conversationId: 'conv_123' },
   )
   assert.equal(
@@ -82,12 +83,15 @@ test('public landing and agent modes have canonical SPA routes', () => {
   assert.match(app, /pendingConversationId/)
   assert.match(app, /window\.history\.replaceState\(\{\}, '', `\$\{HOME_PATH\}/)
   assert.match(app, /const handleReset[\s\S]*agentPath\(routeMode\)[\s\S]*newChat\(/)
+  assert.match(nginx, /location = \/agent\/autopilot/)
+  assert.match(nginx, /location ~ \^\/agent\/\(copilot\|autopilot\)\/history\/\[\^\/\]\+\/\?\$/)
+  assert.match(nginx, /location \/agent\/ \{[\s\S]*proxy_pass/)
 })
 
 test('Zalo callback return path retains conversation and hash while removing callback residue', () => {
   assert.equal(
-    authReturnTo({ pathname: '/agent/copilot/abc', search: '?auth=ok&theme=dark', hash: '#workspace' }),
-    '/agent/copilot/abc?theme=dark#workspace',
+    authReturnTo({ pathname: '/agent/copilot/history/abc', search: '?auth=ok&theme=dark', hash: '#workspace' }),
+    '/agent/copilot/history/abc?theme=dark#workspace',
   )
 })
 
