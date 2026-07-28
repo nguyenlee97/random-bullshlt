@@ -9,8 +9,19 @@ export function hasAgentIntent(locationLike) {
     || params.has('auth_error')
 }
 
-export function agentEntryUrl(locationLike) {
+export function agentEntryMode(locationLike) {
+  const mode = new URLSearchParams(locationLike?.search || '').get('mode')
+  return mode === 'copilot' || mode === 'autopilot' ? mode : ''
+}
+
+export function agentEntryUrl(locationLike, requestedMode = '') {
   const params = new URLSearchParams(locationLike?.search || '')
+  params.delete('tour')
+  if (requestedMode === 'copilot' || requestedMode === 'autopilot') {
+    params.set('mode', requestedMode)
+  } else if (!agentEntryMode(locationLike)) {
+    params.delete('mode')
+  }
   const query = params.toString()
   return `${AGENT_PATH}${query ? `?${query}` : ''}${locationLike?.hash || ''}`
 }

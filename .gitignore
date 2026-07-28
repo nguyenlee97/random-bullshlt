@@ -14,4 +14,9 @@ __pycache__/
 eval/reports
 eval/external-reports
 agent_frontend/dist
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
 output

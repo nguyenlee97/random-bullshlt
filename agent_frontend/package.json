@@ -3,9 +3,11 @@
   "version": "1.40.0",
   "private": true,
   "type": "module",
+  "module": "design-system-entry.jsx",
+  "types": "design-system-entry.d.ts",
   "scripts": {
     "dev": "vite --port 5175",
-    "test": "node --test tests",
+    "test": "node --test tests/*.test.mjs",
     "build": "vite build",
     "preview": "vite preview --port 5175"
   },

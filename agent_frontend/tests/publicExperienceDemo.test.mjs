@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
-import { authReturnTo, hasAgentIntent } from '../src/lib/publicExperience.js'
+import {
+  agentEntryMode,
+  agentEntryUrl,
+  authReturnTo,
+  hasAgentIntent,
+} from '../src/lib/publicExperience.js'
 import { AUTOPILOT_TOUR_STEPS } from '../src/demo/autopilotTour.js'
 import { buildAutopilotLiveSteps } from '../src/demo/autopilotWalkthrough.js'
 import { getDemoDateRange, pickRandomBrief } from '../src/demo/demoScripts.js'
@@ -26,13 +31,28 @@ const topBar = read('../src/components/TopBar.jsx')
 const docs = read('../public/tech-docs.html')
 const styles = read('../src/index.css')
 
-test('public landing routes ordinary visitors to /agent while callbacks and deep links bypass it', () => {
+test('public landing preserves an explicit production mode when entering /agent', () => {
   assert.equal(hasAgentIntent({ pathname: '/', search: '' }), false)
   assert.equal(hasAgentIntent({ pathname: '/agent', search: '' }), true)
   assert.equal(hasAgentIntent({ pathname: '/', search: '?conversation=conv_123' }), true)
   assert.equal(hasAgentIntent({ pathname: '/', search: '?auth=success' }), true)
+  assert.equal(agentEntryMode({ search: '?mode=copilot' }), 'copilot')
+  assert.equal(agentEntryMode({ search: '?mode=unknown' }), '')
+  assert.equal(
+    agentEntryUrl({ pathname: '/', search: '?tour=copilot', hash: '' }, 'autopilot'),
+    '/agent?mode=autopilot',
+  )
   assert.match(app, /<PublicLanding/)
-  assert.match(app, /agentEntryUrl\(window\.location\)/)
+  assert.match(app, /agentEntryUrl\(window\.location, mode\)/)
+  assert.match(app, /pendingEntryMode/)
+  assert.match(app, /pendingEntryStartRef/)
+  assert.match(app, /landingEntryAttemptRef/)
+  assert.match(app, /entryIsStale/)
+  assert.match(app, /setPendingEntryMode\(agentEntryMode\(window\.location\)\)/)
+  assert.match(app, /searchParams\.delete\('mode'\)/)
+  assert.match(app, /startCampaign\(mode === 'autopilot' \? 'autopilot' : 'guided', model, attempt\)/)
+  assert.match(app, /archiveIfStale/)
+  assert.match(app, /AgentAPI\.archiveConversation\(context\.conversation_id\)/)
   assert.match(app, /pendingConversationDeepLinkRef/)
 })
 
@@ -43,29 +63,48 @@ test('Zalo callback return path retains conversation and hash while removing cal
   )
 })
 
-test('landing uses a kinetic campaign system and opens real guided tours', () => {
+test('landing v3 implements the handed-off structure, assets, modes, and local tour', () => {
   assert.match(landing, /CampaignConstellation/)
   assert.match(landing, /campaign-stage/)
   assert.match(landing, /campaign-agent-core/)
   assert.match(landing, /\/brand\/advertising-agent-mascot\.png/)
-  assert.match(landing, /landing-nav-signal/)
   assert.equal(existsSync(new URL('../public/brand/advertising-agent-mascot.png', import.meta.url)), true)
-  assert.match(landing, /SignalRibbon/)
-  assert.match(landing, /\[0, 1, 2\]\.map/)
+  assert.doesNotMatch(landing, /function SignalRibbon|<SignalRibbon/)
+  assert.doesNotMatch(landing, /<LandingProof/)
+  assert.match(landing, /data-section="01"[\s\S]*data-section="02"[\s\S]*data-section="03"[\s\S]*data-section="04"[\s\S]*data-section="05"/)
+  for (const id of ['tools', 'experience', 'error', 'slow']) {
+    assert.match(landing, new RegExp(`id: '${id}'`))
+  }
+  for (const asset of ['card-marketer-scene.png', 'card-sales-scene.png', 'card-manager-scene2.png']) {
+    assert.match(landing, new RegExp(asset.replace('.', '\\.')))
+    assert.equal(existsSync(new URL(`../public/landing/personas/${asset}`, import.meta.url)), true)
+  }
   assert.match(landing, /CampaignTruthVisual/)
+  assert.match(landing, /\['06', 'Performance'/)
   assert.match(landing, /landing-manifesto-chapter/)
   assert.match(landing, /IntersectionObserver/)
   assert.match(landing, /data-scroll-reveal/)
-  assert.match(landing, /Chọn Copilot để cùng Agent xây từng quyết định/)
-  assert.doesNotMatch(landing, /Không phải hai giao diện đổi màu/)
+  assert.match(landing, /Dual-Surface Experience/)
+  assert.match(landing, /Safety & Privacy by Design/)
   assert.match(landing, /mode-visual-copilot/)
   assert.match(landing, /mode-visual-autopilot/)
   assert.match(landing, /<em>chuyển động\.<\/em>/)
   assert.doesNotMatch(landing, /310 segments/)
-  assert.match(landing, /onOpenDemo\('copilot'\)/)
-  assert.match(landing, /onOpenDemo\(mode\)/)
+  assert.match(landing, /new URLSearchParams\(window\.location\.search\)\.get\('tour'\)/)
+  assert.match(landing, /role="dialog"/)
+  assert.match(landing, /event\.key === 'Escape'/)
+  assert.match(landing, /event\.key !== 'Tab'/)
+  assert.match(landing, /scrollToModes/)
+  assert.match(landing, /onEnterAgent\(mode\)/)
+  assert.match(landing, /data-ecosystem-index=\{index\}/)
   assert.match(landing, /\/tech-docs\.html/)
-  assert.match(app, /enterAgentForDemo/)
+  assert.match(landing, /landing-menu-toggle/)
+  assert.match(landing, /aria-controls="landing-mobile-menu"/)
+  assert.match(landing, /aria-expanded=\{mobileMenuOpen\}/)
+  assert.match(landing, /Mở menu điều hướng/)
+  assert.match(landing, /Đóng menu điều hướng/)
+  assert.match(landing, /closeOnOutsidePress/)
+  assert.match(landing, /closeOnFocusOutside/)
   assert.match(app, /startGuidedDemo/)
   assert.doesNotMatch(app, /ProductDemo/)
 })
@@ -309,11 +348,23 @@ test('technical document distinguishes the live feedback foundation from later l
 })
 
 test('public experience is responsive and honors reduced motion', () => {
+  assert.match(styles, /@media \(max-width:1050px\)/)
+  assert.match(styles, /@media \(max-width:1040px\)/)
+  assert.match(styles, /@media \(max-width:760px\)/)
   assert.match(styles, /@media \(max-width: 700px\)/)
+  assert.match(styles, /@media \(max-width:560px\)/)
   assert.match(styles, /prefers-reduced-motion: reduce/)
   assert.match(styles, /campaign-stage \*/)
   assert.match(styles, /animation: none !important/)
-  assert.match(styles, /translate3d\(-33\.333333%/)
-  assert.match(styles, /signal-ribbon-track \{[^}]*top:34px[^}]*rotate\(-\.35deg\)/)
+  assert.match(styles, /scroll-snap-type:x mandatory/)
+  assert.match(styles, /\.landing-desktop-nav-links \{ display:none; \}/)
+  assert.match(styles, /\.landing-mobile-nav-panel:not\(\[hidden\]\)/)
+  assert.match(styles, /\.landing-menu-toggle \{[\s\S]*width:44px/)
+  assert.match(styles, /\.landing-agent-cta \{ display:none; \}/)
+  assert.doesNotMatch(styles, /a\[data-ecosystem-index="0"\]::before/)
+  assert.doesNotMatch(styles, /@media \(max-width:560px\) \{[^}]*nav a \{ display:none/)
+  assert.match(styles, /@keyframes v3Spin360/)
+  assert.match(styles, /@keyframes dvFlow/)
+  assert.match(styles, /\.public-landing-v3 \.scroll-reveal/)
   assert.match(styles, /\.scroll-reveal\.is-visible/)
 })
