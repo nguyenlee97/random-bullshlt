@@ -1,4 +1,5 @@
 const HOME_PATH = '/home'
+const WORKSPACE_PATH = '/workspace'
 const AGENT_PATH = '/agent'
 
 const publicMode = mode => mode === 'autopilot' ? 'autopilot' : 'copilot'
@@ -21,6 +22,10 @@ export function parseAppRoute(locationLike) {
   const legacyMode = params.get('mode')
   const queryRequiresAgent = params.has('conversation') || params.has('auth') || params.has('auth_error')
   const isAgentPath = segments[0] === 'agent'
+
+  if (pathname === WORKSPACE_PATH && !params.has('conversation')) {
+    return { surface: 'workspace', mode: '', conversationId: '' }
+  }
 
   if (!isAgentPath && !queryRequiresAgent) {
     return { surface: 'home', mode: '', conversationId: '' }
@@ -49,7 +54,7 @@ export function parseAppRoute(locationLike) {
 }
 
 export function hasAgentIntent(locationLike) {
-  return parseAppRoute(locationLike).surface === 'agent'
+  return parseAppRoute(locationLike).surface !== 'home'
 }
 
 export function agentEntryMode(locationLike) {
@@ -79,4 +84,4 @@ export function authReturnTo(locationLike) {
   return `${locationLike?.pathname || AGENT_PATH}${query ? `?${query}` : ''}${locationLike?.hash || ''}`
 }
 
-export { AGENT_PATH, HOME_PATH }
+export { AGENT_PATH, HOME_PATH, WORKSPACE_PATH }

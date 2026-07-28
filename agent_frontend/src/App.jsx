@@ -23,6 +23,7 @@ import { normalizeAudienceSelection } from '@/lib/audience'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
 import {
   HOME_PATH,
+  WORKSPACE_PATH,
   agentConversationId,
   agentEntryMode,
   agentEntryUrl,
@@ -227,6 +228,11 @@ export default function App() {
         return
       }
       setExperienceMode(null)
+      if (route.surface === 'workspace') {
+        setPendingConversationId('')
+        setPendingEntryMode('')
+        return
+      }
       setPendingConversationId(route.conversationId)
       setPendingEntryMode(route.conversationId ? '' : route.mode)
     }
@@ -234,14 +240,14 @@ export default function App() {
     return () => window.removeEventListener('popstate', syncEntryRoute)
   }, [])
 
-  const enterAgent = useCallback((requestedMode = 'copilot') => {
+  const enterAgent = useCallback((requestedMode = '') => {
     const mode = requestedMode === 'autopilot' ? 'autopilot' : requestedMode === 'copilot' ? 'copilot' : ''
     landingEntryAttemptRef.current += 1
     pendingEntryStartRef.current = ''
-    const nextUrl = agentEntryUrl(window.location, mode)
+    const nextUrl = mode ? agentEntryUrl(window.location, mode) : WORKSPACE_PATH
     window.history.pushState({}, '', nextUrl)
     setPendingConversationId('')
-    setPendingEntryMode(mode || 'copilot')
+    setPendingEntryMode(mode)
     setExperienceMode(null)
     setShowPublicLanding(false)
   }, [])
@@ -612,11 +618,14 @@ export default function App() {
         authParams.delete('conversation')
         authParams.delete('mode')
         const nextQuery = authParams.toString()
-        if (initialRoute.surface === 'agent') {
+        if (initialRoute.surface !== 'home') {
+          const returnPath = initialRoute.surface === 'agent'
+            ? agentPath(initialRoute.mode, requestedConversation)
+            : WORKSPACE_PATH
           window.history.replaceState(
             {},
             '',
-            `${agentPath(initialRoute.mode, requestedConversation)}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`,
+            `${returnPath}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`,
           )
         }
         setHistoryLoading(true)

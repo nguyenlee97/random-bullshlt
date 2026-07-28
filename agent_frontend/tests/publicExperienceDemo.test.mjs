@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
+  WORKSPACE_PATH,
   agentConversationId,
   agentEntryMode,
   agentEntryUrl,
@@ -38,6 +39,7 @@ const styles = read('../src/index.css')
 test('public landing and agent modes have canonical SPA routes', () => {
   assert.equal(hasAgentIntent({ pathname: '/', search: '' }), false)
   assert.equal(hasAgentIntent({ pathname: '/home', search: '' }), false)
+  assert.equal(hasAgentIntent({ pathname: '/workspace', search: '' }), true)
   assert.equal(hasAgentIntent({ pathname: '/agent', search: '' }), true)
   assert.equal(hasAgentIntent({ pathname: '/', search: '?conversation=conv_123' }), true)
   assert.equal(hasAgentIntent({ pathname: '/', search: '?auth=success' }), true)
@@ -53,6 +55,11 @@ test('public landing and agent modes have canonical SPA routes', () => {
     agentConversationId({ pathname: '/agent/autopilot/history/conv_456', search: '' }),
     'conv_456',
   )
+  assert.deepEqual(
+    parseAppRoute({ pathname: '/workspace', search: '' }),
+    { surface: 'workspace', mode: '', conversationId: '' },
+  )
+  assert.equal(WORKSPACE_PATH, '/workspace')
   assert.deepEqual(
     parseAppRoute({ pathname: '/agent/copilot/history/conv%20123', search: '' }),
     { surface: 'agent', mode: 'copilot', conversationId: 'conv 123' },
@@ -71,6 +78,7 @@ test('public landing and agent modes have canonical SPA routes', () => {
   )
   assert.match(app, /<PublicLanding/)
   assert.match(app, /agentEntryUrl\(window\.location, mode\)/)
+  assert.match(app, /const nextUrl = mode \? agentEntryUrl\(window\.location, mode\) : WORKSPACE_PATH/)
   assert.match(app, /agentPath\(context\.experience_mode, context\.conversation_id \|\| conversationId\)/)
   assert.match(app, /pendingEntryMode/)
   assert.match(app, /pendingEntryStartRef/)
