@@ -21,7 +21,7 @@ import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { canApproveWorkflowStep, isBriefReady } from '@/lib/workflowValidation'
 import { normalizeAudienceSelection } from '@/lib/audience'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
-import { AGENT_PATH, agentEntryUrl, hasAgentIntent } from '@/lib/publicExperience'
+import { AGENT_PATH, agentEntryMode, agentEntryUrl, hasAgentIntent } from '@/lib/publicExperience'
 import {
   assignmentsToFileIndexes,
   normalizeAssignmentsForEditor,
@@ -124,7 +124,7 @@ function TabBar({ activeTab, onTabChange, chatHasNew, workspaceHasNew, experienc
 export default function App() {
   const account = useIdentity()
   const [showPublicLanding, setShowPublicLanding] = useState(() => !hasAgentIntent(window.location))
-  const [pendingDemoMode, setPendingDemoMode] = useState('')
+  const [pendingEntryMode, setPendingEntryMode] = useState(() => agentEntryMode(window.location))
   const [autoStartDemoMode, setAutoStartDemoMode] = useState('')
   const [experienceMode, setExperienceMode] = useState(null)
   const [currentConversationModel, setCurrentConversationModel] = useState(null)
@@ -168,6 +168,8 @@ export default function App() {
   const pendingConversationDeepLinkRef = useRef('')
   const currentConversationIdRef = useRef('')
   const campaignEpochRef = useRef(0)
+  const pendingEntryStartRef = useRef('')
+  const landingEntryAttemptRef = useRef(0)
   useEffect(() => {
     currentConversationIdRef.current = currentConversationId
   }, [currentConversationId])
@@ -191,21 +193,26 @@ export default function App() {
   const isDemoActiveRef = useRef(false)
 
   useEffect(() => {
-    const syncEntryRoute = () => setShowPublicLanding(!hasAgentIntent(window.location))
+    const syncEntryRoute = () => {
+      landingEntryAttemptRef.current += 1
+      pendingEntryStartRef.current = ''
+      setShowPublicLanding(!hasAgentIntent(window.location))
+      setPendingEntryMode(agentEntryMode(window.location))
+    }
     window.addEventListener('popstate', syncEntryRoute)
     return () => window.removeEventListener('popstate', syncEntryRoute)
   }, [])
 
-  const enterAgent = useCallback(() => {
-    const nextUrl = agentEntryUrl(window.location)
+  const enterAgent = useCallback((requestedMode = '') => {
+    const mode = requestedMode === 'autopilot' ? 'autopilot' : requestedMode === 'copilot' ? 'copilot' : ''
+    landingEntryAttemptRef.current += 1
+    pendingEntryStartRef.current = ''
+    const nextUrl = agentEntryUrl(window.location, mode)
     window.history.pushState({}, '', nextUrl)
+    setPendingEntryMode(mode)
+    if (mode) setExperienceMode(null)
     setShowPublicLanding(false)
   }, [])
-
-  const enterAgentForDemo = useCallback((mode) => {
-    setPendingDemoMode(mode === 'autopilot' ? 'autopilot' : 'copilot')
-    enterAgent()
-  }, [enterAgent])
 
   const returnToPublicLanding = useCallback(() => {
     window.history.pushState({}, '', '/')
@@ -1208,7 +1215,21 @@ export default function App() {
     }
   }, [claimBusy, claimTarget])
 
-  const startCampaign = useCallback(async (mode, conversationModel) => {
+  const startCampaign = useCallback(async (mode, conversationModel, landingEntryAttempt = null) => {
+    const entryIsStale = () => (
+      landingEntryAttempt !== null
+      && landingEntryAttempt !== landingEntryAttemptRef.current
+    )
+    const archiveIfStale = async context => {
+      if (!entryIsStale()) return false
+      if (context?.conversation_id) {
+        await AgentAPI.archiveConversation(context.conversation_id).catch(error => {
+          console.warn('Could not archive a superseded landing entry.', error)
+          return false
+        })
+      }
+      return true
+    }
     setModeSelectionBusy(true)
     setModeSelectionError('')
     try {
@@ -1218,18 +1239,22 @@ export default function App() {
         conversationModel,
       })
       if (!context) throw new Error('Không thể tạo campaign mới.')
-      applyConversationContext({ ...context, ui_messages: [] })
+      if (await archiveIfStale(context)) return false
       const result = await AgentAPI.setWorkspacePreferences(
         mode,
         mode === 'autopilot' ? 'critical_only' : 'review_every_stage',
       )
+      if (await archiveIfStale(context)) return false
       if (!result?.ok) throw new Error(result?.detail || 'Không thể lưu cách làm việc cho campaign.')
       const workspace = await AgentAPI.getWorkspace()
-      hydrateCanonicalWorkspace(workspace)
+      if (await archiveIfStale(context)) return false
+      const conversations = await AgentAPI.listConversations()
+      if (await archiveIfStale(context)) return false
+      applyConversationContext({ ...context, workspace, ui_messages: [] })
       setExperienceMode(mode)
       setActiveTab(mode === 'autopilot' ? 'autopilot' : 'workspace')
       setHasUserStarted(true)
-      setConversationHistory(await AgentAPI.listConversations())
+      setConversationHistory(conversations)
       bootedRef.current = false
       return true
     } catch (error) {
@@ -1238,7 +1263,7 @@ export default function App() {
     } finally {
       setModeSelectionBusy(false)
     }
-  }, [applyConversationContext, hydrateCanonicalWorkspace, newChat])
+  }, [applyConversationContext, newChat])
 
   const startGuidedDemo = useCallback(async (requestedMode) => {
     const demoMode = requestedMode === 'autopilot' ? 'autopilot' : 'copilot'
@@ -1259,11 +1284,32 @@ export default function App() {
   }, [conversationModelCatalog, startCampaign])
 
   useEffect(() => {
-    if (!pendingDemoMode || showPublicLanding || !identityReady || identityError || experienceMode || modeSelectionBusy) return
-    const mode = pendingDemoMode
-    setPendingDemoMode('')
-    startGuidedDemo(mode)
-  }, [experienceMode, identityError, identityReady, modeSelectionBusy, pendingDemoMode, showPublicLanding, startGuidedDemo])
+    if (!pendingEntryMode || showPublicLanding || !identityReady || identityError || experienceMode || modeSelectionBusy) return
+    const model = conversationModelCatalog.default_model
+      || conversationModelCatalog.models.find(item => item.available)?.id
+    if (!model) return
+    const mode = pendingEntryMode
+    const attempt = landingEntryAttemptRef.current
+    const entryKey = `${attempt}:${mode}`
+    if (pendingEntryStartRef.current === entryKey) return
+    pendingEntryStartRef.current = entryKey
+    setPendingEntryMode('')
+    const consumedUrl = new URL(window.location.href)
+    consumedUrl.searchParams.delete('mode')
+    window.history.replaceState({}, '', `${consumedUrl.pathname}${consumedUrl.search}${consumedUrl.hash}`)
+    startCampaign(mode === 'autopilot' ? 'autopilot' : 'guided', model, attempt).then(started => {
+      if (!started) pendingEntryStartRef.current = ''
+    })
+  }, [
+    conversationModelCatalog,
+    experienceMode,
+    identityError,
+    identityReady,
+    modeSelectionBusy,
+    pendingEntryMode,
+    showPublicLanding,
+    startCampaign,
+  ])
 
   const openConversationHistory = useCallback(async () => {
     setHistoryOpen(true)
@@ -1736,7 +1782,7 @@ export default function App() {
     : null
 
   if (showPublicLanding) {
-    return <PublicLanding onEnterAgent={enterAgent} onOpenDemo={enterAgentForDemo} />
+    return <PublicLanding onEnterAgent={enterAgent} />
   }
 
   if (!identityReady) {
