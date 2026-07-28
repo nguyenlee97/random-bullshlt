@@ -54,7 +54,7 @@ test('public landing preserves an explicit production mode when entering /agent'
   assert.match(app, /entryIsStale/)
   assert.match(app, /setPendingEntryMode\(agentEntryMode\(window\.location\)\)/)
   assert.match(app, /searchParams\.delete\('mode'\)/)
-  assert.match(app, /startCampaign\(mode === 'autopilot' \? 'autopilot' : 'guided', model, attempt\)/)
+  assert.match(app, /startCampaign\(mode === 'autopilot' \? 'autopilot' : 'guided', attempt\)/)
   assert.match(app, /archiveIfStale/)
   assert.match(app, /AgentAPI\.archiveConversation\(context\.conversation_id\)/)
   assert.match(app, /pendingConversationDeepLinkRef/)

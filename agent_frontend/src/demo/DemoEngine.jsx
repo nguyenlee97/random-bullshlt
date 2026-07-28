@@ -14,6 +14,7 @@ import {
   rememberOpenAIWalkthroughTool,
 } from './walkthroughMessageTracker'
 import log from '@/lib/logger'
+import { ACTIVE_CAMPAIGN_ENGINE_ID } from '@/lib/campaignEnginePolicy'
 
 const DemoContext = createContext(null)
 
@@ -120,7 +121,7 @@ function resolvePaneForStep(step) {
 export function DemoProvider({
   children, busy, messages, onSendMessage, onApprove, onRequestTab, activeTab,
   onActiveChange, onPrepareLive, experienceMode = 'guided', autoStart = '', onAutoStartConsumed,
-  conversationModel = 'greennode_minimax',
+  conversationModel = ACTIVE_CAMPAIGN_ENGINE_ID,
 }) {
   const [phase, setPhase] = useState(PHASE.IDLE)
   const [stepIdx, setStepIdx] = useState(0)

@@ -61,7 +61,7 @@ flowchart TB
   U[Web / Mobile] --> FE[React experience layer]
   Z[Zalo OA] --> ZA[Signed webhook + durable Zalo worker]
   FE --> AG[FastAPI Agent gateway]
-  ZA --> CTRL[Bounded GPT tool controller]
+  ZA --> CTRL[Bounded tool controller]
   CTRL --> AG
   AG --> LG[LangGraph Copilot / Autopilot orchestration]
   LG --> CAP[Typed capability registry]
@@ -102,12 +102,12 @@ flowchart TB
   B[Approved brief + audience context] --> N[Normalize multilingual intent]
   N --> P1[Placement dense + BM25 topic retrieval]
   N --> A1[Audience dense + BM25 retrieval]
-  P1 --> P2[GPT-5.4-nano topic rerank]
+  P1 --> P2[Bounded semantic topic reranker]
   P2 --> P3[Eligibility · availability · format · budget]
   P3 --> P4[Context-first deterministic score]
   P4 --> PE[Placement shortlist + match evidence]
   A1 --> A2[RRF top 50 candidates]
-  A2 --> A3[GPT-5.4-nano rerank top 30]
+  A2 --> A3[Bounded semantic rerank top 30]
   A3 --> A4[Explicit exclusion & contradiction guard]
   A4 --> A5[Provider-owned selector · exactly 6]
   A5 --> AE[Catalog ID validation · dedupe · evidence]
@@ -119,10 +119,10 @@ flowchart TB
     <tr><td>Dense retrieval</td><td><code>text-embedding-3-small</code>; index topic chạy in-process vì catalog chỉ có hàng trăm document.</td><td><code>paraphrase-multilingual-MiniLM-L12-v2</code>; vector 384 chiều lưu trong Qdrant.</td></tr>
     <tr><td>Sparse retrieval</td><td>BM25-style score giữ exact vocabulary tiếng Việt/Anh từ metadata placement.</td><td>Qdrant sparse BM25 giữ brand, product, interest và taxonomy term chính xác.</td></tr>
     <tr><td>Fusion</td><td>Dense + sparse rank được Reciprocal Rank Fusion theo từng query; topic được mở rộng trở lại các placement format hợp lệ.</td><td>Dense + sparse được RRF thành 50 candidate; query gốc luôn được giữ để không mất tín hiệu brief.</td></tr>
-    <tr><td>Rerank</td><td><code>gpt-5.4-nano</code> rerank tối đa 30 topic ID đã biết; không được thêm hoặc sửa ID.</td><td><code>gpt-5.4-nano</code> chấm tối đa 30 candidate; server sort theo relevance score rồi nối lại tail theo retrieval order.</td></tr>
+    <tr><td>Rerank</td><td>Bounded semantic reranker xử lý tối đa 30 topic ID đã biết; không được thêm hoặc sửa ID.</td><td>Bounded semantic reranker chấm tối đa 30 candidate; server sort theo relevance score rồi nối lại tail theo retrieval order.</td></tr>
     <tr><td>Deterministic boundary</td><td>Availability, booking conflict, device, creative ratio/format, budget và objective performance vẫn được kiểm tra ngoài LLM. Context match tạo tier ưu tiên; reach/quality chỉ reorder bên trong tier.</td><td>Explicit exclusion, B2B/B2C contradiction, ID grounding và duplicate removal chạy trước/sau selector. Selector lỗi thì giữ guarded retrieval order thay vì dump lại toàn catalog.</td></tr>
-    <tr><td>Engine boundary</td><td>Reranker là fixed relevance specialist, không thay conversational engine của campaign.</td><td>Copilot và Autopilot dùng cùng retrieval/rerank; selector cuối vẫn thuộc GreenNode hoặc OpenAI theo immutable campaign model.</td></tr>
-    <tr><td>Evidence</td><td>Card trả topic, matched keyword/DMP affinity, dense/sparse rank, nano rationale và ranking mode.</td><td>Artifact trả retrieval mode, candidate count, rerank model/status, guard rejection, provider selector và stage latency.</td></tr>
+    <tr><td>Engine boundary</td><td>Reranker là fixed relevance specialist, không thay conversational engine của campaign.</td><td>Copilot và Autopilot dùng cùng retrieval/rerank; execution route vẫn được khóa theo campaign engine đã cấu hình.</td></tr>
+    <tr><td>Evidence</td><td>Card trả topic, matched keyword/DMP affinity, dense/sparse rank, rerank rationale và ranking mode.</td><td>Artifact trả retrieval mode, candidate count, rerank status, guard rejection, execution route và stage latency.</td></tr>
   </tbody></table></div>
 
   <div class="callout success"><b>Fail-open có giới hạn:</b> embedding, reranker hoặc provider lỗi không được tạo ID mới. Placement quay về deterministic contextual scorer; audience giữ candidate order đã được guard và catalog-grounding. Lỗi recommendation không được nới lỏng ownership, confirmation, image quota, audience-reach hay order-idempotency.</div>
@@ -131,14 +131,14 @@ flowchart TB
   <div class="table"><table><thead><tr><th>Setup</th><th>Top-1 đúng</th><th>Top-3 đúng</th><th>Semantic hard-case top-1</th><th>p95 latency</th></tr></thead><tbody>
     <tr><td>Deterministic contextual baseline</td><td>76.7%</td><td>81.4%</td><td>10.0%</td><td>0.08s</td></tr>
     <tr><td>Dense + BM25 retrieval</td><td>81.4%</td><td>86.1%</td><td>20.0%</td><td>1.18s</td></tr>
-    <tr><td><b>Dense + BM25 + GPT-5.4-nano</b></td><td><b>100%</b></td><td><b>100%</b></td><td><b>100%</b></td><td>12.6s</td></tr>
+    <tr><td><b>Dense + BM25 + bounded reranker</b></td><td><b>100%</b></td><td><b>100%</b></td><td><b>100%</b></td><td>12.6s</td></tr>
   </tbody></table></div>
 
   <h3>Audience experiment · 80 golden briefs · 310 segment</h3>
   <div class="table"><table><thead><tr><th>Setup</th><th>Retrieval recall@50</th><th>Must-have recall@6</th><th>nDCG@6</th><th>Exclusion violation@6</th><th>p95 latency</th></tr></thead><tbody>
     <tr><td>BM25-only baseline</td><td>38.8%</td><td>24.0%</td><td>18.4%</td><td>1</td><td>2.08s</td></tr>
     <tr><td>Dense + BM25 retrieval</td><td>75.0%</td><td>47.9%</td><td>36.3%</td><td>1</td><td>2.10s</td></tr>
-    <tr><td><b>Dense + BM25 + GPT-5.4-nano</b></td><td><b>75.0%</b></td><td><b>75.8%</b></td><td><b>61.3%</b></td><td><b>0</b></td><td>7.50s</td></tr>
+    <tr><td><b>Dense + BM25 + bounded reranker</b></td><td><b>75.0%</b></td><td><b>75.8%</b></td><td><b>61.3%</b></td><td><b>0</b></td><td>7.50s</td></tr>
   </tbody></table></div>
 
   <div class="metrics"><div class="metric"><b>258</b><span>active placement có versioned audience context</span></div><div class="metric"><b>310</b><span>audience segment trong production Qdrant</span></div><div class="metric"><b>100%</b><span>placement top-1 trên 43-case NP-6 matrix</span></div><div class="metric"><b>75.8%</b><span>audience must-have recall@6 trên 80 brief</span></div></div>
@@ -249,7 +249,7 @@ flowchart LR
     <div class="card"><h3>Model learning — đường có điều kiện</h3><p>Chỉ dùng SFT/DPO/RLHF/RLAIF khi có model path cho phép fine-tune, dataset đủ lớn và được adjudicate, cùng held-out eval chứng minh lợi ích. Không có online weight update trực tiếp từ feedback của một user.</p></div>
   </div>
 
-  <p class="small">Phương pháp tham chiếu: <a href="https://arxiv.org/abs/2203.02155" target="_blank" rel="noreferrer">InstructGPT / RLHF</a> · <a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noreferrer">Direct Preference Optimization</a> · <a href="https://www.anthropic.com/research/constitutional-ai-harmlessness-from-ai-feedback" target="_blank" rel="noreferrer">Constitutional AI / RLAIF</a> · <a href="https://airc.nist.gov/airmf-resources/airmf/5-sec-core/" target="_blank" rel="noreferrer">NIST AI RMF: feedback, human oversight &amp; evaluation</a>.</p>
+  <p class="small">Phương pháp tham chiếu: <a href="https://arxiv.org/abs/2203.02155" target="_blank" rel="noreferrer">RLHF foundation</a> · <a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noreferrer">Direct Preference Optimization</a> · <a href="https://www.anthropic.com/research/constitutional-ai-harmlessness-from-ai-feedback" target="_blank" rel="noreferrer">Constitutional AI / RLAIF</a> · <a href="https://airc.nist.gov/airmf-resources/airmf/5-sec-core/" target="_blank" rel="noreferrer">NIST AI RMF: feedback, human oversight &amp; evaluation</a>.</p>
 
   <div class="callout warn"><b>Đọc trước khi diễn giải sơ đồ:</b> Phần đang chạy gồm feedback UI/API, owner-scoped idempotent storage, redaction/retention, versioned interaction &amp; guard events, metrics, golden set và guardrail eval. Review queue, automated dataset-candidate pipeline, adjudication UI, outcome join, preference-pair generation, SFT/DPO/RLHF/RLAIF và closed-loop shadow/canary vẫn là các stage tiếp theo. Feedback hiện tại không tự sửa campaign, không tự đổi prompt và không cập nhật model weight.</div>
 

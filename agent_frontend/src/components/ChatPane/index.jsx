@@ -2,7 +2,12 @@ import { MessageSquare, Download } from 'lucide-react'
 import ChatThread from './ChatThread'
 import ChatComposer from './ChatComposer'
 import { AgentAPI } from '@/api/agentApi'
-import { compactNetworkLog, requestBodySnapshot, safeDebugValue } from '@/lib/debugExport'
+import {
+  compactNetworkLog,
+  requestBodySnapshot,
+  safeDebugValue,
+  safePublicDebugValue,
+} from '@/lib/debugExport'
 
 // ─── Global fetch interceptor ─────────────────────────────────────────────────
 // Installed once per page load. Captures all fetch() calls (DMP, agent, campaigns).
@@ -120,7 +125,7 @@ async function exportChatLog(messages, debugContext = {}) {
   }
 
   // Trigger download
-  const json = JSON.stringify(exportData, null, 2)
+  const json = JSON.stringify(safePublicDebugValue(exportData), null, 2)
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

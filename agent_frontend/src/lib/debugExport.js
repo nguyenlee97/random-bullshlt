@@ -1,6 +1,8 @@
 const REDACTED_KEY = /(?:authorization|cookie|token|secret|password|api[_-]?key|csrf)/i
 const BINARY_KEY = /(?:imageb64|dataurl|base64|binary|filedata)/i
 const BACKEND_LOG_URL = /\/api\/agent\/logs\//
+const ENGINE_METADATA_KEY = /(?:^|_)(?:model|provider)(?:$|_)|(?:^|_)route_key$/i
+const ENGINE_NAME = /(?:greennode|minimax|openai|gpt)(?:[\w.-]*)/gi
 
 export function safeDebugValue(value, key = '', depth = 0, seen = new WeakSet()) {
   if (REDACTED_KEY.test(key)) return '[redacted]'
@@ -28,6 +30,21 @@ export function safeDebugValue(value, key = '', depth = 0, seen = new WeakSet())
       safeDebugValue(childValue, childKey, depth + 1, seen),
     ]),
   )
+}
+
+function stripPublicEngineMetadata(value) {
+  if (typeof value === 'string') return value.replace(ENGINE_NAME, '[internal engine]')
+  if (Array.isArray(value)) return value.map(stripPublicEngineMetadata)
+  if (value == null || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !ENGINE_METADATA_KEY.test(key))
+      .map(([key, childValue]) => [key, stripPublicEngineMetadata(childValue)]),
+  )
+}
+
+export function safePublicDebugValue(value) {
+  return stripPublicEngineMetadata(safeDebugValue(value))
 }
 
 export function requestBodySnapshot(body) {

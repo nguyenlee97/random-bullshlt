@@ -1,4 +1,6 @@
-export const OPENAI_CAMPAIGN_MODEL = 'openai_gpt_5_4_mini'
+import { ACTIVE_CAMPAIGN_ENGINE_ID } from '../lib/campaignEnginePolicy.js'
+
+export const OPENAI_CAMPAIGN_MODEL = ACTIVE_CAMPAIGN_ENGINE_ID
 
 const OPENAI_WALKTHROUGH_TOOL_ALIASES = {
   openai_audience_entry: 'audience_entry',

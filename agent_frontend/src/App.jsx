@@ -23,6 +23,10 @@ import { normalizeAudienceSelection } from '@/lib/audience'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
 import { AGENT_PATH, agentEntryMode, agentEntryUrl, hasAgentIntent } from '@/lib/publicExperience'
 import {
+  CAMPAIGN_ENGINE_UNAVAILABLE_MESSAGE,
+  resolveActiveCampaignEngine,
+} from '@/lib/campaignEnginePolicy'
+import {
   assignmentsToFileIndexes,
   normalizeAssignmentsForEditor,
   normalizeCreativeFiles,
@@ -132,6 +136,7 @@ export default function App() {
   const [conversationModelCatalog, setConversationModelCatalog] = useState({
     models: [], default_model: null,
   })
+  const activeCampaignEngine = resolveActiveCampaignEngine(conversationModelCatalog)
   const [modeSelectionBusy, setModeSelectionBusy] = useState(false)
   const [modeSelectionError, setModeSelectionError] = useState('')
   const [autopilotSummary, setAutopilotSummary] = useState(null)
@@ -582,6 +587,9 @@ export default function App() {
         ])
         setConversationHistory(history)
         setConversationModelCatalog(modelCatalog)
+        if (!resolveActiveCampaignEngine(modelCatalog)) {
+          setModeSelectionError(current => current || CAMPAIGN_ENGINE_UNAVAILABLE_MESSAGE)
+        }
         // Zalo OA deep links carry only the public conversation ID. Ownership
         // is still resolved from HttpOnly/anonymous cookies by the Agent API.
         const requestedConversation = authParams.get('conversation')
@@ -1224,7 +1232,11 @@ export default function App() {
     }
   }, [claimBusy, claimTarget])
 
-  const startCampaign = useCallback(async (mode, conversationModel, landingEntryAttempt = null) => {
+  const startCampaign = useCallback(async (mode, landingEntryAttempt = null) => {
+    if (!activeCampaignEngine) {
+      setModeSelectionError(CAMPAIGN_ENGINE_UNAVAILABLE_MESSAGE)
+      return false
+    }
     const entryIsStale = () => (
       landingEntryAttempt !== null
       && landingEntryAttempt !== landingEntryAttemptRef.current
@@ -1245,7 +1257,7 @@ export default function App() {
       if (window.location.pathname !== AGENT_PATH) window.history.replaceState({}, '', AGENT_PATH)
       const context = await newChat({
         experienceMode: mode,
-        conversationModel,
+        conversationModel: activeCampaignEngine,
       })
       if (!context) throw new Error('Không thể tạo campaign mới.')
       if (await archiveIfStale(context)) return false
@@ -1272,25 +1284,15 @@ export default function App() {
     } finally {
       setModeSelectionBusy(false)
     }
-  }, [applyConversationContext, newChat])
+  }, [activeCampaignEngine, applyConversationContext, newChat])
 
   const startGuidedDemo = useCallback(async (requestedMode) => {
     const demoMode = requestedMode === 'autopilot' ? 'autopilot' : 'copilot'
     setAutoStartDemoMode(demoMode === 'copilot' ? 'copilot-tour' : 'autopilot')
-    const model = conversationModelCatalog.default_model
-      || conversationModelCatalog.models.find(item => item.available)?.id
-    if (!model) {
-      setModeSelectionError('Không có model campaign nào đang sẵn sàng.')
-      setAutoStartDemoMode('')
-      return false
-    }
-    const started = await startCampaign(
-      demoMode === 'autopilot' ? 'autopilot' : 'guided',
-      model,
-    )
+    const started = await startCampaign(demoMode === 'autopilot' ? 'autopilot' : 'guided')
     if (!started) setAutoStartDemoMode('')
     return started
-  }, [conversationModelCatalog, startCampaign])
+  }, [startCampaign])
 
   useEffect(() => {
     if (!pendingDemoMode || showPublicLanding || !identityReady || identityError || experienceMode || modeSelectionBusy) return
@@ -1309,9 +1311,7 @@ export default function App() {
 
   useEffect(() => {
     if (!pendingEntryMode || showPublicLanding || !identityReady || identityError || experienceMode || modeSelectionBusy) return
-    const model = conversationModelCatalog.default_model
-      || conversationModelCatalog.models.find(item => item.available)?.id
-    if (!model) return
+    if (!activeCampaignEngine) return
     const mode = pendingEntryMode
     const attempt = landingEntryAttemptRef.current
     const entryKey = `${attempt}:${mode}`
@@ -1321,11 +1321,11 @@ export default function App() {
     const consumedUrl = new URL(window.location.href)
     consumedUrl.searchParams.delete('mode')
     window.history.replaceState({}, '', `${consumedUrl.pathname}${consumedUrl.search}${consumedUrl.hash}`)
-    startCampaign(mode === 'autopilot' ? 'autopilot' : 'guided', model, attempt).then(started => {
+    startCampaign(mode === 'autopilot' ? 'autopilot' : 'guided', attempt).then(started => {
       if (!started) pendingEntryStartRef.current = ''
     })
   }, [
-    conversationModelCatalog,
+    activeCampaignEngine,
     experienceMode,
     identityError,
     identityReady,
@@ -1837,7 +1837,7 @@ export default function App() {
       <>
         <ExperienceSelector
           onSelect={startCampaign}
-          modelCatalog={conversationModelCatalog}
+          campaignEngineReady={Boolean(activeCampaignEngine)}
           busy={modeSelectionBusy}
           error={modeSelectionError}
           conversations={conversationHistory}
@@ -2075,7 +2075,6 @@ export default function App() {
             canRetry={canRetry && !busy}
             policy={autopilotChatPolicy}
             debugContext={{
-              conversation_model: currentConversationModel,
               experience_mode: experienceMode,
               current_step: currentStep,
               step_statuses: stepStatuses,
