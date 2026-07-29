@@ -150,7 +150,7 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
           <p className="text-[10px] text-brand-700">Thay đổi chỉ được lưu khi bấm “Duyệt & tiếp tục”.</p>
         </div>
       )}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-2 sm:grid-cols-2 2xl:grid-cols-3">
         {zones.map((zone, index) => (
           <button
             type="button"
@@ -159,7 +159,7 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
             disabled={!editable}
             aria-pressed={activeIds.has(zone.id)}
             onClick={() => toggle(zone.id)}
-            className={`rounded-xl border px-3 py-2.5 text-left transition ${activeIds.has(zone.id)
+            className={`min-w-0 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition ${activeIds.has(zone.id)
               ? 'border-brand-300 bg-brand-50/60 ring-1 ring-brand-100'
               : 'border-slate-200 bg-white opacity-55'} ${editable ? 'cursor-pointer hover:border-brand-400' : 'cursor-default disabled:opacity-100'}`}
           >
@@ -167,10 +167,10 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
               {editable && (
                 <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-black ${activeIds.has(zone.id) ? 'border-brand-500 bg-brand-500 text-white' : 'border-slate-300 bg-white text-transparent'}`}>✓</span>
               )}
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-900">{zoneName(zone)}</p>
-                <p className="mt-1 text-[10px] text-slate-500">{zone.id || '—'} · {zone.channel || zone.siteId || zone.format || zone.size || 'inventory'}</p>
-                <p className="mt-1 text-[10px] font-semibold text-brand-700">CPM {number(zone.cpm)} ₫ · reach {number(zone.reach)}</p>
+              <div className="min-w-0 flex-1">
+                <p className="[overflow-wrap:anywhere] text-xs font-bold leading-4 text-slate-900">{zoneName(zone)}</p>
+                <p className="mt-1 [overflow-wrap:anywhere] text-[10px] leading-4 text-slate-500">{zone.id || '—'} · {zone.channel || zone.siteId || zone.format || zone.size || 'inventory'}</p>
+                <p className="mt-1 [overflow-wrap:anywhere] text-[10px] font-semibold leading-4 text-brand-700">CPM {number(zone.cpm)} ₫ · reach {number(zone.reach)}</p>
               </div>
             </div>
           </button>
