@@ -216,7 +216,10 @@ test('Copilot creative walkthrough waits for analysis and handles manual review 
   assert.match(engine, /step\.whenReviewState/)
   assert.match(engine, /currentCreativeReviewState/)
   assert.match(engine, /isCreativeReviewTerminal\(\) && reviewStates\.includes\(state\)/)
+  assert.match(engine, /state === 'upload_failed'/)
+  assert.match(engine, /action: 'retry_previous_step'/)
   assert.match(scripts, /whenReviewState: 'blocked'/)
+  assert.match(scripts, /retryPreviousStep: true/)
   assert.match(engine, /if \(step\.autoAdvance && inputEl\)/)
 
   const analyzeIndex = scripts.indexOf("title: '🔎 Phân tích Creative Intelligence'")

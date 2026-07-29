@@ -12,6 +12,7 @@ export const APPROVED_CREATIVE_STATUSES = new Set([
 export function creativeReviewState(files = []) {
   if (!files.length) return 'empty'
   const statuses = files.map(file => file.analysisStatus || '')
+  if (statuses.some(status => status === 'upload_failed')) return 'upload_failed'
   if (statuses.some(status => status === 'needs_review')) return 'blocked'
   if (statuses.every(status => APPROVED_CREATIVE_STATUSES.has(status))) return 'ready'
   return 'analysis_required'

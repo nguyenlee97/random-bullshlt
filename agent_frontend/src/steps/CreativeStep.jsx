@@ -91,6 +91,7 @@ function FileCard({ file, onRemove, onPreview, onOverride, onFormat, readOnly = 
     .map(([key]) => SAFETY_LABELS[key] || key)
   const statusUi = {
     uploading: { label: 'Đang tải lên', cls: 'bg-blue-100 text-blue-700' },
+    upload_failed: { label: 'Tải lên thất bại · có thể thử lại', cls: 'bg-red-100 text-red-700' },
     queued: { label: 'Đang chờ phân tích', cls: 'bg-blue-100 text-blue-700' },
     analyzing: { label: 'Đang phân tích', cls: 'bg-blue-100 text-blue-700' },
     auto_approved: { label: 'Đã duyệt', cls: 'bg-emerald-100 text-emerald-700' },
@@ -189,6 +190,11 @@ function FileCard({ file, onRemove, onPreview, onOverride, onFormat, readOnly = 
             {(file.reviewReasons || []).map((reason, index) => (
               <p key={index} className="text-[10px] leading-snug text-amber-700">• {reason}</p>
             ))}
+            {status === 'upload_failed' && (
+              <p className="text-[10px] leading-snug text-red-700">
+                {file.uploadError || 'Kết nối tải lên bị gián đoạn.'} Bấm “Phân tích creative” để thử lại.
+              </p>
+            )}
             {(vlm.subject_desc || vlm.brand_guess || vlm.brief_match_score || vlm.confidence != null) && (
               <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] text-slate-700">
                 {vlm.subject_desc && <p><strong>Nội dung:</strong> {vlm.subject_desc}</p>}

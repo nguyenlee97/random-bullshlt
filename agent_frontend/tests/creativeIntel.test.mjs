@@ -11,6 +11,7 @@ import {
 
 test('creative review separates analysis completion from operator confirmation', () => {
   assert.equal(creativeReviewState([{ analysisStatus: 'queued' }]), 'analysis_required')
+  assert.equal(creativeReviewState([{ analysisStatus: 'upload_failed' }]), 'upload_failed')
   assert.equal(creativeReviewState([{ analysisStatus: 'needs_review' }]), 'blocked')
   assert.equal(creativeReviewState([
     { analysisStatus: 'auto_approved' },

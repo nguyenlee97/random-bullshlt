@@ -4,6 +4,7 @@ const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 const crypto  = require('crypto');
+const { deterministicUploadFilename } = require('../lib/creativeUploadIdempotency');
 
 // ── Uploads directory ──────────────────────────────────────────────────────
 // Resolve once at startup: <project_root>/uploads/
@@ -79,16 +80,50 @@ router.post('/upload', upload.single('file'), (req, res) => {
         return res.status(400).json({ error: 'No file received. Send as multipart field "file".' });
     }
 
-    const url = buildPublicUrl(req, req.file.filename);
+    const idempotencyKey = String(req.get('x-idempotency-key') || '').trim();
+    let filename = req.file.filename;
+    let reused = false;
 
-    console.log(`[Creative] Uploaded: ${req.file.filename} (${(req.file.size / 1024).toFixed(1)} KB)`);
+    if (idempotencyKey) {
+        const stableFilename = deterministicUploadFilename(idempotencyKey, req.file.originalname);
+        const stablePath = path.join(UPLOADS_DIR, stableFilename);
+        try {
+            if (fs.existsSync(stablePath)) {
+                fs.unlinkSync(req.file.path);
+                reused = true;
+            } else {
+                fs.renameSync(req.file.path, stablePath);
+            }
+            filename = stableFilename;
+        } catch (error) {
+            // A concurrent retry may win the rename race. The stable file is
+            // authoritative; discard this request's temporary duplicate.
+            if ((error.code === 'EEXIST' || error.code === 'EPERM') && fs.existsSync(stablePath)) {
+                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+                filename = stableFilename;
+                reused = true;
+            } else {
+                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+                console.error('[Creative] Idempotent upload finalize failed:', error);
+                return res.status(500).json({ error: 'Failed to finalize uploaded file.' });
+            }
+        }
+    }
 
-    res.status(201).json({
+    const url = buildPublicUrl(req, filename);
+
+    console.log(
+        `[Creative] Uploaded: ${filename} (${(req.file.size / 1024).toFixed(1)} KB)`
+        + ` original=${req.file.originalname} reused=${reused}`
+    );
+
+    res.status(reused ? 200 : 201).json({
         ok:       true,
         url,
-        filename: req.file.filename,
+        filename,
         size:     req.file.size,
         mimeType: req.file.mimetype,
+        reused,
     });
 });
 

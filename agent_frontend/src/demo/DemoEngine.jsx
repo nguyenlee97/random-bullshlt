@@ -742,17 +742,20 @@ export function DemoProvider({
         } = step
         const startedAt = Date.now()
 
-        const reachedTerminalState = await new Promise((resolve) => {
+        const waitResult = await new Promise((resolve) => {
           const poll = () => {
             const state = currentCreativeReviewState()
             if (isCreativeReviewTerminal() && reviewStates.includes(state)) {
-              resolve(true)
+              resolve({ ok: true, state })
+            } else if (!busyRef.current && state === 'upload_failed') {
+              log.error('DemoEngine: creative upload failed; stopping review wait immediately')
+              resolve({ ok: false, state, reason: 'upload_failed' })
             } else if (Date.now() - startedAt > reviewTimeout) {
               log.error(
                 `DemoEngine: WAIT_FOR_CREATIVE_REVIEW timeout; `
                 + `expected=${reviewStates.join(',')} actual=${state || 'missing'}`,
               )
-              resolve(false)
+              resolve({ ok: false, state, reason: 'timeout' })
             } else {
               setTimeout(poll, 300)
             }
@@ -761,11 +764,24 @@ export function DemoProvider({
         })
 
         setIsWaiting(false)
-        if (!reachedTerminalState) {
+        if (!waitResult.ok) {
+          const canRetryUpload = (
+            waitResult.reason === 'upload_failed'
+            && step.retryPreviousStep === true
+          )
           setPopup({
-            title: 'Phân tích creative chưa hoàn tất',
-            text: 'Walkthrough đã dừng để không đi tiếp khi kết quả Creative Intelligence chưa sẵn sàng. Hãy kiểm tra trạng thái phân tích trong workspace rồi thử lại walkthrough.',
+            title: canRetryUpload
+              ? 'Tải creative bị gián đoạn'
+              : 'Phân tích creative chưa hoàn tất',
+            text: canRetryUpload
+              ? 'Một creative chưa tải lên hoàn tất. Các file đã thành công vẫn được giữ lại; walkthrough có thể thử lại đúng bước phân tích mà không bắt đầu lại campaign.'
+              : 'Walkthrough đã dừng để không đi tiếp khi kết quả Creative Intelligence chưa sẵn sàng. Hãy kiểm tra trạng thái phân tích trong workspace rồi thử lại walkthrough.',
             buttons: [
+              ...(canRetryUpload ? [{
+                label: 'Thử tải lại và tiếp tục',
+                variant: 'primary',
+                action: 'retry_previous_step',
+              }] : []),
               { label: 'Dừng walkthrough và kiểm tra', variant: 'primary', action: 'skip' },
             ],
           })
@@ -1067,6 +1083,11 @@ export function DemoProvider({
 
     if (action === 'retry_current_step') {
       setStepRetryNonce(prev => prev + 1)
+      return
+    }
+
+    if (action === 'retry_previous_step') {
+      setStepIdx(prev => Math.max(0, prev - 1))
       return
     }
 

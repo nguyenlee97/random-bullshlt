@@ -590,6 +590,7 @@ export default function App() {
     onAutoSelectAudience: handleAutoSelectAudience,
     onWorkspaceUpdate: handleWorkspaceUpdate,
     onCreativePrepared: handleCreativePrepared,
+    openaiCampaignFlow: currentConversationModel === 'openai_gpt_5_4_mini',
 
     // Full state snapshot for retry — capture formState+step BEFORE each send
     onSnapshotRequest: useCallback(() => ({

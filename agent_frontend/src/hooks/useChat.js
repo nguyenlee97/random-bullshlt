@@ -36,6 +36,7 @@ export function useChat({
   onAutoSelectAudience,
   onWorkspaceUpdate,
   onCreativePrepared,
+  openaiCampaignFlow = false,
   onSnapshotRequest,   // () => { formState, stepStatuses, currentStep } — called before each send
   onRestoreSnapshot,  // (snapshot) => void — called on retry to revert external state
 }) {
@@ -369,6 +370,7 @@ export function useChat({
           const prepared = await prepareCreativeFiles(
             currentFiles,
             files => onCreativePrepared?.(files),
+            { resilientUpload: openaiCampaignFlow },
           )
           onCreativePrepared?.(prepared)
           const reviewFiles = prepared.filter(file => file.analysisStatus === 'needs_review')
@@ -486,7 +488,7 @@ export function useChat({
     setBusy(false)
     if (shouldAdvance && markApproved && onStepApproved) onStepApproved(stepIndex)
     return { response, shouldAdvance }
-  }, [busy, startThinking, stopThinking, onStepApproved, onCreativePrepared])
+  }, [busy, startThinking, stopThinking, onStepApproved, onCreativePrepared, openaiCampaignFlow])
 
   return {
     messages, busy, boot, hydrateMessages, newChat, sendMessage, approveStep,

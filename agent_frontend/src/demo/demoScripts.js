@@ -740,6 +740,7 @@ export function buildStage2Steps(
     {
       type: 'WAIT_FOR_CREATIVE_REVIEW',
       reviewStates: ['ready', 'blocked'],
+      retryPreviousStep: true,
       timeout: 120000,
       title: '⏳ Chờ kết quả Creative Intelligence...',
       text: 'Hệ thống đang chờ tất cả creative hoàn tất phân tích. Nếu có ảnh cần con người xem lại, walkthrough sẽ hướng dẫn bước phê duyệt thủ công.',

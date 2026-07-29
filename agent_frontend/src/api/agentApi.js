@@ -2,6 +2,12 @@ import { fmt, generateId } from '@/lib/utils'
 import log from '@/lib/logger'
 import { normalizeDmpAttr } from '@/lib/audience'
 import { isRetryableCreativeAnalysisFailure } from '@/lib/creativeIntel'
+import {
+  creativeUploadIdempotencyKey,
+  OPENAI_CREATIVE_UPLOAD_MAX_ATTEMPTS,
+  OPENAI_CREATIVE_UPLOAD_TIMEOUT_MS,
+  shouldRetryCreativeUpload,
+} from '@/lib/creativeUploadPolicy'
 
 export { normalizeDmpAttr } from '@/lib/audience'
 
@@ -966,7 +972,11 @@ function mergeCreativeIntel(files, docs) {
 }
 
 /** Upload, enqueue, and wait for terminal creative verdicts before Setup. */
-export async function prepareCreativeFiles(files, onProgress = () => {}) {
+export async function prepareCreativeFiles(
+  files,
+  onProgress = () => {},
+  { resilientUpload = false } = {},
+) {
   let prepared = []
   for (let index = 0; index < (files || []).length; index += 1) {
     const file = files[index]
@@ -977,14 +987,48 @@ export async function prepareCreativeFiles(files, onProgress = () => {}) {
         { ...file, analysisStatus: 'uploading' },
         ...(files || []).slice(index + 1),
       ])
-      url = await uploadCreativeFile(file.dataUrl, file.name, file.type)
+      try {
+        url = await uploadCreativeFile(
+          file.dataUrl,
+          file.name,
+          file.type,
+          resilientUpload
+            ? {
+                timeoutMs: OPENAI_CREATIVE_UPLOAD_TIMEOUT_MS,
+                maxAttempts: OPENAI_CREATIVE_UPLOAD_MAX_ATTEMPTS,
+                idempotencyKey: creativeUploadIdempotencyKey({
+                  conversationId: CURRENT_CONVERSATION_ID,
+                  sessionId: SESSION_ID,
+                  file,
+                  index,
+                }),
+              }
+            : {},
+        )
+      } catch (error) {
+        if (resilientUpload) {
+          onProgress([
+            ...prepared,
+            {
+              ...file,
+              analysisStatus: 'upload_failed',
+              uploadError: error.message,
+            },
+            ...(files || []).slice(index + 1),
+          ])
+        }
+        throw new Error(`Upload creative thất bại: ${file.name} — ${error.message}`)
+      }
     }
     if (!url) throw new Error(`Upload creative thất bại: ${file.name}`)
     prepared.push({
       ...file,
       url,
       intendedFormat: inferIntendedFormat(file),
-      analysisStatus: file.analysisStatus || 'queued',
+      analysisStatus: ['uploading', 'upload_failed'].includes(file.analysisStatus)
+        ? 'queued'
+        : (file.analysisStatus || 'queued'),
+      uploadError: null,
     })
     onProgress([...prepared, ...(files || []).slice(index + 1)])
   }
@@ -1057,42 +1101,102 @@ export async function prepareCreativeFiles(files, onProgress = () => {}) {
   throw new Error('Phân tích creative quá thời gian. Tác vụ vẫn được lưu; vui lòng thử xác nhận lại.')
 }
 
-export async function uploadCreativeFile(dataUrl, filename, mimeType) {
+export async function uploadCreativeFile(
+  dataUrl,
+  filename,
+  mimeType,
+  {
+    timeoutMs = 20000,
+    maxAttempts = 1,
+    idempotencyKey = '',
+  } = {},
+) {
   if (!dataUrl || !dataUrl.startsWith('data:')) return ''
-  try {
-    // Convert base64 dataUrl to Blob
-    const base64 = dataUrl.split(',')[1]
-    const bytes = atob(base64)
-    const arr = new Uint8Array(bytes.length)
-    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
-    const blob = new Blob([arr], { type: mimeType })
-    const file = new File([blob], filename, { type: mimeType })
+  // Convert once and reuse the same bytes for a safe idempotent retry.
+  const base64 = dataUrl.split(',')[1]
+  const bytes = atob(base64)
+  const arr = new Uint8Array(bytes.length)
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
+  const blob = new Blob([arr], { type: mimeType })
+  const file = new File([blob], filename, { type: mimeType })
+  const attempts = Math.max(1, Number(maxAttempts || 1))
+  const retryEnabled = attempts > 1 || Boolean(idempotencyKey)
+  let lastError = null
 
-    const form = new FormData()
-    form.append('file', file)
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const form = new FormData()
+      form.append('file', file)
 
-    const res = await fetch(`${BACKEND_URL}/api/creative/upload`, {
-      method: 'POST',
-      body: form,
-      signal: AbortSignal.timeout(20000),
-    })
-    if (!res.ok) {
-      console.warn('[uploadCreativeFile] upload failed:', res.status)
+      const res = await fetch(`${BACKEND_URL}/api/creative/upload`, {
+        method: 'POST',
+        headers: idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {},
+        body: form,
+        signal: AbortSignal.timeout(timeoutMs),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        lastError = new Error(body.error || `HTTP ${res.status}`)
+        lastError.status = res.status
+        console.warn('[uploadCreativeFile] upload failed:', res.status, {
+          filename,
+          attempt,
+          attempts,
+        })
+        if (shouldRetryCreativeUpload({
+          attempt,
+          maxAttempts: attempts,
+          status: res.status,
+        })) {
+          await wait(750 * attempt)
+          continue
+        }
+        if (retryEnabled) throw lastError
+        return ''
+      }
+      const data = await res.json()
+      // The AdsPilot backend returns { url } or { path } — normalise
+      const raw = data.url || data.path || ''
+      if (!raw) {
+        lastError = new Error('Server không trả về URL creative')
+        if (shouldRetryCreativeUpload({
+          attempt,
+          maxAttempts: attempts,
+          status: 0,
+        })) {
+          await wait(750 * attempt)
+          continue
+        }
+        if (retryEnabled) throw lastError
+        return ''
+      }
+      // If it's a relative path, prefix with the backend origin
+      if (raw && raw.startsWith('/')) {
+        const origin = new URL(BACKEND_URL).origin
+        return `${origin}${raw}`
+      }
+      return raw
+    } catch (error) {
+      lastError = error
+      console.warn('[uploadCreativeFile] error:', error.message, {
+        filename,
+        attempt,
+        attempts,
+      })
+      if (shouldRetryCreativeUpload({
+        attempt,
+        maxAttempts: attempts,
+        status: Number(error.status || 0),
+      })) {
+        await wait(750 * attempt)
+        continue
+      }
+      if (retryEnabled) throw error
       return ''
     }
-    const data = await res.json()
-    // The AdsPilot backend returns { url } or { path } — normalise
-    const raw = data.url || data.path || ''
-    // If it's a relative path, prefix with the backend origin
-    if (raw && raw.startsWith('/')) {
-      const origin = new URL(BACKEND_URL).origin
-      return `${origin}${raw}`
-    }
-    return raw
-  } catch (e) {
-    console.warn('[uploadCreativeFile] error:', e.message)
-    return ''
   }
+  if (retryEnabled && lastError) throw lastError
+  return ''
 }
 
 /**
