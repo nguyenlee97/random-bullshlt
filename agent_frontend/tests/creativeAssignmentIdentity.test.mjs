@@ -6,6 +6,7 @@ import {
   assignmentRole,
   bestCreativeForZone,
   creativeAssignmentIdentityScore,
+  highConfidenceCreativeIdentity,
 } from '../src/lib/creativeAssignmentIdentity.js'
 
 const files = [
@@ -67,4 +68,20 @@ test('generic creative names stay neutral for geometry-based fallback', () => {
     ),
     0,
   )
+})
+
+test('shared category background contract treats canonical format as high confidence', () => {
+  const zone = {
+    id: 'BaoMoi_GamingEsports_Background',
+    platform: 'BaoMoi',
+    creativeContractId: 'category-background-v1',
+  }
+  const shared = {
+    id: 'shared-background',
+    name: 'znews-Background.png',
+    formatId: 'znews-Background',
+  }
+
+  assert.equal(highConfidenceCreativeIdentity(shared, zone), true)
+  assert.equal(bestCreativeForZone([files[2], shared], zone)?.id, 'shared-background')
 })

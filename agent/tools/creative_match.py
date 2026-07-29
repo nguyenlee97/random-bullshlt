@@ -158,12 +158,12 @@ def creative_assignment_identity_score(file: dict, zone: dict) -> tuple[int, lis
 
 
 def match_file_to_format(file: dict, format_spec: dict) -> dict:
-    """Match an uploaded file to one planned format without trusting its name alone.
+    """Match an uploaded file to one planned format.
 
-    ``formatId`` and a descriptive filename express operator intent.  When real
-    dimensions are available they must still be within the shared ratio safety
-    boundary.  Skin/background formats additionally require an explicit skin
-    hint so a wide banner is not silently used as a page takeover.
+    A structured ``formatId`` or the canonical format token in the filename is
+    explicit operator intent and therefore wins over measured geometry.  Ratio
+    remains an advisory in that tier.  Without canonical identity, geometry is
+    authoritative and the shared ratio boundary still applies.
     """
     target_width = int(format_spec.get("width") or 0)
     target_height = int(format_spec.get("height") or 0)
@@ -172,11 +172,11 @@ def match_file_to_format(file: dict, format_spec: dict) -> dict:
     filename_hint = _normalized_hint(file.get("name"))
     format_hint = _normalized_hint(format_id)
     size_hint = _normalized_hint(f"{target_width}x{target_height}")
-    explicit_hint = bool(
+    canonical_identity = bool(
         (file.get("formatId") and str(file.get("formatId")) == format_id)
         or (format_hint and format_hint in filename_hint)
-        or (size_hint and size_hint in filename_hint)
     )
+    weak_size_hint = bool(size_hint and size_hint in filename_hint)
     skin_hint = bool(
         str(file.get("intendedFormat") or "").lower() == "skin"
         or "skin" in filename_hint
@@ -188,6 +188,15 @@ def match_file_to_format(file: dict, format_spec: dict) -> dict:
     width = intel.get("width") or file.get("width") or 0
     height = intel.get("height") or file.get("height") or 0
     mode, ratio_diff = dimension_match(width, height, target_width, target_height)
+    if canonical_identity:
+        return {
+            "matched": True,
+            "mode": "explicit_identity",
+            "ratio_diff": ratio_diff,
+            "explicit_hint": True,
+            "ratio_advisory": mode == "incompatible_ratio",
+            "measured_mode": mode,
+        }
     dimensions_accepted = mode in {
         "exact_size", "strong_ratio", "same_ratio", "acceptable_ratio",
     }
@@ -199,9 +208,11 @@ def match_file_to_format(file: dict, format_spec: dict) -> dict:
             "matched": True,
             "mode": mode,
             "ratio_diff": ratio_diff,
-            "explicit_hint": explicit_hint or skin_hint,
+            "explicit_hint": skin_hint,
         }
-    if mode == "unknown_dimensions" and (explicit_hint or (intended_format == "skin" and skin_hint)):
+    if mode == "unknown_dimensions" and (
+        weak_size_hint or (intended_format == "skin" and skin_hint)
+    ):
         return {
             "matched": True,
             "mode": "explicit_format_hint",
@@ -267,6 +278,43 @@ def _contract_identity_bonus(file: dict, format_spec: dict) -> int:
     return 0
 
 
+def high_confidence_assignment_identity(file: dict, zone: dict) -> bool:
+    """Return true only for canonical, contract-resolved creative identity."""
+    if not zone.get("creativeContractId"):
+        return False
+    from autopilot.placement_planning import format_spec_for_zone
+
+    spec = format_spec_for_zone(zone)
+    if not spec:
+        return False
+    format_id = str(spec.get("format_id") or spec.get("format_key") or "")
+    format_hint = _normalized_hint(format_id)
+    filename_hint = _normalized_hint(file.get("name"))
+    return bool(
+        (file.get("formatId") and str(file.get("formatId")) == format_id)
+        or (format_hint and format_hint in filename_hint)
+    )
+
+
+def _ratio_distance_for_zone(file: dict, zone: dict) -> tuple[str, float | None]:
+    """Return measured compatibility mode and distance for assignment ordering."""
+    intel = file.get("intel") or {}
+    width = intel.get("width") or file.get("width") or 0
+    height = intel.get("height") or file.get("height") or 0
+    target_width = target_height = 0
+    if zone.get("creativeContractId"):
+        from autopilot.placement_planning import format_spec_for_zone
+
+        spec = format_spec_for_zone(zone) or {}
+        target_width = spec.get("width") or 0
+        target_height = spec.get("height") or 0
+    else:
+        dims = _parse_dims(zone.get("size", ""))
+        if dims:
+            target_width, target_height = dims
+    return dimension_match(width, height, target_width, target_height)
+
+
 def score_file_for_zone(
     file: dict,
     zone: dict,
@@ -295,18 +343,32 @@ def score_file_for_zone(
         if match.get("matched"):
             mode = match.get("mode")
             if prefer_contract_identity:
-                score += {
-                    "exact_size": 12,
-                    "strong_ratio": 10,
-                    "same_ratio": 7,
-                    "acceptable_ratio": 4,
-                    "explicit_format_hint": 1,
-                }.get(mode, 1)
-                score += _contract_identity_bonus(file, spec)
-                score += identity_score
-                warnings.extend(identity_warnings)
+                if mode == "explicit_identity":
+                    # The contract is the canonical source of truth. Some
+                    # intentionally shared formats (for example category
+                    # backgrounds) have a legacy publisher name in formatId.
+                    # Do not reclassify them as cross-publisher mismatches.
+                    score += 100 + _contract_identity_bonus(file, spec)
+                    if match.get("ratio_advisory"):
+                        warnings.append(
+                            "Creative khớp tên/format chuẩn; tỷ lệ đo được lệch "
+                            f"{float(match.get('ratio_diff') or 0) * 100:.0f}%"
+                        )
+                else:
+                    score += {
+                        "exact_size": 12,
+                        "strong_ratio": 10,
+                        "same_ratio": 7,
+                        "acceptable_ratio": 4,
+                        "explicit_format_hint": 1,
+                    }.get(mode, 1)
+                    score += _contract_identity_bonus(file, spec)
+                    score += identity_score
+                    warnings.extend(identity_warnings)
             else:
-                score += 10 if mode in {"exact_size", "strong_ratio"} else 7
+                score += 10 if mode in {
+                    "exact_size", "strong_ratio", "explicit_identity",
+                } else 7
         else:
             score -= 7
             # Positive name hints must never rescue incompatible measured
@@ -388,8 +450,9 @@ def score_file_for_zone(
             score += 1
             warnings.append(f"Tỷ lệ hơi lệch ({diff*100:.0f}%)")
         elif mode == "incompatible_ratio":
-            # A misleading filename must never outweigh measured geometry.
-            score = min(score - 4, -4)
+            # Preserve the distance so the final fallback deterministically
+            # chooses the closest ratio instead of the first uploaded file.
+            score = min(score - 4 - round(float(diff or 1) * 100), -4)
             warnings.append(f"Tỷ lệ không phù hợp ({diff*100:.0f}% lệch)")
 
     file_ext = (file.get("type", "") or fname.rsplit(".", 1)[-1]).lower()
@@ -416,7 +479,6 @@ def auto_assign(
 
     for zone in zones:
         zid = zone["id"]
-        best_score, best_idx, zone_warnings = -999, 0, []
 
         eligible = [
             (idx, f) for idx, f in enumerate(files)
@@ -432,20 +494,55 @@ def auto_assign(
             scores.setdefault(zid, {})
             continue
 
+        ranked_candidates = []
         for idx, f in eligible:
             s, w = score_file_for_zone(
                 f,
                 zone,
                 prefer_contract_identity=prefer_contract_identity,
             )
+            mode, ratio_diff = _ratio_distance_for_zone(f, zone)
+            explicit_identity = (
+                prefer_contract_identity
+                and high_confidence_assignment_identity(f, zone)
+            )
+            compatible_ratio = mode in {
+                "exact_size", "strong_ratio", "same_ratio", "acceptable_ratio",
+            }
             # MongoDB/BSON document keys must be strings. JSON clients already
             # observe object keys as strings, so normalize at the source.
             scores.setdefault(zid, {})[str(idx)] = s
-            if s > best_score:
-                best_score, best_idx, zone_warnings = s, idx, w
+            ranked_candidates.append((
+                1 if explicit_identity else 0,
+                1 if compatible_ratio else 0,
+                -float(ratio_diff) if ratio_diff is not None else float("-inf"),
+                s,
+                -idx,
+                idx,
+                w,
+                mode,
+            ))
+
+        best = max(ranked_candidates)
+        _, ratio_safe, _, _, _, best_idx, zone_warnings, _ = best
 
         assignments[zid] = best_idx
+        if not ratio_safe and not high_confidence_assignment_identity(files[best_idx], zone):
+            all_warnings.append({
+                "zoneId": zid,
+                "message": "Dùng creative có tỷ lệ gần nhất để tiếp tục",
+                "kind": "closest_ratio_fallback",
+            })
         for msg in zone_warnings:
             all_warnings.append({"zoneId": zid, "message": msg})
 
-    return {"assignments": assignments, "warnings": all_warnings, "scores": scores}
+    fallback_zone_ids = sorted({
+        warning["zoneId"] for warning in all_warnings
+        if warning.get("kind") == "closest_ratio_fallback"
+    })
+    return {
+        "assignments": assignments,
+        "warnings": all_warnings,
+        "scores": scores,
+        "fallback_zone_ids": fallback_zone_ids,
+    }

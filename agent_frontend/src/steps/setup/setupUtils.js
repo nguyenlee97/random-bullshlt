@@ -1,5 +1,8 @@
 import { ALL_ZONES } from '@/data/zones'
-import { creativeAssignmentIdentityScore } from '@/lib/creativeAssignmentIdentity'
+import {
+  creativeAssignmentIdentityScore,
+  highConfidenceCreativeIdentity,
+} from '@/lib/creativeAssignmentIdentity'
 
 // ─── Parse size string — handles both 'x' (DB format) and '×' (display format)
 function _parseDims(sizeStr) {
@@ -44,6 +47,7 @@ export function checkMismatch(zone, file) {
 // Guided warning band above unchanged for the legacy/GreenNode setup flow.
 export function checkAutopilotMismatch(zone, file) {
   if (!file?.width || !file?.height) return null
+  if (highConfidenceCreativeIdentity(file, zone)) return false
   const dims = _parseDims(zone?.size)
   if (!dims) return null
   const [zoneWidth, zoneHeight] = dims
@@ -63,11 +67,14 @@ export function scoreFile(file, zone, { identityAware = false } = {}) {
   const fname = (file.name || '').toLowerCase()
   const format = (zone.format || '').toLowerCase()
   const dims = _parseDims(zone?.size)
+  const canonicalIdentity = identityAware
+    && highConfidenceCreativeIdentity(file, zone)
 
   // ─── 1. Canonical identity — platform + placement role/direction.
   // Known cross-platform or left/right conflicts are hard negatives. Generic
   // names stay neutral so measured geometry can still provide a safe fallback.
-  if (identityAware) score += creativeAssignmentIdentityScore(file, zone)
+  if (canonicalIdentity) score += 100
+  else if (identityAware) score += creativeAssignmentIdentityScore(file, zone)
 
   // ─── 2. Generic skin hint. This is deliberately weaker than platform and
   // role identity: a filename containing "skin" is not enough to prove that a
@@ -93,7 +100,7 @@ export function scoreFile(file, zone, { identityAware = false } = {}) {
     if (diff < 0.02)       score += 8
     else if (diff < 0.08)  score += 4
     else if (diff < 0.15)  score += 1
-    else                   score -= 3
+    else                   score -= 3 + Math.round(diff * 100)
   }
 
   // ─── 5. Size string in filename (+5)

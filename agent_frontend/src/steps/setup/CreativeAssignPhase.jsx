@@ -10,21 +10,18 @@ const isCreativeApproved = (file) =>
   ['auto_approved', 'approved_override'].includes(file.analysisStatus)
 
 // ─── Single creative thumbnail option ─────────────────────────────────────────
-function CreativeOption({ file, zone, selected, onSelect, rank, strictCompatibility = false, serverScore }) {
+function CreativeOption({ file, zone, selected, onSelect, rank, strictCompatibility = false }) {
   const mismatch = strictCompatibility
     ? checkAutopilotMismatch(zone, file)
     : checkMismatch(zone, file)
   const isBest = rank === 0
   const approved = isCreativeApproved(file)
-  const serverRejected = strictCompatibility
-    && Number.isFinite(serverScore)
-    && serverScore < 1
-  const incompatible = Boolean(mismatch) || serverRejected
+  const incompatible = Boolean(mismatch)
 
   return (
     <button
-      onClick={() => approved && !incompatible && onSelect(selected ? null : file.id)}
-      disabled={!approved || incompatible}
+      onClick={() => approved && (!incompatible || selected) && onSelect(selected ? null : file.id)}
+      disabled={!approved || (incompatible && !selected)}
       className={cn(
         'relative flex flex-col rounded-lg border-2 overflow-hidden text-left transition-all duration-150',
         selected ? 'border-brand-500 shadow-md ring-2 ring-brand-200' : 'border-border hover:border-brand-300',
@@ -88,7 +85,6 @@ function AssignRow({
   onGroupSameSize,
   groupedCount,
   strictCompatibility = false,
-  recommendedScores = {},
   identityAware = false,
 }) {
   const assignedFile = files.find(f => f.id === assignedFileId)
@@ -138,7 +134,6 @@ function AssignRow({
               onSelect={(id) => onAssign(zone.id, id)}
               rank={rank}
               strictCompatibility={strictCompatibility}
-              serverScore={Number(recommendedScores[String(files.findIndex(item => item.id === file.id))])}
             />
           ))}
         </div>
@@ -194,32 +189,31 @@ export default function CreativeAssignPhase({
     if (approvedFiles.length === 0) return
     const newAssignments = { ...assignments }
     const recommended = data.recommendedAssignments || {}
-    const recommendationScores = data.recommendedAssignmentScores || {}
     selectedZones.forEach(zone => {
       const recommendedFile = approvedFiles.find(file =>
         file.id === recommended[zone.id]
       )
       if (repairMode) {
-        const fileIndex = files.findIndex(file => file.id === recommendedFile?.id)
-        const serverScore = Number(
-          recommendationScores[zone.id]?.[String(fileIndex)],
-        )
-        if (
-          recommendedFile
-          && Number.isFinite(serverScore)
-          && serverScore >= 1
-          && !checkAutopilotMismatch(zone, recommendedFile)
-        ) {
+        if (recommendedFile) {
           newAssignments[zone.id] = recommendedFile.id
         } else {
-          delete newAssignments[zone.id]
+          const bestFallback = [...approvedFiles]
+            .map(file => ({
+              ...file,
+              _score: scoreFile(file, zone, { identityAware: true }),
+            }))
+            .sort((a, b) => b._score - a._score)
+            .at(0)
+          if (bestFallback) newAssignments[zone.id] = bestFallback.id
+          else delete newAssignments[zone.id]
         }
         return
       }
       const compatibleFiles = strictCompatibility
         ? approvedFiles.filter(file => !checkAutopilotMismatch(zone, file))
         : approvedFiles
-      const best = [...compatibleFiles]
+      const assignmentPool = compatibleFiles.length ? compatibleFiles : approvedFiles
+      const best = [...assignmentPool]
         .map(f => ({
           ...f,
           _score: scoreFile(f, zone, { identityAware: openaiCampaignFlow || repairMode }),
@@ -347,7 +341,6 @@ export default function CreativeAssignPhase({
             onGroupSameSize={handleGroupSameSize}
             groupedCount={countGroupable(zone, assignments[zone.id])}
             strictCompatibility={strictCompatibility}
-            recommendedScores={data.recommendedAssignmentScores?.[zone.id] || {}}
             identityAware={openaiCampaignFlow || repairMode}
           />
         ))}

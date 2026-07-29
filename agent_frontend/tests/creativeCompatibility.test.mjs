@@ -47,3 +47,24 @@ test('a matching filename cannot override an incompatible measured ratio', () =>
   assert.equal(match.matched, false)
   assert.match(match.label, /sai tỷ lệ/)
 })
+
+test('canonical format identity overrides ratio and keeps an advisory', () => {
+  const match = matchPlannedFormat(
+    {
+      name: 'campaign-smoney-top-desktop.png',
+      formatId: 'smoney-top-desktop',
+      width: 512,
+      height: 512,
+    },
+    {
+      format_id: 'smoney-top-desktop',
+      width: 1440,
+      height: 108,
+      intended_format: 'banner',
+    },
+  )
+  assert.equal(match.matched, true)
+  assert.equal(match.identityMatch, true)
+  assert.equal(match.ratioAdvisory, true)
+  assert.match(match.label, /khớp tên\/format chuẩn/)
+})

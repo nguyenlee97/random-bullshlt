@@ -89,3 +89,44 @@ def test_generic_names_remain_neutral_for_geometry_fallback():
 
     assert score == 0
     assert warnings == []
+
+
+def test_shared_category_background_contract_beats_publisher_name_penalty():
+    zone = {
+        "id": "BaoMoi_GamingEsports_Background",
+        "platform": "BaoMoi",
+        "format": "skin",
+        "size": "skin",
+        "creativeContractId": "category-background-v1",
+    }
+    shared_background = {
+        "name": "znews-Background.png",
+        "formatId": "znews-Background",
+        "width": 1504,
+        "height": 704,
+        "intel": {
+            "width": 1504,
+            "height": 704,
+            "effective_status": "auto_approved",
+        },
+    }
+    wrong_side = {
+        "name": "zuma-Left.png",
+        "formatId": "zuma-Left",
+        "width": 465,
+        "height": 1200,
+        "intel": {
+            "width": 465,
+            "height": 1200,
+            "effective_status": "auto_approved",
+        },
+    }
+
+    result = auto_assign(
+        [zone],
+        [wrong_side, shared_background],
+        prefer_contract_identity=True,
+    )
+
+    assert result["assignments"][zone["id"]] == 1
+    assert result["scores"][zone["id"]]["1"] > 100

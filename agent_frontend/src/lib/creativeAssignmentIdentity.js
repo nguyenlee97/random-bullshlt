@@ -1,6 +1,28 @@
 const compactIdentity = (value) =>
   String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '')
 
+export const FORMAT_BY_CREATIVE_CONTRACT = {
+  'znews-category-masthead-v1': 'znews-top-banner',
+  'baomoi-category-masthead-v1': 'zuma-baomoi-masthead',
+  'category-background-v1': 'znews-Background',
+  'znews-category-side-left-v1': 'znews-side-banner',
+  'znews-category-side-right-v1': 'znews-side-banner',
+  'baomoi-category-side-left-v1': 'zuma-Left',
+  'baomoi-category-side-right-v1': 'zuma-Right',
+  'display-box-300x250-v1': 'zuma-box',
+  'display-halfpage-300x600-v1': 'display-halfpage-300x600',
+  'znews-home-inline-v1': 'znews-middle-banner',
+  'zingmp3-masthead-v1': 'zmp3-top-banner',
+  'smoney-top-desktop-v1': 'smoney-top-desktop',
+  'smoney-top-mobile-v1': 'smoney-top-mobile',
+  'smoney-screener-desktop-v1': 'smoney-screener-desktop',
+  'smoney-screener-mobile-v1': 'smoney-screener-mobile',
+  'dicungcon-bridge-desktop-v1': 'dicungcon-bridge-desktop',
+  'dicungcon-bridge-mobile-v1': 'dicungcon-bridge-mobile',
+  'zagoo-interstitial-desktop-v1': 'zagoo-interstitial-desktop',
+  'zagoo-interstitial-mobile-v1': 'zagoo-interstitial-mobile',
+}
+
 const combinedFileIdentity = (file = {}) => compactIdentity([
   file.name,
   file.formatId,
@@ -108,12 +130,23 @@ export function creativeAssignmentIdentityScore(file = {}, zone = {}) {
   return score
 }
 
+export function highConfidenceCreativeIdentity(file = {}, zone = {}) {
+  const formatId = FORMAT_BY_CREATIVE_CONTRACT[zone.creativeContractId] || ''
+  if (!formatId) return false
+  const filename = compactIdentity(file.name)
+  const formatHint = compactIdentity(formatId)
+  return file.formatId === formatId
+    || Boolean(formatHint && filename.includes(formatHint))
+}
+
 export function bestCreativeForZone(files = [], zone = {}) {
   return [...files]
     .map((file, index) => ({
       file,
       index,
-      score: creativeAssignmentIdentityScore(file, zone),
+      score: highConfidenceCreativeIdentity(file, zone)
+        ? 100
+        : creativeAssignmentIdentityScore(file, zone),
     }))
     .sort((left, right) =>
       right.score - left.score || left.index - right.index

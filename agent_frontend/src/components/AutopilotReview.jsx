@@ -186,7 +186,16 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
               )}
               <div className="min-w-0 flex-1">
                 <p className="[overflow-wrap:anywhere] text-xs font-bold leading-4 text-slate-900">{zoneName(zone)}</p>
-                <p className="mt-1 [overflow-wrap:anywhere] text-[10px] leading-4 text-slate-500">{zone.id || '—'} · {zone.channel || zone.siteId || zone.format || zone.size || 'inventory'}</p>
+                <p className="mt-1 [overflow-wrap:anywhere] text-[10px] leading-4 text-slate-500">{zone.id || '—'} · {zone.channel || zone.siteId || 'inventory'}</p>
+                <p className="mt-1 text-[10px] font-semibold leading-4 text-slate-600">
+                  Kích thước {zone.size || '—'}
+                  {zone.creativeRequirements?.width && zone.creativeRequirements?.height
+                    ? ` · creative ${zone.creativeRequirements.width}×${zone.creativeRequirements.height}`
+                    : ''}
+                  {zone.creativeRequirements?.formatId
+                    ? ` · ${zone.creativeRequirements.formatId}`
+                    : zone.format ? ` · ${zone.format}` : ''}
+                </p>
                 <p className="mt-1 [overflow-wrap:anywhere] text-[10px] font-semibold leading-4 text-brand-700">CPM {number(zone.cpm)} ₫ · reach {number(zone.reach)}</p>
               </div>
             </div>

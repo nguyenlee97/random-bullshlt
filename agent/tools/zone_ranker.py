@@ -79,7 +79,18 @@ def _size_compat(zone: dict, files: list[dict]) -> tuple[float, str]:
             match = match_file_to_format(file, spec)
             mode = match.get("mode", "no_match")
             if not match.get("matched"):
-                bonus = -0.35 if mode == "incompatible_ratio" else 0.0
+                if mode == "incompatible_ratio":
+                    bonus = max(
+                        -0.35,
+                        0.12 - float(match.get("ratio_diff") or 1),
+                    )
+                    mode = "nearest_ratio"
+                else:
+                    bonus = 0.0
+            elif mode == "explicit_identity":
+                # Canonical formatId/name is the strongest operator signal.
+                # Measured ratio remains available as an advisory.
+                bonus = 0.32
             elif mode == "exact_size":
                 bonus = 0.30
             elif mode == "strong_ratio":

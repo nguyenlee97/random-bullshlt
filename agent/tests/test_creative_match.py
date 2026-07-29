@@ -55,6 +55,50 @@ def test_filename_cannot_override_incompatible_measured_ratio():
     assert any("không phù hợp" in warning for warning in warnings)
 
 
+def test_canonical_format_identity_overrides_ratio_with_advisory():
+    match = match_file_to_format(
+        {
+            "name": "smoney-top-desktop.png",
+            "formatId": "smoney-top-desktop",
+            "width": 512,
+            "height": 512,
+        },
+        {
+            "format_id": "smoney-top-desktop",
+            "width": 1440,
+            "height": 108,
+            "intended_format": "banner",
+        },
+    )
+
+    assert match["matched"] is True
+    assert match["mode"] == "explicit_identity"
+    assert match["ratio_advisory"] is True
+
+
+def test_openai_assignment_falls_back_to_closest_ratio():
+    zone = {"id": "generic-banner", "size": "1000x200", "format": "banner"}
+    files = [
+        {
+            "name": "far.png",
+            "width": 300,
+            "height": 600,
+            "intel": {"width": 300, "height": 600, "effective_status": "auto_approved"},
+        },
+        {
+            "name": "closer.png",
+            "width": 1000,
+            "height": 300,
+            "intel": {"width": 1000, "height": 300, "effective_status": "auto_approved"},
+        },
+    ]
+
+    result = auto_assign([zone], files, prefer_contract_identity=True)
+
+    assert result["assignments"][zone["id"]] == 1
+    assert result["fallback_zone_ids"] == [zone["id"]]
+
+
 def test_np6_side_contract_accepts_side_banner_not_background_skin():
     zone = {
         "id": "Znews_FamilyParenting_SideLeft",

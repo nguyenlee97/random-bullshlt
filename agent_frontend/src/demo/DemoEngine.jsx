@@ -7,7 +7,10 @@ import DemoOverlay from './DemoOverlay'
 import { STAGE1_STEPS, buildStage2Steps, pickRandomBrief, DEMO_AD_FORMAT_META, DEMO_NON_BOX_FORMAT_IDS, ZONE_FORMAT_MAP } from './demoScripts'
 import { AUTOPILOT_TOUR_STEPS } from './autopilotTour'
 import { buildAutopilotLiveSteps } from './autopilotWalkthrough'
-import { compatiblePlacementIndexes } from './demoPlacementCompatibility.js'
+import {
+  compatiblePlacementIndexes,
+  supportedPlacementIndexes,
+} from './demoPlacementCompatibility.js'
 import { fitDemoCreative } from './demoCreativeFit.js'
 import {
   AUTOPILOT_CHECKPOINT_OBSERVATION,
@@ -705,22 +708,19 @@ export function DemoProvider({
             '[data-demo="autopilot-placement-option"]',
           ),
         ]
-        const compatibleIndexes = step.creativeFormats?.length
+        const candidates = options.map(option => ({
+          size: option.dataset.zoneSize,
+          format: option.dataset.zoneFormat,
+          creativeContractId: option.dataset.zoneContract,
+        }))
+        const desiredIndexes = step.creativeFormats?.length
           ? compatiblePlacementIndexes(
-              options.map(option => ({
-                size: option.dataset.zoneSize,
-                format: option.dataset.zoneFormat,
-                creativeContractId: option.dataset.zoneContract,
-              })),
+              candidates,
               step.creativeFormats,
               keep,
             )
-          : []
-        const desired = new Set(
-          compatibleIndexes.length
-            ? compatibleIndexes
-            : options.slice(0, keep).map((_, index) => index),
-        )
+          : supportedPlacementIndexes(candidates, keep)
+        const desired = new Set(desiredIndexes)
         for (const [index, option] of options.entries()) {
           const selected = option.getAttribute('aria-pressed') === 'true'
           if (selected !== desired.has(index)) {

@@ -1,26 +1,6 @@
-const MAX_RATIO_DIFF = 0.15
+import { FORMAT_BY_CREATIVE_CONTRACT } from '../lib/creativeAssignmentIdentity.js'
 
-const FORMAT_BY_CONTRACT = {
-  'znews-category-masthead-v1': 'znews-top-banner',
-  'baomoi-category-masthead-v1': 'zuma-baomoi-masthead',
-  'category-background-v1': 'znews-Background',
-  'znews-category-side-left-v1': 'znews-side-banner',
-  'znews-category-side-right-v1': 'znews-side-banner',
-  'baomoi-category-side-left-v1': 'zuma-Left',
-  'baomoi-category-side-right-v1': 'zuma-Right',
-  'display-box-300x250-v1': 'zuma-box',
-  'display-halfpage-300x600-v1': 'display-halfpage-300x600',
-  'znews-home-inline-v1': 'znews-middle-banner',
-  'zingmp3-masthead-v1': 'zmp3-top-banner',
-  'smoney-top-desktop-v1': 'smoney-top-desktop',
-  'smoney-top-mobile-v1': 'smoney-top-mobile',
-  'smoney-screener-desktop-v1': 'smoney-screener-desktop',
-  'smoney-screener-mobile-v1': 'smoney-screener-mobile',
-  'dicungcon-bridge-desktop-v1': 'dicungcon-bridge-desktop',
-  'dicungcon-bridge-mobile-v1': 'dicungcon-bridge-mobile',
-  'zagoo-interstitial-desktop-v1': 'zagoo-interstitial-desktop',
-  'zagoo-interstitial-mobile-v1': 'zagoo-interstitial-mobile',
-}
+const MAX_RATIO_DIFF = 0.15
 
 const FORMAT_BY_SIZE = {
   '300x250': 'zuma-box',
@@ -41,7 +21,7 @@ const dimensions = value => {
 }
 
 const formatForCandidate = candidate => (
-  FORMAT_BY_CONTRACT[candidate.creativeContractId]
+  FORMAT_BY_CREATIVE_CONTRACT[candidate.creativeContractId]
   || FORMAT_BY_SIZE[normalizedSize(candidate.size)]
   || ''
 )
@@ -69,7 +49,32 @@ const compatibilityScore = (candidate, creativeFormats) => {
  * Pick at most `keep` candidate indexes that an uploaded walkthrough creative
  * can safely cover. Original recommendation order breaks compatibility ties.
  */
-export function compatiblePlacementIndexes(candidates = [], creativeFormats = [], keep = 2) {
+export function samplePlacementIndexes(indexes = [], keep = 2, random = Math.random) {
+  const pool = [...new Set(indexes)]
+  for (let index = pool.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1))
+    ;[pool[index], pool[swapIndex]] = [pool[swapIndex], pool[index]]
+  }
+  return pool.slice(0, Math.max(0, Math.min(Number(keep || 0), pool.length)))
+}
+
+export function supportedPlacementIndexes(candidates = [], keep = 2, random = Math.random) {
+  const eligible = candidates
+    .map((candidate, index) => ({ candidate, index }))
+    .filter(({ candidate }) => (
+      Boolean(formatForCandidate(candidate))
+      || Boolean(dimensions(candidate.size))
+    ))
+    .map(item => item.index)
+  return samplePlacementIndexes(eligible, keep, random)
+}
+
+export function compatiblePlacementIndexes(
+  candidates = [],
+  creativeFormats = [],
+  keep = 2,
+  random = Math.random,
+) {
   const limit = Math.max(1, Number(keep || 2))
   const ranked = candidates
     .map((candidate, index) => ({
@@ -78,6 +83,19 @@ export function compatiblePlacementIndexes(candidates = [], creativeFormats = []
     }))
     .filter(item => Number.isFinite(item.score))
     .sort((left, right) => right.score - left.score || left.index - right.index)
-  return ranked.slice(0, limit).map(item => item.index)
+  const compatible = samplePlacementIndexes(
+    ranked.map(item => item.index),
+    limit,
+    random,
+  )
+  if (compatible.length >= limit) return compatible
+  const selected = new Set(compatible)
+  const fallback = supportedPlacementIndexes(
+    candidates.map((candidate, index) => (
+      selected.has(index) ? {} : candidate
+    )),
+    limit - compatible.length,
+    random,
+  )
+  return [...compatible, ...fallback]
 }
-

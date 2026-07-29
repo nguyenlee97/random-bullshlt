@@ -69,18 +69,34 @@ export function matchPlannedFormat(file, item) {
   const filename = normalizeHint(file.name)
   const formatHint = normalizeHint(item.format_id)
   const sizeHint = normalizeHint(`${targetWidth}x${targetHeight}`)
-  const explicitHint = file.formatId === item.format_id
-    || (formatHint && filename.includes(formatHint))
-    || (sizeHint && filename.includes(sizeHint))
+  const canonicalIdentity = file.formatId === item.format_id
+    || Boolean(formatHint && filename.includes(formatHint))
+  const weakSizeHint = Boolean(sizeHint && filename.includes(sizeHint))
   const isSkin = item.intended_format === 'skin'
   const skinHint = inferIntendedFormat(file) === 'skin'
     || filename.includes('skin')
     || filename.includes('background')
     || file.formatId === item.format_id
 
+  if (canonicalIdentity) {
+    if (!fileWidth || !fileHeight || !targetWidth || !targetHeight) {
+      return { matched: true, label: 'khớp tên/format chuẩn', identityMatch: true }
+    }
+    const targetRatio = targetWidth / targetHeight
+    const ratioDiff = Math.abs(targetRatio - (fileWidth / fileHeight)) / targetRatio
+    return {
+      matched: true,
+      label: ratioDiff < MAX_AUTOPILOT_RATIO_DIFF
+        ? 'khớp tên/format chuẩn'
+        : `khớp tên/format chuẩn · tỷ lệ lệch ${(ratioDiff * 100).toFixed(0)}%`,
+      identityMatch: true,
+      ratioDiff,
+      ratioAdvisory: ratioDiff >= MAX_AUTOPILOT_RATIO_DIFF,
+    }
+  }
   if (isSkin && !skinHint) return { matched: false, label: 'chọn Skin / Background' }
   if (!fileWidth || !fileHeight || !targetWidth || !targetHeight) {
-    return explicitHint || (isSkin && skinHint)
+    return weakSizeHint || (isSkin && skinHint)
       ? { matched: true, label: 'khớp theo tên/format' }
       : { matched: false, label: 'chưa đủ thông tin' }
   }

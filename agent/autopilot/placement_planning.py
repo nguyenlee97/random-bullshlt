@@ -69,6 +69,24 @@ def format_spec_for_zone(zone: dict) -> dict | None:
     }
 
 
+def with_creative_requirements(zone: dict) -> dict:
+    """Expose the resolved delivery dimensions beside catalog shorthand."""
+    spec = format_spec_for_zone(zone)
+    if not spec:
+        return zone
+    return {
+        **zone,
+        "creativeRequirements": {
+            "formatId": spec["format_id"],
+            "width": spec["width"],
+            "height": spec["height"],
+            "mediaType": spec["media_type"],
+            "intendedFormat": spec["intended_format"],
+            "contractId": zone.get("creativeContractId"),
+        },
+    }
+
+
 def build_creative_format_plan(
     placement_intent: dict,
     *,

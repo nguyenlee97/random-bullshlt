@@ -1787,7 +1787,7 @@ async def test_stale_creative_verdict_is_recommitted_against_current_strategy(mo
 
 
 @pytest.mark.asyncio
-async def test_placement_ranking_keeps_only_creative_compatible_zones(monkeypatch):
+async def test_placement_ranking_keeps_compatible_and_nearest_ratio_fallback(monkeypatch):
     import creative_intel.service as creative_service
     import tools.order_api as order_api
     import tools.zone_ranker as zone_ranker
@@ -1815,11 +1815,11 @@ async def test_placement_ranking_keeps_only_creative_compatible_zones(monkeypatc
     }}
     result = await _rank_placements({"session_id": "compatible"}, workspace)
     assert result.force_review is False
-    assert result.value["selectedZoneIds"] == ["GOOD"]
+    assert result.value["selectedZoneIds"] == ["GOOD", "BAD"]
 
 
 @pytest.mark.asyncio
-async def test_no_compatible_placement_requests_new_creative(monkeypatch):
+async def test_nearest_ratio_placement_continues_without_recovery_review(monkeypatch):
     import creative_intel.service as creative_service
     import tools.order_api as order_api
     import tools.zone_ranker as zone_ranker
@@ -1848,24 +1848,8 @@ async def test_no_compatible_placement_requests_new_creative(monkeypatch):
         }]}},
     }}
     result = await _rank_placements({"session_id": "incompatible"}, workspace)
-    assert result.force_review is True
-    assert result.value["reason"] == "no_compatible_placements"
-    assert result.value["review_action"] == "retry"
-    assert result.value["recovery"] == {
-        "kind": "creative_format_mismatch",
-        "can_adapt_existing": True,
-        "can_generate_missing": True,
-        "existing_image_count": 1,
-        "target_formats": [{
-            "format_id": "znews-masthead-1160x250",
-            "width": 1160,
-            "height": 250,
-            "intended_format": None,
-            "zone_ids": ["BAD"],
-        }],
-        "recommended_action": "adapt_existing",
-    }
-    assert "crop/scale" in result.value["message"]
+    assert result.force_review is False
+    assert result.value["selectedZoneIds"] == ["BAD"]
 
 
 @pytest.mark.asyncio
