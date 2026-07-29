@@ -13,6 +13,7 @@ import {
   AUTOPILOT_CHECKPOINT_OBSERVATION,
   classifyAutopilotCheckpointObservation,
 } from './autopilotCheckpointSync.js'
+import { waitForDemoElement } from './demoElementWait.js'
 import {
   hasSeenOpenAIWalkthroughTool,
   isOpenAIWalkthroughModel,
@@ -390,13 +391,25 @@ export function DemoProvider({
         setIsWaiting(true)
         const delay = step.delay || 300
         await new Promise(r => setTimeout(r, delay))
-        const el = document.querySelector(step.target)
+        const el = await waitForDemoElement(step.target, {
+          timeout: step.timeout || 30000,
+        })
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' })
           await new Promise(r => setTimeout(r, 300))
           el.click()
         } else {
           log.error(`DemoEngine: CLICK_EL target not found: ${step.target}`)
+          setIsWaiting(false)
+          setPopup({
+            title: 'Thao tác walkthrough chưa sẵn sàng',
+            text: `Walkthrough chưa tìm thấy điều khiển cần thiết cho bước **${step.tooltip?.title || step.title || 'tiếp theo'}**. Tiến trình hiện tại vẫn được giữ nguyên; hãy thử lại bước này thay vì bỏ qua dữ liệu.`,
+            buttons: [
+              { label: 'Thử lại bước này', variant: 'primary', action: 'retry_current_step' },
+              { label: 'Dừng walkthrough', variant: 'ghost', action: 'skip' },
+            ],
+          })
+          return
         }
         // Wait for any triggered busy cycle
         await new Promise(r => setTimeout(r, 400))
@@ -525,20 +538,23 @@ export function DemoProvider({
         // Poll until a CSS selector appears in the DOM, then advance
         setIsWaiting(true)
         const { target: sel, timeout: wfTimeout = 90000 } = step
-        await new Promise((resolve) => {
-          const start = Date.now()
-          const poll = () => {
-            if (document.querySelector(sel)) {
-              resolve()
-            } else if (Date.now() - start > wfTimeout) {
-              log.error(`DemoEngine: WAIT_FOR_SELECTOR timeout for: ${sel}`)
-              resolve()
-            } else {
-              setTimeout(poll, 300)
-            }
-          }
-          poll()
+        const element = await waitForDemoElement(sel, {
+          timeout: wfTimeout,
+          interval: 300,
         })
+        if (!element) {
+          log.error(`DemoEngine: WAIT_FOR_SELECTOR timeout for: ${sel}`)
+          setIsWaiting(false)
+          setPopup({
+            title: 'Màn hình tiếp theo chưa sẵn sàng',
+            text: `Walkthrough vẫn đang chờ **${step.title || 'giao diện tiếp theo'}**. Nó sẽ không tự đi tiếp khi dữ liệu hoặc editor chưa xuất hiện.`,
+            buttons: [
+              { label: 'Tiếp tục chờ', variant: 'primary', action: 'retry_current_step' },
+              { label: 'Dừng walkthrough', variant: 'ghost', action: 'skip' },
+            ],
+          })
+          return
+        }
         // Extra settle time so the element is fully rendered
         await new Promise(r => setTimeout(r, 700))
         setIsWaiting(false)

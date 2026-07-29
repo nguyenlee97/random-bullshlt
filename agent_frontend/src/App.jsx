@@ -232,6 +232,8 @@ export default function App() {
       }
       setExperienceMode(null)
       if (route.surface === 'manage') {
+        setHistoryLoading(true)
+        setHistoryError('')
         setPendingConversationId('')
         setPendingEntryMode('')
         return
@@ -1238,6 +1240,8 @@ export default function App() {
   const returnToCampaignManager = useCallback((historyAction = 'push') => {
     landingEntryAttemptRef.current += 1
     pendingEntryStartRef.current = ''
+    setHistoryLoading(true)
+    setHistoryError('')
     clearActiveConversation()
     setPendingEntryMode('')
     setShowPublicLanding(false)
@@ -1464,11 +1468,23 @@ export default function App() {
   useEffect(() => {
     if (!identityReady || (experienceMode && !historyOpen)) return undefined
     let cancelled = false
-    const refresh = async () => {
-      const items = await AgentAPI.listConversations(true)
-      if (!cancelled) setConversationHistory(items)
+    const refresh = async (settleLoading = false) => {
+      try {
+        const items = await AgentAPI.listConversations(true)
+        if (!cancelled) {
+          setConversationHistory(items)
+          setHistoryError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setHistoryError(error.message || 'Không thể tải lịch sử chiến dịch.')
+        }
+      } finally {
+        if (!cancelled && settleLoading) setHistoryLoading(false)
+      }
     }
-    const timer = setInterval(refresh, 4000)
+    refresh(true)
+    const timer = setInterval(() => refresh(false), 4000)
     return () => {
       cancelled = true
       clearInterval(timer)

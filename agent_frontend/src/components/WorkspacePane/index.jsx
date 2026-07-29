@@ -285,6 +285,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
               </button>
               <button type="button" onClick={() => saveAutopilotEditor()} disabled={!canApprove || busy}
                 data-demo="autopilot-editor-save"
+                data-autopilot-editor-artifact={autopilotEditorArtifact || ''}
                 className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-bold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50">
                 {busy
                   ? (currentStep === 2 ? 'Đang phân tích & lưu…' : 'Đang lưu…')

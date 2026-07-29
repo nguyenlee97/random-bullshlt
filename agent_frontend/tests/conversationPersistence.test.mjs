@@ -50,7 +50,25 @@ test('history UI exposes resume, archive and new campaign actions', () => {
   assert.match(homepage, /latest_run_summary/)
   assert.match(homepage, /Tiến độ Autopilot/)
   assert.match(app, /if \(!identityReady \|\| \(experienceMode && !historyOpen\)\) return undefined/)
-  assert.match(app, /setInterval\(refresh, 4000\)/)
+  assert.match(app, /refresh\(true\)/)
+  assert.match(app, /setInterval\(\(\) => refresh\(false\), 4000\)/)
+})
+
+test('returning to management hides cached history until the immediate refresh completes', () => {
+  const managerBody = app.slice(
+    app.indexOf('const returnToCampaignManager'),
+    app.indexOf('const handleNewChat'),
+  )
+  const historySyncBody = app.slice(
+    app.indexOf('// Zalo-created Autopilot runs'),
+    app.indexOf('const resumeConversation'),
+  )
+
+  assert.match(managerBody, /setHistoryLoading\(true\)/)
+  assert.match(managerBody, /setHistoryError\(''\)/)
+  assert.match(historySyncBody, /refresh\(true\)/)
+  assert.match(historySyncBody, /settleLoading/)
+  assert.match(historySyncBody, /setHistoryLoading\(false\)/)
 })
 
 test('archived campaigns remain discoverable in management and workspace history', () => {

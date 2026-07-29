@@ -345,9 +345,9 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
       },
       {
         type: 'CLICK_EL',
-        target: '[data-demo="autopilot-editor-save"]',
+        target: '[data-demo="autopilot-editor-save"][data-autopilot-editor-artifact="creative"]',
         tooltip: {
-          target: '[data-demo="autopilot-editor-save"]',
+          target: '[data-demo="autopilot-editor-save"][data-autopilot-editor-artifact="creative"]',
           position: 'top',
           title: 'Bắt đầu phân tích creative',
           text: 'Đang upload các file và kiểm tra kích thước, nội dung, thương hiệu cùng độ phù hợp. Editor sẽ không tự đóng sau khi kết quả xuất hiện.',
@@ -483,10 +483,10 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
       },
       {
         type: 'CLICK_EL',
-        target: '[data-demo="autopilot-editor-save"]',
+        target: '[data-demo="autopilot-editor-save"][data-autopilot-editor-artifact="creative"]',
         whenAutopilotTask: 'analyze_creatives',
         tooltip: {
-          target: '[data-demo="autopilot-editor-save"]',
+          target: '[data-demo="autopilot-editor-save"][data-autopilot-editor-artifact="creative"]',
           position: 'top',
           title: 'Lưu kết quả và quay lại run',
           text: 'Autopilot sẽ kiểm tra lại nhánh creative trước khi xếp hạng placement cuối.',
@@ -543,16 +543,16 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
     },
     {
       type: 'WAIT_FOR_SELECTOR',
-      target: '[data-demo="autopilot-editor-save"]:not(:disabled)',
+      target: '[data-demo="autopilot-editor-save"][data-autopilot-editor-artifact="assignments"]:not(:disabled)',
       timeout: 30000,
       title: 'Đang kiểm tra assignment',
       text: 'Mỗi placement phải có một creative đã được duyệt trước khi lưu.',
     },
     {
       type: 'CLICK_EL',
-      target: '[data-demo="autopilot-editor-save"]',
+      target: '[data-demo="autopilot-editor-save"][data-autopilot-editor-artifact="assignments"]',
       tooltip: {
-        target: '[data-demo="autopilot-editor-save"]',
+        target: '[data-demo="autopilot-editor-save"][data-autopilot-editor-artifact="assignments"]',
         position: 'top',
         title: 'Lưu phân bổ creative',
         text: 'Đang ghi assignments, sau đó Autopilot chạy forecast, order draft và safety guard.',
