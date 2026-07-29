@@ -10,6 +10,10 @@ import { buildAutopilotLiveSteps } from './autopilotWalkthrough'
 import { compatiblePlacementIndexes } from './demoPlacementCompatibility.js'
 import { fitDemoCreative } from './demoCreativeFit.js'
 import {
+  AUTOPILOT_CHECKPOINT_OBSERVATION,
+  classifyAutopilotCheckpointObservation,
+} from './autopilotCheckpointSync.js'
+import {
   hasSeenOpenAIWalkthroughTool,
   isOpenAIWalkthroughModel,
   matchesWalkthroughMetaTool,
@@ -131,6 +135,7 @@ export function DemoProvider({
   const [targetRect, setTargetRect] = useState(null)
   const [isWaiting, setIsWaiting] = useState(false)
   const [popup, setPopup] = useState(null)
+  const [stepRetryNonce, setStepRetryNonce] = useState(0)
   const briefRef = useRef(null)
   const eventCleanupRef = useRef(null)
   const onApproveRef = useRef(onApprove)
@@ -564,22 +569,44 @@ export function DemoProvider({
         setIsWaiting(true)
         const expected = new Set(step.taskKeys || [])
         const timeout = step.timeout || 120000
+        const unexpectedGraceMs = step.unexpectedGraceMs ?? 4000
         const startedAt = Date.now()
+        let unexpectedTask = ''
+        let unexpectedSince = 0
         const found = await new Promise(resolve => {
           const poll = () => {
             const canvas = document.querySelector('[data-demo="autopilot-canvas"]')
             const taskKey = canvas?.getAttribute('data-autopilot-waiting-task') || ''
             const status = canvas?.getAttribute('data-autopilot-status') || ''
-            if (expected.has(taskKey)) {
+            const observation = classifyAutopilotCheckpointObservation({
+              expectedTaskKeys: [...expected],
+              taskKey,
+              status,
+              lastHandledTask: autopilotWaitingTaskRef.current,
+            })
+
+            if (observation === AUTOPILOT_CHECKPOINT_OBSERVATION.EXPECTED) {
               resolve(taskKey)
-            } else if (status === 'waiting_review' && taskKey) {
-              resolve(`unexpected:${taskKey}`)
-            } else if (['failed', 'cancelled'].includes(status)) {
+            } else if (observation === AUTOPILOT_CHECKPOINT_OBSERVATION.TERMINAL) {
               resolve('')
+            } else if (observation === AUTOPILOT_CHECKPOINT_OBSERVATION.UNEXPECTED) {
+              if (unexpectedTask !== taskKey) {
+                unexpectedTask = taskKey
+                unexpectedSince = Date.now()
+              }
+              if (Date.now() - unexpectedSince >= unexpectedGraceMs) {
+                resolve(`unexpected:${taskKey}`)
+              } else {
+                setTimeout(poll, 500)
+              }
             } else if (Date.now() - startedAt > timeout) {
               log.error(`DemoEngine: WAIT_FOR_AUTOPILOT_TASK timeout for ${[...expected].join(',')}`)
               resolve('')
             } else {
+              // A just-approved checkpoint can remain visible while Autopilot
+              // resumes. Keep waiting instead of treating it as a new blocker.
+              unexpectedTask = ''
+              unexpectedSince = 0
               setTimeout(poll, 500)
             }
           }
@@ -595,9 +622,10 @@ export function DemoProvider({
               : 'Autopilot cần bạn xử lý một checkpoint phát sinh',
             text: audienceBlocked
               ? 'Walkthrough đã dừng đúng tại bước **Tìm audience** vì Agent cần làm rõ sản phẩm, dịch vụ hoặc người mua. Hãy bổ sung Brief hoặc chọn audience thủ công; các artifact đã tạo vẫn được giữ nguyên.'
-              : `Walkthrough đã dừng tại checkpoint **${blockedTask}** để bạn kiểm tra dữ liệu hoặc rủi ro phát sinh. Đây là điểm dừng an toàn, không phải lỗi timeout.`,
+              : `Autopilot đang chờ tại checkpoint **${blockedTask}**, ngoài checkpoint mà walkthrough dự kiến ở thời điểm này. Hãy xử lý checkpoint trong workspace rồi tiếp tục; walkthrough sẽ chờ lại từ đúng vị trí hiện tại.`,
             buttons: [
-              { label: 'Dừng walkthrough và xử lý checkpoint', variant: 'primary', action: 'skip' },
+              { label: 'Đã xử lý, tiếp tục walkthrough', variant: 'primary', action: 'retry_current_step' },
+              { label: 'Dừng walkthrough', variant: 'ghost', action: 'skip' },
             ],
           })
           return
@@ -605,9 +633,10 @@ export function DemoProvider({
         if (!found) {
           setPopup({
             title: 'Autopilot chưa đến được checkpoint tiếp theo',
-            text: 'Walkthrough đã dừng an toàn vì run bị lỗi, bị hủy hoặc chưa hoàn tất trong thời gian chờ. Các artifact đã lưu vẫn được giữ lại để bạn kiểm tra.',
+            text: 'Run bị lỗi, bị hủy hoặc chưa đến checkpoint tiếp theo trong thời gian chờ. Các artifact đã lưu vẫn được giữ lại; nếu run vẫn đang xử lý, bạn có thể tiếp tục chờ mà không phải khởi động lại walkthrough.',
             buttons: [
-              { label: 'Dừng walkthrough và kiểm tra run', variant: 'primary', action: 'skip' },
+              { label: 'Tiếp tục chờ', variant: 'primary', action: 'retry_current_step' },
+              { label: 'Dừng walkthrough và kiểm tra run', variant: 'ghost', action: 'skip' },
             ],
           })
           return
@@ -891,7 +920,7 @@ export function DemoProvider({
     if (isActive && steps[stepIdx]) {
       executeStep(steps[stepIdx], stepIdx)
     }
-  }, [stepIdx, phase]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stepIdx, phase, stepRetryNonce]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Handle end of a phase ──────────────────────────────────────────────
   const handlePhaseEnd = useCallback(() => {
@@ -1006,6 +1035,7 @@ export function DemoProvider({
     log.step('DemoEngine: stopDemo')
     openAISeenMetaToolsRef.current.clear()
     autopilotWaitingTaskRef.current = ''
+    setStepRetryNonce(0)
     setPhase(PHASE.IDLE)
     setStepIdx(0)
     setSteps([])
@@ -1018,6 +1048,11 @@ export function DemoProvider({
   // ── Handle popup button actions ────────────────────────────────────────
   const handlePopupAction = useCallback((action) => {
     setPopup(null)
+
+    if (action === 'retry_current_step') {
+      setStepRetryNonce(prev => prev + 1)
+      return
+    }
 
     if (action === 'skip') {
       stopDemo()
