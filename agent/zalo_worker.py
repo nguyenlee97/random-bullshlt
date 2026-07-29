@@ -222,6 +222,14 @@ _MILESTONE_TASKS = {
     "create_setup_report": "Campaign đã launch và báo cáo setup đã sẵn sàng.",
 }
 
+_OPENAI_MILESTONE_TASKS = {
+    "validate_brief",
+    "retrieve_audience",
+    "derive_targeting",
+    "analyze_creatives",
+    "rank_placements",
+}
+
 
 def _progress_message(
     run: dict,
@@ -236,6 +244,24 @@ def _progress_message(
         return f"Autopilot {run['run_id']}: đã nhận brief và bắt đầu thực thi."
     task_id = str(payload.get("task_id") or "")
     task = next((item for item in run.get("tasks", []) if item.get("task_id") == task_id), None)
+    if (
+        event_type == "task_completed"
+        and task
+        and task.get("key") in _OPENAI_MILESTONE_TASKS
+    ):
+        from campaign_models import OPENAI_GPT_5_4_MINI
+
+        if run.get("conversation_model") == OPENAI_GPT_5_4_MINI:
+            from openai_campaign.zalo_review import (
+                render_openai_milestone_message,
+            )
+
+            return render_openai_milestone_message(
+                run,
+                task,
+                workspace=workspace,
+                workspace_url=workspace_url,
+            )
     if event_type == "task_completed" and task and task.get("key") in _MILESTONE_TASKS:
         return f"Autopilot {run['run_id']}: {_MILESTONE_TASKS[task['key']]}"
     if event_type == "task_waiting_review" and task:
@@ -341,6 +367,14 @@ async def _process_progress_once() -> bool:
                 idempotency_key = f"run-review-summary:{marker}"
                 review_markers.add(marker)
                 new_review_markers.append(marker)
+            elif (
+                is_openai_run
+                and event.get("type") == "task_completed"
+                and event_task
+                and event_task.get("key") in _OPENAI_MILESTONE_TASKS
+            ):
+                text = await review_message(event_task, event)
+                idempotency_key = f"run-event:{event_id}"
             else:
                 text = _progress_message(
                     run,
@@ -356,17 +390,28 @@ async def _process_progress_once() -> bool:
                 if (
                     is_openai_run
                     and event_task
-                    and event_task.get("key") == "assign_creatives"
+                    and event_task.get("key") in {
+                        "analyze_creatives", "assign_creatives",
+                    }
                 ):
-                    from openai_campaign.zalo_review import assignment_media_parts
-
-                    assignment_value = (
-                        (event_task.get("pending_artifact") or {}).get("value")
-                        or event_task.get("result")
-                        or {}
+                    from openai_campaign.zalo_review import (
+                        assignment_media_parts,
+                        creative_media_parts,
+                    )
+                    media_parts = (
+                        creative_media_parts(workspace)
+                        if event_task.get("key") == "analyze_creatives"
+                        else assignment_media_parts(
+                            (
+                                (event_task.get("pending_artifact") or {}).get("value")
+                                or event_task.get("result")
+                                or {}
+                            ),
+                            workspace,
+                        )
                     )
                     for image_index, part in enumerate(
-                        assignment_media_parts(assignment_value, workspace), 1
+                        media_parts, 1
                     ):
                         await enqueue_image(
                             thread=thread,
@@ -398,16 +443,27 @@ async def _process_progress_once() -> bool:
                         idempotency_key=f"run-review-summary:{marker}",
                         run_id=run["run_id"],
                     )
-                    if waiting_task.get("key") == "assign_creatives":
-                        from openai_campaign.zalo_review import assignment_media_parts
-
-                        assignment_value = (
-                            (waiting_task.get("pending_artifact") or {}).get("value")
-                            or waiting_task.get("result")
-                            or {}
+                    if waiting_task.get("key") in {
+                        "analyze_creatives", "assign_creatives",
+                    }:
+                        from openai_campaign.zalo_review import (
+                            assignment_media_parts,
+                            creative_media_parts,
+                        )
+                        media_parts = (
+                            creative_media_parts(workspace)
+                            if waiting_task.get("key") == "analyze_creatives"
+                            else assignment_media_parts(
+                                (
+                                    (waiting_task.get("pending_artifact") or {}).get("value")
+                                    or waiting_task.get("result")
+                                    or {}
+                                ),
+                                workspace,
+                            )
                         )
                         for image_index, part in enumerate(
-                            assignment_media_parts(assignment_value, workspace), 1
+                            media_parts, 1
                         ):
                             await enqueue_image(
                                 thread=thread,

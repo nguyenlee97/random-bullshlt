@@ -39,6 +39,22 @@ export function checkMismatch(zone, file) {
   return false                                    // explicitly OK
 }
 
+// Autopilot uses the server's launch-safe 15% ratio boundary. Keep the looser
+// Guided warning band above unchanged for the legacy/GreenNode setup flow.
+export function checkAutopilotMismatch(zone, file) {
+  if (!file?.width || !file?.height) return null
+  const dims = _parseDims(zone?.size)
+  if (!dims) return null
+  const [zoneWidth, zoneHeight] = dims
+  const zoneRatio = zoneWidth / zoneHeight
+  const fileRatio = file.width / file.height
+  const ratioDiff = Math.abs(zoneRatio - fileRatio) / zoneRatio
+  if (ratioDiff < 0.15) return false
+  const zoneLabel = zoneWidth > zoneHeight ? 'ngang' : 'dọc'
+  const fileLabel = file.width > file.height ? 'ngang' : 'dọc'
+  return `Zone ${zone.size} (${zoneLabel}) · Ảnh ${file.width}×${file.height}px (${fileLabel})`
+}
+
 
 // ─── Smart score: how well a file fits a zone ─────────────────────────────────
 export function scoreFile(file, zone) {

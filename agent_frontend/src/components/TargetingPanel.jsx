@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import { ChevronDown, ChevronUp, Target, MapPin, Users, Smartphone, Tag, GraduationCap, Briefcase, DollarSign, Heart, Baby, Cloud, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+const ADVANCED_TARGETING_KEYS = [
+  'marital', 'parental', 'education', 'income', 'career', 'interest', 'weather',
+]
+
 // ─── Fetch & cache targeting options from the real API ───────────────────────
 const TARGETING_API = 'https://api.pawgrammers.io.vn/api/targeting/options'
 let _optionsCache = null
@@ -149,7 +153,10 @@ function countSelected(targeting) {
 export default function TargetingForm({ targeting = {}, onChange, autoExpand = false }) {
   const [expanded, setExpanded] = useState(autoExpand)
   const [opts, setOpts] = useState(null)
-  const [advExpanded, setAdvExpanded] = useState(false)
+  const hasAdvancedSelection = ADVANCED_TARGETING_KEYS.some(
+    key => Array.isArray(targeting[key]) && targeting[key].length > 0
+  )
+  const [advExpanded, setAdvExpanded] = useState(hasAdvancedSelection)
 
   // Autopilot opens AudienceStep for both audience and targeting repairs.
   // When the user explicitly chose "Chỉnh targeting", reveal the controls
@@ -157,6 +164,10 @@ export default function TargetingForm({ targeting = {}, onChange, autoExpand = f
   useEffect(() => {
     if (autoExpand) setExpanded(true)
   }, [autoExpand])
+
+  useEffect(() => {
+    if (hasAdvancedSelection) setAdvExpanded(true)
+  }, [hasAdvancedSelection])
 
   // Load options once
   useEffect(() => {

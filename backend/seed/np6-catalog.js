@@ -1,4 +1,4 @@
-const NP6_CATALOG_VERSION = 'np6-2026-03';
+const NP6_CATALOG_VERSION = 'np6-2026-04';
 const NP6_TAXONOMY_VERSION = 'placement-topics-v2';
 
 const BASE_TOPICS = [
@@ -877,6 +877,7 @@ function makePlacement({ publisher, topic, family, channel, channelReach, siteUr
   }[family];
   const id = `${prefix}_${topic.code}_${suffix}`;
   const spec = familySpec(family);
+  const isRetiredCategoryMasthead = family === 'category_masthead';
   const size = family === 'category_masthead'
     ? (publisher === 'ZNews' ? '1160x250' : '1160x280')
     : spec.size;
@@ -896,8 +897,8 @@ function makePlacement({ publisher, topic, family, channel, channelReach, siteUr
     device: ['desktop'],
     creativeContractId: contractFor(publisher, family),
     catalogVersion: NP6_CATALOG_VERSION,
-    recordRevision: 1,
-    lifecycleStatus: 'active',
+    recordRevision: isRetiredCategoryMasthead ? 2 : 1,
+    lifecycleStatus: isRetiredCategoryMasthead ? 'retired' : 'active',
     testSiteZone: id,
     siteUrl,
     renderer: {
@@ -910,8 +911,19 @@ function makePlacement({ publisher, topic, family, channel, channelReach, siteUr
     provenance: {
       classification: 'demo_fixture',
       sourceType: 'live_layout_observation_plus_synthetic_fixture',
-      evidenceIds: ['np6-category-census-2026-07-25'],
-      verifiedAt: '2026-07-25',
+      commercialStatus: isRetiredCategoryMasthead
+        ? 'unavailable'
+        : 'recommendable',
+      retirementReason: isRetiredCategoryMasthead
+        ? 'category_page_skin_mode_hides_masthead'
+        : null,
+      evidenceIds: isRetiredCategoryMasthead
+        ? [
+            'np6-category-census-2026-07-25',
+            'category-masthead-visibility-audit-2026-07-29',
+          ]
+        : ['np6-category-census-2026-07-25'],
+      verifiedAt: isRetiredCategoryMasthead ? '2026-07-29' : '2026-07-25',
     },
     ...deriveNp6Metrics(publisher, family, channelReach),
   };
@@ -1197,7 +1209,7 @@ function applyNp6Catalog(baseCatalog, options = {}) {
     catalogVersion: NP6_CATALOG_VERSION,
     taxonomyVersion: NP6_TAXONOMY_VERSION,
     revision: 1,
-    previousVersion: 'np6-2026-02',
+    previousVersion: 'np6-2026-03',
     groups: extendGroups(baseCatalog.groups),
     channels,
     placements: [...legacy, ...additions],

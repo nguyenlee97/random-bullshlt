@@ -19,6 +19,11 @@ from tools.audience_library import get_all_segments, search_audience
 from tools.order_api import fetch_zone_conflicts, public_conflict_details
 from tools.registry import execute_tool
 from tools.zone_catalog import get_all_zones
+from openai_campaign.placement_inventory import (
+    filter_openai_recommendable_zones,
+    filter_openai_zone_tool_result,
+    is_openai_recommendable_zone,
+)
 from workspace.intent import InvalidWorkspaceIntent, resolve_legacy_update
 from workspace.service import create_proposal, get_workspace
 
@@ -410,7 +415,7 @@ async def _execute_read_tool(name: str, args: dict) -> dict:
         result["unresolved_segment_ids"] = [item for item in requested if item not in by_id]
         return result
     if name in {"get_zone_details", "get_zone_availability", "compare_zones"}:
-        zones = await get_all_zones()
+        zones = filter_openai_recommendable_zones(await get_all_zones())
         zone_map = {str(item.get("id")): item for item in zones if item.get("id")}
         if name == "get_zone_details":
             zone_id = str(args.get("zone_id") or "")
@@ -521,6 +526,8 @@ async def execute_openai_tool(
             result = await execute_tool(
                 name, safe_args, session_id=session_id
             )
+            if name in {"get_zone_list", "search_zones"}:
+                result = filter_openai_zone_tool_result(result)
         return {"output": _bounded_json(result), "ui": None, "mutated": False}
 
     if name != MUTATION_TOOL_NAME:
@@ -539,6 +546,23 @@ async def execute_openai_tool(
         str(args.get("reason") or ""),
         source_message=message,
     )
+    if field == "setup.selectedZoneIds":
+        zone_map = {
+            str(zone.get("id")): zone
+            for zone in await get_all_zones()
+            if zone.get("id")
+        }
+        unavailable = [
+            zone_id
+            for zone_id in value
+            if zone_id in zone_map
+            and not is_openai_recommendable_zone(zone_map[zone_id])
+        ]
+        if unavailable:
+            raise InvalidWorkspaceIntent(
+                "Zone không còn khả dụng trong inventory hiện tại: "
+                + ", ".join(unavailable)
+            )
     if field.startswith("brief.") and validate_brief_value(
         canonical.get("artifacts", {}).get("brief", {}).get("value")
     )[1]:

@@ -3,7 +3,7 @@
  * Renders HTML shell then delegates to:
  *   scorecard.js, c1-conv-trend.js, c2-cost.js, c3-funnel.js
  */
-import { renderScorecard }                   from './conversion/scorecard.js';
+import { renderScorecard }                   from './conversion/scorecard.js?v=1.1.4';
 import { drawConversionTrend, drawCvrByChannel } from './conversion/c1-conv-trend.js';
 import { drawCpaByPlacement, drawSpendVsConvScatter } from './conversion/c2-cost.js';
 import { drawConversionFunnel, renderTopConversionsTable } from './conversion/c3-funnel.js';
@@ -49,14 +49,8 @@ function buildShell() {
           <div class="sub">Conversion bars · CVR % line (right axis)</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Track conversion delivery day-by-day and whether click-to-conversion rate is improving.</div>
-      <div class="card-rule"><b>Decision rule:</b> Clicks rising but CVR falling → landing page or offer issue, not a media problem.</div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap tall"><canvas id="ch_cv_trend"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_cv_trend">i</span>
-        <span id="ins_cv_trend">—</span>
       </div>
     </div>
 
@@ -69,14 +63,8 @@ function buildShell() {
           <div class="sub">Click-to-conversion rate per channel · 🟢 ≥5% · 🟡 2–5% · 🔴 &lt;2%</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Find which channel's audience converts best after clicking — signals audience quality.</div>
-      <div class="card-rule"><b>Decision rule:</b> Channel with high CVR + high CPC → still worth it if CPA is acceptable.</div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap" style="min-height:220px"><canvas id="ch_cv_cvr_ch"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_cv_cvr_ch">i</span>
-        <span id="ins_cv_cvr_ch">—</span>
       </div>
     </div>
   </div>
@@ -94,14 +82,8 @@ function buildShell() {
           <div class="sub">Sorted ascending — cheapest conversions first</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Identify the most cost-efficient placements for driving conversions.</div>
-      <div class="card-rule"><b>Decision rule:</b> CPA &gt;2× median → deprioritise. Shift budget to green placements.</div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap tall"><canvas id="ch_cv_cpa"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_cv_cpa">i</span>
-        <span id="ins_cv_cpa">—</span>
       </div>
     </div>
 
@@ -114,14 +96,8 @@ function buildShell() {
           <div class="sub">Bubble size = click volume · upper-left = best efficiency</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> See which campaigns deliver conversions proportional to their spend.</div>
-      <div class="card-rule"><b>Decision rule:</b> High spend + low conversions (lower-right) → review offer, creative, or targeting.</div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap tall"><canvas id="ch_cv_scatter"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_cv_scatter">i</span>
-        <span id="ins_cv_scatter">—</span>
       </div>
     </div>
   </div>
@@ -139,8 +115,6 @@ function buildShell() {
           <div class="sub">Impressions → Reach → Clicks → Conversions with drop-off rates</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Diagnose where the biggest drop-off occurs and prioritise optimisation efforts.</div>
-      <div class="card-rule"><b>Decision rule:</b> Large drop at click stage → fix CTR (creative). Large drop at conversion → fix landing page.</div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div style="display:grid;grid-template-columns:1fr 160px;gap:20px;align-items:center">
           <div id="cv-funnel"></div>
@@ -153,10 +127,6 @@ function buildShell() {
             <div style="text-align:center;font-size:10px;color:var(--muted);margin-top:4px">CVR</div>
           </div>
         </div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_cv_funnel">i</span>
-        <span id="ins_cv_funnel">—</span>
       </div>
     </div>
   </div>
@@ -171,14 +141,8 @@ function buildShell() {
           <div class="sub">Ranked by total conversions · CVR pills · CPA</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Holistic conversion performance view — rank and compare all campaigns.</div>
-      <div class="card-rule"><b>Decision rule:</b> Top-conv campaign with highest CPA → scale budget only after verifying LTV supports CPA.</div>
       <div class="card-body auto">
         <div id="cv-top-conv"></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_cv_top">i</span>
-        <span id="ins_cv_top">—</span>
       </div>
     </div>
   </div>

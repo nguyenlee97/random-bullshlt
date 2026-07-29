@@ -3,7 +3,7 @@
  * Renders the HTML shell then delegates to component modules:
  *   scorecard.js, a1-reach.js, a2-viewability.js, a3-matrix.js
  */
-import { renderScorecard }           from './awareness/scorecard.js';
+import { renderScorecard }           from './awareness/scorecard.js?v=1.1.4';
 import { drawReachTrend, drawCpmTrend, drawFreqDistribution } from './awareness/a1-reach.js';
 import { drawViewabilityByPlacement, drawVideoFunnel }        from './awareness/a2-viewability.js';
 import { renderMatrix }              from './awareness/a3-matrix.js';
@@ -15,7 +15,7 @@ function norm(r) {
   const channel     = r.channel || '';
   return {
     date:        r.date         || '',
-    brand:       r.brand        || r.Brand || campaignId.replace(/-\d+$/, '') || 'Unknown',
+    brand:       r.brand        || r.Brand || campaignId || 'Unknown',
     zone:        placementId,
     channel,
     campaignId,
@@ -61,18 +61,8 @@ function buildShell() {
           <div class="sub">Reach bars · Frequency line (right axis)</div>
         </div>
       </div>
-      <div class="card-usecase">
-        <b>When to use:</b> Check if the campaign is expanding reach or repeatedly hitting the same users.
-      </div>
-      <div class="card-rule">
-        <b>Decision rule:</b> Reach% declining + Impressions flat → over-frequency. Frequency &gt;5 → add frequency cap.
-      </div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap tall"><canvas id="ch_aw_reach"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_aw_reach">i</span>
-        <span id="ins_aw_reach">—</span>
       </div>
     </div>
 
@@ -85,18 +75,8 @@ function buildShell() {
           <div class="sub">Daily avg CPM vs period average (dashed)</div>
         </div>
       </div>
-      <div class="card-usecase">
-        <b>When to use:</b> Monitor buying efficiency — is cost-per-mille trending up or stabilising?
-      </div>
-      <div class="card-rule">
-        <b>Decision rule:</b> CPM rising &gt;15% over benchmark → renegotiate placements or broaden targeting.
-      </div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap tall"><canvas id="ch_aw_cpm"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_aw_cpm">i</span>
-        <span id="ins_aw_cpm">—</span>
       </div>
     </div>
 
@@ -112,18 +92,8 @@ function buildShell() {
           <div class="sub">Count of days falling in each frequency band</div>
         </div>
       </div>
-      <div class="card-usecase">
-        <b>When to use:</b> Understand the spread of daily frequency — are most days healthy or over-exposed?
-      </div>
-      <div class="card-rule">
-        <b>Decision rule:</b> &gt;30% of days in the 5–7 or 7+ band → aggressive frequency cap needed.
-      </div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap" style="min-height:200px"><canvas id="ch_aw_freq"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_aw_freq">i</span>
-        <span id="ins_aw_freq">—</span>
       </div>
     </div>
   </div>
@@ -145,18 +115,8 @@ function buildShell() {
           <div class="sub">Weighted-avg VI% · 🟢 ≥70 · 🟡 50–70 · 🔴 &lt;50</div>
         </div>
       </div>
-      <div class="card-usecase">
-        <b>When to use:</b> Audit each placement's viewability — are ads actually being seen?
-      </div>
-      <div class="card-rule">
-        <b>Decision rule:</b> VI &lt;50% = non-viewable inventory → pause or replace that placement.
-      </div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap tall"><canvas id="ch_aw_vi"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_aw_vi">i</span>
-        <span id="ins_aw_vi">—</span>
       </div>
     </div>
 
@@ -169,21 +129,11 @@ function buildShell() {
           <div class="sub">Impression → Q1 → Q2 → Complete (VI-derived estimate)</div>
         </div>
       </div>
-      <div class="card-usecase">
-        <b>When to use:</b> For video formats — understand where viewers drop off in the creative.
-      </div>
-      <div class="card-rule">
-        <b>Decision rule:</b> &lt;30% complete at Q2 → shorten creative or improve opening hook.
-      </div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div id="aw-funnel" style="margin-bottom:12px"></div>
         <div class="chart-wrap" style="min-height:140px; position:relative">
           <canvas id="ch_aw_funnel"></canvas>
         </div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_aw_funnel">i</span>
-        <span id="ins_aw_funnel">—</span>
       </div>
     </div>
 
@@ -204,18 +154,8 @@ function buildShell() {
           <div class="sub">All awareness KPIs by channel — sortable at a glance</div>
         </div>
       </div>
-      <div class="card-usecase">
-        <b>When to use:</b> Side-by-side comparison of all channels on reach efficiency, cost, and viewability.
-      </div>
-      <div class="card-rule">
-        <b>Decision rule:</b> High CPM + low VI = poor ROI placement. Low Freq + high Reach = strong awareness driver to scale.
-      </div>
       <div class="card-body auto">
         <div id="aw-matrix"></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_aw_matrix">i</span>
-        <span id="ins_aw_matrix">—</span>
       </div>
     </div>
   </div>

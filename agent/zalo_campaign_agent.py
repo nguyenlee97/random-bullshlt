@@ -860,10 +860,15 @@ async def _start_autopilot(thread: dict, brief: dict, mode: str) -> dict:
     })
     await subscribe_run(thread, run["run_id"])
     mode_label = "Tự động hoàn toàn" if mode == "fully_automatic" else "Bán tự động"
+    mode_behavior = (
+        "Agent sẽ tự chạy đến launch và cập nhật từng mốc quan trọng."
+        if mode == "fully_automatic"
+        else "Agent sẽ cập nhật và dừng để bạn duyệt các mốc quan trọng."
+    )
     return {"thread": thread, "text": (
         f"Đã bắt đầu Campaign Autopilot cho “{brief['brand']}”.\n"
         f"Mode: {mode_label}\nRun: {run['run_id']}\n"
-        "Tôi sẽ cập nhật ở các mốc quan trọng. Cả hai mode đều dừng để xác nhận trước khi launch."
+        f"{mode_behavior}"
     )}
 
 
@@ -1145,7 +1150,7 @@ async def _handle_channel_event_legacy(event: dict) -> list[str | dict]:
         }})
         text = (
             "Chọn mode Campaign Autopilot:\n"
-            "1. Tự động hoàn toàn — chỉ dừng trước khi launch.\n"
+            "1. Tự động hoàn toàn — tự chạy đến launch và vẫn gửi cập nhật từng mốc.\n"
             "2. Bán tự động — dừng ở các bước quan trọng và trước khi launch."
         )
     elif intent == "list_campaigns" or (

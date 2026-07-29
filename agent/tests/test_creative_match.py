@@ -1,4 +1,9 @@
-from tools.creative_match import dimension_match, match_file_to_format, score_file_for_zone
+from tools.creative_match import (
+    auto_assign,
+    dimension_match,
+    match_file_to_format,
+    score_file_for_zone,
+)
 
 
 def test_dimension_match_accepts_exported_size_with_same_ratio():
@@ -87,3 +92,81 @@ def test_np6_side_contract_accepts_side_banner_not_background_skin():
     assert side_score > background_score
     assert side_warnings == []
     assert background_warnings
+
+
+def test_openai_contract_assignment_prefers_format_id_over_upload_order():
+    zone = {
+        "id": "Znews_Home_Background",
+        "format": "skin",
+        "size": "skin",
+        "creativeContractId": "znews-home-background-v1",
+    }
+    files = [
+        {
+            "name": "first-upload.png",
+            "width": 1504,
+            "height": 704,
+            "intendedFormat": "skin",
+            "intel": {
+                "width": 1504,
+                "height": 704,
+                "effective_status": "auto_approved",
+            },
+        },
+        {
+            "name": "campaign-hero.png",
+            "formatId": "znews-Background",
+            "width": 1504,
+            "height": 704,
+            "intendedFormat": "skin",
+            "intel": {
+                "width": 1504,
+                "height": 704,
+                "effective_status": "auto_approved",
+            },
+        },
+    ]
+
+    legacy = auto_assign([zone], files)
+    openai = auto_assign([zone], files, prefer_contract_identity=True)
+
+    assert legacy["assignments"][zone["id"]] == 0
+    assert openai["assignments"][zone["id"]] == 1
+    assert openai["scores"][zone["id"]]["1"] > openai["scores"][zone["id"]]["0"]
+
+
+def test_openai_contract_assignment_uses_filename_when_format_id_is_missing():
+    zone = {
+        "id": "Znews_Home_Background",
+        "format": "skin",
+        "size": "skin",
+        "creativeContractId": "znews-home-background-v1",
+    }
+    files = [
+        {
+            "name": "first-upload.png",
+            "width": 1504,
+            "height": 704,
+            "intendedFormat": "skin",
+            "intel": {
+                "width": 1504,
+                "height": 704,
+                "effective_status": "auto_approved",
+            },
+        },
+        {
+            "name": "vietjet-znews-background-final.png",
+            "width": 1504,
+            "height": 704,
+            "intendedFormat": "skin",
+            "intel": {
+                "width": 1504,
+                "height": 704,
+                "effective_status": "auto_approved",
+            },
+        },
+    ]
+
+    result = auto_assign([zone], files, prefer_contract_identity=True)
+
+    assert result["assignments"][zone["id"]] == 1

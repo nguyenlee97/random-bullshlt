@@ -1,23 +1,35 @@
 /**
- * app.js — Tab router, filter state, data loading
- * Imports api.js functions, delegates rendering to tab modules.
+ * app.js — campaign-aware analytics dashboard
+ *
+ * Aggregate mode renders the complete analytics record catalog.
+ * Campaign mode uses the same campaign record endpoint as the Agent UI so both
+ * surfaces chart the same authoritative dataset. Generated analysis stays in
+ * the Agent UI.
  */
-import { fetchData, fetchSummary, fetchByDate, fetchByCampaign, fetchByPlacement, fetchHealth } from './api.js';
-import { render as renderDailyOps }      from './tabs/daily-ops.js';
-import { render as renderAwareness }     from './tabs/awareness.js';
-import { render as renderConsideration } from './tabs/consideration.js';
-import { render as renderConversion }    from './tabs/conversion.js';
-import { render as renderRetention }     from './tabs/retention.js';
-import { render as renderExecutive }     from './tabs/executive.js';
+import {
+  fetchData,
+  fetchHealth,
+  fetchOrders,
+  fetchReportData
+} from './api.js?v=1.1.4';
+import {
+  campaignOptions,
+  filterRecords,
+  requestedCampaignId
+} from './campaign-data.js?v=1.1.4';
+import { render as renderDailyOps } from './tabs/daily-ops.js?v=1.1.4';
+import { render as renderAwareness } from './tabs/awareness.js?v=1.1.4';
+import { render as renderConsideration } from './tabs/consideration.js?v=1.1.4';
+import { render as renderConversion } from './tabs/conversion.js?v=1.1.4';
+import { render as renderRetention } from './tabs/retention.js?v=1.1.4';
+import { render as renderExecutive } from './tabs/executive.js?v=1.1.4';
 
-/* ── Shared state ───────────────────────────────────────────────── */
 const State = {
-  allData: [],       // raw analytics records from backend
-  filtered: [],      // after client-side filter applied
-  summary: null,     // /api/analytics/summary response
-  byDate: [],        // /api/analytics/by-date response
-  byCampaign: [],    // /api/analytics/by-campaign response
-  byPlacement: [],   // /api/analytics/by-placement response
+  allData: [],
+  sourceData: [],
+  filtered: [],
+  orders: [],
+  dataRequest: 0,
   filters: {
     brand: '',
     zone: '',
@@ -29,7 +41,6 @@ const State = {
   loading: false
 };
 
-/* ── Chart registry (destroy before re-render) ──────────────────── */
 export const Charts = {};
 
 export function destroyChart(id) {
@@ -44,30 +55,29 @@ export function registerChart(id, instance) {
   Charts[id] = instance;
 }
 
-/* ── DOM refs ───────────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
 
 const els = {
   loadingOverlay: $('loadingOverlay'),
-  errorState:     $('errorState'),
-  errorMsg:       $('errorMsg'),
-  totalRows:      $('totalRows'),
-  totalSpend:     $('totalSpend'),
-  filteredCount:  $('filteredCount'),
-  connDot:        $('connDot'),
-  connLabel:      $('connLabel'),
-  fBrand:         $('fBrand'),
-  fZone:          $('fZone'),
-  fAudience:      $('fAudience'),
-  fStart:         $('fStart'),
-  fEnd:           $('fEnd'),
-  btnApply:       $('btnApplyFilter'),
-  btnReset:       $('btnResetFilter'),
-  btnRetry:       $('btnRetry'),
-  tabs:           $('tabs'),
+  loadingText: $('loadingText'),
+  errorState: $('errorState'),
+  errorMsg: $('errorMsg'),
+  totalRows: $('totalRows'),
+  totalSpend: $('totalSpend'),
+  filteredCount: $('filteredCount'),
+  connDot: $('connDot'),
+  connLabel: $('connLabel'),
+  fBrand: $('fBrand'),
+  fZone: $('fZone'),
+  fAudience: $('fAudience'),
+  fStart: $('fStart'),
+  fEnd: $('fEnd'),
+  btnApply: $('btnApplyFilter'),
+  btnReset: $('btnResetFilter'),
+  btnRetry: $('btnRetry'),
+  tabs: $('tabs')
 };
 
-/* ── Formatters ─────────────────────────────────────────────────── */
 export function fmt(n, decimals = 0) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   return Number(n).toLocaleString('vi-VN', {
@@ -84,225 +94,274 @@ export function fmtPct(n, decimals = 1) {
 export function fmtVND(n) {
   if (!n) return '₫0';
   if (n >= 1_000_000_000) return '₫' + (n / 1_000_000_000).toFixed(1) + 'B';
-  if (n >= 1_000_000)     return '₫' + (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000)         return '₫' + (n / 1_000).toFixed(0) + 'K';
+  if (n >= 1_000_000) return '₫' + (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return '₫' + (n / 1_000).toFixed(0) + 'K';
   return '₫' + n;
 }
 
 export function fmtK(n) {
   if (!n) return '0';
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return String(n);
 }
 
-/* ── Color palette ──────────────────────────────────────────────── */
 export const COLORS = [
   '#1f3551', '#2c7fb8', '#5ba33d', '#c98a14', '#6e4cb8',
   '#0d8a8a', '#c54a8a', '#c0392b', '#2980b9', '#27ae60'
 ];
 
 export function alpha(hex, a) {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r},${g},${b},${a})`;
 }
 
-/* ── Connection check ───────────────────────────────────────────── */
 async function checkConnection() {
   try {
     await fetchHealth();
     els.connDot.className = 'conn-dot ok';
-    els.connLabel.textContent = 'Connected · :3000';
+    els.connLabel.textContent = 'Connected';
   } catch {
     els.connDot.className = 'conn-dot err';
     els.connLabel.textContent = 'Offline';
   }
 }
 
-/* ── Data loading ───────────────────────────────────────────────── */
+function setLoading(loading, message = 'Loading analytics data…') {
+  State.loading = loading;
+  els.loadingText.textContent = message;
+  els.loadingOverlay.classList.toggle('hidden', !loading);
+}
+
+function normalizeArray(result) {
+  return Array.isArray(result) ? result : (result?.data || []);
+}
+
+function updateUrlCampaign(campaignId) {
+  const url = new URL(window.location.href);
+  if (campaignId) url.searchParams.set('campaignId', campaignId);
+  else url.searchParams.delete('campaignId');
+  window.history.replaceState({}, '', url);
+}
+
 async function loadAll() {
-  State.loading = true;
-  els.loadingOverlay.classList.remove('hidden');
+  setLoading(true);
   els.errorState.classList.add('hidden');
 
   try {
-    const [dataRes, summaryRes, byDateRes, byCampRes, byPlacementRes] = await Promise.all([
-      fetchData({ limit: 2000 }),
-      fetchSummary(),
-      fetchByDate(),
-      fetchByCampaign(),
-      fetchByPlacement()
+    const [dataResult, ordersResult] = await Promise.all([
+      fetchData(),
+      fetchOrders().catch(error => {
+        console.warn('[analytics] Campaign labels unavailable:', error);
+        return [];
+      })
     ]);
 
-    // Normalize — backend may return { data: [...] } or just [...]
-    State.allData      = Array.isArray(dataRes) ? dataRes : (dataRes.data || []);
-    State.summary      = summaryRes;
-    State.byDate       = Array.isArray(byDateRes) ? byDateRes : (byDateRes.data || []);
-    State.byCampaign   = Array.isArray(byCampRes) ? byCampRes : (byCampRes.data || []);
-    State.byPlacement  = Array.isArray(byPlacementRes) ? byPlacementRes : (byPlacementRes.data || []);
+    State.allData = normalizeArray(dataResult);
+    State.sourceData = State.allData;
+    State.orders = normalizeArray(ordersResult);
 
-    populateFilterDropdowns();
-    applyClientFilter();
-    updateTopbarStats();
-    renderActiveTab();
+    const requestedId = requestedCampaignId(window.location.search);
+    populateCampaignDropdown(requestedId);
 
-    els.loadingOverlay.classList.add('hidden');
-  } catch (err) {
-    console.error('[analytics] Load failed:', err);
-    els.loadingOverlay.classList.add('hidden');
-    els.errorMsg.textContent = err.message || 'Backend at localhost:3000 is unreachable.';
+    if (requestedId) {
+      els.fBrand.value = requestedId;
+      await loadCampaignData(requestedId, { updateUrl: false, showOverlay: false });
+    } else {
+      State.filters.brand = '';
+      populateDimensionDropdowns(State.sourceData);
+      applyClientFilter();
+      renderActiveTab();
+    }
+  } catch (error) {
+    console.error('[analytics] Load failed:', error);
+    els.errorMsg.textContent = error.message || 'The analytics backend is unreachable.';
     els.errorState.classList.remove('hidden');
   } finally {
-    State.loading = false;
+    setLoading(false);
   }
 }
 
-/* ── Filter dropdowns ───────────────────────────────────────────── */
-function populateFilterDropdowns() {
-  const data = State.allData;
+function populateCampaignDropdown(requestedId = '') {
+  const options = campaignOptions(State.allData, State.orders, requestedId);
+  const current = requestedId || els.fBrand.value;
+  els.fBrand.innerHTML = '<option value="">All campaigns (aggregate)</option>';
 
-  // Real backend: campaignId, placementId, channel
-  // Mock data: brand, zone, audienceSegment
-  const brands = [...new Set(data.map(r =>
-    r.brand || r.Brand || (r.campaignId || '').replace(/-\d+$/, '') || ''
-  ).filter(Boolean))].sort();
-
-  const zones = [...new Set(data.map(r =>
-    r.placementId || r.zone || r.Zone || ''
-  ).filter(Boolean))].sort();
-
-  const audiences = [...new Set(data.map(r =>
-    r.audienceSegment || r['Audience Segment'] || r.channel || ''
-  ).filter(Boolean))].sort();
-
-  fillSelect(els.fBrand,    brands,    'All campaigns');
-  fillSelect(els.fZone,     zones,     'All placements');
-  fillSelect(els.fAudience, audiences, 'All channels');
+  for (const item of options) {
+    const option = document.createElement('option');
+    option.value = item.value;
+    option.textContent = item.label;
+    option.selected = item.value === current;
+    els.fBrand.appendChild(option);
+  }
 }
 
+function populateDimensionDropdowns(data) {
+  const zoneValue = els.fZone.value;
+  const audienceValue = els.fAudience.value;
+  const zones = [...new Set(data.map(record =>
+    record.placementId || record.zone || record.Zone || ''
+  ).filter(Boolean))].sort();
+  const audiences = [...new Set(data.map(record =>
+    record.audienceSegment || record['Audience Segment'] || record.channel || ''
+  ).filter(Boolean))].sort();
 
-function fillSelect(sel, options, placeholder) {
-  const cur = sel.value;
-  sel.innerHTML = `<option value="">${placeholder}</option>`;
-  options.forEach(v => {
-    const o = document.createElement('option');
-    o.value = v;
-    o.textContent = v;
-    if (v === cur) o.selected = true;
-    sel.appendChild(o);
-  });
+  fillSelect(els.fZone, zones, 'All placements', zoneValue);
+  fillSelect(els.fAudience, audiences, 'All channels', audienceValue);
 }
 
-/* ── Client-side filter ─────────────────────────────────────────── */
+function fillSelect(select, options, placeholder, current = '') {
+  select.innerHTML = '';
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = placeholder;
+  select.appendChild(defaultOption);
+
+  for (const value of options) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    option.selected = value === current;
+    select.appendChild(option);
+  }
+
+  if (![...select.options].some(option => option.value === current)) select.value = '';
+}
+
+async function loadCampaignData(campaignId, {
+  updateUrl = true,
+  showOverlay = true
+} = {}) {
+  const request = ++State.dataRequest;
+  State.filters.brand = campaignId;
+  els.fBrand.value = campaignId;
+
+  if (updateUrl) updateUrlCampaign(campaignId);
+
+  if (!campaignId) {
+    State.sourceData = State.allData;
+    populateDimensionDropdowns(State.sourceData);
+    applyClientFilter();
+    renderActiveTab();
+    return;
+  }
+
+  if (showOverlay) setLoading(true, `Loading chart data for ${campaignId}…`);
+
+  try {
+    const recordsResult = await fetchReportData(campaignId);
+    if (request !== State.dataRequest) return;
+    State.sourceData = normalizeArray(recordsResult);
+  } catch (error) {
+    if (request !== State.dataRequest) return;
+    console.error(`[analytics] Campaign data load failed for ${campaignId}:`, error);
+    State.sourceData = State.allData.filter(record => record.campaignId === campaignId);
+  } finally {
+    if (request === State.dataRequest) {
+      populateDimensionDropdowns(State.sourceData);
+      applyClientFilter();
+      renderActiveTab();
+      if (showOverlay) setLoading(false);
+    }
+  }
+}
+
 function applyClientFilter() {
-  const f = State.filters;
-  State.filtered = State.allData.filter(r => {
-    const brand    = r.brand || r.Brand || (r.campaignId || '').replace(/-\d+$/, '') || '';
-    const zone     = r.placementId || r.zone || r.Zone || '';
-    const audience = r.audienceSegment || r['Audience Segment'] || r.channel || '';
-    const date     = r.date || r.Date || '';
-
-    if (f.brand    && brand !== f.brand)       return false;
-    if (f.zone     && zone !== f.zone)         return false;
-    if (f.audience && audience !== f.audience) return false;
-    if (f.startDate && date < f.startDate)     return false;
-    if (f.endDate   && date > f.endDate)       return false;
-    return true;
-  });
-
+  State.filtered = filterRecords(State.sourceData, State.filters);
   els.filteredCount.textContent = fmt(State.filtered.length);
+  updateTopbarStats();
 }
 
-/* ── Topbar stats ───────────────────────────────────────────────── */
 function updateTopbarStats() {
-  els.totalRows.textContent = fmt(State.allData.length);
-  const totalSpend = State.allData.reduce((s, r) => s + (r.spend || r.spendVnd || r['Spend VND'] || 0), 0);
+  const data = State.filtered;
+  els.totalRows.textContent = fmt(data.length);
+  const totalSpend = data.reduce((sum, record) =>
+    sum + Number(record.spend || record.spendVnd || record['Spend VND'] || 0), 0);
   els.totalSpend.textContent = fmtVND(totalSpend);
 }
 
-/* ── Tab routing ────────────────────────────────────────────────── */
 function switchTab(tab) {
-  // Remove active from all tabs
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('on'));
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.tab-btn').forEach(button => button.classList.remove('on'));
+  document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('on'));
 
-  document.querySelector(`[data-tab="${tab}"]`).classList.add('on');
-  document.getElementById('p-' + tab).classList.add('on');
+  document.querySelector(`[data-tab="${tab}"]`)?.classList.add('on');
+  document.getElementById('p-' + tab)?.classList.add('on');
 
   State.activeTab = tab;
   renderActiveTab();
 }
 
 function renderActiveTab() {
-  const tab = State.activeTab;
-  if (State.allData.length === 0) return; // no data yet
+  if (State.loading && State.allData.length === 0) return;
 
   const utils = { fmt, fmtPct, fmtVND, fmtK, COLORS, alpha, registerChart, destroyChart };
-
-  if (tab === 'op') {
-    renderDailyOps(State, utils);
-  } else if (tab === 'aw') {
-    renderAwareness(State, utils);
-  } else if (tab === 'co') {
-    renderConsideration(State, utils);
-  } else if (tab === 'cv') {
-    renderConversion(State, utils);
-  } else if (tab === 'rt') {
-    renderRetention(State, utils);
-  } else if (tab === 'ex') {
-    renderExecutive(State, utils);
-  }
+  const renderers = {
+    op: renderDailyOps,
+    aw: renderAwareness,
+    co: renderConsideration,
+    cv: renderConversion,
+    rt: renderRetention,
+    ex: renderExecutive
+  };
+  renderers[State.activeTab]?.(State, utils);
 }
 
-/* ── Event listeners ────────────────────────────────────────────── */
+function readFiltersFromControls() {
+  State.filters = {
+    brand: els.fBrand.value,
+    zone: els.fZone.value,
+    audience: els.fAudience.value,
+    startDate: els.fStart.value,
+    endDate: els.fEnd.value
+  };
+}
+
 function bindEvents() {
-  // Tab clicks
-  els.tabs.addEventListener('click', e => {
-    const btn = e.target.closest('[data-tab]');
-    if (!btn) return;
-    switchTab(btn.dataset.tab);
+  els.tabs.addEventListener('click', event => {
+    const button = event.target.closest('[data-tab]');
+    if (button) switchTab(button.dataset.tab);
   });
 
-  // Apply filter
-  els.btnApply.addEventListener('click', () => {
-    State.filters = {
-      brand:     els.fBrand.value,
-      zone:      els.fZone.value,
-      audience:  els.fAudience.value,
-      startDate: els.fStart.value,
-      endDate:   els.fEnd.value
-    };
-    applyClientFilter();
-    renderActiveTab();
-  });
-
-  // Reset filter
-  els.btnReset.addEventListener('click', () => {
-    els.fBrand.value    = '';
-    els.fZone.value     = '';
+  els.fBrand.addEventListener('change', () => {
+    els.fZone.value = '';
     els.fAudience.value = '';
-    els.fStart.value    = '';
-    els.fEnd.value      = '';
-    State.filters = { brand: '', zone: '', audience: '', startDate: '', endDate: '' };
+    els.fStart.value = '';
+    els.fEnd.value = '';
+    State.filters = {
+      brand: els.fBrand.value,
+      zone: '',
+      audience: '',
+      startDate: '',
+      endDate: ''
+    };
+    loadCampaignData(els.fBrand.value);
+  });
+
+  els.btnApply.addEventListener('click', () => {
+    readFiltersFromControls();
     applyClientFilter();
     renderActiveTab();
   });
 
-  // Retry button
-  els.btnRetry.addEventListener('click', () => {
-    loadAll();
+  els.btnReset.addEventListener('click', () => {
+    els.fBrand.value = '';
+    els.fZone.value = '';
+    els.fAudience.value = '';
+    els.fStart.value = '';
+    els.fEnd.value = '';
+    State.filters = { brand: '', zone: '', audience: '', startDate: '', endDate: '' };
+    loadCampaignData('');
   });
+
+  els.btnRetry.addEventListener('click', loadAll);
 }
 
-/* ── Boot ───────────────────────────────────────────────────────── */
 async function boot() {
   bindEvents();
   checkConnection();
   await loadAll();
-
-  // Re-check connection every 30s
   setInterval(checkConnection, 30000);
 }
 

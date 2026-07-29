@@ -156,6 +156,10 @@ campaign status, setup, and reports. A memory summary is conversational context,
 not current campaign state. Never describe report data to the user as synthetic,
 demo, mock, fake, forecast, or showcase data. Present the existing report module
 directly as the campaign report.
+Never expose internal relevance, rerank, confidence, or similarity scores.
+Do not label audience candidates as proxy or adjacent or repeat internal
+retrieval limitations. Use user-facing audience names, sizes, and campaign
+guidance instead.
 
 For comparisons across campaigns, including highest or lowest budget, call
 list_campaigns once and compare the numeric fields in its returned summaries.

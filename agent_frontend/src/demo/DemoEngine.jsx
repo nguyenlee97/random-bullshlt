@@ -7,6 +7,8 @@ import DemoOverlay from './DemoOverlay'
 import { STAGE1_STEPS, buildStage2Steps, pickRandomBrief, DEMO_AD_FORMAT_META, DEMO_NON_BOX_FORMAT_IDS, ZONE_FORMAT_MAP } from './demoScripts'
 import { AUTOPILOT_TOUR_STEPS } from './autopilotTour'
 import { buildAutopilotLiveSteps } from './autopilotWalkthrough'
+import { compatiblePlacementIndexes } from './demoPlacementCompatibility.js'
+import { fitDemoCreative } from './demoCreativeFit.js'
 import {
   hasSeenOpenAIWalkthroughTool,
   isOpenAIWalkthroughModel,
@@ -541,6 +543,8 @@ export function DemoProvider({
             const status = canvas?.getAttribute('data-autopilot-status') || ''
             if (expected.has(taskKey)) {
               resolve(taskKey)
+            } else if (status === 'waiting_review' && taskKey) {
+              resolve(`unexpected:${taskKey}`)
             } else if (['failed', 'cancelled'].includes(status)) {
               resolve('')
             } else if (Date.now() - startedAt > timeout) {
@@ -553,6 +557,22 @@ export function DemoProvider({
           poll()
         })
         setIsWaiting(false)
+        if (found.startsWith('unexpected:')) {
+          const blockedTask = found.slice('unexpected:'.length)
+          const audienceBlocked = blockedTask === 'retrieve_audience'
+          setPopup({
+            title: audienceBlocked
+              ? 'Brief cần thêm ngữ cảnh trước khi tìm audience'
+              : 'Autopilot cần bạn xử lý một checkpoint phát sinh',
+            text: audienceBlocked
+              ? 'Walkthrough đã dừng đúng tại bước **Tìm audience** vì Agent cần làm rõ sản phẩm, dịch vụ hoặc người mua. Hãy bổ sung Brief hoặc chọn audience thủ công; các artifact đã tạo vẫn được giữ nguyên.'
+              : `Walkthrough đã dừng tại checkpoint **${blockedTask}** để bạn kiểm tra dữ liệu hoặc rủi ro phát sinh. Đây là điểm dừng an toàn, không phải lỗi timeout.`,
+            buttons: [
+              { label: 'Dừng walkthrough và xử lý checkpoint', variant: 'primary', action: 'skip' },
+            ],
+          })
+          return
+        }
         if (!found) {
           setPopup({
             title: 'Autopilot chưa đến được checkpoint tiếp theo',
@@ -603,19 +623,36 @@ export function DemoProvider({
       case 'TRIM_AUTOPILOT_PLACEMENTS': {
         setIsWaiting(true)
         const keep = Math.max(1, Number(step.keep || 2))
-        let selected = [
-          ...document.querySelectorAll(
-            '[data-demo="autopilot-placement-option"][aria-pressed="true"]',
+        const review = document.querySelector(
+          '[data-demo="autopilot-review-artifact"][data-autopilot-task="plan_placement_intent"]',
+        )
+        const options = [
+          ...(review || document).querySelectorAll(
+            '[data-demo="autopilot-placement-option"]',
           ),
         ]
-        while (selected.length > keep) {
-          selected[selected.length - 1].click()
-          await new Promise(r => setTimeout(r, 180))
-          selected = [
-            ...document.querySelectorAll(
-              '[data-demo="autopilot-placement-option"][aria-pressed="true"]',
-            ),
-          ]
+        const compatibleIndexes = step.creativeFormats?.length
+          ? compatiblePlacementIndexes(
+              options.map(option => ({
+                size: option.dataset.zoneSize,
+                format: option.dataset.zoneFormat,
+                creativeContractId: option.dataset.zoneContract,
+              })),
+              step.creativeFormats,
+              keep,
+            )
+          : []
+        const desired = new Set(
+          compatibleIndexes.length
+            ? compatibleIndexes
+            : options.slice(0, keep).map((_, index) => index),
+        )
+        for (const [index, option] of options.entries()) {
+          const selected = option.getAttribute('aria-pressed') === 'true'
+          if (selected !== desired.has(index)) {
+            option.click()
+            await new Promise(r => setTimeout(r, 180))
+          }
         }
         setIsWaiting(false)
         setStepIdx(prev => prev + 1)
@@ -685,23 +722,26 @@ export function DemoProvider({
               log.error(`INJECT_DEMO_CREATIVES: 404 → ${url}`)
               continue
             }
-            const blob = await resp.blob()
-            const dataUrl = await new Promise((resolve) => {
-              const reader = new FileReader()
-              reader.onload = () => resolve(reader.result)
-              reader.readAsDataURL(blob)
-            })
+            const sourceBlob = await resp.blob()
+            const fitted = isOpenAIWalkthroughModel(conversationModelRef.current)
+              ? await fitDemoCreative(sourceBlob, meta)
+              : { blob: sourceBlob, dataUrl: await new Promise((resolve) => {
+                  const reader = new FileReader()
+                  reader.onload = () => resolve(reader.result)
+                  reader.readAsDataURL(sourceBlob)
+                }) }
             creatives.push({
               id: `demo-${briefId}-${formatId}`,
               name: `${formatId}.png`,
               type: 'image/png',
-              size: blob.size,
-              dataUrl,
+              size: fitted.blob.size,
+              dataUrl: fitted.dataUrl,
               width: meta.width,
               height: meta.height,
               formatId,
               aiGenerated: false,
               demoInjected: true,
+              exactDimensionsVerified: isOpenAIWalkthroughModel(conversationModelRef.current),
             })
           } catch (e) {
             log.error(`INJECT_DEMO_CREATIVES: failed ${url}`, e.message)
@@ -833,7 +873,7 @@ export function DemoProvider({
             setPhase(PHASE.CONFIRM_LIVE)
             setPopup({
               title: 'Tiếp tục với walkthrough Autopilot tương tác?',
-              text: 'Walkthrough sẽ tạo một **Autopilot run thật** từ scenario brief, giới thiệu cách đọc plan và evidence, rồi dừng ở năm checkpoint quan trọng để chỉnh Audience, targeting, placement cùng creative assignment.\n\nNguồn creative được chọn ngẫu nhiên giữa bộ file chuẩn bị trước và phương án tạo tự động. Walkthrough dừng trước nút tạo order.',
+              text: 'Walkthrough sẽ tạo một **Autopilot run thật** từ scenario brief, giới thiệu cách đọc plan và evidence, tự động hoàn tất Audience cùng targeting, rồi dừng ở ba checkpoint quan trọng: placement, creative assignment và launch.\n\nNguồn creative được chọn ngẫu nhiên giữa bộ file chuẩn bị trước và phương án tạo tự động. Walkthrough dừng trước nút tạo order.',
               buttons: [
                 { label: 'Bắt đầu walkthrough', variant: 'primary', action: 'live' },
                 { label: 'Dừng tại tour giao diện', variant: 'ghost', action: 'skip' },

@@ -64,6 +64,19 @@ function StrategyReview({ value }) {
 function AudienceReview({ value }) {
   const attrs = value.attrs || []
   const adjacent = value.adjacent_attrs || []
+  if (value.clarification_required) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <p className="text-xs font-black text-amber-900">Brief chưa đủ thông tin để chọn audience an toàn</p>
+        <p className="mt-1 text-[11px] leading-5 text-amber-800">
+          {value.clarification_prompt || 'Bổ sung sản phẩm/dịch vụ, ngành hoặc người mua cụ thể trong brief rồi chạy lại Autopilot.'}
+        </p>
+        <p className="mt-2 text-[10px] leading-4 text-amber-700">
+          Agent chưa tự chọn segment nào và checkpoint này chưa thể xác nhận.
+        </p>
+      </div>
+    )
+  }
   const cards = (items, tone) => (
     <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((item, index) => (
@@ -156,6 +169,10 @@ function PlacementReview({ value, final = false, selectedIds, onSelectionChange 
             type="button"
             key={zone.id || index}
             data-demo="autopilot-placement-option"
+            data-zone-id={zone.id || ''}
+            data-zone-size={zone.size || ''}
+            data-zone-format={zone.format || ''}
+            data-zone-contract={zone.creativeContractId || ''}
             disabled={!editable}
             aria-pressed={activeIds.has(zone.id)}
             onClick={() => toggle(zone.id)}

@@ -686,7 +686,7 @@ export default function App() {
   useEffect(() => {
     if (identityReady && experienceMode && !bootedRef.current) {
       bootedRef.current = true
-      boot()
+      boot(experienceMode)
     }
   }, [boot, experienceMode, identityReady])
 
@@ -1885,6 +1885,7 @@ export default function App() {
     const zones = placements.zones || []
     const selectedZoneIds = placements.selectedZoneIds || zones.map(zone => zone.id).filter(Boolean)
     const rawAssignments = assignmentValue?.assignments || assignmentValue || {}
+    const recommendedAssignments = normalizeAssignmentsForEditor(rawAssignments, files)
     setFormStateWithEvents(prev => ({
       ...prev,
       creative: {
@@ -1899,7 +1900,10 @@ export default function App() {
         allZones: zones,
         recoZones: zones,
         selectedZoneIds,
-        assignments: normalizeAssignmentsForEditor(rawAssignments, files),
+        assignments: recommendedAssignments,
+        recommendedAssignments,
+        recommendedAssignmentScores: assignmentValue?.scores || {},
+        recommendedAssignmentWarnings: assignmentValue?.warnings || [],
         created: false,
         submitted: false,
       },
@@ -2164,6 +2168,7 @@ export default function App() {
               onSendReportQuestion={sendMessage}
               onReportActivate={initializeReport}
               onReportExit={exitAutopilotReport}
+              openaiCampaignFlow={currentConversationModel === 'openai_gpt_5_4_mini'}
             />
           )}
         </div>

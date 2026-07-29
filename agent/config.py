@@ -129,6 +129,9 @@ class Config:
     )
     OPENAI_IMAGE_MODEL: str = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
     OPENAI_IMAGE_QUALITY: str = os.getenv("OPENAI_IMAGE_QUALITY", "medium")
+    OPENAI_IMAGE_DAILY_LIMIT: int = int(
+        os.getenv("OPENAI_IMAGE_DAILY_LIMIT", "100")
+    )
     OPENAI_IMAGE_TIMEOUT_SECONDS: float = float(
         os.getenv("OPENAI_IMAGE_TIMEOUT_SECONDS", "180")
     )
@@ -425,6 +428,21 @@ class Config:
         "AUDIENCE_RERANK_MODE",
         "legacy" if os.getenv("RAG_USE_RERANK", "false").lower() == "true" else "off",
     ).lower()
+    # Query planning interprets unrestricted campaign language and therefore
+    # uses the campaign-grade model. Catalog reranking remains a bounded
+    # scoring job with its own independently configurable smaller model.
+    AUDIENCE_QUERY_PLANNER_MODEL: str = os.getenv(
+        "AUDIENCE_QUERY_PLANNER_MODEL", "gpt-5.4-mini"
+    )
+    AUDIENCE_QUERY_PLANNER_REASONING_EFFORT: str = os.getenv(
+        "AUDIENCE_QUERY_PLANNER_REASONING_EFFORT", "low"
+    )
+    AUDIENCE_QUERY_PLANNER_MAX_OUTPUT_TOKENS: int = int(
+        os.getenv("AUDIENCE_QUERY_PLANNER_MAX_OUTPUT_TOKENS", "1400")
+    )
+    AUDIENCE_QUERY_PLANNER_TIMEOUT_SECONDS: float = float(
+        os.getenv("AUDIENCE_QUERY_PLANNER_TIMEOUT_SECONDS", "30")
+    )
     AUDIENCE_NANO_RERANK_MODEL: str = os.getenv(
         "AUDIENCE_NANO_RERANK_MODEL", "gpt-5.4-nano"
     )

@@ -289,6 +289,165 @@ async def test_openai_audience_ordinals_can_select_adjacent_then_confirm(monkeyp
     assert "Xác nhận” riêng" in edited.text
 
 
+@pytest.mark.parametrize(
+    ("message", "evidence"),
+    [
+        ("Chọn 1 và 2 đi", "Chọn 1 và 2 đi"),
+        (
+            "Chọn construction và management",
+            "Chọn construction và management",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_openai_audience_semantic_selection_accepts_natural_zalo_phrases(
+    monkeypatch, message, evidence,
+):
+    import autopilot.chat as chat
+    import autopilot.service as service
+    import openai_campaign.autopilot as openai_autopilot
+    import workspace.service as workspace_service
+    from openai_campaign.autopilot import AudienceReviewSelectionAction
+
+    selections = []
+    candidates = [
+        {"segmentId": "INT006", "fullLabel": "Construction", "tier": "adjacent"},
+        {"segmentId": "INT020", "fullLabel": "Management", "tier": "adjacent"},
+        {"segmentId": "SCI001", "fullLabel": "Science", "tier": "adjacent"},
+    ]
+
+    async def fake_workspace(_session_id):
+        return {"experience_mode": "autopilot", "artifacts": {}}
+
+    async def fake_run(_session_id):
+        value = {
+            "attrs": [],
+            "adjacent_attrs": candidates,
+            "recommendations": candidates,
+            "selection_required": True,
+        }
+        return {
+            "run_id": "run-audience-natural",
+            "status": "waiting_review",
+            "conversation_model": "openai_gpt_5_4_mini",
+            "tasks": [{
+                "task_id": "task-audience-natural",
+                "key": "retrieve_audience",
+                "title": "Audience",
+                "status": "waiting_review",
+                "result": value,
+                "pending_artifact": {
+                    "artifact": "audience",
+                    "value": value,
+                },
+            }],
+        }
+
+    async def fake_select(run_id, segment_ids, *, actor, reason):
+        selections.append((run_id, segment_ids, actor, reason))
+        return {"run_id": run_id}
+
+    classifier = AsyncMock(return_value=AudienceReviewSelectionAction(
+        intent="select",
+        candidate_numbers=[1, 2],
+        explicit=True,
+        ambiguous=False,
+        evidence=f'"{evidence}"',
+    ))
+    monkeypatch.setattr(chat, "add_message", AsyncMock())
+    monkeypatch.setattr(workspace_service, "get_workspace", fake_workspace)
+    monkeypatch.setattr(service, "get_latest_run", fake_run)
+    monkeypatch.setattr(service, "select_audience_recommendations", fake_select)
+    monkeypatch.setattr(
+        openai_autopilot,
+        "classify_openai_audience_review_selection",
+        classifier,
+    )
+
+    edited = await route_autopilot_chat(
+        message,
+        "session-audience-natural",
+        1,
+    )
+
+    assert edited.meta.tool == "autopilot_audience_selection"
+    assert selections[0][1] == ["INT006", "INT020"]
+    assert "Xác nhận” riêng" in edited.text
+    classifier.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_openai_audience_semantic_selection_clarifies_ambiguity(monkeypatch):
+    import autopilot.chat as chat
+    import autopilot.service as service
+    import openai_campaign.autopilot as openai_autopilot
+    import workspace.service as workspace_service
+    from openai_campaign.autopilot import AudienceReviewSelectionAction
+
+    value = {
+        "attrs": [],
+        "adjacent_attrs": [
+            {"segmentId": "SCI001", "fullLabel": "Science"},
+            {"segmentId": "SCI002", "fullLabel": "Applied Science"},
+        ],
+        "selection_required": True,
+    }
+
+    async def fake_workspace(_session_id):
+        return {"experience_mode": "autopilot", "artifacts": {}}
+
+    async def fake_run(_session_id):
+        return {
+            "run_id": "run-audience-ambiguous",
+            "status": "waiting_review",
+            "conversation_model": "openai_gpt_5_4_mini",
+            "tasks": [{
+                "task_id": "task-audience-ambiguous",
+                "key": "retrieve_audience",
+                "title": "Audience",
+                "status": "waiting_review",
+                "result": value,
+                "pending_artifact": {
+                    "artifact": "audience",
+                    "value": value,
+                },
+            }],
+        }
+
+    select = AsyncMock()
+    review = AsyncMock()
+    monkeypatch.setattr(chat, "add_message", AsyncMock())
+    monkeypatch.setattr(workspace_service, "get_workspace", fake_workspace)
+    monkeypatch.setattr(service, "get_latest_run", fake_run)
+    monkeypatch.setattr(service, "select_audience_recommendations", select)
+    monkeypatch.setattr(service, "review_task", review)
+    monkeypatch.setattr(
+        openai_autopilot,
+        "classify_openai_audience_review_selection",
+        AsyncMock(return_value=AudienceReviewSelectionAction(
+            intent="select",
+            candidate_numbers=[],
+            explicit=True,
+            ambiguous=True,
+            evidence="Chọn Science",
+            clarification_question=(
+                "Bạn muốn chọn Science hay Applied Science?"
+            ),
+        )),
+    )
+
+    response = await route_autopilot_chat(
+        "Chọn Science",
+        "session-audience-ambiguous",
+        1,
+    )
+
+    assert response.meta.tool == "autopilot_audience_selection_clarification"
+    assert "Science hay Applied Science" in response.text
+    select.assert_not_awaited()
+    review.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_openai_placement_ordinal_out_of_range_does_not_mutate(monkeypatch):
     import autopilot.chat as chat

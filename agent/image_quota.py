@@ -9,7 +9,7 @@ from config import config
 from pymongo import ReturnDocument
 
 
-DAILY_LIMIT = 20
+DAILY_LIMIT = max(1, config.OPENAI_IMAGE_DAILY_LIMIT)
 # Vietnam has used UTC+07:00 without DST since 1975. A fixed offset keeps the
 # product-day boundary portable on minimal Windows/Linux images without tzdata.
 QUOTA_TIMEZONE = timezone(timedelta(hours=7), name="Asia/Ho_Chi_Minh")

@@ -92,6 +92,9 @@ class ChatRequest(BaseModel):
     )
     step: int = Field(default=-1, ge=-1, le=6)
     message: str = Field(default="", max_length=12000)
+    experience_mode: str | None = Field(
+        default=None, pattern=r"^(guided|autopilot)$"
+    )
     formData: FormData | None = None
     workspace: dict | None = None          # Live formState from frontend (compact, no dataUrls)
     workspace_revision: int | None = None  # Optimistic-concurrency revision of that snapshot

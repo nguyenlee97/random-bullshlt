@@ -5,6 +5,8 @@ import pytest
 from campaign_models import GREENNODE_MINIMAX, OPENAI_GPT_5_4_MINI
 from openai_campaign.zalo_review import (
     assignment_media_parts,
+    creative_media_parts,
+    render_openai_milestone_message,
     render_openai_review_message,
 )
 from zalo_worker import _progress_message
@@ -75,7 +77,7 @@ def _workspace() -> dict:
     }
 
 
-def test_openai_audience_review_lists_exact_pending_segments_and_reasons():
+def test_openai_audience_review_lists_public_segment_details_only():
     run, task = _run("retrieve_audience", {
         "attrs": [
             {
@@ -106,9 +108,9 @@ def test_openai_audience_review_lists_exact_pending_segments_and_reasons():
     assert "2 segment" in text
     assert "Tea (nonalcoholic beverage)" in text
     assert "2,53 triệu–3,56 triệu" in text
-    assert "Phù hợp trực tiếp với sản phẩm." in text
-    assert "Xác nhận” để duyệt các đề xuất trực tiếp" in text
-    assert "Chọn audience 1,2,3" in text
+    assert "Phù hợp trực tiếp với sản phẩm." not in text
+    assert "Xác nhận” để duyệt audience" in text
+    assert "bằng số hoặc tên" in text
     assert "https://example.test/?conversation=conv-1" in text
     assert "stale" not in text
 
@@ -153,23 +155,51 @@ def test_openai_placement_review_shows_inventory_metrics_and_estimate_disclosure
     assert "mở workspace để thay đổi ad zone" in text
 
 
-def test_openai_audience_review_labels_adjacent_rows_as_unselected():
+def test_openai_audience_review_hides_internal_retrieval_tiers_and_scores():
     run, task = _run("retrieve_audience", {
         "attrs": [],
         "adjacent_attrs": [{
             "_id": "INT006",
             "fullLabel": "Construction",
             "reason": "Liên quan để mở rộng. Hạn chế: proxy ngành rộng.",
+            "relevance_score": 0.34,
+        }],
+        "recommendations": [{
+            "_id": "INT006",
+            "fullLabel": "Construction",
+            "reason": "Liên quan để mở rộng. Hạn chế: proxy ngành rộng.",
+            "relevance_score": 0.34,
         }],
         "selection_required": True,
     })
 
     text = _progress_message(run, _event(task), workspace=_workspace())
 
-    assert "Đề xuất trực tiếp đang chờ duyệt: 0 segment" in text
-    assert "Audience liên quan để mở rộng (chưa tự chọn): 1 segment" in text
+    assert "Danh sách audience đề xuất: 1 segment" in text
     assert "1. Construction" in text
-    assert "Agent chưa tự chọn mục nào" in text
+    assert "proxy" not in text.lower()
+    assert "adjacent" not in text.lower()
+    assert "0.34" not in text
+    assert "relevance" not in text.lower()
+    assert "Liên quan/giới hạn" not in text
+
+
+def test_openai_audience_review_blocks_confirmation_for_vague_brief():
+    run, task = _run("retrieve_audience", {
+        "attrs": [],
+        "adjacent_attrs": [],
+        "clarification_required": True,
+        "clarification_prompt": (
+            "Bổ sung sản phẩm/dịch vụ, ngành hoặc người mua cụ thể trước khi chọn audience."
+        ),
+    })
+
+    text = _progress_message(run, _event(task), workspace=_workspace())
+
+    assert "Agent chưa chọn audience" in text
+    assert "Bổ sung sản phẩm/dịch vụ" in text
+    assert "Chưa thể xác nhận bước này" in text
+    assert "Chọn audience 1,2,3" not in text
 
 
 def test_openai_placement_review_keeps_all_twelve_ordinals_visible():
@@ -264,9 +294,111 @@ def test_large_review_keeps_confirmation_instructions_within_zalo_limit():
     )
 
     assert len(text) <= 1950
-    assert "Xác nhận” để duyệt các đề xuất trực tiếp đang được chọn" in text
+    assert "Xác nhận” để duyệt audience đang được chọn" in text
     assert "Gợi ý lại audience" in text
     assert "https://example.test/workspace" in text
+
+
+def test_openai_fully_automatic_milestones_are_informational_and_complete():
+    workspace = _workspace()
+    tasks = [
+        {
+            "task_id": "task-brief",
+            "key": "validate_brief",
+            "status": "succeeded",
+            "result": {"valid": True, "brief": workspace["artifacts"]["brief"]["value"]},
+        },
+        {
+            "task_id": "task-audience",
+            "key": "retrieve_audience",
+            "status": "succeeded",
+            "result": {
+                "attrs": [{
+                    "segmentId": "INT006",
+                    "fullLabel": "Construction",
+                    "sizeMin": 5_000_000,
+                    "sizeMax": 6_000_000,
+                    "tier": "adjacent",
+                    "relevance_score": 0.34,
+                    "reason": "Proxy/adjacent audience with internal limitations.",
+                }],
+                "selection_required": False,
+                "size": 5_500_000,
+            },
+        },
+        {
+            "task_id": "task-targeting",
+            "key": "derive_targeting",
+            "status": "succeeded",
+            "result": {
+                "age": ["25-34"],
+                "gender": ["Male", "Female"],
+                "geo": ["TP.HCM"],
+            },
+        },
+        {
+            "task_id": "task-creative",
+            "key": "analyze_creatives",
+            "status": "succeeded",
+            "result": workspace["artifacts"]["creative_verdict"]["value"],
+        },
+        {
+            "task_id": "task-placement",
+            "key": "rank_placements",
+            "status": "succeeded",
+            "result": {
+                "zones": [{
+                    "id": "ZONE-1",
+                    "name": "Masthead",
+                    "channel": "BaoMoi",
+                    "format": "masthead",
+                    "cpm": 42_000,
+                    "reach": 2_500_000,
+                    "relevance_score": 0.91,
+                    "topic_relevance": {"matched_keywords": ["internal-keyword"]},
+                }],
+            },
+        },
+    ]
+    run = {
+        "run_id": "run-auto-milestones",
+        "conversation_model": OPENAI_GPT_5_4_MINI,
+        "approval_policy": "auto_build_draft",
+        "tasks": tasks,
+    }
+
+    rendered = {}
+    for task in tasks:
+        rendered[task["key"]] = _progress_message(
+            run,
+            {
+                "type": "task_completed",
+                "payload": {"task_id": task["task_id"]},
+            },
+            workspace=workspace,
+        )
+
+    assert "Brief đã xác nhận" in rendered["validate_brief"]
+    assert "Mixigaming" in rendered["validate_brief"]
+    assert "Audience đã chuẩn bị" in rendered["retrieve_audience"]
+    assert "Construction" in rendered["retrieve_audience"]
+    assert "Targeting đã chuẩn bị" in rendered["derive_targeting"]
+    assert "Khu vực: TP.HCM" in rendered["derive_targeting"]
+    assert "Creative đã kiểm tra" in rendered["analyze_creatives"]
+    assert "đạt kiểm tra" in rendered["analyze_creatives"]
+    assert "Ad placement đã chọn" in rendered["rank_placements"]
+    assert "Masthead" in rendered["rank_placements"]
+    for text in rendered.values():
+        assert "Xác nhận" not in text
+        assert "relevance" not in text.lower()
+        assert "proxy" not in text.lower()
+        assert "adjacent" not in text.lower()
+        assert "internal-keyword" not in text
+
+    assert creative_media_parts(workspace) == [{
+        "kind": "image",
+        "image_url": "https://example.test/mixi-banner.png",
+    }]
 
 
 def test_greennode_review_message_remains_legacy_and_does_not_render_payload():

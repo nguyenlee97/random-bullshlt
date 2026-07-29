@@ -25,7 +25,7 @@ test('placement mismatch exposes recoverable crop and generation actions', () =>
 
 test('creative editor can derive an exact planned format from an uploaded image', () => {
   assert.match(creative, /data-demo="creative-format-recovery"/)
-  assert.match(creative, /nearestRatioFile/)
+  assert.match(creative, /selectRepairSourceFile/)
   assert.match(creative, /operator_adapted/)
   assert.match(creative, /<ImageCropModal/)
   assert.match(crop, /Scale toàn ảnh/)

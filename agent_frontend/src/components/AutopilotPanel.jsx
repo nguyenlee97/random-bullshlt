@@ -13,7 +13,7 @@ import { defaultPlacementSelection, mergeCreativeVerdicts } from '@/lib/creative
 const ADSPILOT_URL = import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn'
 
 const POLICY_OPTIONS = [
-  { value: 'critical_only', label: 'Duyệt các bước quan trọng', note: '5 checkpoint · Khuyến nghị' },
+  { value: 'critical_only', label: 'Duyệt các bước quan trọng', note: 'Khuyến nghị' },
   { value: 'review_every_stage', label: 'Duyệt từng giai đoạn', note: 'Kiểm soát tối đa' },
   { value: 'auto_build_draft', label: 'Tự xây dựng bản nháp', note: 'Dừng trước launch' },
 ]
@@ -141,12 +141,18 @@ export default function AutopilotPanel({
   onOpenChat, onOpenBrief, onOpenAudience, onOpenCreative, onOpenAssignments, onStatusChange,
   reportState, onReportChange, onSendReportQuestion,
   onReportActivate, onReportExit,
+  openaiCampaignFlow = false,
 }) {
   const [policy, setPolicy] = useState('critical_only')
   const [creativeSource, setCreativeSource] = useState(null)
   const [creativeDirection, setCreativeDirection] = useState('')
   const [creativeAssets, setCreativeAssets] = useState([])
   const [creativeAssetIds, setCreativeAssetIds] = useState(new Set())
+  const policyOptions = useMemo(() => POLICY_OPTIONS.map(item => (
+    item.value === 'critical_only'
+      ? { ...item, note: `${openaiCampaignFlow ? 3 : 5} checkpoint · Khuyến nghị` }
+      : item
+  )), [openaiCampaignFlow])
   const [assetName, setAssetName] = useState('')
   const [assetUploading, setAssetUploading] = useState(false)
   const [run, setRun] = useState(initialRun)
@@ -506,17 +512,14 @@ export default function AutopilotPanel({
           }, waiting.key),
         }]
       : waiting?.key === 'assign_creatives'
-        ? [
-            {
-              label: 'Chỉnh phân bổ creative',
-              action: () => onOpenAssignments?.({
-                placements: placementResult,
-                creativeFiles,
-                assignmentValue: waiting.result || assignmentResult,
-              }),
-            },
-            { label: 'Tải creative mới', action: onOpenCreative },
-          ]
+        ? [{
+            label: 'Dùng đề xuất hoặc chỉnh phân bổ',
+            action: () => onOpenAssignments?.({
+              placements: placementResult,
+              creativeFiles,
+              assignmentValue: waiting.result || assignmentResult,
+            }),
+          }]
         : ['prepare_creatives', 'analyze_creatives', 'rank_placements'].includes(waiting?.key)
           ? waiting?.key === 'rank_placements' && placementRecovery?.kind === 'creative_format_mismatch'
             ? [
@@ -600,7 +603,7 @@ export default function AutopilotPanel({
               <article className={`rounded-2xl border p-3.5 ${briefReady ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-amber-300/30 bg-amber-300/10'}`}>
                 <div className="flex items-center justify-between"><span className="text-[10px] font-black tracking-[0.16em] text-slate-400">01 · BRIEF</span>{briefReady ? <Check className="h-4 w-4 text-emerald-300" /> : <AlertTriangle className="h-4 w-4 text-amber-300" />}</div>
                 <p className="mt-3 text-sm font-black">Đủ dữ kiện để lập plan</p>
-                <p className="mt-1.5 text-[11px] leading-5 text-slate-400">Bắt buộc: brand, objective, budget và ngày chạy. KPI + ghi chú audience/thị trường giúp plan sắc hơn.</p>
+                <p className="mt-1.5 text-[11px] leading-5 text-slate-400">Tối thiểu: brand, objective, budget và ngày chạy. Sản phẩm/dịch vụ, KPI và đối tượng mục tiêu giúp recommendation đúng ngữ cảnh.</p>
                 <button type="button" onClick={onOpenBrief} className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-cyan-300 hover:text-white">{briefReady && briefHasDecisionContext ? 'Brief đã đủ lực' : 'Mở và hoàn thiện Brief'} <ArrowRight className="h-3 w-3" /></button>
               </article>
               <article className={`rounded-2xl border p-3.5 ${creativeSource ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/10 bg-white/[0.045]'}`}>
@@ -613,7 +616,7 @@ export default function AutopilotPanel({
                 <div className="flex items-center justify-between"><span className="text-[10px] font-black tracking-[0.16em] text-slate-400">03 · CONTROL</span><ShieldCheck className="h-4 w-4 text-cyan-300" /></div>
                 <p className="mt-3 text-sm font-black">Biết lúc Agent sẽ dừng</p>
                 <p className="mt-1.5 text-[11px] leading-5 text-slate-400">Review policy quyết định số checkpoint. Dù chọn policy nào, launch vẫn là một điểm kiểm soát rõ ràng.</p>
-                <p className="mt-3 text-[11px] font-bold text-cyan-300">{POLICY_OPTIONS.find(item => item.value === policy)?.label}</p>
+                <p className="mt-3 text-[11px] font-bold text-cyan-300">{policyOptions.find(item => item.value === policy)?.label}</p>
               </article>
               <article className="rounded-2xl border border-white/10 bg-white/[0.045] p-3.5">
                 <div className="flex items-center justify-between"><span className="text-[10px] font-black tracking-[0.16em] text-slate-400">04 · RUN</span><ListChecks className="h-4 w-4 text-cyan-300" /></div>
@@ -681,7 +684,7 @@ export default function AutopilotPanel({
                 <p className="mt-1 text-xs leading-5 text-slate-500">Có thể tạm dừng Autopilot bất cứ lúc nào; campaign này vẫn giữ nguyên mode đã chọn từ trang chủ.</p>
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
-                {POLICY_OPTIONS.map(item => (
+                {policyOptions.map(item => (
                   <button key={item.value} type="button" onClick={() => setPolicy(item.value)}
                     data-demo={`autopilot-policy-${item.value}`}
                     aria-pressed={policy === item.value}
@@ -692,11 +695,18 @@ export default function AutopilotPanel({
                   </button>
                 ))}
               </div>
-              {policy === 'critical_only' && (
-                <p className="mt-3 rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-2 text-[11px] leading-5 text-brand-800">
-                  Agent sẽ dừng tại: Tìm audience → Thiết lập targeting → Ad zone đề xuất ban đầu → Gán creative → Duyệt launch. Creative có rủi ro sẽ luôn dừng để review.
-                </p>
-              )}
+              <p className="mt-3 rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-2 text-[11px] leading-5 text-brand-800">
+                {policy === 'critical_only'
+                  ? (
+                    openaiCampaignFlow
+                      ? 'Bán tự động: Agent tự chọn Audience và targeting, sau đó dừng tại Ad zone đề xuất ban đầu → Gán creative → Duyệt launch.'
+                      : 'Bán tự động: Agent dừng tại Tìm audience → Thiết lập targeting → Ad zone đề xuất ban đầu → Gán creative → Duyệt launch.'
+                  )
+                  : policy === 'review_every_stage'
+                    ? 'Kiểm soát tối đa: Agent trình kết quả và chờ bạn duyệt ở từng giai đoạn chính trước khi tiếp tục.'
+                    : 'Tự động hoàn toàn: Agent tự chọn audience liên quan, targeting, placement và creative để hoàn tất campaign; chỉ dừng khi thiếu dữ liệu hoặc có rủi ro cần con người xử lý.'}
+                {' '}Creative có rủi ro sẽ luôn dừng để review.
+              </p>
             </div>
 
             <aside
@@ -731,7 +741,11 @@ export default function AutopilotPanel({
                   Còn thiếu: {startBlockers.join(' và ')}. Bấm bắt đầu để xem hướng dẫn chi tiết.
                 </p>
               ) : (
-                <p className="mt-1 text-xs text-slate-500">Agent luôn dừng trước hành động tạo order để bạn xác nhận.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {policy === 'auto_build_draft'
+                    ? 'Agent sẽ tự chạy đến khi hoàn tất; guard vẫn dừng run nếu phát hiện thiếu dữ liệu hoặc rủi ro.'
+                    : 'Agent sẽ dừng tại các checkpoint được mô tả ở chế độ duyệt phía trên.'}
+                </p>
               )}
             </div>
             <button type="button" disabled={loading || prerequisitesLoading} onClick={start}

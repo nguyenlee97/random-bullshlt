@@ -29,7 +29,7 @@ Comparisons should state the metric and trade-off: high viewability can favor aw
 
 Each creative should have one dominant message, readable hierarchy, sufficient contrast, crop-safe critical content and a clear call to action. Use named brand assets according to their use instructions. Do not invent logos, discounts, prices, legal claims, URLs or product benefits that are absent from the brief or supplied assets.
 
-GPT Image 2 generation uses a shared daily quota of 20 outputs per authenticated user or anonymous actor across Copilot and Autopilot. Prompt composition does not spend image quota. A generated proxy is cropped and resized to the placement's exact required dimensions and should be reviewed before campaign launch.
+GPT Image 2 generation uses a shared daily quota of 100 outputs per authenticated user or anonymous actor across Copilot and Autopilot. Prompt composition does not spend image quota. A generated proxy is cropped and resized to the placement's exact required dimensions and should be reviewed before campaign launch.
 
 # Reporting and interpretation
 

@@ -582,7 +582,7 @@ async def _dispatch_chat(request: Request, req: ChatRequest) -> AgentResponse:
 
     # ── Boot ──────────────────────────────────────────────────────────────────
     if req.step == -1 or (req.step == 0 and not req.formData and not req.message):
-        return await handle_boot()
+        return await handle_boot(req.experience_mode)
 
     # ── Form submission → deterministic handler ───────────────────────────────
     if req.formData:

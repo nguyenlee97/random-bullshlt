@@ -21,8 +21,19 @@ from openai_campaign.tracing import trace_responses_call
 
 class AudienceRerankItem(BaseModel):
     candidate_index: int = Field(ge=0, le=49)
+    segment_id: str = Field(min_length=1, max_length=160)
     relevance_score: float = Field(ge=0, le=1)
     match_tier: Literal["recommended", "adjacent", "unrelated"] = "unrelated"
+    match_basis: Literal[
+        "exact_product",
+        "exact_industry",
+        "exact_buyer",
+        "exact_user_interest",
+        "broad_parent",
+        "proxy",
+        "unrelated",
+    ]
+    has_conflict: bool
     matched_signals: list[str] = Field(default_factory=list, max_length=6)
     missing_signals: list[str] = Field(default_factory=list, max_length=6)
     limitation: str = Field(default="", max_length=320)
@@ -34,6 +45,7 @@ class AudienceRerankResult(BaseModel):
 
 _client: AsyncOpenAI | None = None
 _rerank_cache: dict[str, dict] = {}
+_RERANK_SCHEMA_VERSION = 2
 
 
 def _get_client() -> AsyncOpenAI:
@@ -67,6 +79,7 @@ def _cache_key(query: str, candidates: list[dict], limit: int) -> str:
     payload = {
         "query": query,
         "model": config.AUDIENCE_NANO_RERANK_MODEL,
+        "schema_version": _RERANK_SCHEMA_VERSION,
         "candidates": sorted(
             (
                 {
@@ -76,6 +89,7 @@ def _cache_key(query: str, candidates: list[dict], limit: int) -> str:
                     "subcategory": candidate.get("subcategory"),
                     "label": candidate.get("fullLabel") or candidate.get("name"),
                     "context": candidate.get("context"),
+                    "taxonomy": candidate.get("_taxonomy"),
                 }
                 for candidate in candidates[:limit]
             ),
@@ -142,6 +156,37 @@ async def rerank_candidates(
                 "full_label": candidate.get("fullLabel") or candidate.get("name"),
                 "context": candidate.get("context"),
                 "retrieval_rank": index + 1,
+                "taxonomy_parent_ids": (
+                    (candidate.get("_taxonomy") or {}).get(
+                        "direct_parent_ids", []
+                    )
+                ),
+                "taxonomy_parent_labels": (
+                    (candidate.get("_taxonomy") or {}).get(
+                        "direct_parent_labels", []
+                    )
+                ),
+                "taxonomy_ancestor_ids": (
+                    (candidate.get("_taxonomy") or {}).get("ancestor_ids", [])
+                ),
+                "taxonomy_child_count": (
+                    (candidate.get("_taxonomy") or {}).get(
+                        "descendant_count", 0
+                    )
+                ),
+                "taxonomy_child_labels": (
+                    (candidate.get("_taxonomy") or {}).get(
+                        "direct_child_labels", []
+                    )
+                ),
+                "taxonomy_relation_sources": (
+                    (candidate.get("_taxonomy") or {}).get(
+                        "direct_parent_sources", {}
+                    )
+                ),
+                "taxonomy_injected": bool(
+                    candidate.get("_taxonomy_injected")
+                ),
             }
             for index, candidate in enumerate(bounded)
         ],
@@ -160,6 +205,17 @@ async def rerank_candidates(
         "Classify each candidate into exactly one tier. Use recommended only "
         "when the catalog label or taxonomy directly represents an intended "
         "buyer, user, industry, product interest, or behavior in the brief. "
+        "A broad parent interest is still recommended when the advertised "
+        "product directly serves that whole domain or intentionally spans "
+        "several child categories; do not demote the parent merely because "
+        "more specific children exist. Specificity is useful only when it "
+        "preserves the same meaning. The supplied taxonomy parent/child fields "
+        "are catalog-structure evidence, not automatic relevance: use them to "
+        "recognize the closest parent that covers a relevant child, but never "
+        "infer that a sibling is relevant merely because another child is. "
+        "Prefer the closest meaningful parent over a more distant ancestor. "
+        "A taxonomy-injected parent must still be judged against the campaign "
+        "context and may be adjacent or unrelated. "
         "Use adjacent when it is a defensible broad proxy or expansion signal "
         "but misses a decisive buyer, industry, or product signal. Use unrelated "
         "for incidental words, generic digital activity, conflicting consumer "
@@ -167,15 +223,35 @@ async def rerank_candidates(
         "turn an adjacent proxy into recommended. State short matched_signals, "
         "missing_signals, and a concrete limitation; do not invent catalog "
         "properties. "
+        "Also classify match_basis. Use exact_product, exact_industry, "
+        "exact_buyer, or exact_user_interest only for a literal semantic match "
+        "to the intended campaign domain. Use broad_parent for a genuine parent "
+        "of intended child interests. Use proxy whenever the candidate is merely "
+        "the closest available catalog row, a possible overlap, or is missing "
+        "the advertised product plus intended buyer/industry. A proxy cannot be "
+        "recommended regardless of numeric score. Set has_conflict=true when "
+        "the candidate represents a different real-world domain, a conflicting "
+        "buyer class (for example institutional versus consumer), an explicit "
+        "exclusion, or creative-only context. Conflicting rows must be unrelated, "
+        "not adjacent. "
+        "Respect taxonomy namespaces and the real-world meaning of the full "
+        "label, category and subcategory. Shared words alone do not establish "
+        "relevance across domains: a game genre must not promote the similarly "
+        "named real-world sport, a software product must not promote generic "
+        "business activity, and a venue/location must not become product "
+        "intent. Conversely, a broad video-game interest is a direct user "
+        "category for a controller explicitly sold across multiple game "
+        "genres. Apply these principles to every taxonomy, not only the "
+        "examples. "
         "A campaign city or store location is not travel/aviation intent unless "
         "the product itself is explicitly travel or transportation. When the "
         "product and target are explicitly gender- or life-stage-specific, "
         "score contradictory gender/life-stage segments near zero unless the "
         "brief says the offer is inclusive. "
-        "Use only supplied zero-based candidate_index values, return every "
-        "candidate exactly "
-        "once, and never infer sensitive personal traits. Assign relevance "
-        "scores from 0 to 1."
+        "Use only supplied zero-based candidate_index values and copy the "
+        "corresponding segment_id exactly. The index and ID must refer to the "
+        "same candidate. Return every candidate exactly once, and never infer "
+        "sensitive personal traits. Assign relevance scores from 0 to 1."
     )
 
     try:
@@ -193,45 +269,72 @@ async def rerank_candidates(
             "store": False,
             "safety_identifier": _safety_identifier(query),
         }
-        response = await trace_responses_call(
-            name="openai.audience_nano_rerank",
-            session_id=session_id,
-            model=config.AUDIENCE_NANO_RERANK_MODEL,
-            request=request,
-            metadata={
-                "schema": "audience_rerank",
-                "candidate_count": len(bounded),
-            },
-            model_parameters={
-                "reasoning_effort": (
-                    config.AUDIENCE_NANO_RERANK_REASONING_EFFORT
-                ),
-                "max_output_tokens": (
-                    config.AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS
-                ),
-                "store": False,
-            },
-            call=lambda: api.responses.parse(
-                model=config.AUDIENCE_NANO_RERANK_MODEL,
-                instructions=instructions,
-                input=input_data,
-                text_format=AudienceRerankResult,
-                reasoning={
-                    "effort": config.AUDIENCE_NANO_RERANK_REASONING_EFFORT,
-                },
-                max_output_tokens=(
-                    config.AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS
-                ),
-                store=False,
-                safety_identifier=_safety_identifier(query),
-            ),
-        )
-        parsed = getattr(response, "output_parsed", None)
+        response = None
+        parsed = None
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                response = await trace_responses_call(
+                    name=(
+                        "openai.audience_nano_rerank"
+                        if attempt == 0
+                        else "openai.audience_nano_rerank_retry"
+                    ),
+                    session_id=session_id,
+                    model=config.AUDIENCE_NANO_RERANK_MODEL,
+                    request=request,
+                    metadata={
+                        "schema": "audience_rerank",
+                        "candidate_count": len(bounded),
+                        "attempt": attempt + 1,
+                    },
+                    model_parameters={
+                        "reasoning_effort": (
+                            config.AUDIENCE_NANO_RERANK_REASONING_EFFORT
+                        ),
+                        "max_output_tokens": (
+                            config.AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS
+                        ),
+                        "store": False,
+                    },
+                    call=lambda: api.responses.parse(
+                        model=config.AUDIENCE_NANO_RERANK_MODEL,
+                        instructions=instructions,
+                        input=input_data,
+                        text_format=AudienceRerankResult,
+                        reasoning={
+                            "effort": (
+                                config.AUDIENCE_NANO_RERANK_REASONING_EFFORT
+                            ),
+                        },
+                        max_output_tokens=(
+                            config.AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS
+                        ),
+                        store=False,
+                        safety_identifier=_safety_identifier(query),
+                    ),
+                )
+                parsed = getattr(response, "output_parsed", None)
+                if parsed is None:
+                    raise ValueError("missing structured output")
+                raw_indexes = [item.candidate_index for item in parsed.items]
+                if any(index >= len(ids) for index in raw_indexes):
+                    raise ValueError(
+                        "reranker introduced an unknown candidate index"
+                    )
+                if any(
+                    item.segment_id != ids[item.candidate_index]
+                    for item in parsed.items
+                ):
+                    raise ValueError(
+                        "reranker candidate index and segment ID disagree"
+                    )
+                break
+            except Exception as exc:
+                last_error = exc
         if parsed is None:
-            raise ValueError("missing structured output")
+            raise last_error or ValueError("missing structured output")
         raw_indexes = [item.candidate_index for item in parsed.items]
-        if any(index >= len(ids) for index in raw_indexes):
-            raise ValueError("reranker introduced an unknown candidate index")
 
         score_by_id: dict[str, float] = {}
         assessment_by_id: dict[str, dict] = {}
@@ -243,6 +346,8 @@ async def rerank_candidates(
                     score_by_id[segment_id] = item.relevance_score
                     assessment_by_id[segment_id] = {
                         "match_tier": getattr(item, "match_tier", None),
+                        "match_basis": getattr(item, "match_basis", None),
+                        "has_conflict": getattr(item, "has_conflict", False),
                         "matched_signals": getattr(item, "matched_signals", []),
                         "missing_signals": getattr(item, "missing_signals", []),
                         "limitation": getattr(item, "limitation", ""),
@@ -251,6 +356,8 @@ async def rerank_candidates(
             score_by_id[segment_id] = item.relevance_score
             assessment_by_id[segment_id] = {
                 "match_tier": getattr(item, "match_tier", None),
+                "match_basis": getattr(item, "match_basis", None),
+                "has_conflict": getattr(item, "has_conflict", False),
                 "matched_signals": getattr(item, "matched_signals", []),
                 "missing_signals": getattr(item, "missing_signals", []),
                 "limitation": getattr(item, "limitation", ""),

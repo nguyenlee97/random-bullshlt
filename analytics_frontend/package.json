@@ -1,8 +1,10 @@
 {
   "name": "analytics-frontend",
-  "version": "1.0.0",
+  "version": "1.1.4",
+  "type": "module",
   "description": "Camp Ads Analytics Dashboard — Claw-a-thon",
   "scripts": {
+    "test": "node --test tests",
     "serve": "npx -y serve . -p 5174 --no-clipboard",
     "dev": "npx -y serve . -p 5174"
   },

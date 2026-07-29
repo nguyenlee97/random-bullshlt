@@ -17,14 +17,14 @@ def clear_memory_quota(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_reservations_never_exceed_twenty():
+async def test_concurrent_reservations_never_exceed_daily_limit():
     actor = {"anonymous_id": "anon-concurrent"}
     reservations = await asyncio.gather(*(
         image_quota.reserve(actor, f"job-{index}", session_id="quota")
-        for index in range(40)
+        for index in range(image_quota.DAILY_LIMIT + 20)
     ))
     accepted = [item for item in reservations if item.get("ok")]
-    assert len(accepted) == 20
+    assert len(accepted) == image_quota.DAILY_LIMIT
     assert (await image_quota.status(actor))["remaining"] == 0
 
 
@@ -39,7 +39,7 @@ async def test_success_charges_one_output_and_release_restores_one():
     assert current["used"] == 1
     assert current["succeeded"] == 1
     assert current["reserved"] == 0
-    assert current["remaining"] == 19
+    assert current["remaining"] == image_quota.DAILY_LIMIT - 1
 
 
 @pytest.mark.asyncio
@@ -61,11 +61,15 @@ async def test_login_uses_stricter_combined_anonymous_and_account_usage():
         await image_quota.reserve(anonymous, f"anon-{index}", session_id="quota")
         await image_quota.succeed(f"anon-{index}")
     account = {"user_id": "user-1", "anonymous_id": "device-before-login"}
-    assert (await image_quota.status(account))["remaining"] == 13
+    assert (
+        await image_quota.status(account)
+    )["remaining"] == image_quota.DAILY_LIMIT - 7
     accepted = []
-    for index in range(20):
+    for index in range(image_quota.DAILY_LIMIT):
         accepted.append(await image_quota.reserve(account, f"user-{index}", session_id="quota"))
-    assert sum(1 for item in accepted if item.get("ok")) == 13
+    assert sum(
+        1 for item in accepted if item.get("ok")
+    ) == image_quota.DAILY_LIMIT - 7
 
 
 @pytest.mark.asyncio
@@ -73,5 +77,6 @@ async def test_quota_is_shared_across_sessions_for_same_actor():
     actor = {"user_id": "same-user"}
     await image_quota.reserve(actor, "session-a-job", session_id="session-a")
     await image_quota.succeed("session-a-job")
-    assert (await image_quota.status(actor))["remaining"] == 19
-
+    assert (
+        await image_quota.status(actor)
+    )["remaining"] == image_quota.DAILY_LIMIT - 1

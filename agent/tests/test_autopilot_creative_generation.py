@@ -6,6 +6,7 @@ import pytest
 from PIL import Image
 
 import autopilot.creative_generation as generation
+from campaign_models import OPENAI_GPT_5_4_MINI
 
 
 async def _async_value(value):
@@ -87,7 +88,12 @@ async def test_generate_creative_resizes_uploads_and_records_provenance(monkeypa
         "creative_format_plan": {"revision": 2},
     }}
     result = await generation.generate_creative(
-        {"run_id": "run-4", "session_id": "session-4"}, workspace
+        {
+            "run_id": "run-4",
+            "session_id": "session-4",
+            "conversation_model": OPENAI_GPT_5_4_MINI,
+        },
+        workspace,
     )
 
     assert calls["generate"] == 1
@@ -97,6 +103,7 @@ async def test_generate_creative_resizes_uploads_and_records_provenance(monkeypa
     with Image.open(BytesIO(uploaded)) as image:
         assert image.size == (300, 250)
     assert result["url"] == "http://localhost:3000/uploads/generated.png"
+    assert result["name"].startswith("ai-zuma-box-")
     assert result["source"] == "ai_generated"
     assert result["generation"]["promptFingerprint"] == "prompt-sha"
 
@@ -137,11 +144,17 @@ async def test_generate_creative_recovers_uploaded_asset_without_regeneration(mo
         "creative_format_plan": {"revision": 3},
     }}
     result = await generation.generate_creative(
-        {"run_id": "run-7", "session_id": "session-7"}, workspace
+        {
+            "run_id": "run-7",
+            "session_id": "session-7",
+            "conversation_model": OPENAI_GPT_5_4_MINI,
+        },
+        workspace,
     )
     assert result["generation"]["reused"] is True
     assert result["size"] == 2048
     assert result["url"].startswith("http://localhost:3000/uploads/")
+    assert result["name"].startswith("ai-zuma-box-")
 
 
 @pytest.mark.asyncio

@@ -149,7 +149,32 @@ def enrich_files_with_intel(files: list[dict], intel_docs: list[dict]) -> list[d
     return out
 
 
-def score_file_for_zone(file: dict, zone: dict) -> tuple[int, list[str]]:
+def _contract_identity_bonus(file: dict, format_spec: dict) -> int:
+    """Prefer explicit format intent when several assets share safe geometry."""
+    format_id = str(
+        format_spec.get("format_id") or format_spec.get("format_key") or ""
+    )
+    target_width = int(format_spec.get("width") or 0)
+    target_height = int(format_spec.get("height") or 0)
+    filename_hint = _normalized_hint(file.get("name"))
+    format_hint = _normalized_hint(format_id)
+    size_hint = _normalized_hint(f"{target_width}x{target_height}")
+
+    if file.get("formatId") and str(file.get("formatId")) == format_id:
+        return 8
+    if format_hint and format_hint in filename_hint:
+        return 6
+    if size_hint and size_hint in filename_hint:
+        return 3
+    return 0
+
+
+def score_file_for_zone(
+    file: dict,
+    zone: dict,
+    *,
+    prefer_contract_identity: bool = False,
+) -> tuple[int, list[str]]:
     """Score a creative file against a zone. Returns (score, warnings)."""
     score = 0
     warnings: list[str] = []
@@ -170,7 +195,17 @@ def score_file_for_zone(file: dict, zone: dict) -> tuple[int, list[str]]:
         match = match_file_to_format(file, spec)
         if match.get("matched"):
             mode = match.get("mode")
-            score += 10 if mode in {"exact_size", "strong_ratio"} else 7
+            if prefer_contract_identity:
+                score += {
+                    "exact_size": 12,
+                    "strong_ratio": 10,
+                    "same_ratio": 7,
+                    "acceptable_ratio": 4,
+                    "explicit_format_hint": 1,
+                }.get(mode, 1)
+                score += _contract_identity_bonus(file, spec)
+            else:
+                score += 10 if mode in {"exact_size", "strong_ratio"} else 7
         else:
             score -= 7
             warnings.append(
@@ -232,7 +267,12 @@ def score_file_for_zone(file: dict, zone: dict) -> tuple[int, list[str]]:
     return score, warnings
 
 
-def auto_assign(zones: list[dict], files: list[dict]) -> dict:
+def auto_assign(
+    zones: list[dict],
+    files: list[dict],
+    *,
+    prefer_contract_identity: bool = False,
+) -> dict:
     """
     Auto-assign best creative file to each zone.
     Returns: { assignments: {zoneId: fileIdx}, warnings: [{zoneId, message}], scores: {zoneId: {fileIdx: score}} }
@@ -260,7 +300,11 @@ def auto_assign(zones: list[dict], files: list[dict]) -> dict:
             continue
 
         for idx, f in eligible:
-            s, w = score_file_for_zone(f, zone)
+            s, w = score_file_for_zone(
+                f,
+                zone,
+                prefer_contract_identity=prefer_contract_identity,
+            )
             # MongoDB/BSON document keys must be strings. JSON clients already
             # observe object keys as strings, so normalize at the source.
             scores.setdefault(zid, {})[str(idx)] = s

@@ -180,6 +180,110 @@ async def test_openai_brief_and_audience_use_only_openai_structured_calls(monkey
 
 
 @pytest.mark.asyncio
+async def test_openai_targeting_evaluates_advanced_catalog_dimensions():
+    import json
+
+    from openai_campaign.guided import (
+        _TargetingReason,
+        _TargetingSelection,
+        _recommend_targeting,
+    )
+
+    client = _Client([_TargetingSelection(
+        targeting={
+            "geo": ["TP.HCM"],
+            "age": ["25-34"],
+            "gender": ["Male", "Female"],
+            "deviceOS": ["Android"],
+            "interest": ["Automotive"],
+        },
+        reasoning=[
+            _TargetingReason(
+                field="interest",
+                picks=["Automotive"],
+                reason="Sản phẩm dành cho xe ô tô.",
+            ),
+        ],
+    )])
+    options = {
+        "geo": {"Miền Nam": ["TP.HCM"]},
+        "age": ["25-34"],
+        "gender": ["Male", "Female"],
+        "deviceOS": ["Android", "iOS"],
+        "interest": ["Automotive", "Travel"],
+    }
+
+    targeting, reasoning, model = await _recommend_targeting(
+        "openai-targeting-structured",
+        {
+            "brand": "Zalo",
+            "objective": "awareness",
+            "notes": "AI Agent Kiki dành cho xe ô tô.",
+            "strategy": "reach_first",
+        },
+        options,
+        [{
+            "fullLabel": "Automotive",
+            "category": "Interest",
+            "tier": "recommended",
+            "reason": "Quan tâm xe ô tô.",
+        }],
+        client=client,
+    )
+
+    assert targeting["deviceOS"] == ["Android"]
+    assert targeting["interest"] == ["Automotive"]
+    assert reasoning[0]["field"] == "interest"
+    assert model == "gpt-5.4-mini"
+    call = client.responses.calls[0]
+    payload = json.loads(call["input"])
+    assert payload["brief"]["strategy"] == "reach_first"
+    assert payload["selected_segments"][0] == {
+        "label": "Automotive",
+        "category": "Interest",
+        "tier": "recommended",
+        "reason": "Quan tâm xe ô tô.",
+    }
+    assert payload["catalog_options"]["interest"] == ["Automotive", "Travel"]
+    assert "advanced dimensions" in call["instructions"]
+
+
+@pytest.mark.asyncio
+async def test_guided_audience_requests_brief_detail_instead_of_guessing(monkeypatch):
+    import openai_campaign.guided as guided
+
+    async def vague_recommendation(*_args, **_kwargs):
+        return {
+            "recommendations": [],
+            "adjacent_recommendations": [],
+            "rag": {
+                "information_sufficient": False,
+                "insufficient_reason": "brief_missing_product_or_audience_evidence",
+            },
+        }
+
+    monkeypatch.setattr(
+        guided, "handle_openai_dmp_recommend", vague_recommendation,
+    )
+    monkeypatch.setattr(guided, "log_event", AsyncMock())
+
+    result = await guided._grounded_audience_entry(
+        "guided-vague-brief",
+        {
+            "brand": "Nova",
+            "objective": "awareness",
+            "kpi": "Tăng nhận diện",
+            "notes": "Muốn tìm thêm khách hàng phù hợp cho sản phẩm mới.",
+        },
+    )
+
+    assert result["need_more_info"] is True
+    assert result["meta"]["tool"] == "audience_entry_clarification"
+    assert "chưa có đủ thông tin" in result["text"]
+    assert "chưa chọn segment nào" in result["blocks"][0]["text"]
+
+
+@pytest.mark.asyncio
 async def test_openai_dmp_full_catalog_never_uses_legacy_selector(monkeypatch):
     import llm
     import openai_campaign.guided as guided

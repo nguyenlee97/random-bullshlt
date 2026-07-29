@@ -13,7 +13,9 @@ import {
 } from '../src/lib/publicExperience.js'
 import { AUTOPILOT_TOUR_STEPS } from '../src/demo/autopilotTour.js'
 import { buildAutopilotLiveSteps } from '../src/demo/autopilotWalkthrough.js'
-import { getDemoDateRange, pickRandomBrief } from '../src/demo/demoScripts.js'
+import { compatiblePlacementIndexes } from '../src/demo/demoPlacementCompatibility.js'
+import { calculateCoverCrop } from '../src/demo/demoCreativeFit.js'
+import { DEMO_BRIEFS, getDemoDateRange, pickRandomBrief } from '../src/demo/demoScripts.js'
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 const landing = read('../src/components/PublicLanding.jsx')
@@ -35,6 +37,8 @@ const topBar = read('../src/components/TopBar.jsx')
 const docs = read('../public/tech-docs.html')
 const nginx = read('../nginx.conf')
 const styles = read('../src/index.css')
+const api = read('../src/api/agentApi.js')
+const chatHook = read('../src/hooks/useChat.js')
 
 test('public landing and agent modes have canonical SPA routes', () => {
   assert.equal(hasAgentIntent({ pathname: '/', search: '' }), false)
@@ -249,6 +253,27 @@ test('every live walkthrough uses yesterday through seven days later', () => {
   assert.doesNotMatch(scripts, /2026-06-30|2026-07-07|30\/6\/2026|7\/7\/2026/)
 })
 
+test('every walkthrough brief identifies the product, audience, and message', () => {
+  for (const brief of DEMO_BRIEFS) {
+    assert.match(brief.chatMessage, /Sản phẩm \/ dịch vụ:/)
+    assert.match(brief.chatMessage, /Đối tượng mục tiêu:/)
+    assert.match(brief.chatMessage, /Thông điệp chính:/)
+    assert.match(brief.briefPatch.notes, /Sản phẩm \/ dịch vụ:/)
+    assert.match(brief.briefPatch.notes, /Đối tượng mục tiêu:/)
+  }
+  const vietjet = DEMO_BRIEFS.find(brief => brief.id === 'vietjet')
+  assert.match(vietjet.briefPatch.notes, /vé máy bay giá rẻ/)
+  assert.match(vietjet.briefPatch.notes, /thích du lịch/)
+})
+
+test('Copilot and Autopilot request different mode-aware introductions', () => {
+  assert.match(app, /boot\(experienceMode\)/)
+  assert.match(chatHook, /AgentAPI\.boot\(experienceMode\)/)
+  assert.match(api, /experience_mode: experienceMode === 'autopilot' \? 'autopilot' : 'guided'/)
+  assert.match(api, /Bạn đang ở \*\*Campaign Autopilot\*\*/)
+  assert.match(api, /Bạn đang ở \*\*Campaign Copilot\*\*/)
+})
+
 test('Autopilot guided tour maps every entry decision to the actual canvas', () => {
   assert.deepEqual(AUTOPILOT_TOUR_STEPS.map(step => step.target), [
     '[data-demo="autopilot-canvas"]',
@@ -263,19 +288,23 @@ test('Autopilot guided tour maps every entry decision to the actual canvas', () 
   for (const target of ['autopilot-canvas', 'autopilot-intro', 'autopilot-guide', 'autopilot-creative-source', 'autopilot-policy', 'autopilot-brief-status', 'autopilot-start']) {
     assert.match(autopilot, new RegExp(`data-demo="${target}"`))
   }
-  assert.match(autopilot, /KPI \+ ghi chú audience\/thị trường/)
+  assert.match(autopilot, /Sản phẩm\/dịch vụ, KPI và đối tượng mục tiêu/)
   assert.match(autopilot, /Upload khi đã có asset chính thức/)
+  assert.match(autopilot, /openaiCampaignFlow \? 3 : 5/)
+  assert.match(autopilot, /Bán tự động: Agent tự chọn Audience và targeting/)
+  assert.match(autopilot, /Tự động hoàn toàn: Agent tự chọn audience liên quan/)
+  assert.match(app, /openaiCampaignFlow=\{currentConversationModel === 'openai_gpt_5_4_mini'\}/)
 })
 
-test('Autopilot walkthrough explains internals, edits real review artifacts, and stops before launch', () => {
+test('Autopilot walkthrough auto-commits audience and targeting, then stops before launch', () => {
   const brief = pickRandomBrief(new Date(2026, 6, 23, 12, 0, 0))
   const live = buildAutopilotLiveSteps(brief, { creativeSource: 'ai_generate' })
   const types = live.map(step => step.type)
 
   assert.ok(types.includes('APPLY_AUTOPILOT_BRIEF'))
   assert.ok(types.includes('WAIT_FOR_AUTOPILOT_TASK'))
-  assert.ok(types.includes('TRIM_AUTOPILOT_AUDIENCE'))
-  assert.ok(types.includes('CHANGE_AUTOPILOT_TARGETING'))
+  assert.equal(types.includes('TRIM_AUTOPILOT_AUDIENCE'), false)
+  assert.equal(types.includes('CHANGE_AUTOPILOT_TARGETING'), false)
   assert.ok(types.includes('TRIM_AUTOPILOT_PLACEMENTS'))
   assert.match(JSON.stringify(live), /Duyệt từng giai đoạn/)
   assert.match(JSON.stringify(live), /human-in-the-loop/)
@@ -289,8 +318,6 @@ test('Autopilot walkthrough explains internals, edits real review artifacts, and
     .filter(step => step.type === 'WAIT_FOR_AUTOPILOT_TASK')
     .flatMap(step => step.taskKeys)
   for (const checkpoint of [
-    'retrieve_audience',
-    'derive_targeting',
     'plan_placement_intent',
     'assign_creatives',
     'launch_approval',
@@ -302,6 +329,8 @@ test('Autopilot walkthrough explains internals, edits real review artifacts, and
   assert.match(engine, /buildAutopilotLiveSteps/)
   assert.match(engine, /whenAutopilotTask/)
   assert.match(engine, /case 'WAIT_FOR_AUTOPILOT_TASK'/)
+  assert.match(engine, /unexpected:\$\{taskKey\}/)
+  assert.match(engine, /Brief cần thêm ngữ cảnh trước khi tìm audience/)
   assert.match(engine, /case 'TRIM_AUTOPILOT_AUDIENCE'/)
   assert.match(engine, /case 'CHANGE_AUTOPILOT_TARGETING'/)
   assert.match(engine, /case 'TRIM_AUTOPILOT_PLACEMENTS'/)
@@ -349,6 +378,52 @@ test('Autopilot walkthrough can use every pre-generated scenario creative withou
   assert.match(engine, /id: `demo-\$\{briefId\}-\$\{formatId\}`/)
   assert.match(overlay, /Đang xử lý…/)
   assert.match(overlay, /role="status"/)
+})
+
+test('Autopilot upload walkthrough keeps the highest-ranked placements covered by existing creative ratios', () => {
+  const formats = [
+    { formatId: 'znews-top-banner', width: 2224, height: 480, intendedFormat: 'banner' },
+    { formatId: 'znews-side-banner', width: 736, height: 1456, intendedFormat: 'banner' },
+  ]
+  const candidates = [
+    { size: '300x250', creativeContractId: 'display-box-300x250-v1' },
+    { size: '1160x250', creativeContractId: 'znews-category-masthead-v1' },
+    { size: '300x600', creativeContractId: 'display-halfpage-300x600-v1' },
+  ]
+  assert.deepEqual(compatiblePlacementIndexes(candidates, formats, 2), [1, 2])
+
+  const brief = pickRandomBrief(new Date(2026, 6, 23, 12, 0, 0))
+  const trim = buildAutopilotLiveSteps(brief, { creativeSource: 'upload' })
+    .find(step => step.type === 'TRIM_AUTOPILOT_PLACEMENTS')
+  assert.ok(trim.creativeFormats.length > 0)
+  assert.match(trim.title, /khớp creative/)
+  assert.match(engine, /compatiblePlacementIndexes/)
+  assert.match(autopilotReview, /data-zone-contract=/)
+})
+
+test('OpenAI walkthrough converts demo image bytes to the declared delivery dimensions', () => {
+  assert.deepEqual(
+    calculateCoverCrop(1024, 1024, 1504, 704, 'top'),
+    { sx: 0, sy: 0, sw: 1024, sh: 479.3191489361702 },
+  )
+  assert.deepEqual(
+    calculateCoverCrop(1024, 1024, 465, 1200, 'right'),
+    { sx: 627.2, sy: 0, sw: 396.8, sh: 1024 },
+  )
+  assert.match(engine, /fitDemoCreative\(sourceBlob, meta\)/)
+  assert.match(engine, /exactDimensionsVerified/)
+  assert.match(engine, /isOpenAIWalkthroughModel\(conversationModelRef\.current\)/)
+  assert.match(scripts, /cropAnchor: 'top'/)
+  assert.match(scripts, /cropAnchor: 'right'/)
+  assert.match(scripts, /cropAnchor: 'left'/)
+})
+
+test('Autopilot assignment editor restores the server recommendation and has no upload detour', () => {
+  assert.match(app, /recommendedAssignments/)
+  assert.match(assignmentEditor, /Dùng gán đề xuất/)
+  assert.match(assignmentEditor, /checkAutopilotMismatch/)
+  assert.match(autopilot, /Dùng đề xuất hoặc chỉnh phân bổ/)
+  assert.doesNotMatch(autopilot, /Tải creative mới/)
 })
 
 test('Autopilot demo lets users choose UI tour or interactive walkthrough immediately', () => {

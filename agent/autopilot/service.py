@@ -187,7 +187,7 @@ def _task_id(run_id: str, key: str) -> str:
 def _needs_review(task: dict, policy: str) -> bool:
     level = task.get("review_level", task.get("review", "none"))
     if level == "launch":
-        return True
+        return policy != "auto_build_draft"
     if level == "critical":
         return policy in {"review_every_stage", "critical_only"}
     if level == "stage":
@@ -195,7 +195,21 @@ def _needs_review(task: dict, policy: str) -> bool:
     return False
 
 
-def _new_tasks(run_id: str) -> list[dict]:
+def _task_review_level(spec: dict, conversation_model: str = "") -> str:
+    """Apply provider-scoped review policy without changing the shared plan."""
+    from campaign_models import OPENAI_GPT_5_4_MINI
+
+    if (
+        conversation_model == OPENAI_GPT_5_4_MINI
+        and spec["key"] in {"retrieve_audience", "derive_targeting"}
+    ):
+        # OpenAI semi-automatic and fully automatic runs auto-commit these
+        # catalog-backed results. review_every_stage can still inspect them.
+        return "stage"
+    return spec["review"]
+
+
+def _new_tasks(run_id: str, conversation_model: str = "") -> list[dict]:
     now = _now()
     return [{
         "_id": _task_id(run_id, spec["key"]),
@@ -206,7 +220,7 @@ def _new_tasks(run_id: str) -> list[dict]:
         "capability": spec["capability"],
         "dependencies": [_task_id(run_id, dep) for dep in spec["deps"]],
         "artifact": spec["artifact"],
-        "review_level": spec["review"],
+        "review_level": _task_review_level(spec, conversation_model),
         "status": "queued" if not spec["deps"] else "pending",
         "attempts": 0,
         "max_attempts": config.AUTOPILOT_TASK_MAX_ATTEMPTS,
@@ -306,7 +320,7 @@ async def create_run(
         "preference_revision": pref["workspace_revision"],
         "trace_id": trace_id,
     }
-    task_docs = _new_tasks(run_id)
+    task_docs = _new_tasks(run_id, model_lock["conversation_model"])
     if runs is not None:
         try:
             await runs.insert_one(run)
@@ -1055,6 +1069,21 @@ async def rerun_review_task(
         for item in run.get("tasks", [])
     ):
         raise RunConflict("audience cannot be rerun after order creation")
+
+    # An explicit operator rerun must be a genuinely new recommendation, not
+    # a replay of the previous query-planner cache entry. This cache belongs
+    # only to the independent OpenAI campaign path.
+    from campaign_models import OPENAI_GPT_5_4_MINI
+    if run.get("conversation_model") == OPENAI_GPT_5_4_MINI:
+        from openai_campaign.audience_search import (
+            invalidate_audience_search_cache,
+        )
+
+        workspace = await get_workspace(run["session_id"])
+        brief = (
+            workspace.get("artifacts", {}).get("brief", {}).get("value") or {}
+        )
+        invalidate_audience_search_cache(brief)
 
     now = _now()
     updates = {

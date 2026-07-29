@@ -20,6 +20,14 @@ _TASK_TITLES = {
     "launch_approval": "Xác nhận launch",
 }
 
+_MILESTONE_TITLES = {
+    "validate_brief": "Brief đã xác nhận",
+    "retrieve_audience": "Audience đã chuẩn bị",
+    "derive_targeting": "Targeting đã chuẩn bị",
+    "analyze_creatives": "Creative đã kiểm tra",
+    "rank_placements": "Ad placement đã chọn",
+}
+
 _TARGETING_LABELS = {
     "age": "Độ tuổi",
     "ages": "Độ tuổi",
@@ -131,44 +139,55 @@ def _compose(header: str, lines: list[str], footer: str) -> str:
 def _audience_lines(value: dict) -> list[str]:
     attrs = value.get("attrs") or []
     adjacent = value.get("adjacent_attrs") or []
-    lines = [
-        f"Đề xuất trực tiếp đang chờ duyệt: {len(attrs)} segment"
-        + (f" · quy mô cộng gộp khoảng {_compact_number(value.get('size'))}" if value.get("size") else "")
-    ]
-    for index, item in enumerate(attrs, 1):
+    if value.get("clarification_required"):
+        return [
+            "Agent chưa chọn audience vì brief chưa nêu đủ sản phẩm/dịch "
+            "vụ, ngành hoặc người mua cụ thể.",
+            value.get("clarification_prompt")
+            or "Hãy bổ sung thông tin brief trên workspace rồi chạy lại audience.",
+        ]
+    selection_required = bool(value.get("selection_required"))
+    candidates = (
+        value.get("recommendations")
+        or [*attrs, *adjacent]
+        if selection_required else attrs
+    )
+    heading = (
+        f"Danh sách audience đề xuất: {len(candidates)} segment"
+        if selection_required
+        else f"Audience đã chọn: {len(candidates)} segment"
+    )
+    if not selection_required and value.get("size"):
+        heading += f" · quy mô cộng gộp khoảng {_compact_number(value.get('size'))}"
+    lines = [heading]
+    for index, item in enumerate(candidates, 1):
         if not isinstance(item, dict):
             continue
         size = _range(item.get("sizeMin"), item.get("sizeMax"))
         line = f"{index}. {_name(item, f'Segment {index}')}"
         if size:
             line += f" · {size}"
-        reason = _plain(item.get("reason") or item.get("description"), 105)
-        if reason:
-            line += f"\n   Lý do: {reason}"
         lines.append(line)
-    if adjacent:
-        lines.append(
-            f"Audience liên quan để mở rộng (chưa tự chọn): {len(adjacent)} segment"
-        )
-        for index, item in enumerate(adjacent, len(attrs) + 1):
-            if not isinstance(item, dict):
-                continue
-            size = _range(item.get("sizeMin"), item.get("sizeMax"))
-            line = f"{index}. {_name(item, f'Segment {index}')}"
-            if size:
-                line += f" · {size}"
-            reason = _plain(item.get("reason") or item.get("description"), 140)
-            if reason:
-                line += f"\n   Liên quan/giới hạn: {reason}"
-            lines.append(line)
-    if not attrs and adjacent:
-        lines.append(
-            "Catalog chưa có segment khớp trực tiếp, nên Agent chưa tự chọn mục "
-            "nào. Chỉ chọn nhóm mở rộng khi bạn thấy phù hợp."
-        )
-    elif not attrs:
+    if not candidates:
         lines.append("Không tìm thấy segment hợp lệ trong artifact đang chờ duyệt.")
     return lines
+
+
+def _brief_lines(value: dict, workspace: dict) -> list[str]:
+    brief = _artifact(workspace, "brief") or value.get("brief") or {}
+    objective_labels = {
+        "awareness": "Nhận diện",
+        "consideration": "Cân nhắc",
+        "conversion": "Chuyển đổi",
+        "retention": "Duy trì",
+    }
+    return [
+        f"• Thương hiệu: {_plain(brief.get('brand') or '—', 100)}",
+        f"• Mục tiêu: {objective_labels.get(brief.get('objective'), _plain(brief.get('objective') or '—', 60))}",
+        f"• KPI: {_plain(brief.get('kpi') or '—', 160)}",
+        f"• Ngân sách: {_integer(brief.get('budget'))} triệu VND",
+        f"• Thời gian: {brief.get('startDate') or '—'} → {brief.get('endDate') or '—'}",
+    ]
 
 
 def _targeting_lines(value: dict) -> list[str]:
@@ -226,6 +245,30 @@ def _placement_lines(value: dict) -> list[str]:
         )
     else:
         lines.append("Không có ad zone khả dụng trong artifact đang chờ duyệt.")
+    return lines
+
+
+def _ranked_placement_lines(value: dict) -> list[str]:
+    zones = value.get("zones") or []
+    lines = [f"Ad placement đã chọn: {len(zones)} zone"]
+    for index, zone in enumerate(zones, 1):
+        if not isinstance(zone, dict):
+            continue
+        label = _plain(_name(zone, f"Ad zone {index}"), 60)
+        details = [
+            _plain(zone.get("channel"), 35),
+            _plain(zone.get("format"), 35),
+        ]
+        if zone.get("cpm") is not None:
+            details.append(f"CPM {_integer(zone.get('cpm'))}đ")
+        if zone.get("reach") is not None:
+            details.append(f"reach {_compact_number(zone.get('reach'))}")
+        details = [item for item in details if item]
+        lines.append(
+            f"{index}. {label}" + (f" · {' · '.join(details)}" if details else "")
+        )
+    if not zones:
+        lines.append("Chưa có ad placement khả dụng.")
     return lines
 
 
@@ -338,6 +381,22 @@ def assignment_media_parts(value: dict, workspace: dict) -> list[dict]:
     return parts
 
 
+def creative_media_parts(workspace: dict) -> list[dict]:
+    creative = _artifact(workspace, "creative") or {}
+    files = creative.get("files") or []
+    parts = []
+    seen = set()
+    for file in files:
+        if not isinstance(file, dict):
+            continue
+        url = str(file.get("url") or "").strip()
+        if not url.startswith("https://") or url in seen:
+            continue
+        seen.add(url)
+        parts.append({"kind": "image", "image_url": url})
+    return parts
+
+
 def _creative_analysis_lines(value: dict, workspace: dict) -> list[str]:
     creative = _artifact(workspace, "creative") or {}
     files = creative.get("files") or []
@@ -349,6 +408,11 @@ def _creative_analysis_lines(value: dict, workspace: dict) -> list[str]:
             "Bạn không cần xác nhận khi phân tích chưa xong. Agent sẽ gửi kết quả "
             "hoặc cảnh báo cần duyệt ngay khi hoàn tất.",
         ]
+    status_labels = {
+        "auto_approved": "đạt kiểm tra",
+        "approved_override": "đã duyệt",
+        "needs_review": "cần kiểm tra",
+    }
     lines = [f"Kết quả kiểm tra creative: {len(files)} file"]
     for index, file in enumerate(files, 1):
         verdict = next(
@@ -361,7 +425,9 @@ def _creative_analysis_lines(value: dict, workspace: dict) -> list[str]:
             {},
         )
         status = verdict.get("effective_status") or verdict.get("status") or "chưa có kết quả"
-        lines.append(f"{index}. Creative {index} · {status}")
+        lines.append(
+            f"{index}. Creative {index} · {status_labels.get(status, status)}"
+        )
         reasons = verdict.get("review_reasons") or []
         if reasons:
             lines.append("   Cảnh báo: " + "; ".join(
@@ -445,12 +511,24 @@ def render_openai_review_message(
 
     if key == "retrieve_audience":
         lines = _audience_lines(value)
-        action = (
-            "Trả lời “Xác nhận” để duyệt các đề xuất trực tiếp đang được chọn. "
-            "Nhắn “Chọn audience 1,2,3” để thay danh sách bằng đúng các số đó "
-            "(kể cả mục liên quan để mở rộng), rồi gửi “Xác nhận” riêng. Nhắn "
-            "“Gợi ý lại audience” để Agent truy xuất danh sách mới, hoặc “Hủy” để dừng."
-        )
+        if value.get("clarification_required"):
+            action = (
+                "Chưa thể xác nhận bước này. Hãy mở workspace, bổ sung thông tin "
+                "sản phẩm/người mua trong brief và chạy lại Autopilot."
+            )
+        elif value.get("selection_required"):
+            action = (
+                "Nhắn audience bạn muốn chọn bằng số hoặc tên, rồi gửi “Xác nhận” "
+                "riêng để duyệt. Nhắn “Gợi ý lại audience” để nhận danh sách mới, "
+                "hoặc “Hủy” để dừng."
+            )
+        else:
+            action = (
+                "Trả lời “Xác nhận” để duyệt audience đang được chọn. "
+                "Nhắn audience khác bằng số hoặc tên để thay danh sách, rồi gửi "
+                "“Xác nhận” riêng. Nhắn "
+                "“Gợi ý lại audience” để Agent truy xuất danh sách mới, hoặc “Hủy” để dừng."
+            )
     elif key == "derive_targeting":
         lines = _targeting_lines(value)
         action = "Trả lời “Xác nhận” để duyệt targeting, “Hủy” để dừng, hoặc hỏi thêm trước khi quyết định."
@@ -484,4 +562,37 @@ def render_openai_review_message(
         action = "Trả lời “Xác nhận” để tiếp tục hoặc “Hủy” để dừng."
 
     footer = action + _workspace_link(workspace_url)
+    return _compose(header, lines, footer)
+
+
+def render_openai_milestone_message(
+    run: dict,
+    task: dict,
+    *,
+    workspace: dict | None = None,
+    workspace_url: str | None = None,
+) -> str:
+    """Render an informational milestone without introducing an approval gate."""
+    workspace = dict(workspace or {})
+    key = str(task.get("key") or "")
+    value = _task_value(task)
+    header = (
+        f"Autopilot {run.get('run_id') or '—'}: "
+        f"{_MILESTONE_TITLES.get(key, task.get('title') or key)}"
+    )
+    if key == "validate_brief":
+        lines = _brief_lines(value, workspace)
+    elif key == "retrieve_audience":
+        lines = _audience_lines(value)
+    elif key == "derive_targeting":
+        lines = _targeting_lines(value)
+    elif key == "analyze_creatives":
+        lines = _creative_analysis_lines(value, workspace)
+    elif key == "rank_placements":
+        lines = _ranked_placement_lines(value)
+    else:
+        lines = [_plain(value.get("message") or "Đầu ra đã sẵn sàng.", 300)]
+    footer = "Đây là cập nhật thông tin; Autopilot đang tự tiếp tục." + _workspace_link(
+        workspace_url
+    )
     return _compose(header, lines, footer)

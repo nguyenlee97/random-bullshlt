@@ -9,6 +9,7 @@ from io import BytesIO
 import httpx
 from PIL import Image, ImageOps
 
+from campaign_models import OPENAI_GPT_5_4_MINI
 from config import config
 from handlers.image_gen import AD_FORMATS, generation_provenance, handle_generate_image
 from creative_assets import get_assets
@@ -37,6 +38,13 @@ def generation_idempotency_key(
 
 def _default_intended_format(format_id: str) -> str:
     return "skin" if format_id == "znews-Background" else "banner"
+
+
+def _generated_asset_name(run: dict, format_id: str, digest: str) -> str:
+    """Keep OpenAI Autopilot asset names readable without changing storage keys."""
+    if run.get("conversation_model") == OPENAI_GPT_5_4_MINI:
+        return f"ai-{format_id}-{digest[:8]}.png"
+    return f"creative_ai_{digest}.png"
 
 
 def _assert_current_inputs(
@@ -96,6 +104,7 @@ async def generate_creative(
     )
     digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:24]
     filename = f"creative_ai_{digest}.png"
+    display_name = _generated_asset_name(run, format_id, digest)
     stored_url = f"{config.BACKEND_URL.rstrip('/')}/uploads/{filename}"
     actor = await actor_for_session(run["session_id"])
     assets = await get_assets(
@@ -121,7 +130,7 @@ async def generate_creative(
         )
         return {
             "id": idempotency_key,
-            "name": filename,
+            "name": display_name,
             "url": _browser_url(stored_url),
             "size": int(existing.headers.get("content-length") or 0),
             "type": "image/png", "mimeType": "image/png",
@@ -221,7 +230,7 @@ async def generate_creative(
     }
     return {
         "id": idempotency_key,
-        "name": stored.get("filename") or f"ai-{format_id}.png",
+        "name": display_name,
         "url": _browser_url(stored["url"]),
         "size": int(stored.get("size") or 0),
         "type": "image/png",

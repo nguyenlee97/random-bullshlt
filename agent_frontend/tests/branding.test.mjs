@@ -226,8 +226,8 @@ test('strict Autopilot reviews expose artifacts and edit without rejecting the r
   assert.match(panel, /Chỉnh audience/)
   assert.match(panel, /Chỉnh targeting/)
   assert.match(panel, /Tải creative lên/)
-  assert.match(panel, /Tải creative mới/)
-  assert.match(panel, /Chỉnh phân bổ creative/)
+  assert.doesNotMatch(panel, /Tải creative mới/)
+  assert.match(panel, /Dùng đề xuất hoặc chỉnh phân bổ/)
   assert.match(panel, /Hủy run/)
   assert.doesNotMatch(panel, /Từ chối & tải Creative/)
   assert.match(review, /Nội dung cần review/)
@@ -310,6 +310,8 @@ test('Autopilot targeting repair opens the targeting controls immediately', asyn
   assert.match(workspace, /expandTargeting=\{autopilotMode && autopilotEditorArtifact === 'targeting'\}/)
   assert.match(audience, /autoExpand=\{expandTargeting\}/)
   assert.match(targeting, /if \(autoExpand\) setExpanded\(true\)/)
+  assert.match(targeting, /ADVANCED_TARGETING_KEYS\.some/)
+  assert.match(targeting, /if \(hasAdvancedSelection\) setAdvExpanded\(true\)/)
 })
 
 test('Autopilot hides stale review actions after a terminal run', async () => {

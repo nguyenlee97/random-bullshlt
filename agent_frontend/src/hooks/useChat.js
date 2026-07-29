@@ -70,12 +70,12 @@ export function useChat({
     }
   }, [])
 
-  const boot = useCallback(async () => {
+  const boot = useCallback(async (experienceMode = 'guided') => {
     if (bootedRef.current) return
     bootedRef.current = true
     setBusy(true)
     log.chat('boot → start')
-    const response = await AgentAPI.boot()
+    const response = await AgentAPI.boot(experienceMode)
     log.chat('boot ← done', { content_preview: response?.content?.slice(0, 100) })
     setMessages([response])
     setBusy(false)

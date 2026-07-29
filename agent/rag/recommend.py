@@ -147,6 +147,31 @@ def _fold_text(value: object) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
 
 
+def _exact_domain_query_match(segment: dict) -> dict | None:
+    """Return an exact catalog-label product/industry query match, if any."""
+    label = _fold_text(
+        segment.get("name")
+        or str(segment.get("fullLabel") or "").split("(", 1)[0]
+    )
+    if not label:
+        return None
+    for match in segment.get("_query_matches") or []:
+        if not isinstance(match, dict):
+            continue
+        if (
+            match.get("kind") not in {"product", "industry"}
+            or int(match.get("query_rank") or 999) > 3
+        ):
+            continue
+        if _fold_text(match.get("query")) == label:
+            return {
+                "query": match.get("query"),
+                "kind": match.get("kind"),
+                "query_rank": int(match.get("query_rank") or 999),
+            }
+    return None
+
+
 def _guard_reason(brief: dict, segment: dict) -> str | None:
     """Deterministic taxonomy guards for explicit business/consumer conflicts."""
     notes = _fold_text(brief.get("notes"))
@@ -409,7 +434,14 @@ def _merge_openai_retrieval(
                 target["_aspect_hits"].append(kind)
         per_query.append(query_trace)
 
-    priority = {"product": 0, "buyer": 1, "industry": 2, "brief": 3, "rewrite": 4}
+    priority = {
+        "audience": 0,
+        "product": 1,
+        "buyer": 2,
+        "industry": 3,
+        "brief": 4,
+        "rewrite": 5,
+    }
     query_order = sorted(
         range(len(per_query)),
         key=lambda index: (priority.get(per_query[index]["kind"], 5), index),
@@ -594,6 +626,62 @@ async def recommend_rag(
             })
     rewrite_s = time.time() - stage_t0
     RAG_STAGE_SECONDS.labels(stage="rewrite").observe(rewrite_s)
+    if (
+        provider == "openai"
+        and isinstance(query_plan, dict)
+        and query_plan.get("information_sufficient") is False
+    ):
+        reason = (
+            query_plan.get("insufficient_reason")
+            or "brief_missing_product_or_audience_evidence"
+        )
+        stage_ms = {
+            "rewrite": int(rewrite_s * 1000),
+            "retrieve": 0,
+            "rerank": 0,
+            "generate": 0,
+        }
+        quality_gate = {
+            "applied": True,
+            "recommended": 0,
+            "adjacent": 0,
+            "rejected": 0,
+            "reason": "insufficient_information",
+        }
+        await alog(session_id, "openai_audience_pipeline_trace", {
+            "rag": "recommend_skipped",
+            "trace_schema_version": 1,
+            "outcome": "insufficient_information",
+            "provider": provider,
+            "query_plan": query_plan,
+            "query_specs": [],
+            "retrieval_trace": None,
+            "rerank_trace": [],
+            "quality_gate": quality_gate,
+            "stage_ms": stage_ms,
+            "duration_ms": int((time.time() - t0) * 1000),
+        })
+        return {
+            "recommendations": [],
+            "adjacent_recommendations": [],
+            "total_segments": 0,
+            "note": "audience_information_insufficient",
+            "rag": {
+                "applied": True,
+                "mode": config.AUDIENCE_RAG_RETRIEVAL_MODE,
+                "queries": [],
+                "query_plan": query_plan,
+                "information_sufficient": False,
+                "insufficient_reason": reason,
+                "quality_gate": quality_gate,
+                "stage_ms": stage_ms,
+                "tier_counts": {
+                    "recommended": 0,
+                    "adjacent": 0,
+                    "rejected": 0,
+                },
+            },
+        }
 
     # 2. hybrid retrieve
     try:
@@ -617,6 +705,43 @@ async def recommend_rag(
     if not candidates:
         raise RagUnavailable("retrieval returned 0 candidates")
     catalog_segments = _catalog_segment_count(candidates)
+    taxonomy_trace = {
+        "applied": False,
+        "reason": "not_openai_detailed_retrieval",
+    }
+    if provider == "openai" and detailed_retrieval:
+        taxonomy_t0 = time.time()
+        try:
+            from rag.taxonomy import expand_candidates_with_taxonomy
+            from tools.audience_library import get_all_segments
+
+            live_catalog = await get_all_segments(limit=1000)
+            taxonomy_limit = (
+                rerank_candidate_limit
+                or config.AUDIENCE_NANO_RERANK_CANDIDATE_LIMIT
+            )
+            candidates, _taxonomy_graph, taxonomy_trace = (
+                expand_candidates_with_taxonomy(
+                    candidates,
+                    live_catalog,
+                    candidate_limit=taxonomy_limit,
+                )
+            )
+            taxonomy_trace["applied"] = True
+            taxonomy_trace["duration_ms"] = int(
+                (time.time() - taxonomy_t0) * 1000
+            )
+        except Exception as exc:
+            # Parent-awareness improves quality but is not a hard dependency.
+            # Retrieval and reranking remain usable if the catalog endpoint is
+            # temporarily unavailable.
+            taxonomy_trace = {
+                "applied": False,
+                "reason": "catalog_or_graph_unavailable",
+                "error_type": type(exc).__name__,
+                "error_detail": str(exc)[:160],
+                "duration_ms": int((time.time() - taxonomy_t0) * 1000),
+            }
 
     # 3. rerank (graceful skip → keep RRF order)
     brief_text = focused_query if use_focused_query else " | ".join(
@@ -706,6 +831,7 @@ async def recommend_rag(
             if min_relevance_score is None
             else min_relevance_score
         )
+        direct_threshold = max(threshold, 0.65)
         scores = rerank_meta.get("scores") if rerank_meta.get("applied") else {}
         scores = scores if isinstance(scores, dict) else {}
         assessments = (
@@ -717,6 +843,34 @@ async def recommend_rag(
         recs = []
         adjacent_recs = []
         gate_decisions = []
+        candidate_by_id = {
+            str(
+                candidate.get("segmentId")
+                or candidate.get("_id")
+                or candidate.get("fullLabel")
+                or candidate.get("name")
+                or ""
+            ).strip(): candidate
+            for candidate in top
+        }
+        model_recommended_categories = {
+            _fold_text(candidate.get("category"))
+            for candidate_id, candidate in candidate_by_id.items()
+            if (assessments.get(candidate_id) or {}).get("match_tier")
+            == "recommended"
+            and candidate.get("category")
+        }
+        model_recommended_category_counts: dict[str, int] = {}
+        for candidate_id, candidate in candidate_by_id.items():
+            if (
+                (assessments.get(candidate_id) or {}).get("match_tier")
+                != "recommended"
+            ):
+                continue
+            category_key = _fold_text(candidate.get("category"))
+            model_recommended_category_counts[category_key] = (
+                model_recommended_category_counts.get(category_key, 0) + 1
+            )
         for candidate in top:
             candidate_id = str(
                 candidate.get("segmentId")
@@ -733,20 +887,154 @@ async def recommend_rag(
             model_tier = assessment.get("match_tier")
             if not model_tier:
                 model_tier = "recommended" if score >= threshold else "unrelated"
-            if model_tier == "recommended" and score >= threshold:
+            match_basis = assessment.get("match_basis")
+            proxy_basis = match_basis == "proxy"
+            unrelated_basis = match_basis == "unrelated"
+            has_conflict = assessment.get("has_conflict") is True
+            basis_query_kinds = {
+                "exact_product": {"product", "industry", "audience"},
+                "exact_industry": {"industry"},
+                "exact_buyer": {"buyer", "audience"},
+                "exact_user_interest": {"audience", "buyer", "product"},
+            }.get(match_basis)
+            basis_grounded = (
+                basis_query_kinds is None
+                or any(
+                    match.get("kind") in basis_query_kinds
+                    and int(match.get("query_rank") or 999) <= 5
+                    for match in candidate.get("_query_matches") or []
+                    if isinstance(match, dict)
+                )
+            )
+            ungrounded_exact_basis = (
+                basis_query_kinds is not None and not basis_grounded
+            )
+            broad_parent_domain_grounded = (
+                match_basis != "broad_parent"
+                or any(
+                    match.get("kind") in {"product", "industry"}
+                    and int(match.get("query_rank") or 999) <= 5
+                    for match in candidate.get("_query_matches") or []
+                    if isinstance(match, dict)
+                )
+            )
+            ungrounded_broad_parent = (
+                match_basis == "broad_parent"
+                and not broad_parent_domain_grounded
+            )
+            category = _fold_text(candidate.get("category"))
+            non_brief_aspects = {
+                str(kind)
+                for kind in candidate.get("_aspect_hits") or []
+                if kind != "brief"
+            }
+            isolated_low_evidence_direct = (
+                model_tier == "recommended"
+                and bool(assessment.get("match_tier"))
+                and (
+                    len(non_brief_aspects) < 2
+                    or (
+                        int(candidate.get("_query_hits") or 0) < 4
+                        and float(candidate.get("_fusion_score") or 0) < 0.08
+                    )
+                )
+                and model_recommended_category_counts.get(category, 0) < 2
+            )
+            weak_cross_domain_proxy = (
+                model_tier == "adjacent"
+                and bool(model_recommended_categories)
+                and category not in model_recommended_categories
+                and score < 0.50
+            )
+            generic_digital_proxy = (
+                category == "digital activities"
+                and (
+                    model_tier != "recommended"
+                    or score < direct_threshold
+                )
+            )
+            if (
+                model_tier == "recommended"
+                and score >= direct_threshold
+                and not isolated_low_evidence_direct
+                and not proxy_basis
+                and not ungrounded_exact_basis
+                and not ungrounded_broad_parent
+                and not has_conflict
+            ):
                 decision = "recommended"
+                gate_rule = "model_recommended_high_confidence"
+                new_rec = {
+                    "fullLabel": candidate.get("fullLabel") or candidate.get("name", ""),
+                    "reason": _assessment_reason(
+                        brief, candidate, assessment, decision,
+                    ),
+                    "tier": decision,
+                    "relevance_score": score,
+                    **assessment,
+                }
                 if len(recs) < 6:
-                    recs.append({
-                        "fullLabel": candidate.get("fullLabel") or candidate.get("name", ""),
-                        "reason": _assessment_reason(
-                            brief, candidate, assessment, decision,
-                        ),
-                        "tier": decision,
-                        "relevance_score": score,
-                        **assessment,
-                    })
-            elif model_tier == "adjacent" and score >= 0.20:
+                    recs.append(new_rec)
+                elif match_basis == "broad_parent":
+                    replaceable = [
+                        row for row in recs
+                        if row.get("match_basis") != "broad_parent"
+                    ]
+                    if replaceable:
+                        displaced = min(
+                            replaceable,
+                            key=lambda row: float(
+                                row.get("relevance_score") or -1
+                            ),
+                        )
+                        recs.remove(displaced)
+                        displaced["tier"] = "adjacent"
+                        displaced["match_tier"] = "adjacent"
+                        if len(adjacent_recs) < 6:
+                            adjacent_recs.append(displaced)
+                        displaced_decision = next((
+                            item for item in gate_decisions
+                            if item["full_label"]
+                            == displaced.get("fullLabel")
+                        ), None)
+                        if displaced_decision:
+                            displaced_decision["decision"] = "adjacent"
+                            displaced_decision["gate_rule"] = (
+                                "displaced_by_broad_parent"
+                            )
+                        recs.append(new_rec)
+            elif (
+                model_tier in {"recommended", "adjacent"}
+                and score >= 0.20
+                and not weak_cross_domain_proxy
+                and not generic_digital_proxy
+                and not unrelated_basis
+                and not has_conflict
+            ):
                 decision = "adjacent"
+                gate_rule = (
+                    "conflicting_audience_or_domain"
+                    if has_conflict
+                    else (
+                        "proxy_basis"
+                        if proxy_basis
+                        else (
+                            "ungrounded_exact_basis"
+                            if ungrounded_exact_basis
+                            else (
+                                "isolated_low_evidence_direct"
+                                if isolated_low_evidence_direct
+                                else (
+                                    "recommended_below_direct_threshold"
+                                    if model_tier == "recommended"
+                                    else "model_adjacent"
+                                )
+                            )
+                        )
+                    )
+                )
+                if ungrounded_broad_parent:
+                    gate_rule = "broad_parent_without_product_domain_evidence"
                 if len(adjacent_recs) < 6:
                     adjacent_recs.append({
                         "fullLabel": candidate.get("fullLabel") or candidate.get("name", ""),
@@ -759,19 +1047,363 @@ async def recommend_rag(
                     })
             else:
                 decision = "rejected"
+                gate_rule = (
+                    "generic_digital_proxy"
+                    if generic_digital_proxy
+                    else (
+                        "conflicting_audience_or_domain"
+                        if has_conflict
+                        else (
+                            "unrelated_basis"
+                            if unrelated_basis
+                            else (
+                                "weak_cross_domain_proxy"
+                                if weak_cross_domain_proxy
+                                else "model_unrelated_or_below_threshold"
+                            )
+                        )
+                    )
+                )
             gate_decisions.append({
                 "segment_id": candidate_id,
                 "full_label": candidate.get("fullLabel") or candidate.get("name"),
                 "score": score,
                 "model_tier": model_tier,
+                "match_basis": match_basis,
+                "has_conflict": has_conflict,
+                "basis_grounded": basis_grounded,
+                "broad_parent_domain_grounded": (
+                    broad_parent_domain_grounded
+                ),
                 "decision": decision,
+                "gate_rule": gate_rule,
                 "matched_signals": assessment.get("matched_signals") or [],
                 "missing_signals": assessment.get("missing_signals") or [],
                 "limitation": assessment.get("limitation") or "",
+                "taxonomy_injected": bool(
+                    candidate.get("_taxonomy_injected")
+                ),
+                "taxonomy_parent_ids": (
+                    (candidate.get("_taxonomy") or {}).get(
+                        "direct_parent_ids", []
+                    )
+                ),
+                "taxonomy_ancestor_ids": (
+                    (candidate.get("_taxonomy") or {}).get("ancestor_ids", [])
+                ),
             })
+
+        # Avoid an empty direct tier when the reranker explicitly found a
+        # reasonably strong exact product/user match just below the strict
+        # confidence cutoff. This is deliberately narrower than lowering the
+        # global threshold: industries, broad parents, and proxies do not get
+        # this rescue, and it only runs when no stronger direct row exists.
+        if not recs:
+            rescue_rows = []
+            for row in adjacent_recs:
+                decision_row = next((
+                    item for item in gate_decisions
+                    if item["full_label"] == row.get("fullLabel")
+                ), None)
+                if (
+                    decision_row
+                    and decision_row["decision"] == "adjacent"
+                    and decision_row["model_tier"] == "recommended"
+                    and decision_row["match_basis"]
+                    in {"exact_product", "exact_user_interest"}
+                    and float(decision_row["score"]) >= max(threshold, 0.60)
+                    and decision_row.get("basis_grounded")
+                    and not decision_row.get("has_conflict")
+                ):
+                    rescue_rows.append((row, decision_row))
+            if rescue_rows:
+                row, decision_row = max(
+                    rescue_rows,
+                    key=lambda item: float(item[1]["score"]),
+                )
+                adjacent_recs.remove(row)
+                promoted = dict(row)
+                promoted["tier"] = "recommended"
+                promoted["match_tier"] = "recommended"
+                candidate = candidate_by_id.get(
+                    decision_row["segment_id"]
+                ) or {}
+                promoted["reason"] = _assessment_reason(
+                    brief, candidate, promoted, "recommended",
+                )
+                recs.append(promoted)
+                decision_row["decision"] = "recommended"
+                decision_row["gate_rule"] = (
+                    "minimum_viable_direct_exact_match"
+                )
+
+        # The reranker can occasionally over-weight buyer context and call an
+        # exact product-domain catalog row a proxy. If no direct row survives,
+        # an exact top-three product/industry query equal to the catalog name is
+        # stronger deterministic evidence than that inconsistent proxy label.
+        # This is catalog/query evidence, not a language-specific alias.
+        if not recs:
+            exact_domain_rows = []
+            for decision_row in gate_decisions:
+                candidate = candidate_by_id.get(
+                    decision_row["segment_id"]
+                ) or {}
+                exact_query = _exact_domain_query_match(candidate)
+                if (
+                    exact_query
+                    and float(decision_row["score"]) >= 0.40
+                    and decision_row["model_tier"]
+                    in {"recommended", "adjacent"}
+                    and not decision_row.get("has_conflict")
+                    and decision_row.get("match_basis") != "unrelated"
+                ):
+                    exact_domain_rows.append(
+                        (decision_row, candidate, exact_query)
+                    )
+            if exact_domain_rows:
+                decision_row, candidate, exact_query = max(
+                    exact_domain_rows,
+                    key=lambda item: float(item[0]["score"]),
+                )
+                adjacent_row = next((
+                    row for row in adjacent_recs
+                    if row.get("fullLabel") == decision_row["full_label"]
+                ), None)
+                if adjacent_row:
+                    adjacent_recs.remove(adjacent_row)
+                    promoted = dict(adjacent_row)
+                else:
+                    assessment = assessments.get(
+                        decision_row["segment_id"]
+                    ) or {}
+                    promoted = {
+                        "fullLabel": decision_row["full_label"],
+                        "tier": "recommended",
+                        "relevance_score": float(decision_row["score"]),
+                        **assessment,
+                    }
+                promoted["tier"] = "recommended"
+                promoted["match_tier"] = "recommended"
+                promoted["reason"] = _assessment_reason(
+                    brief, candidate, promoted, "recommended",
+                )
+                recs.append(promoted)
+                decision_row["decision"] = "recommended"
+                decision_row["gate_rule"] = (
+                    "minimum_viable_direct_exact_catalog_query"
+                )
+                decision_row["exact_domain_query"] = exact_query
+
+        # Promote the closest safe catalog parent as a coverage anchor. A graph
+        # relationship is necessary but not sufficient: the reranker must still
+        # judge the row relevant, and a single structural child needs high
+        # confidence. Siblings never inherit that promotion.
+        direct_ids = {
+            item["segment_id"]
+            for item in gate_decisions
+            if item["decision"] == "recommended"
+        }
+        parent_proposals = []
+        for row in list(adjacent_recs):
+            decision_row = next((
+                item for item in gate_decisions
+                if item["full_label"] == row.get("fullLabel")
+            ), None)
+            if (
+                not decision_row
+                or decision_row["decision"] != "adjacent"
+                or float(decision_row["score"]) < 0.45
+                or decision_row.get("has_conflict")
+                or decision_row.get("match_basis") in {"proxy", "unrelated"}
+            ):
+                continue
+            parent_id = decision_row["segment_id"]
+            candidate = candidate_by_id.get(parent_id) or {}
+            covered_children = []
+            relation_sources: set[str] = set()
+            distances = []
+            for child_id in direct_ids:
+                child = candidate_by_id.get(child_id) or {}
+                relation = (
+                    (child.get("_taxonomy") or {})
+                    .get("ancestor_relations", {})
+                    .get(parent_id)
+                )
+                if not relation:
+                    continue
+                covered_children.append(child_id)
+                distances.append(int(relation.get("distance") or 99))
+                relation_sources.update(relation.get("sources") or [])
+            if not covered_children:
+                continue
+            closer_direct_anchors = [
+                direct_id
+                for direct_id in direct_ids
+                if direct_id != parent_id
+                and parent_id in (
+                    (candidate_by_id.get(direct_id) or {})
+                    .get("_taxonomy", {})
+                    .get("ancestor_ids", [])
+                )
+                and int(
+                    (candidate_by_id.get(direct_id) or {})
+                    .get("_taxonomy", {})
+                    .get("descendant_count", 0)
+                ) > 0
+            ]
+            if closer_direct_anchors:
+                decision_row["taxonomy_decision"] = (
+                    "parent_kept_adjacent_closer_direct_anchor_available"
+                )
+                decision_row["closer_direct_anchor_ids"] = (
+                    closer_direct_anchors
+                )
+                continue
+            semantic_override = "semantic_override" in relation_sources
+            multi_child_coverage = len(covered_children) >= 2
+            high_confidence = (
+                float(decision_row["score"]) >= direct_threshold
+            )
+            if not (
+                semantic_override
+                or multi_child_coverage
+                or high_confidence
+            ):
+                decision_row["taxonomy_decision"] = (
+                    "parent_kept_adjacent_low_coverage"
+                )
+                continue
+            parent_proposals.append({
+                "row": row,
+                "decision": decision_row,
+                "candidate": candidate,
+                "parent_id": parent_id,
+                "covered_child_ids": covered_children,
+                "relation_sources": sorted(relation_sources),
+                "distance": min(distances),
+                "descendant_count": int(
+                    (candidate.get("_taxonomy") or {}).get(
+                        "descendant_count", 0
+                    )
+                ),
+                "semantic_override": semantic_override,
+                "multi_child_coverage": multi_child_coverage,
+                "high_confidence": high_confidence,
+            })
+
+        # If two proposed parents are nested, keep the closer/narrower one.
+        closest_parent_proposals = []
+        for proposal in parent_proposals:
+            is_distant_ancestor = any(
+                proposal["parent_id"] in (
+                    (other["candidate"].get("_taxonomy") or {}).get(
+                        "ancestor_ids", []
+                    )
+                )
+                for other in parent_proposals
+                if other["parent_id"] != proposal["parent_id"]
+                and set(proposal["covered_child_ids"])
+                & set(other["covered_child_ids"])
+            )
+            if is_distant_ancestor:
+                proposal["decision"]["taxonomy_decision"] = (
+                    "parent_kept_adjacent_closer_parent_available"
+                )
+                continue
+            closest_parent_proposals.append(proposal)
+
+        closest_parent_proposals.sort(key=lambda proposal: (
+            not proposal["semantic_override"],
+            not proposal["multi_child_coverage"],
+            proposal["distance"],
+            proposal["descendant_count"],
+            -float(proposal["decision"]["score"]),
+        ))
+        promoted_parent_ids = []
+        for proposal in closest_parent_proposals:
+            row = proposal["row"]
+            decision_row = proposal["decision"]
+            candidate = proposal["candidate"]
+            if row not in adjacent_recs:
+                continue
+            adjacent_recs.remove(row)
+            if len(recs) >= 6:
+                displaced = min(
+                    recs,
+                    key=lambda item: float(
+                        item.get("relevance_score") or -1
+                    ),
+                )
+                recs.remove(displaced)
+                displaced["tier"] = "adjacent"
+                displaced["match_tier"] = "adjacent"
+                if len(adjacent_recs) < 6:
+                    adjacent_recs.append(displaced)
+                displaced_decision = next((
+                    item for item in gate_decisions
+                    if item["full_label"] == displaced.get("fullLabel")
+                ), None)
+                if displaced_decision:
+                    displaced_decision["decision"] = "adjacent"
+                    displaced_decision["gate_rule"] = (
+                        "displaced_by_coverage_anchor"
+                    )
+            promoted = dict(row)
+            promoted["tier"] = "recommended"
+            promoted["match_tier"] = "recommended"
+            promoted["reason"] = _assessment_reason(
+                brief, candidate, promoted, "recommended",
+            )
+            recs.append(promoted)
+            direct_ids.add(proposal["parent_id"])
+            promoted_parent_ids.append(proposal["parent_id"])
+            decision_row["decision"] = "recommended"
+            decision_row["covered_child_ids"] = proposal[
+                "covered_child_ids"
+            ]
+            decision_row["taxonomy_relation_sources"] = proposal[
+                "relation_sources"
+            ]
+            if proposal["semantic_override"]:
+                gate_rule = "coverage_anchor_semantic_override"
+            elif proposal["multi_child_coverage"]:
+                gate_rule = "coverage_anchor_multiple_direct_children"
+            else:
+                gate_rule = "coverage_anchor_high_confidence"
+            decision_row["gate_rule"] = gate_rule
+            decision_row["taxonomy_decision"] = "parent_promoted"
+
+        # Make the distinction explicit in debug output: siblings may remain
+        # optional expansion rows, but are never promoted by the graph.
+        for decision_row in gate_decisions:
+            if (
+                decision_row["decision"] == "adjacent"
+                and not decision_row.get("taxonomy_decision")
+            ):
+                candidate = candidate_by_id.get(
+                    decision_row["segment_id"]
+                ) or {}
+                candidate_ancestors = set(
+                    (candidate.get("_taxonomy") or {}).get(
+                        "ancestor_ids", []
+                    )
+                )
+                if any(
+                    candidate_ancestors
+                    & set(
+                        (candidate_by_id.get(parent_id) or {})
+                        .get("_taxonomy", {})
+                        .get("ancestor_ids", [])
+                    )
+                    for parent_id in promoted_parent_ids
+                ):
+                    decision_row["taxonomy_decision"] = (
+                        "sibling_kept_adjacent"
+                    )
         quality_gate = {
             "applied": True,
             "threshold": threshold,
+            "direct_threshold": direct_threshold,
             "eligible": len(recs),
             "recommended": len(recs),
             "adjacent": len(adjacent_recs),
@@ -779,6 +1411,7 @@ async def recommend_rag(
                 1 for item in gate_decisions if item["decision"] == "rejected"
             ),
             "reranker_available": bool(rerank_meta.get("applied")),
+            "promoted_parent_ids": promoted_parent_ids,
             "decisions": gate_decisions,
         }
         selector_name = "openai_nano_scores"
@@ -823,7 +1456,8 @@ async def recommend_rag(
         source = catalog_source(segment, index_metadata)
         internal = {
             "_rank", "_text", "_fusion_score", "_query_hits", "_rag_index",
-            "_query_matches", "_aspect_hits",
+            "_query_matches", "_aspect_hits", "_taxonomy",
+            "_taxonomy_injected",
         }
         public = {key: value for key, value in segment.items() if key not in internal}
         return {**public, "reason": reason, "source": source}
@@ -848,7 +1482,8 @@ async def recommend_rag(
             public = _public_recommendation(seg, rec.get("reason", ""))
             for key in (
                 "tier", "relevance_score", "match_tier", "matched_signals",
-                "missing_signals", "limitation",
+                "match_basis", "missing_signals", "limitation",
+                "has_conflict",
             ):
                 if key in rec:
                     public[key] = rec[key]
@@ -906,9 +1541,10 @@ async def recommend_rag(
             or config.AUDIENCE_NANO_RERANK_CANDIDATE_LIMIT
         )
         log_payload.update({
-            "trace_schema_version": 1,
+            "trace_schema_version": 2,
             "query_specs": query_specs,
             "retrieval_trace": retrieval_trace,
+            "taxonomy_trace": taxonomy_trace,
             "rerank_trace": [{
                 "pre_rerank_rank": index + 1,
                 "segment_id": str(
@@ -951,6 +1587,7 @@ async def recommend_rag(
                     "rerank_mode": selected_rerank_mode,
                     "rerank_model": rerank_meta.get("model"),
                     "rerank_meta": rerank_meta,
+                    "taxonomy_trace": taxonomy_trace,
                     "selector": selector_name,
                     "quality_gate": quality_gate,
                     "tier_counts": {

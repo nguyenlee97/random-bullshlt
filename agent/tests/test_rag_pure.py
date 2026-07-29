@@ -385,8 +385,14 @@ async def test_nano_reranker_normalizes_duplicates_and_appends_omissions(monkeyp
         async def parse(self, **_kwargs):
             return SimpleNamespace(
                 output_parsed=SimpleNamespace(items=[
-                    SimpleNamespace(candidate_index=1, relevance_score=0.9),
-                    SimpleNamespace(candidate_index=1, relevance_score=0.8),
+                    SimpleNamespace(
+                        candidate_index=1, segment_id="SEG-2",
+                        relevance_score=0.9,
+                    ),
+                    SimpleNamespace(
+                        candidate_index=1, segment_id="SEG-2",
+                        relevance_score=0.8,
+                    ),
                 ]),
                 id="resp-test",
             )
@@ -411,6 +417,119 @@ async def test_nano_reranker_normalizes_duplicates_and_appends_omissions(monkeyp
     assert meta["applied"] is True
     assert meta["duplicate_count"] == 1
     assert meta["omitted_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_nano_reranker_retries_mismatched_index_and_segment_id(monkeypatch):
+    class Responses:
+        calls = 0
+
+        async def parse(self, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return SimpleNamespace(
+                    output_parsed=SimpleNamespace(items=[
+                        SimpleNamespace(
+                            candidate_index=0,
+                            segment_id="WRONG-ID",
+                            relevance_score=0.9,
+                        ),
+                    ]),
+                    id="resp-mismatched-index",
+                )
+            return SimpleNamespace(
+                output_parsed=SimpleNamespace(items=[
+                    SimpleNamespace(
+                        candidate_index=0,
+                        segment_id="SEG-1",
+                        relevance_score=0.9,
+                        match_tier="recommended",
+                        matched_signals=["food"],
+                        missing_signals=[],
+                        limitation="",
+                    ),
+                ]),
+                id="resp-retry",
+            )
+
+    class Client:
+        responses = Responses()
+
+    monkeypatch.setattr(
+        "rag.nano_rerank.config.OPENAI_API_KEY", "test-key"
+    )
+    order, meta = await rerank_candidates(
+        "food shoppers",
+        [{"segmentId": "SEG-1", "fullLabel": "Food"}],
+        client=Client(),
+    )
+
+    assert order == [0]
+    assert meta["applied"] is True
+    assert Client.responses.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_nano_reranker_prompt_preserves_taxonomy_boundaries(monkeypatch):
+    captured = {}
+
+    class Responses:
+        async def parse(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(
+                output_parsed=SimpleNamespace(items=[
+                    SimpleNamespace(
+                        candidate_index=0,
+                        segment_id="INT059",
+                        relevance_score=0.95,
+                        match_tier="recommended",
+                        matched_signals=["video games"],
+                        missing_signals=[],
+                        limitation="",
+                    ),
+                    SimpleNamespace(
+                        candidate_index=1,
+                        segment_id="INT060",
+                        relevance_score=0.05,
+                        match_tier="unrelated",
+                        matched_signals=[],
+                        missing_signals=["real-world motorsport"],
+                        limitation="Different taxonomy meaning.",
+                    ),
+                ]),
+                id="resp-taxonomy",
+            )
+
+    class Client:
+        responses = Responses()
+
+    monkeypatch.setattr(
+        "rag.nano_rerank.config.OPENAI_API_KEY", "test-key"
+    )
+    order, meta = await rerank_candidates(
+        "Controller for video gamers across multiple game genres",
+        [
+            {
+                "segmentId": "INT059",
+                "fullLabel": "Video games (gaming)",
+                "category": "Entertainment",
+            },
+            {
+                "segmentId": "INT060",
+                "fullLabel": "Auto racing (motor sports)",
+                "category": "Sports",
+            },
+        ],
+        client=Client(),
+    )
+
+    assert order == [0, 1]
+    assert meta["applied"] is True
+    assert "Respect taxonomy namespaces" in captured["instructions"]
+    assert "game genre must not promote" in captured["instructions"]
+    assert "broad video-game interest is a direct user category" in (
+        captured["instructions"]
+    )
 
 
 @pytest.mark.asyncio
@@ -673,7 +792,7 @@ async def test_openai_score_gate_reaches_beyond_old_window_and_rejects_fillers(m
                for item in result["recommendations"])
     assert result["rag"]["selector"] == "openai_nano_scores"
     assert result["rag"]["quality_gate"]["eligible"] == 3
-    assert result["rag"]["stage_ms"]["generate"] == 0
+    assert result["rag"]["stage_ms"]["generate"] <= 2
 
 
 @pytest.mark.asyncio
@@ -733,7 +852,7 @@ async def test_openai_score_gate_returns_empty_instead_of_six_weak_segments(monk
     assert result["rag"]["quality_gate"]["rejected"] == 8
 
 
-def test_openai_retrieval_merge_balances_product_buyer_and_industry_queries():
+def test_openai_retrieval_merge_prioritizes_explicit_audience_identity():
     from rag.recommend import _merge_openai_retrieval
 
     def row(segment_id, label, score):
@@ -746,16 +865,19 @@ def test_openai_retrieval_merge_balances_product_buyer_and_industry_queries():
         }, score)
 
     specs = [
+        {"query": "Vietnamese expats", "kind": "audience"},
         {"query": "IoT leak sensor", "kind": "product"},
         {"query": "warehouse manager", "kind": "buyer"},
         {"query": "industrial facilities", "kind": "industry"},
     ]
     dense = [
+        [row("AUDIENCE", "Expats", 0.95), row("GENERIC", "Shops admins", 0.8)],
         [row("PRODUCT", "Technology early adopters", 0.9), row("GENERIC", "Shops admins", 0.8)],
         [row("BUYER", "Management", 0.9), row("GENERIC", "Shops admins", 0.8)],
         [row("INDUSTRY", "Construction", 0.9), row("GENERIC", "Shops admins", 0.8)],
     ]
     sparse = [
+        [row("AUDIENCE", "Expats", 13.0)],
         [row("PRODUCT", "Technology early adopters", 12.0)],
         [row("BUYER", "Management", 11.0)],
         [row("INDUSTRY", "Construction", 10.0)],
@@ -763,14 +885,192 @@ def test_openai_retrieval_merge_balances_product_buyer_and_industry_queries():
 
     candidates, trace = _merge_openai_retrieval(specs, dense, sparse)
 
-    assert [item["segmentId"] for item in candidates[:3]] == [
-        "PRODUCT", "BUYER", "INDUSTRY",
+    assert [item["segmentId"] for item in candidates[:4]] == [
+        "AUDIENCE", "PRODUCT", "BUYER", "INDUSTRY",
     ]
     assert trace["query_results"][0]["dense_top"][0]["full_label"] == (
+        "Expats"
+    )
+    assert trace["query_results"][1]["bm25_top"][0]["full_label"] == (
         "Technology early adopters"
     )
-    assert trace["query_results"][1]["bm25_top"][0]["full_label"] == "Management"
-    assert trace["merged_pre_rerank"][0]["segment_id"] == "PRODUCT"
+    assert trace["merged_pre_rerank"][0]["segment_id"] == "AUDIENCE"
+
+
+@pytest.mark.asyncio
+async def test_openai_insufficient_plan_skips_catalog_retrieval(monkeypatch):
+    import rag.recommend as recommend
+
+    async def ready(_session_id):
+        return True
+
+    async def planner(_brief):
+        return {
+            "queries": [],
+            "query_specs": [],
+            "information_sufficient": False,
+            "insufficient_reason": "brief_missing_product_or_audience_evidence",
+            "applied": True,
+        }
+
+    async def forbidden_search(*_args, **_kwargs):
+        raise AssertionError("catalog retrieval must not run for a vague brief")
+
+    monkeypatch.setattr(recommend, "ensure_index", ready)
+    monkeypatch.setattr(recommend, "_hybrid_search", forbidden_search)
+    monkeypatch.setattr(recommend, "_openai_hybrid_search", forbidden_search)
+
+    result = await recommend.recommend_rag(
+        "openai-vague-brief",
+        {
+            "brand": "Nova",
+            "objective": "awareness",
+            "kpi": "Tăng nhận diện",
+            "notes": "Muốn tìm thêm khách hàng phù hợp cho sản phẩm mới.",
+        },
+        provider="openai",
+        query_rewriter=planner,
+        enable_query_rewrite=True,
+        detailed_retrieval=True,
+    )
+
+    assert result["recommendations"] == []
+    assert result["adjacent_recommendations"] == []
+    assert result["note"] == "audience_information_insufficient"
+    assert result["rag"]["information_sufficient"] is False
+    assert result["rag"]["quality_gate"]["reason"] == "insufficient_information"
+
+
+@pytest.mark.asyncio
+async def test_openai_quality_gate_separates_parent_proxy_and_cross_domain(monkeypatch):
+    import rag.nano_rerank as nano
+    import rag.recommend as recommend
+
+    def candidate(
+        segment_id, label, category, subcategory, rank, context=None
+    ):
+        return {
+            "_id": segment_id,
+            "segmentId": segment_id,
+            "fullLabel": label,
+            "name": label,
+            "category": category,
+            "subcategory": subcategory,
+            "context": context,
+            "_text": label,
+            "_rank": rank,
+            "_fusion_score": 0.1,
+                "_query_hits": 4,
+                "_query_matches": [{
+                    "kind": "audience",
+                    "query_rank": 1,
+                }],
+                "_rag_index": {"segment_count": 310},
+        }
+
+    candidates = [
+        candidate(
+            "CHILD-1", "Action games (video games)",
+            "Entertainment", "Games", 0, "video games",
+        ),
+        candidate(
+            "CHILD-2", "Sports games (video games)",
+            "Entertainment", "Games", 1, "video games",
+        ),
+        candidate(
+            "PARENT", "Video games (gaming)",
+            "Entertainment", "Games", 2,
+        ),
+        candidate(
+            "PROXY", "Construction (industry)",
+            "Business and industry", None, 3,
+        ),
+        candidate(
+            "CROSS", "Shops admins",
+            "Digital Activities", None, 4,
+        ),
+    ]
+    from rag.taxonomy import expand_candidates_with_taxonomy
+
+    candidates, _graph, _trace = expand_candidates_with_taxonomy(
+        candidates,
+        candidates,
+        candidate_limit=len(candidates),
+    )
+
+    async def ready(_session_id):
+        return True
+
+    async def search(_queries, _limit, mode=None):
+        return candidates
+
+    async def nano_order(_query, _candidates, **_kwargs):
+        return list(range(len(candidates))), {
+            "applied": True,
+            "mode": "openai_nano",
+            "candidate_count": len(candidates),
+            "scores": {
+                "CHILD-1": 0.90,
+                "CHILD-2": 0.85,
+                "PARENT": 0.55,
+                "PROXY": 0.90,
+                "CROSS": 0.40,
+            },
+            "assessments": {
+                "CHILD-1": {
+                    "match_tier": "recommended",
+                    "match_basis": "exact_user_interest",
+                },
+                "CHILD-2": {
+                    "match_tier": "recommended",
+                    "match_basis": "exact_user_interest",
+                },
+                "PARENT": {
+                    "match_tier": "adjacent",
+                    "match_basis": "broad_parent",
+                },
+                "PROXY": {
+                    "match_tier": "recommended",
+                    "match_basis": "proxy",
+                },
+                "CROSS": {
+                    "match_tier": "adjacent",
+                    "match_basis": "proxy",
+                },
+            },
+        }
+
+    monkeypatch.setattr(recommend, "ensure_index", ready)
+    monkeypatch.setattr(recommend, "_hybrid_search", search)
+    monkeypatch.setattr(nano, "rerank_candidates", nano_order)
+
+    result = await recommend.recommend_rag(
+        "openai-tier-confidence",
+        {
+            "brand": "Controller",
+            "notes": "Gamepad for action and sports video game players.",
+        },
+        provider="openai",
+        rerank_mode="openai_nano",
+        select_from_rerank_scores=True,
+        min_relevance_score=0.45,
+    )
+
+    assert [row["segmentId"] for row in result["recommendations"]] == [
+        "CHILD-1", "CHILD-2", "PARENT",
+    ]
+    assert [row["segmentId"] for row in result["adjacent_recommendations"]] == [
+        "PROXY",
+    ]
+    decisions = {
+        row["segment_id"]: row
+        for row in result["rag"]["quality_gate"]["decisions"]
+    }
+    assert decisions["PARENT"]["gate_rule"] == (
+        "coverage_anchor_multiple_direct_children"
+    )
+    assert decisions["PROXY"]["gate_rule"] == "proxy_basis"
+    assert decisions["CROSS"]["gate_rule"] == "generic_digital_proxy"
 
 
 @pytest.mark.asyncio

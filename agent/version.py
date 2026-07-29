@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-27.4"
+BUILD_VERSION = "2026-07-29.6"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -15,6 +15,17 @@ BUILD_FEATURES = [
     "np6-nano-audience-reranking",
     "np6-audience-pipeline-evidence",
     "np6-news-screenshot-zone-contract",
+    "openai-category-masthead-retirement",
+    "zalo-semantic-audience-selection",
+    "zalo-fully-automatic-milestones",
+    "openai-format-aware-creative-assignment",
+    "openai-generated-format-filenames",
+    "openai-image-daily-quota-100",
+    "mode-aware-brief-onboarding",
+    "autopilot-complete-demo-briefs",
+    "openai-mini-audience-query-planner",
+    "openai-audience-sufficiency-fallback",
+    "openai-audience-rerun-cache-bypass",
     "system-logs",
     "step-tool-rules",
     "brief-rules",
@@ -223,7 +234,10 @@ BUILD_FEATURES = [
     "provider-aware-creative-vlm",                # uploaded creative analysis follows the immutable campaign model lock
     "creative-vlm-failure-retry",                 # provider failures requeue while genuine review verdicts stay terminal
     "openai-vlm-brief-fit-consistency",           # derive fit score from anchored visual evidence and gate critical mismatches
-    "autopilot-critical-review-checkpoints",       # critical policy stops at audience, targeting, placement, creative assignment and launch
+    "autopilot-critical-review-checkpoints",       # shared legacy policy stops at five operator checkpoints
+    "openai-autopilot-streamlined-semi-automatic", # OpenAI audience and targeting auto-commit when quality gates pass
+    "openai-autopilot-related-audience-fallback",  # delegated modes select top-ranked related rows when direct is empty
+    "openai-autopilot-contextual-targeting",        # brief/audience-aware basic and advanced catalog targeting
     "autopilot-review-question-safety",             # review questions never become approvals and receive artifact-grounded answers
     "report-once-only-showcase-disclosure",         # report model reasons on metrics without repeating UI-only showcase provenance
     "autopilot-report-resume-routing",               # completed runs use report Q&A even when resume restores stale step metadata

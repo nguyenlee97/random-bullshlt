@@ -14,6 +14,53 @@ const normalizeHint = value => String(value || '')
   .replace('×', 'x')
   .replace(/[^a-z0-9]+/g, '')
 
+function repairSourceIdentity(file, format) {
+  const filename = normalizeHint(file.name)
+  const formatHint = normalizeHint(format.format_id)
+  const sizeHint = normalizeHint(`${format.width}x${format.height}`)
+  if (file.formatId === format.format_id) return 3
+  if (formatHint && filename.includes(formatHint)) return 2
+  if (sizeHint && filename.includes(sizeHint)) return 1
+  return 0
+}
+
+export function rankRepairSourceFiles(files = [], format = {}) {
+  const targetWidth = Number(format.width || 0)
+  const targetHeight = Number(format.height || 0)
+  const targetRatio = targetWidth / Math.max(targetHeight, 1)
+  return files
+    .map((file, index) => {
+      const width = Number(file.width || file.deterministic?.width || 0)
+      const height = Number(file.height || file.deterministic?.height || 0)
+      const ratio = width / Math.max(height, 1)
+      const ratioDiff = width && height
+        ? Math.abs(ratio - targetRatio)
+        : Number.POSITIVE_INFINITY
+      const resolutionDiff = width && height && targetWidth && targetHeight
+        ? Math.abs(width - targetWidth) / targetWidth
+          + Math.abs(height - targetHeight) / targetHeight
+        : Number.POSITIVE_INFINITY
+      return {
+        file,
+        index,
+        identity: repairSourceIdentity(file, format),
+        ratioDiff,
+        resolutionDiff,
+      }
+    })
+    .sort((left, right) => (
+      right.identity - left.identity
+      || left.ratioDiff - right.ratioDiff
+      || left.resolutionDiff - right.resolutionDiff
+      || left.index - right.index
+    ))
+    .map(item => item.file)
+}
+
+export function selectRepairSourceFile(files = [], format = {}) {
+  return rankRepairSourceFiles(files, format)[0]
+}
+
 export function matchPlannedFormat(file, item) {
   const targetWidth = Number(item.width || 0)
   const targetHeight = Number(item.height || 0)

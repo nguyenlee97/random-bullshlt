@@ -76,6 +76,12 @@ test('OpenAI audience separates direct recommendations from optional expansion',
   assert.doesNotMatch(autopilot, /Catalog có \$\{audienceCatalogCount\} segment/)
 })
 
+test('OpenAI vague brief shows clarification instead of an empty approvable audience', () => {
+  assert.match(autopilotReview, /value\.clarification_required/)
+  assert.match(autopilotReview, /Brief chưa đủ thông tin để chọn audience an toàn/)
+  assert.match(autopilotReview, /checkpoint này chưa thể xác nhận/)
+})
+
 test('Audience review exposes a real rerun action in Copilot and Autopilot', () => {
   assert.match(api, /async rerunAutopilotAudience\(runId, taskId, reason = ''\)/)
   assert.match(api, /tasks\/\$\{encodeURIComponent\(taskId\)\}\/rerun/)

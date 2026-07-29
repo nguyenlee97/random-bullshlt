@@ -248,10 +248,14 @@ function delay(ms) {
 export const AGENT_SCENARIOS = {
 
   // ── BOOT ──────────────────────────────────────────────────────────────────
-  async boot() {
+  async boot(experienceMode = 'guided') {
     await delay(600)
+    const isAutopilot = experienceMode === 'autopilot'
+    const modeIntro = isAutopilot
+      ? 'Bạn đang ở **Campaign Autopilot**. Agent sẽ dùng brief để xây dựng plan theo chế độ duyệt bạn chọn.'
+      : 'Bạn đang ở **Campaign Copilot**. Bạn có thể hoàn thiện campaign từng phần và điều chỉnh mọi đề xuất trước khi áp dụng.'
     return agentMessage(
-      'Xin chào 👋 Tôi là **Advertising Agent**, trợ lý AI giúp bạn xây dựng và vận hành chiến dịch quảng cáo.\n\nBạn có thể làm theo từng bước hoặc dùng **Campaign Autopilot** để Agent xây dựng bản campaign và chờ bạn duyệt. Hãy bắt đầu bằng Brief nhé!',
+      `Xin chào 👋 Tôi là **Advertising Agent**.\n\n${modeIntro}\n\nMột brief hữu ích nên có **brand + sản phẩm/dịch vụ, mục tiêu, KPI, ngân sách, thời gian, đối tượng mục tiêu, thông điệp, creative, placement** và các lưu ý đặc biệt.\n\nNếu chưa biết một mục, hãy gửi phần bạn đang có và nhắn **“gợi ý giúp tôi phần còn thiếu”**.`,
       [],
       { tool: 'agent_boot', model: 'minimax', step: 0 }
     )
@@ -1389,9 +1393,14 @@ export const AgentAPI = {
     return withRequestId(await response.json(), response)
   },
 
-  async boot() {
-    const real = await callAgent({ session_id: SESSION_ID, step: -1, message: '' })
-    return real ?? safeDemoFallback(AGENT_SCENARIOS.boot())
+  async boot(experienceMode = 'guided') {
+    const real = await callAgent({
+      session_id: SESSION_ID,
+      step: -1,
+      message: '',
+      experience_mode: experienceMode === 'autopilot' ? 'autopilot' : 'guided',
+    })
+    return real ?? safeDemoFallback(AGENT_SCENARIOS.boot(experienceMode))
   },
 
   async chat(text, currentStep, formState, stepStatuses, workspaceEvents) {

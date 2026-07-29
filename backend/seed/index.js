@@ -9,8 +9,10 @@
  *   - 12 unmapped real zone slots (category side strips) added as catalog-only entries.
  *   - Audio/video formats converted to banner/skin.
  *   - Legacy baseline: 35 placements (23 mock-mapped + 12 real-only)
- *   - NP-6 v2 adds 214 active topic placements plus 9 observed property
- *     placements without changing legacy IDs (258 total).
+ *   - NP-6 v2 retains 214 topic placements plus 9 observed property
+ *     placements without changing legacy IDs (258 total). Category mastheads
+ *     are retained as retired historical inventory because normal category
+ *     page rendering uses the mutually exclusive skin/background layout.
  *
  * Usage:
  *   node seed/index.js              — skip collections that already have data

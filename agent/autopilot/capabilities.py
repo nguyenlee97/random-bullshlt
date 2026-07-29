@@ -216,7 +216,10 @@ async def _generate_strategy(run: dict, workspace: dict) -> CapabilityResult:
 
 async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
     from campaign_engines.dispatcher import dispatch_autopilot
-    from campaign_models import LEGACY_CONVERSATION_MODEL
+    from campaign_models import (
+        LEGACY_CONVERSATION_MODEL,
+        OPENAI_GPT_5_4_MINI,
+    )
     from handlers.audience import handle_dmp_recommend
     from openai_campaign.autopilot import recommend_openai_autopilot_audience
 
@@ -228,10 +231,16 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
         "quality_first": "Chiến lược: ưu tiên audience có ý định/độ liên quan cao và inventory chất lượng.",
         "balanced": "Chiến lược: cân bằng độ phủ, độ liên quan và khả năng thử nghiệm.",
     }.get(selected, "")
-    brief["notes"] = " ".join(
-        item for item in (str(brief.get("notes") or "").strip(), strategy_signal) if item
-    )
     conversation_model = run.get("conversation_model") or LEGACY_CONVERSATION_MODEL
+    if conversation_model != OPENAI_GPT_5_4_MINI:
+        brief["notes"] = " ".join(
+            item
+            for item in (
+                str(brief.get("notes") or "").strip(),
+                strategy_signal,
+            )
+            if item
+        )
     recommendation = await dispatch_autopilot(
         conversation_model,
         greennode_handler=handle_dmp_recommend,
@@ -241,14 +250,28 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
     )
     attrs = (recommendation.get("recommendations") or [])[:15]
     adjacent_attrs = (recommendation.get("adjacent_recommendations") or [])[:15]
-    if not attrs and not adjacent_attrs:
+    raw_diagnostics = (
+        recommendation.get("rag") or recommendation.get("retrieval") or {}
+    )
+    information_insufficient = (
+        raw_diagnostics.get("information_sufficient") is False
+    )
+    auto_selected_related = False
+    if (
+        conversation_model == OPENAI_GPT_5_4_MINI
+        and run.get("approval_policy") in {"critical_only", "auto_build_draft"}
+        and not attrs
+        and adjacent_attrs
+        and not information_insufficient
+    ):
+        attrs = adjacent_attrs[:3]
+        adjacent_attrs = adjacent_attrs[3:]
+        auto_selected_related = True
+    if not attrs and not adjacent_attrs and not information_insufficient:
         raise RuntimeError("audience retrieval returned no catalog-backed segments")
     size = sum(
         int(((item.get("sizeMin") or 0) + (item.get("sizeMax") or 0)) / 2)
         for item in attrs
-    )
-    raw_diagnostics = (
-        recommendation.get("rag") or recommendation.get("retrieval") or {}
     )
     diagnostics = dict(raw_diagnostics)
     diagnostics.setdefault("applied", bool(raw_diagnostics))
@@ -268,8 +291,30 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
             "adjacent_attrs": adjacent_attrs,
             "recommendations": [*attrs, *adjacent_attrs],
             "selection_required": not bool(attrs),
+            "clarification_required": information_insufficient,
+            "clarification_prompt": (
+                "Bổ sung sản phẩm/dịch vụ, ngành hoặc người mua "
+                "cụ thể trước khi chọn audience."
+                if information_insufficient else ""
+            ),
             "size": size,
             "retrieval": diagnostics,
+            "selection": (
+                {
+                    "source": "autopilot_policy",
+                    "actor": (
+                        "fully_automatic"
+                        if run.get("approval_policy") == "auto_build_draft"
+                        else "semi_automatic"
+                    ),
+                    "reason": (
+                        "The operator delegated routine audience selection to "
+                        "the OpenAI Autopilot policy."
+                    ),
+                    "selected_count": len(attrs),
+                }
+                if auto_selected_related else None
+            ),
         },
         evidence=[{
             "type": "catalog_segments", "count": len(attrs),
@@ -288,6 +333,7 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
             "selector": diagnostics.get("selector", "legacy"),
             "recommended_count": len(attrs),
             "adjacent_count": len(adjacent_attrs),
+            "information_sufficient": not information_insufficient,
             "strategy_id": selected,
             "stage_ms": diagnostics.get("stage_ms", {}),
         }],
@@ -296,13 +342,67 @@ async def _retrieve_audience(run: dict, workspace: dict) -> CapabilityResult:
 
 
 async def _derive_targeting(run: dict, workspace: dict) -> CapabilityResult:
-    from handlers.audience import _normalize_targeting
+    from campaign_models import OPENAI_GPT_5_4_MINI
     from tools.targeting_options import get_targeting_options
+
     options = await get_targeting_options()
-    # Deterministic, catalog-validated fallback. The model-assisted targeting
-    # selector can later enrich this without weakening the source boundary.
     strategy = _artifact(workspace, "strategy", {})
     selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
+
+    if run.get("conversation_model") == OPENAI_GPT_5_4_MINI:
+        from openai_campaign.autopilot import (
+            recommend_openai_autopilot_targeting,
+        )
+
+        brief = dict(_artifact(workspace, "brief", {}))
+        audience = _audience_attrs(_artifact(workspace, "audience", {}))
+        brief["strategy"] = selected
+        try:
+            targeting, reasoning, provider_model = (
+                await recommend_openai_autopilot_targeting(
+                    session_id=run["session_id"],
+                    brief=brief,
+                    options=options,
+                    segments=audience,
+                )
+            )
+            mode = "openai_catalog_grounded"
+            error = ""
+        except Exception as exc:
+            # Empty targeting is an explicit broad fallback. It avoids silently
+            # narrowing delivery to arbitrary cities/ages when the provider is
+            # unavailable; the downstream order guard still validates it.
+            targeting, reasoning = {}, []
+            provider_model = run.get("conversation_model_version") or ""
+            mode = "broad_fallback"
+            error = f"{type(exc).__name__}: {str(exc)[:180]}"
+
+        advanced_dimensions = [
+            dimension
+            for dimension in (
+                "deviceOS", "deviceBrand", "marital", "parental",
+                "education", "income", "career", "interest", "weather",
+            )
+            if targeting.get(dimension)
+        ]
+        return CapabilityResult(
+            value=targeting,
+            evidence=[{
+                "type": "targeting_catalog",
+                "dimensions": list(targeting),
+                "advanced_dimensions": advanced_dimensions,
+                "strategy_id": selected,
+                "selection_mode": mode,
+                "provider_model": provider_model,
+                "reasoning": reasoning,
+                "fallback_error": error,
+            }],
+        )
+
+    from handlers.audience import _normalize_targeting
+
+    # Deterministic, catalog-validated fallback. The model-assisted targeting
+    # selector belongs only to the separate OpenAI campaign flow above.
     ages = {
         "reach_first": ["18-24", "25-34", "35-44"],
         "balanced": ["25-34", "35-44"],
@@ -391,6 +491,17 @@ async def _plan_placement_intent(run: dict, workspace: dict) -> CapabilityResult
         placement_context=build_placement_context(brief, audience),
         limit=100,
     )
+    from campaign_models import OPENAI_GPT_5_4_MINI
+    is_openai = run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+    retired_inventory_excluded = 0
+    if is_openai:
+        from openai_campaign.placement_inventory import (
+            filter_openai_recommendable_zones,
+        )
+        eligible = filter_openai_recommendable_zones(ranked)
+        retired_inventory_excluded = len(ranked) - len(eligible)
+        ranked = eligible
+
     conflicts = await fetch_zone_conflicts(
         brief.get("startDate", ""), brief.get("endDate", "")
     )
@@ -398,11 +509,9 @@ async def _plan_placement_intent(run: dict, workspace: dict) -> CapabilityResult
     strategy = _artifact(workspace, "strategy", {})
     selected = strategy.get("selected", "balanced") if isinstance(strategy, dict) else "balanced"
     available = sort_ranked_zones_for_strategy(available, selected)
-    from campaign_models import OPENAI_GPT_5_4_MINI
-
     candidates = (
         _diverse_openai_placement_candidates(available)
-        if run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+        if is_openai
         else available[:12]
     )
     if not candidates:
@@ -433,6 +542,7 @@ async def _plan_placement_intent(run: dict, workspace: dict) -> CapabilityResult
             "candidate_count": len(candidates),
             "candidate_zone_ids": value["candidate_zone_ids"],
             "conflict_count": len(conflicts),
+            "retired_inventory_excluded": retired_inventory_excluded,
             "strategy_id": selected,
         }],
     )
@@ -762,6 +872,15 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
         placement_context=build_placement_context(brief, audience),
         limit=100,
     )
+    from campaign_models import OPENAI_GPT_5_4_MINI
+    retired_inventory_excluded = 0
+    if run.get("conversation_model") == OPENAI_GPT_5_4_MINI:
+        from openai_campaign.placement_inventory import (
+            filter_openai_recommendable_zones,
+        )
+        eligible = filter_openai_recommendable_zones(ranked)
+        retired_inventory_excluded = len(ranked) - len(eligible)
+        ranked = eligible
     conflicts = await fetch_zone_conflicts(
         brief.get("startDate", ""), brief.get("endDate", "")
     )
@@ -853,6 +972,7 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
             evidence=[{
                 "type": "creative_placement_compatibility", "passed": False,
                 "ranked": len(ranked),
+                "retired_inventory_excluded": retired_inventory_excluded,
                 "shortlist_candidates": len(ranked_candidates),
                 "unconflicted_candidates": len(unconflicted_candidates),
                 "compatible_candidates": 0,
@@ -867,12 +987,14 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
         value={"selectedZoneIds": [zone["id"] for zone in available],
                "zones": available, "phase": "zones"},
         evidence=[{"type": "zone_catalog", "ids": [zone["id"] for zone in available],
-                   "strategy_id": selected, "placement_intent_candidates": len(candidate_ids)},
+                   "strategy_id": selected, "placement_intent_candidates": len(candidate_ids),
+                   "retired_inventory_excluded": retired_inventory_excluded},
                   {"type": "conflict_check", "excluded": len(ranked) - len(available)}],
     )
 
 
 async def _assign_creatives(run: dict, workspace: dict) -> CapabilityResult:
+    from campaign_models import OPENAI_GPT_5_4_MINI
     from creative_intel.service import get_intel
     from tools.creative_match import auto_assign, enrich_files_with_intel
     from tools.zone_catalog import get_zone_map
@@ -923,7 +1045,13 @@ async def _assign_creatives(run: dict, workspace: dict) -> CapabilityResult:
                 "passed": True,
             }],
         )
-    result = auto_assign(zones, files)
+    result = auto_assign(
+        zones,
+        files,
+        prefer_contract_identity=(
+            run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+        ),
+    )
     if len(result["assignments"]) != len(zones):
         return CapabilityResult(
             value={**result, "review_action": "retry",
@@ -1097,14 +1225,23 @@ async def _launch_approval(run: dict, workspace: dict) -> CapabilityResult:
     draft_item = workspace.get("artifacts", {}).get("order_draft", {})
     draft = draft_item.get("value") or {}
     payload = draft.get("payload", {}) if isinstance(draft, dict) else {}
+    fully_automatic = run.get("approval_policy") == "auto_build_draft"
     return CapabilityResult(
-        value={"ready": True, "requires_explicit_approval": True,
+        value={"ready": True, "requires_explicit_approval": not fully_automatic,
+               "authorization": (
+                   "fully_automatic_mode"
+                   if fully_automatic else "explicit_launch_confirmation"
+               ),
                "order_draft_revision": int(draft_item.get("revision", 0)),
                "summary": {"brand": payload.get("brand"),
                            "budget": payload.get("budget"),
                            "placements": payload.get("placements", [])}},
-        evidence=[{"type": "launch_boundary", "auto_approvable": False}],
-        force_review=True,
+        evidence=[{
+            "type": "launch_boundary",
+            "auto_approvable": fully_automatic,
+            "approval_policy": run.get("approval_policy"),
+        }],
+        force_review=not fully_automatic,
     )
 
 

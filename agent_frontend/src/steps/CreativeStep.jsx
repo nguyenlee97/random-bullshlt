@@ -7,7 +7,11 @@ import { Upload, FileText, X, ZoomIn, CheckCircle2, AlertCircle, Sparkles, Wand2
 import AdImageGenerator from './creative/AdImageGenerator'
 import ImageCropModal from './creative/ImageCropModal'
 import { overrideCreative } from '@/api/agentApi'
-import { inferIntendedFormat, matchPlannedFormat } from '@/lib/creativeCompatibility'
+import {
+  inferIntendedFormat,
+  matchPlannedFormat,
+  selectRepairSourceFile,
+} from '@/lib/creativeCompatibility'
 import { creativeReviewState, TERMINAL_CREATIVE_STATUSES } from '@/lib/creativeIntel'
 
 function fmtSize(bytes) {
@@ -61,15 +65,6 @@ function repairableImage(file) {
 
 function repairFileKey(file) {
   return String(file?.id || file?._id || file?.url || file?.dataUrl || file?.name || '')
-}
-
-function nearestRatioFile(files, format) {
-  const targetRatio = Number(format.width || 0) / Number(format.height || 1)
-  return [...files].sort((left, right) => {
-    const leftRatio = Number(left.width || 0) / Number(left.height || 1)
-    const rightRatio = Number(right.width || 0) / Number(right.height || 1)
-    return Math.abs(leftRatio - targetRatio) - Math.abs(rightRatio - targetRatio)
-  })[0]
 }
 
 // ─── File card (shared between upload + AI gallery) ───────────────────────────
@@ -608,7 +603,7 @@ export default function CreativeStep({
             {repairImages.length > 0 ? (
               <div className="grid gap-2 sm:grid-cols-2">
                 {missingFormats.map(format => {
-                  const preferred = nearestRatioFile(repairImages, format)
+                  const preferred = selectRepairSourceFile(repairImages, format)
                   const selectedId = repairSourceIds[format.format_id]
                     || repairFileKey(preferred)
                   const selectedFile = repairImages.find(

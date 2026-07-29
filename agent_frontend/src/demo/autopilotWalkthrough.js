@@ -1,3 +1,5 @@
+import { DEMO_AD_FORMAT_META, DEMO_NON_BOX_FORMAT_IDS } from './demoScripts.js'
+
 const creativeDirection = brief => [
   `Giữ ${brief.briefPatch.brand} là thương hiệu chính.`,
   'Bố cục rõ, ít chữ, hình ảnh nổi bật và phù hợp nhóm khách hàng trong brief.',
@@ -117,7 +119,7 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
       target: '[data-demo="autopilot-policy-critical_only"]',
       position: 'bottom',
       title: 'Duyệt các bước quan trọng · Khuyến nghị',
-      text: 'Đây là lựa chọn cân bằng cho quy trình bán tự động: Agent chủ động xử lý phần thường quy và dừng tại năm quyết định quan trọng để có **human-in-the-loop**.',
+      text: 'Đây là lựa chọn cân bằng cho quy trình bán tự động: Agent tự chọn Audience và targeting, rồi dừng tại ba quyết định quan trọng để có **human-in-the-loop**.',
     },
     {
       type: 'TOOLTIP',
@@ -133,7 +135,7 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
         target: '[data-demo="autopilot-policy-critical_only"]',
         position: 'bottom',
         title: 'Giữ quyền kiểm soát ở các bước quan trọng',
-        text: 'Walkthrough chọn chế độ khuyến nghị: dừng tại **Tìm audience → Thiết lập targeting → Đề xuất placement sơ bộ → Gán creative → Duyệt launch**. Creative có rủi ro vẫn luôn dừng riêng để review.',
+        text: 'Walkthrough chọn chế độ khuyến nghị: Agent tự hoàn tất Audience và targeting, rồi dừng tại **Đề xuất placement sơ bộ → Gán creative → Duyệt launch**. Creative có rủi ro vẫn luôn dừng riêng để review.',
       },
     },
     {
@@ -233,126 +235,11 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
       text: 'Mỗi task bổ sung evidence vào đây. Phần này giúp đội vận hành kiểm tra dữ liệu đã dùng, guard đã chạy và lần thực thi nào tạo ra artifact hiện tại.',
     },
     {
-      type: 'WAIT_FOR_AUTOPILOT_TASK',
-      taskKeys: ['retrieve_audience'],
-      timeout: 120000,
-      title: 'Đang chờ checkpoint Tìm audience',
-      text: 'Agent đang dùng brief, catalog và retrieval pipeline để chọn tập audience ban đầu.',
-    },
-    {
       type: 'TOOLTIP',
-      target: '[data-demo="autopilot-review-artifact"][data-autopilot-task="retrieve_audience"]',
+      target: '[data-demo="autopilot-execution-plan"]',
       position: 'top',
-      title: 'Artifact Audience có bằng chứng',
-      text: 'Thẻ này cho biết catalog đã được tìm như thế nào, số ứng viên RAG và các segment cuối cùng. Ta sẽ mở editor và giữ lại ít segment hơn.',
-    },
-    {
-      type: 'CLICK_EL',
-      target: '[data-demo="autopilot-edit-retrieve_audience"]',
-      tooltip: {
-        target: '[data-demo="autopilot-edit-retrieve_audience"]',
-        position: 'top',
-        title: 'Chỉnh Audience trong cùng run',
-        text: 'Editor dùng canonical workspace. Khi lưu, Autopilot chỉ tính lại nhánh phụ thuộc; các artifact không liên quan được giữ nguyên.',
-      },
-    },
-    {
-      type: 'WAIT_FOR_SELECTOR',
-      target: '[data-demo="autopilot-audience-option"][aria-pressed="true"]',
-      timeout: 30000,
-      title: 'Đang mở danh sách segment',
-      text: 'Walkthrough chờ catalog và lựa chọn hiện tại hiển thị đầy đủ.',
-    },
-    {
-      type: 'TRIM_AUTOPILOT_AUDIENCE',
-      keep: 3,
-      title: 'Giảm audience xuống 3 segment',
-      text: 'Walkthrough đang bỏ bớt các segment cuối danh sách và giữ ba lựa chọn đầu tiên để minh họa quyền chỉnh quyết định của Agent.',
-    },
-    {
-      type: 'TOOLTIP',
-      target: '[data-demo="ai-reco-section"]',
-      position: 'top',
-      title: 'Audience đã được thu gọn',
-      text: 'Các card được bỏ chọn ngay trên form thật. Unique reach sẽ được backend tính lại cho tập segment mới.',
-    },
-    {
-      type: 'WAIT_FOR_SELECTOR',
-      target: '[data-demo="autopilot-editor-save"]:not(:disabled)',
-      timeout: 30000,
-      title: 'Đang tính lại unique reach',
-      text: 'Nút lưu chỉ mở khi tập audience mới có dữ liệu hợp lệ.',
-    },
-    {
-      type: 'CLICK_EL',
-      target: '[data-demo="autopilot-editor-save"]',
-      tooltip: {
-        target: '[data-demo="autopilot-editor-save"]',
-        position: 'top',
-        title: 'Lưu Audience và replan',
-        text: 'Đang ghi artifact Audience mới. Review đang chờ sẽ được supersede an toàn và run tiếp tục từ dependency phù hợp.',
-      },
-    },
-    {
-      type: 'WAIT_FOR_AUTOPILOT_TASK',
-      taskKeys: ['derive_targeting'],
-      timeout: 120000,
-      title: 'Đang chờ checkpoint Thiết lập targeting',
-      text: 'Agent đang suy ra targeting từ brief và audience vừa được chỉnh.',
-    },
-    {
-      type: 'TOOLTIP',
-      target: '[data-demo="autopilot-review-artifact"][data-autopilot-task="derive_targeting"]',
-      position: 'top',
-      title: 'Targeting là artifact riêng',
-      text: 'Tuổi, giới tính, địa lý và device được lưu độc lập với DMP segments. Vì vậy ta có thể đổi targeting mà không ghi đè Audience.',
-    },
-    {
-      type: 'CLICK_EL',
-      target: '[data-demo="autopilot-edit-derive_targeting"]',
-      tooltip: {
-        target: '[data-demo="autopilot-edit-derive_targeting"]',
-        position: 'top',
-        title: 'Mở targeting catalog',
-        text: 'Walkthrough sẽ thêm lựa chọn hợp lệ từ catalog thay vì tự tạo chuỗi targeting.',
-      },
-    },
-    {
-      type: 'WAIT_FOR_SELECTOR',
-      target: '[data-demo="autopilot-targeting-option"][data-targeting-dimension="age"]',
-      timeout: 30000,
-      title: 'Đang tải targeting options',
-      text: 'Chờ các giá trị hợp lệ từ targeting catalog.',
-    },
-    {
-      type: 'CHANGE_AUTOPILOT_TARGETING',
-      dimensions: ['age', 'deviceOS'],
-      title: 'Thử một cấu hình targeting khác',
-      text: 'Walkthrough đang thêm một nhóm tuổi và một hệ điều hành chưa được chọn. Đây là thay đổi thật trên form và vẫn bị giới hạn bởi catalog.',
-    },
-    {
-      type: 'TOOLTIP',
-      target: '[data-demo="targeting-panel-toggle"]',
-      position: 'top',
-      title: 'Targeting đã thay đổi',
-      text: 'Badge tổng số lựa chọn đã cập nhật. Khi lưu, Autopilot sẽ đánh dấu đúng các task downstream cần tính lại.',
-    },
-    {
-      type: 'WAIT_FOR_SELECTOR',
-      target: '[data-demo="autopilot-editor-save"]:not(:disabled)',
-      timeout: 30000,
-      title: 'Đang kiểm tra targeting',
-      text: 'Chỉ các lựa chọn hợp lệ trong catalog mới có thể được lưu.',
-    },
-    {
-      type: 'CLICK_EL',
-      target: '[data-demo="autopilot-editor-save"]',
-      tooltip: {
-        target: '[data-demo="autopilot-editor-save"]',
-        position: 'top',
-        title: 'Lưu targeting và tiếp tục run',
-        text: 'Đang commit targeting mới vào canonical workspace.',
-      },
+      title: 'Audience và targeting được Agent tự chọn',
+      text: 'Trong chế độ bán tự động, Agent ưu tiên segment khớp trực tiếp. Nếu không có direct match nhưng brief vẫn đủ rõ, Agent chọn tối đa ba “Audience liên quan” được xếp hạng cao nhất; targeting hợp lệ cũng được commit tự động.',
     },
     {
       type: 'WAIT_FOR_AUTOPILOT_TASK',
@@ -366,20 +253,35 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
       target: '[data-demo="autopilot-review-artifact"][data-autopilot-task="plan_placement_intent"]',
       position: 'top',
       title: 'Shortlist placement trước creative',
-      text: 'Đây là đề xuất sơ bộ dựa trên inventory. Ta sẽ bỏ bớt cho đến khi còn đúng **2 placement**, sau đó creative format plan sẽ được tính từ hai lựa chọn này.',
+      text: usesUpload
+        ? 'Đây là đề xuất sơ bộ dựa trên inventory. Walkthrough sẽ ưu tiên tối đa **2 placement** có format hoặc tỷ lệ khớp an toàn nhất với bộ creative đã nạp.'
+        : 'Đây là đề xuất sơ bộ dựa trên inventory. Ta sẽ bỏ bớt cho đến khi còn đúng **2 placement**, sau đó creative format plan sẽ được tính từ hai lựa chọn này.',
     },
     {
       type: 'TRIM_AUTOPILOT_PLACEMENTS',
       keep: 2,
-      title: 'Giữ lại đúng 2 placement',
-      text: 'Walkthrough đang bỏ chọn từng placement trên artifact review. Thay đổi chỉ được lưu khi duyệt checkpoint.',
+      creativeFormats: usesUpload
+        ? DEMO_NON_BOX_FORMAT_IDS.map(formatId => ({
+            formatId,
+            ...DEMO_AD_FORMAT_META[formatId],
+            intendedFormat: ['znews-Background', 'zuma-Left', 'zuma-Right'].includes(formatId)
+              ? 'skin'
+              : 'banner',
+          }))
+        : [],
+      title: usesUpload ? 'Chọn placement khớp creative' : 'Giữ lại đúng 2 placement',
+      text: usesUpload
+        ? 'Walkthrough đang so format và tỷ lệ thật, rồi giữ tối đa hai placement tương thích cao nhất. Thay đổi chỉ được lưu khi duyệt checkpoint.'
+        : 'Walkthrough đang bỏ chọn từng placement trên artifact review. Thay đổi chỉ được lưu khi duyệt checkpoint.',
     },
     {
       type: 'TOOLTIP',
       target: '[data-demo="autopilot-review-artifact"][data-autopilot-task="plan_placement_intent"]',
       position: 'top',
-      title: 'Hai placement đã được chọn',
-      text: 'Format plan, creative preparation và forecast downstream sẽ dùng đúng shortlist này.',
+      title: usesUpload ? 'Placement tương thích đã được chọn' : 'Hai placement đã được chọn',
+      text: usesUpload
+        ? 'Format plan sẽ dùng shortlist phù hợp nhất với bộ ảnh hiện có, giảm khả năng phải dừng để sửa tỷ lệ ở bước xếp hạng cuối.'
+        : 'Format plan, creative preparation và forecast downstream sẽ dùng đúng shortlist này.',
     },
     {
       type: 'CLICK_EL',

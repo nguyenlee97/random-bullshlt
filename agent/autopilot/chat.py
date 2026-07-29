@@ -507,23 +507,94 @@ async def route_autopilot_chat(
                 )
 
         audience_ordinals = _audience_selection_ordinals(message)
-        if (
+        is_openai_audience_review = (
             run.get("conversation_model") == OPENAI_GPT_5_4_MINI
             and waiting.get("key") == "retrieve_audience"
-            and audience_ordinals is not None
+        )
+        pending_audience_value = (
+            (waiting.get("pending_artifact") or {}).get("value")
+            or waiting.get("result")
+            or {}
+        )
+        audience_candidates = (
+            pending_audience_value.get("recommendations")
+            or [
+                *(pending_audience_value.get("attrs") or []),
+                *(pending_audience_value.get("adjacent_attrs") or []),
+            ]
+        )
+        if (
+            is_openai_audience_review
+            and audience_ordinals is None
+            and review_intent(message) == "question"
         ):
-            pending_value = (
-                (waiting.get("pending_artifact") or {}).get("value")
-                or waiting.get("result")
-                or {}
+            try:
+                from openai_campaign.autopilot import (
+                    classify_openai_audience_review_selection,
+                )
+
+                selection_action = (
+                    await classify_openai_audience_review_selection(
+                        session_id=session_id,
+                        message=message,
+                        candidates=audience_candidates,
+                    )
+                )
+            except Exception as exc:
+                from agent_logger import alog
+
+                await alog(session_id, "error", {
+                    "handler": "autopilot_audience_review_selection",
+                    "conversation_model": run.get("conversation_model"),
+                    "error_type": type(exc).__name__,
+                    "error": str(exc)[:300],
+                    "cross_provider_fallback": False,
+                })
+                selection_action = None
+
+            raw_action_evidence = str(
+                getattr(selection_action, "evidence", "")
+            ).strip()
+            quote_pairs = {('"', '"'), ("'", "'"), ("“", "”"), ("‘", "’")}
+            if (
+                len(raw_action_evidence) >= 2
+                and (
+                    raw_action_evidence[0],
+                    raw_action_evidence[-1],
+                ) in quote_pairs
+            ):
+                raw_action_evidence = raw_action_evidence[1:-1].strip()
+            action_evidence = _fold(raw_action_evidence)
+            valid_selection_action = bool(
+                selection_action
+                and selection_action.intent == "select"
+                and selection_action.explicit
+                and action_evidence
+                and action_evidence in _fold(message)
             )
-            candidates = (
-                pending_value.get("recommendations")
-                or [
-                    *(pending_value.get("attrs") or []),
-                    *(pending_value.get("adjacent_attrs") or []),
-                ]
-            )
+            if valid_selection_action and (
+                selection_action.ambiguous
+                or not selection_action.candidate_numbers
+            ):
+                clarification = (
+                    selection_action.clarification_question.strip()
+                    or "Bạn muốn chọn những audience nào trong danh sách đang chờ duyệt?"
+                )
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    f"{clarification} Checkpoint chưa bị thay đổi.",
+                    tool="autopilot_audience_selection_clarification",
+                    step=step,
+                )
+            if valid_selection_action:
+                audience_ordinals = list(dict.fromkeys(
+                    selection_action.candidate_numbers
+                ))
+
+        if is_openai_audience_review and audience_ordinals is not None:
+            pending_value = pending_audience_value
+            candidates = audience_candidates
             invalid = [
                 ordinal for ordinal in audience_ordinals
                 if ordinal < 1 or ordinal > len(candidates)

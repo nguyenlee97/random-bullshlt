@@ -5,16 +5,16 @@
 // Dates are materialized when a walkthrough starts so no scenario can age into
 // an invalid campaign. The start is yesterday; the end is seven days later.
 const DEMO_BRIEF_TEMPLATES = [
-  { id: 'mixi', brand: 'Mixi', kpi: 'Reach', budget: 150, budgetEdit: 180, audience: 'Đối tượng Nam 18–30 tuổi, quan tâm mạng xã hội và gaming', notes: 'Nam 18–30, mạng xã hội & gaming' },
-  { id: 'cafe24', brand: 'Café 24', kpi: 'CTR', budget: 250, budgetEdit: 300, audience: 'Đối tượng Nữ 22–35, thích cà phê và lifestyle', notes: 'Nữ 22–35, café & lifestyle' },
-  { id: 'zplay', brand: 'ZPlay', kpi: 'Reach, VTR', budget: 200, budgetEdit: 220, audience: 'Đối tượng Nam 15–28, gaming và esports', notes: 'Nam 15–28, gaming & esports' },
-  { id: 'vpbank-neo', brand: 'VPBank Neo', kpi: 'CTR, Reach', budget: 400, budgetEdit: 450, audience: 'Đối tượng 22–40 tuổi, quan tâm tài chính số và đầu tư', notes: '22–40, tài chính số & đầu tư' },
-  { id: 'tiki', brand: 'Tiki', kpi: 'CTR', budget: 350, budgetEdit: 400, audience: 'Đối tượng 20–45 tuổi, thích mua sắm online và deals', notes: '20–45, mua sắm online & deals' },
-  { id: 'gentis', brand: 'Gentis', kpi: 'Reach, VTR', budget: 180, budgetEdit: 200, audience: 'Đối tượng 28–50 tuổi, quan tâm sức khỏe và y tế gia đình', notes: '28–50, sức khỏe & y tế gia đình' },
-  { id: 'elsa', brand: 'ELSA Speak', kpi: 'CTR, Reach', budget: 220, budgetEdit: 250, audience: 'Đối tượng 16–35 tuổi, sinh viên và đi làm muốn học tiếng Anh', notes: '16–35, sinh viên & đi làm học tiếng Anh' },
-  { id: 'vietjet', brand: 'Vietjet Air', kpi: 'Reach, VTR', budget: 500, budgetEdit: 550, audience: 'Đối tượng 20–45 tuổi, thích du lịch và săn vé giá rẻ', notes: '20–45, du lịch & săn vé rẻ' },
-  { id: 'cocoon', brand: 'Cocoon', kpi: 'CTR, Reach', budget: 160, budgetEdit: 200, audience: 'Đối tượng Nữ 18–35, quan tâm làm đẹp và skincare thuần Việt', notes: 'Nữ 18–35, làm đẹp & skincare thuần Việt' },
-  { id: 'vinfast', brand: 'VinFast', kpi: 'Reach, VTR', budget: 800, budgetEdit: 900, audience: 'Đối tượng 30–55 tuổi, thu nhập khá, quan tâm xe điện và công nghệ', notes: '30–55, thu nhập khá, xe điện & công nghệ' },
+  { id: 'mixi', brand: 'Mixi', product: 'Nội dung livestream và cộng đồng gaming Mixi', kpi: 'Reach', budget: 150, budgetEdit: 180, audience: 'Nam 18–30 tuổi, quan tâm mạng xã hội, gaming và livestream', message: 'Nơi cộng đồng game thủ kết nối và giải trí mỗi ngày' },
+  { id: 'cafe24', brand: 'Café 24', product: 'Chuỗi cà phê và đồ uống phong cách sống', kpi: 'CTR', budget: 250, budgetEdit: 300, audience: 'Nữ 22–35 tuổi, thích cà phê, gặp gỡ bạn bè và lifestyle', message: 'Không gian cà phê tiện lợi cho nhịp sống hiện đại' },
+  { id: 'zplay', brand: 'ZPlay', product: 'Nền tảng game và giải đấu esports', kpi: 'Reach, VTR', budget: 200, budgetEdit: 220, audience: 'Nam 15–28 tuổi, quan tâm gaming, esports và game online', message: 'Khám phá sân chơi dành cho cộng đồng game thủ' },
+  { id: 'vpbank-neo', brand: 'VPBank Neo', product: 'Ứng dụng ngân hàng số VPBank NEO', kpi: 'CTR, Reach', budget: 400, budgetEdit: 450, audience: 'Người 22–40 tuổi, quan tâm tài chính số, thanh toán và đầu tư', message: 'Quản lý tài chính thuận tiện ngay trên điện thoại' },
+  { id: 'tiki', brand: 'Tiki', product: 'Sàn thương mại điện tử Tiki', kpi: 'CTR', budget: 350, budgetEdit: 400, audience: 'Người 20–45 tuổi, thường mua sắm online và săn ưu đãi', message: 'Mua sắm tiện lợi với nhiều lựa chọn phù hợp nhu cầu' },
+  { id: 'gentis', brand: 'Gentis', product: 'Dịch vụ xét nghiệm gen và chăm sóc sức khỏe gia đình', kpi: 'Reach, VTR', budget: 180, budgetEdit: 200, audience: 'Người 28–50 tuổi, quan tâm sức khỏe, xét nghiệm và y tế gia đình', message: 'Hiểu thêm về sức khỏe để chủ động chăm sóc gia đình' },
+  { id: 'elsa', brand: 'ELSA Speak', product: 'Ứng dụng luyện nói tiếng Anh ELSA Speak', kpi: 'CTR, Reach', budget: 220, budgetEdit: 250, audience: 'Người 16–35 tuổi, là sinh viên hoặc người đi làm muốn cải thiện tiếng Anh', message: 'Luyện nói tiếng Anh chủ động mọi lúc' },
+  { id: 'vietjet', brand: 'Vietjet Air', product: 'Vé máy bay giá rẻ cho các đường bay nội địa', kpi: 'Reach, VTR', budget: 500, budgetEdit: 550, audience: 'Người 20–45 tuổi, thích du lịch và thường săn vé máy bay giá rẻ', message: 'Bay nội địa thuận tiện với mức giá dễ tiếp cận' },
+  { id: 'cocoon', brand: 'Cocoon', product: 'Mỹ phẩm thuần chay chăm sóc da Cocoon', kpi: 'CTR, Reach', budget: 160, budgetEdit: 200, audience: 'Nữ 18–35 tuổi, quan tâm làm đẹp, skincare và sản phẩm thuần chay', message: 'Chăm sóc làn da với mỹ phẩm thuần chay Việt Nam' },
+  { id: 'vinfast', brand: 'VinFast', product: 'Ô tô điện thông minh VinFast', kpi: 'Reach, VTR', budget: 800, budgetEdit: 900, audience: 'Người 30–55 tuổi, thu nhập khá, quan tâm xe điện và công nghệ', message: 'Trải nghiệm di chuyển thông minh cùng ô tô điện' },
 ]
 
 const toLocalIsoDate = date => [
@@ -48,11 +48,13 @@ export function materializeDemoBrief(template, now = new Date()) {
     chatMessage: [
       'Brief chiến dịch:',
       `- Brand: ${template.brand}`,
+      `- Sản phẩm / dịch vụ: ${template.product}`,
       '- Objective: awareness',
       `- KPI: ${template.kpi}`,
       `- Budget: ${template.budget} triệu VND`,
       `- Thời gian: ${dates.displayStart} đến ${dates.displayEnd}`,
-      `- Ghi chú: ${template.audience}`,
+      `- Đối tượng mục tiêu: ${template.audience}`,
+      `- Thông điệp chính: ${template.message}`,
     ].join('\n'),
     briefPatch: {
       brand: template.brand,
@@ -61,7 +63,11 @@ export function materializeDemoBrief(template, now = new Date()) {
       budget: template.budget,
       startDate: dates.startDate,
       endDate: dates.endDate,
-      notes: template.notes,
+      notes: [
+        `Sản phẩm / dịch vụ: ${template.product}.`,
+        `Đối tượng mục tiêu: ${template.audience}.`,
+        `Thông điệp chính: ${template.message}.`,
+      ].join(' '),
     },
     budgetEdit: template.budgetEdit,
   }
@@ -85,14 +91,14 @@ export function pickRandomBrief(now = new Date()) {
 // These formats are injected automatically after the Box AI generation step.
 // Images are served from /public/demo-creatives/{briefId}/{formatId}.png
 export const DEMO_AD_FORMAT_META = {
-  'zmp3-top-banner':      { width: 2032, height: 528,  label: 'ZMP3 Top Banner Panoramic' },
-  'znews-Background':     { width: 1504, height: 704,  label: 'ZNews Desktop Background' },
-  'znews-middle-banner':  { width: 2048, height: 512,  label: 'ZNews Mid-page Banner' },
-  'znews-side-banner':    { width: 736,  height: 1456, label: 'ZNews Side Skyscraper' },
-  'znews-top-banner':     { width: 2224, height: 480,  label: 'ZNews Top Banner Ultra-wide' },
-  'zuma-baomoi-masthead': { width: 1160, height: 280,  label: 'Baomoi Masthead Strip' },
-  'zuma-Left':            { width: 465,  height: 1200, label: 'Sticky Side Slider Left' },
-  'zuma-Right':           { width: 465,  height: 1200, label: 'Sticky Side Slider Right' },
+  'zmp3-top-banner':      { width: 2032, height: 528,  cropAnchor: 'center', label: 'ZMP3 Top Banner Panoramic' },
+  'znews-Background':     { width: 1504, height: 704,  cropAnchor: 'top',    label: 'ZNews Desktop Background' },
+  'znews-middle-banner':  { width: 2048, height: 512,  cropAnchor: 'center', label: 'ZNews Mid-page Banner' },
+  'znews-side-banner':    { width: 736,  height: 1456, cropAnchor: 'center', label: 'ZNews Side Skyscraper' },
+  'znews-top-banner':     { width: 2224, height: 480,  cropAnchor: 'center', label: 'ZNews Top Banner Ultra-wide' },
+  'zuma-baomoi-masthead': { width: 1160, height: 280,  cropAnchor: 'center', label: 'Baomoi Masthead Strip' },
+  'zuma-Left':            { width: 465,  height: 1200, cropAnchor: 'right',  label: 'Sticky Side Slider Left' },
+  'zuma-Right':           { width: 465,  height: 1200, cropAnchor: 'left',   label: 'Sticky Side Slider Right' },
 }
 export const DEMO_NON_BOX_FORMAT_IDS = Object.keys(DEMO_AD_FORMAT_META)
 

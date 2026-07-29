@@ -4,11 +4,13 @@ import pytest
 
 from autopilot import service
 from autopilot.capabilities import (
-    CapabilityResult, _analyze_creatives, _assign_creatives, _build_creatives, _build_order_draft,
-    _create_order, _create_setup_report, _forecast, _generate_strategy,
+    CapabilityResult, _analyze_creatives, _assign_creatives, _audience_attrs,
+    _build_creatives, _build_order_draft, _create_order, _create_setup_report,
+    _derive_targeting, _forecast, _generate_strategy, _launch_approval,
     _plan_placement_intent, _prepare_creatives, _rank_placements, _retrieve_audience,
 )
 from autopilot import worker
+from campaign_models import LEGACY_CONVERSATION_MODEL, OPENAI_GPT_5_4_MINI
 from workspace.service import (
     apply_mutation, create_proposal, get_task_context, get_workspace, set_preferences,
 )
@@ -238,20 +240,42 @@ def test_valid_brief_is_not_a_redundant_strict_review_checkpoint():
     assert not service._needs_review(validate_spec, "review_every_stage")
 
 
-def test_critical_policy_stops_at_the_five_operator_checkpoints():
-    expected = {
+def test_openai_critical_policy_stops_at_three_operator_checkpoints():
+    tasks = service._new_tasks("openai-review-plan", OPENAI_GPT_5_4_MINI)
+    actual = {
+        task["key"]
+        for task in tasks
+        if service._needs_review(task, "critical_only")
+    }
+    assert actual == {
+        "plan_placement_intent",
+        "assign_creatives",
+        "launch_approval",
+    }
+
+
+def test_legacy_critical_policy_keeps_five_operator_checkpoints():
+    tasks = service._new_tasks("legacy-review-plan", LEGACY_CONVERSATION_MODEL)
+    actual = {
+        task["key"]
+        for task in tasks
+        if service._needs_review(task, "critical_only")
+    }
+    assert actual == {
         "retrieve_audience",
         "derive_targeting",
         "plan_placement_intent",
         "assign_creatives",
         "launch_approval",
     }
-    actual = {
-        spec["key"]
-        for spec in service.STANDARD_PLAN
-        if service._needs_review(spec, "critical_only")
-    }
-    assert actual == expected
+
+
+def test_review_every_stage_still_reviews_audience_and_targeting():
+    tasks = service._new_tasks("openai-stage-review", OPENAI_GPT_5_4_MINI)
+    for key in ("retrieve_audience", "derive_targeting"):
+        task = next(item for item in tasks if item["key"] == key)
+        assert service._needs_review(task, "review_every_stage")
+        assert not service._needs_review(task, "critical_only")
 
 
 def test_creative_intel_commit_is_internal_autopilot_work():
@@ -272,9 +296,38 @@ def test_creative_intel_commit_is_internal_autopilot_work():
 
 
 @pytest.mark.asyncio
-async def test_auto_build_still_requires_launch_review():
-    assert service._needs_review({"review": "launch"}, "auto_build_draft")
+async def test_auto_build_has_no_routine_approval_checkpoints():
+    assert not service._needs_review({"review": "launch"}, "auto_build_draft")
+    assert not service._needs_review({"review": "critical"}, "auto_build_draft")
     assert not service._needs_review({"review": "stage"}, "auto_build_draft")
+    assert service._needs_review({"review": "launch"}, "critical_only")
+
+
+@pytest.mark.asyncio
+async def test_launch_boundary_uses_fully_automatic_delegation():
+    workspace = {"artifacts": {"order_draft": {
+        "revision": 7,
+        "value": {"payload": {
+            "brand": "ZaloPay",
+            "budget": 40_000_000,
+            "placements": ["ZONE-1"],
+        }},
+    }}}
+    automatic = await _launch_approval(
+        {"approval_policy": "auto_build_draft"},
+        workspace,
+    )
+    assert automatic.force_review is False
+    assert automatic.value["requires_explicit_approval"] is False
+    assert automatic.value["authorization"] == "fully_automatic_mode"
+    assert automatic.evidence[0]["auto_approvable"] is True
+
+    semi_automatic = await _launch_approval(
+        {"approval_policy": "critical_only"},
+        workspace,
+    )
+    assert semi_automatic.force_review is True
+    assert semi_automatic.value["requires_explicit_approval"] is True
 
 
 @pytest.mark.asyncio
@@ -369,6 +422,273 @@ async def test_selected_strategy_is_grounded_into_audience_retrieval(monkeypatch
     assert pipeline["reranked"] is True
 
 
+def test_order_audience_uses_direct_tier_without_silently_adding_related_rows():
+    direct = {"_id": "INT001", "tier": "recommended"}
+    related = {"_id": "INT002", "tier": "adjacent"}
+    assert _audience_attrs({
+        "attrs": [direct],
+        "adjacent_attrs": [related],
+        "recommendations": [direct, related],
+    }) == [direct]
+
+
+@pytest.mark.asyncio
+async def test_openai_autopilot_vague_brief_requires_clarification(monkeypatch):
+    import openai_campaign.autopilot as openai_autopilot
+    from campaign_models import OPENAI_GPT_5_4_MINI
+
+    captured = {}
+
+    async def vague_recommendation(*_args, **kwargs):
+        captured["brief"] = kwargs["brief_override"]
+        return {
+            "recommendations": [],
+            "adjacent_recommendations": [],
+            "rag": {
+                "information_sufficient": False,
+                "insufficient_reason": "brief_missing_product_or_audience_evidence",
+            },
+            "provenance": {"provider": "openai", "model": "gpt-5.4-mini"},
+        }
+
+    monkeypatch.setattr(
+        openai_autopilot,
+        "recommend_openai_autopilot_audience",
+        vague_recommendation,
+    )
+    workspace = {"artifacts": {
+        "brief": {"value": {
+            "brand": "Nova",
+            "objective": "awareness",
+            "kpi": "Tăng nhận diện",
+            "notes": "Muốn tìm thêm khách hàng phù hợp cho sản phẩm mới.",
+        }},
+        "strategy": {"value": {"selected": "balanced"}},
+    }}
+
+    result = await _retrieve_audience(
+        {
+            "session_id": "openai-vague-autopilot",
+            "conversation_model": OPENAI_GPT_5_4_MINI,
+        },
+        workspace,
+    )
+
+    assert result.value["attrs"] == []
+    assert result.value["adjacent_attrs"] == []
+    assert result.value["clarification_required"] is True
+    assert "Bổ sung sản phẩm" in result.value["clarification_prompt"]
+    assert result.force_review is True
+    assert "Chiến lược" not in captured["brief"]["notes"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("policy", "actor"),
+    [
+        ("critical_only", "semi_automatic"),
+        ("auto_build_draft", "fully_automatic"),
+    ],
+)
+async def test_delegated_openai_modes_select_ranked_related_audience_without_review(
+    monkeypatch, policy, actor,
+):
+    import openai_campaign.autopilot as openai_autopilot
+
+    related = [{
+        "_id": f"INT00{index}",
+        "segmentId": f"INT00{index}",
+        "fullLabel": label,
+        "tier": "adjacent",
+        "sizeMin": index * 1_000_000,
+        "sizeMax": index * 1_200_000,
+    } for index, label in enumerate(
+        ["Construction", "Management", "Science", "Engineering"],
+        start=1,
+    )]
+
+    async def related_recommendation(*_args, **_kwargs):
+        return {
+            "recommendations": [],
+            "adjacent_recommendations": related,
+            "rag": {"information_sufficient": True},
+            "provenance": {"provider": "openai", "model": "gpt-5.4-mini"},
+        }
+
+    monkeypatch.setattr(
+        openai_autopilot,
+        "recommend_openai_autopilot_audience",
+        related_recommendation,
+    )
+    result = await _retrieve_audience(
+        {
+            "session_id": f"openai-{actor}-audience",
+            "conversation_model": OPENAI_GPT_5_4_MINI,
+            "approval_policy": policy,
+        },
+        {"artifacts": {
+            "brief": {"value": BRIEF},
+            "strategy": {"value": {"selected": "balanced"}},
+        }},
+    )
+
+    assert [item["segmentId"] for item in result.value["attrs"]] == [
+        "INT001", "INT002", "INT003",
+    ]
+    assert [item["segmentId"] for item in result.value["adjacent_attrs"]] == [
+        "INT004",
+    ]
+    assert result.value["selection_required"] is False
+    assert result.value["selection"]["source"] == "autopilot_policy"
+    assert result.value["selection"]["actor"] == actor
+    assert result.force_review is False
+
+
+@pytest.mark.asyncio
+async def test_openai_autopilot_targeting_uses_basic_and_advanced_catalog_fields(
+    monkeypatch,
+):
+    captured = {}
+    options = {
+        "geo": {"Miền Nam": ["TP.HCM"]},
+        "age": ["25-34", "35-44"],
+        "gender": ["Male", "Female"],
+        "deviceOS": ["Android", "iOS"],
+        "deviceBrand": ["Samsung", "Apple"],
+        "marital": ["Single", "Married"],
+        "parental": ["Have children", "No children"],
+        "education": ["College & Bachelor"],
+        "income": ["Top 10-25%"],
+        "career": ["Office Worker"],
+        "interest": ["Automotive"],
+        "weather": ["Sunny", "Rain"],
+    }
+
+    async def get_options():
+        return options
+
+    async def recommend(**kwargs):
+        captured.update(kwargs)
+        return (
+            {
+                "geo": ["TP.HCM"],
+                "age": ["25-34", "35-44"],
+                "gender": ["Male", "Female"],
+                "deviceOS": ["Android"],
+                "career": ["Office Worker"],
+                "interest": ["Automotive"],
+            },
+            [{
+                "field": "interest",
+                "picks": ["Automotive"],
+                "reason": "Kiki là sản phẩm AI dành cho xe ô tô.",
+            }],
+            "gpt-5.4-mini",
+        )
+
+    monkeypatch.setattr(
+        "tools.targeting_options.get_targeting_options",
+        get_options,
+    )
+    monkeypatch.setattr(
+        "openai_campaign.autopilot.recommend_openai_autopilot_targeting",
+        recommend,
+    )
+    result = await _derive_targeting(
+        {
+            "session_id": "openai-targeting-advanced",
+            "conversation_model": OPENAI_GPT_5_4_MINI,
+            "conversation_model_version": "openai-gpt-5.4-mini-v1",
+        },
+        {"artifacts": {
+            "brief": {"value": {
+                **BRIEF,
+                "brand": "Zalo",
+                "notes": "Ứng dụng AI Agent Kiki dành cho xe ô tô.",
+            }},
+            "strategy": {"value": {"selected": "reach_first"}},
+            "audience": {"value": {"attrs": [{
+                "segmentId": "INT001",
+                "fullLabel": "Automotive",
+                "tier": "recommended",
+                "reason": "Quan tâm xe ô tô.",
+            }]}},
+        }},
+    )
+
+    assert captured["brief"]["strategy"] == "reach_first"
+    assert captured["segments"][0]["fullLabel"] == "Automotive"
+    assert result.value["interest"] == ["Automotive"]
+    assert result.value["career"] == ["Office Worker"]
+    assert result.evidence[0]["selection_mode"] == "openai_catalog_grounded"
+    assert result.evidence[0]["advanced_dimensions"] == [
+        "deviceOS", "career", "interest",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_openai_targeting_failure_falls_back_to_broad_delivery(monkeypatch):
+    async def get_options():
+        return {"geo": {"Miền Nam": ["TP.HCM"]}, "age": ["25-34"]}
+
+    async def fail_targeting(**_kwargs):
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr(
+        "tools.targeting_options.get_targeting_options",
+        get_options,
+    )
+    monkeypatch.setattr(
+        "openai_campaign.autopilot.recommend_openai_autopilot_targeting",
+        fail_targeting,
+    )
+    result = await _derive_targeting(
+        {
+            "session_id": "openai-targeting-fallback",
+            "conversation_model": OPENAI_GPT_5_4_MINI,
+        },
+        {"artifacts": {
+            "brief": {"value": BRIEF},
+            "strategy": {"value": {"selected": "balanced"}},
+            "audience": {"value": {"attrs": []}},
+        }},
+    )
+
+    assert result.value == {}
+    assert result.evidence[0]["selection_mode"] == "broad_fallback"
+    assert "RuntimeError" in result.evidence[0]["fallback_error"]
+
+
+@pytest.mark.asyncio
+async def test_legacy_targeting_keeps_existing_deterministic_template(monkeypatch):
+    async def get_options():
+        return {
+            "geo": ["Hà Nội", "TP.HCM", "Đà Nẵng"],
+            "age": ["18-24", "25-34", "35-44"],
+            "gender": ["Male", "Female"],
+        }
+
+    monkeypatch.setattr(
+        "tools.targeting_options.get_targeting_options",
+        get_options,
+    )
+    result = await _derive_targeting(
+        {
+            "session_id": "legacy-targeting",
+            "conversation_model": LEGACY_CONVERSATION_MODEL,
+        },
+        {"artifacts": {
+            "strategy": {"value": {"selected": "reach_first"}},
+        }},
+    )
+
+    assert result.value == {
+        "geo": ["Hà Nội", "TP.HCM", "Đà Nẵng"],
+        "age": ["18-24", "25-34", "35-44"],
+        "gender": ["Male", "Female"],
+    }
+
+
 @pytest.mark.asyncio
 async def test_operator_can_select_pending_strategy_before_review():
     await _seed("strategy-review")
@@ -440,6 +760,48 @@ async def test_operator_can_rerun_unapproved_audience_review():
     assert task["evidence"] == []
     assert task["pending_artifact"] is None
     assert (await get_workspace("audience-rerun"))["artifacts"]["audience"]["status"] == "missing"
+
+
+@pytest.mark.asyncio
+async def test_openai_audience_rerun_invalidates_query_plan_cache(monkeypatch):
+    await _seed("openai-audience-rerun")
+
+    async def openai_model(_session_id):
+        return {
+            "conversation_id": "conv-openai-rerun",
+            "conversation_model": OPENAI_GPT_5_4_MINI,
+            "conversation_model_version": "gpt-5.4-mini",
+        }
+
+    invalidated = []
+    monkeypatch.setattr(
+        "identity.get_conversation_model_for_session", openai_model
+    )
+    monkeypatch.setattr(
+        "openai_campaign.audience_search.invalidate_audience_search_cache",
+        lambda brief: invalidated.append(brief),
+    )
+    run = await service.create_run(
+        "openai-audience-rerun",
+        approval_policy="critical_only",
+        idempotency_key="openai-audience-rerun",
+    )
+    task_id = f"{run['run_id']}:retrieve_audience"
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result={"attrs": []},
+        pending_artifact={
+            "session_id": "openai-audience-rerun",
+            "artifact": "audience",
+            "value": {"attrs": []},
+            "input_revisions": {},
+            "base_artifact_revision": 0,
+        },
+    )
+
+    await service.rerun_review_task(run["run_id"], task_id)
+
+    assert invalidated == [BRIEF]
 
 
 @pytest.mark.asyncio
@@ -916,6 +1278,79 @@ async def test_worker_commits_auto_approved_artifact(monkeypatch):
     workspace = await get_workspace("worker-auto")
     assert workspace["artifacts"]["strategy"]["status"] == "approved"
     assert workspace["artifacts"]["strategy"]["value"] == {"selected": "balanced"}
+
+
+@pytest.mark.asyncio
+async def test_critical_policy_auto_commits_audience_and_targeting(monkeypatch):
+    async def openai_model_lock(_session_id):
+        return {
+            "conversation_id": "conv-worker-streamlined-critical",
+            "conversation_model": OPENAI_GPT_5_4_MINI,
+            "conversation_model_version": "openai-gpt-5.4-mini-v1",
+        }
+
+    monkeypatch.setattr(
+        "identity.get_conversation_model_for_session",
+        openai_model_lock,
+    )
+    await _seed("worker-streamlined-critical")
+    run = await service.create_run(
+        "worker-streamlined-critical",
+        approval_policy="critical_only",
+        idempotency_key="worker-streamlined-critical",
+    )
+    direct = {
+        "_id": "INT001",
+        "segmentId": "INT001",
+        "fullLabel": "Automotive",
+        "tier": "recommended",
+    }
+    related = {
+        "_id": "INT002",
+        "segmentId": "INT002",
+        "fullLabel": "Technology",
+        "tier": "adjacent",
+    }
+
+    async def fake_execute(task, _run):
+        if task["key"] == "generate_strategy":
+            return CapabilityResult(value={"selected": "balanced"})
+        if task["key"] == "retrieve_audience":
+            return CapabilityResult(value={
+                "attrs": [direct],
+                "adjacent_attrs": [related],
+                "recommendations": [direct, related],
+                "selection_required": False,
+            })
+        if task["key"] == "derive_targeting":
+            return CapabilityResult(value={
+                "geo": ["TP.HCM"],
+                "age": ["25-34"],
+                "gender": ["Male", "Female"],
+            })
+        return CapabilityResult(value={"ok": True})
+
+    monkeypatch.setattr(worker, "execute", fake_execute)
+    for expected_key in (
+        "normalize_brief",
+        "validate_brief",
+        "generate_strategy",
+        "retrieve_audience",
+        "derive_targeting",
+    ):
+        task = await service.claim_next_task("worker-streamlined")
+        assert task["key"] == expected_key
+        await worker._process(task)
+
+    current = await service.get_run(run["run_id"])
+    by_key = {task["key"]: task for task in current["tasks"]}
+    workspace = await get_workspace("worker-streamlined-critical")
+    assert by_key["retrieve_audience"]["status"] == "succeeded"
+    assert by_key["derive_targeting"]["status"] == "succeeded"
+    assert by_key["plan_placement_intent"]["status"] == "queued"
+    assert workspace["artifacts"]["audience"]["value"]["attrs"] == [direct]
+    assert workspace["artifacts"]["audience"]["value"]["adjacent_attrs"] == [related]
+    assert workspace["artifacts"]["targeting"]["value"]["geo"] == ["TP.HCM"]
 
 
 @pytest.mark.asyncio
