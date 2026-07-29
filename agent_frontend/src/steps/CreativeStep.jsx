@@ -671,7 +671,7 @@ export default function CreativeStep({
       {tab === 'upload' && (
         <div className="space-y-4">
           <div>
-            <Label className="mb-2 block">Upload Creative</Label>
+            <Label className="mb-2 block">Thêm creative</Label>
             <div
               onDragOver={e => { e.preventDefault(); setDragging(true) }}
               onDragLeave={() => setDragging(false)}
@@ -691,7 +691,7 @@ export default function CreativeStep({
                   <p className="text-sm font-semibold text-foreground">{dragging ? 'Thả file vào đây' : 'Kéo thả hoặc bấm để chọn'}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">PNG · JPG · MP4 — Nhiều file cùng lúc · Resolution tự động đọc</p>
                 </div>
-                {files.length > 0 && <Badge variant="green" className="mt-1">{files.length} file đã chọn · Thêm nữa</Badge>}
+                {files.length > 0 && <Badge variant="green" className="mt-1">Đang có {files.length} creative · Chọn thêm</Badge>}
               </div>
             </div>
             <input ref={fileInputRef} id="creative-file-input" type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFileChange} />
@@ -700,7 +700,7 @@ export default function CreativeStep({
           {files.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>{files.length} file đã upload</Label>
+                <Label>Creative đã chọn ({files.length})</Label>
                 <button onClick={() => onChange(prev => ({ ...prev, files: [], uploaded: false }))}
                   className="text-xs text-red-500 hover:text-red-600 font-medium flex items-center gap-1">
                   <X className="w-3 h-3" /> Xoá tất cả

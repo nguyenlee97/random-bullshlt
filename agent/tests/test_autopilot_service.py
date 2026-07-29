@@ -1570,6 +1570,87 @@ async def test_creative_upload_supersedes_missing_input_review_and_resumes_analy
 
 
 @pytest.mark.asyncio
+async def test_later_audience_edit_keeps_operator_selection_and_replans_consumers():
+    session_id = "later-audience-edit"
+    await _seed(session_id)
+    run = await service.create_run(
+        session_id,
+        approval_policy="auto_build_draft",
+        idempotency_key="later-audience-edit",
+    )
+    _mark_tasks(run["run_id"], {
+        "normalize_brief": "succeeded",
+        "validate_brief": "succeeded",
+        "generate_strategy": "succeeded",
+        "retrieve_audience": "succeeded",
+        "derive_targeting": "succeeded",
+        "plan_placement_intent": "succeeded",
+        "plan_creative_formats": "succeeded",
+        "prepare_creatives": "waiting_review",
+        "analyze_creatives": "pending",
+    })
+    candidates = [
+        {
+            "segmentId": "INT159",
+            "fullLabel": "Organic food",
+            "sizeMin": 4_070_000,
+            "sizeMax": 5_490_000,
+            "tier": "recommended",
+        },
+        {
+            "segmentId": "INT117",
+            "fullLabel": "Motherhood",
+            "sizeMin": 1_450_000,
+            "sizeMax": 2_040_000,
+            "tier": "recommended",
+        },
+        {
+            "segmentId": "INT118",
+            "fullLabel": "Parenting",
+            "sizeMin": 2_290_000,
+            "sizeMax": 2_870_000,
+            "tier": "adjacent",
+        },
+    ]
+    audience = {
+        "attrs": candidates[:2],
+        "adjacent_attrs": candidates[2:],
+        "recommendations": candidates,
+        "size": 6_525_000,
+    }
+    workspace = await get_workspace(session_id)
+    await apply_mutation(
+        session_id,
+        "segment",
+        audience,
+        base_revision=workspace["revision"],
+        actor="autopilot_worker",
+        idempotency_key="initial-audience",
+    )
+
+    updated = await service.select_audience_recommendations(
+        run["run_id"],
+        ["INT159", "INT117", "INT118"],
+        reason="Add Parenting to the two current primary audiences",
+    )
+
+    workspace = await get_workspace(session_id)
+    by_key = {task["key"]: task for task in updated["tasks"]}
+    selected = workspace["artifacts"]["audience"]["value"]
+    assert [item["segmentId"] for item in selected["attrs"]] == [
+        "INT159", "INT117", "INT118",
+    ]
+    assert selected["selection"]["source"] == "operator"
+    assert by_key["retrieve_audience"]["status"] == "succeeded"
+    assert [item["segmentId"] for item in by_key["retrieve_audience"]["result"]["attrs"]] == [
+        "INT159", "INT117", "INT118",
+    ]
+    assert by_key["derive_targeting"]["status"] == "queued"
+    assert by_key["prepare_creatives"]["status"] == "pending"
+    assert updated["status"] == "queued"
+
+
+@pytest.mark.asyncio
 async def test_workspace_edit_supersedes_stale_launch_review():
     await _seed("replan-launch")
     run = await service.create_run("replan-launch", idempotency_key="launch")

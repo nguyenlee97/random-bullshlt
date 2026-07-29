@@ -331,9 +331,24 @@ export default function App() {
     const artifacts = workspace.artifacts || {}
     setCanonicalWorkspace(workspace)
     setFormState(prev => {
-      const creative = artifacts.creative?.value
+      const canonicalCreative = artifacts.creative?.value
+      // Autopilot keeps polling the canonical workspace while its editor is
+      // open. Preserve the operator's local draft during that window; otherwise
+      // a poll can replace three selected files with the two-file server
+      // snapshot that existed before the latest selection.
+      const creativeInput = (
+        canonicalCreative
+        && autopilotEditorArtifactRef.current === 'creative'
+      )
+        ? {
+            ...canonicalCreative,
+            ...prev.creative,
+            files: prev.creative?.files || [],
+          }
+        : canonicalCreative
+      const creative = creativeInput
         ? mergeCreativeVerdicts(
-            artifacts.creative.value,
+            creativeInput,
             artifacts.creative_verdict?.value,
           )
         : prev.creative

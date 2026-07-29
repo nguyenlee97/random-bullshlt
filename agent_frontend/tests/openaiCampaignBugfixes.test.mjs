@@ -36,6 +36,13 @@ test('OpenAI cropped images become Creative drafts before step navigation', () =
   assert.match(creative, /files: \[\.\.\.existing, \.\.\.toAdd\], uploaded: true/)
 })
 
+test('Autopilot polling preserves an in-progress Creative editor draft', () => {
+  assert.match(app, /autopilotEditorArtifactRef\.current === 'creative'/)
+  assert.match(app, /files: prev\.creative\?\.files \|\| \[\]/)
+  assert.match(creative, /Creative đã chọn \(\{files\.length\}\)/)
+  assert.doesNotMatch(creative, /\{files\.length\} file đã upload/)
+})
+
 test('OpenAI Brief cannot be marked complete by a nested or incomplete patch', () => {
   assert.match(
     app,

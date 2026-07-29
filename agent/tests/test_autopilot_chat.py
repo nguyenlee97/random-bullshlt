@@ -377,6 +377,87 @@ async def test_openai_audience_semantic_selection_accepts_natural_zalo_phrases(
 
 
 @pytest.mark.asyncio
+async def test_openai_can_expand_audience_during_later_creative_review(monkeypatch):
+    import autopilot.chat as chat
+    import autopilot.service as service
+    import openai_campaign.autopilot as openai_autopilot
+    import workspace.service as workspace_service
+    from openai_campaign.autopilot import AudienceReviewSelectionAction
+
+    selections = []
+    candidates = [
+        {"segmentId": "INT159", "fullLabel": "Organic food", "tier": "recommended"},
+        {"segmentId": "INT117", "fullLabel": "Motherhood", "tier": "recommended"},
+        {"segmentId": "INT118", "fullLabel": "Parenting", "tier": "adjacent"},
+    ]
+    audience = {
+        "attrs": candidates[:2],
+        "adjacent_attrs": candidates[2:],
+        "recommendations": candidates,
+    }
+
+    async def fake_workspace(_session_id):
+        return {
+            "experience_mode": "autopilot",
+            "artifacts": {"audience": {"value": audience}},
+        }
+
+    async def fake_run(_session_id):
+        return {
+            "run_id": "run-later-audience-edit",
+            "status": "waiting_review",
+            "conversation_model": "openai_gpt_5_4_mini",
+            "tasks": [
+                {
+                    "task_id": "task-audience",
+                    "key": "retrieve_audience",
+                    "status": "succeeded",
+                    "result": audience,
+                },
+                {
+                    "task_id": "task-creative",
+                    "key": "prepare_creatives",
+                    "title": "Creative",
+                    "status": "waiting_review",
+                    "result": {"reason": "missing_creative"},
+                },
+            ],
+        }
+
+    async def fake_select(run_id, segment_ids, *, actor, reason):
+        selections.append((run_id, segment_ids, actor, reason))
+        return {"run_id": run_id, "status": "queued"}
+
+    message = "Tôi muốn mở rộng thêm tệp Parenting vào 2 TA hiện tại"
+    monkeypatch.setattr(chat, "add_message", AsyncMock())
+    monkeypatch.setattr(workspace_service, "get_workspace", fake_workspace)
+    monkeypatch.setattr(service, "get_latest_run", fake_run)
+    monkeypatch.setattr(service, "select_audience_recommendations", fake_select)
+    monkeypatch.setattr(
+        openai_autopilot,
+        "classify_openai_audience_review_selection",
+        AsyncMock(return_value=AudienceReviewSelectionAction(
+            intent="select",
+            candidate_numbers=[1, 2, 3],
+            explicit=True,
+            ambiguous=False,
+            evidence=message,
+        )),
+    )
+
+    response = await route_autopilot_chat(
+        message,
+        "session-later-audience-edit",
+        2,
+    )
+
+    assert response.meta.tool == "autopilot_audience_selection"
+    assert selections[0][1] == ["INT159", "INT117", "INT118"]
+    assert "Targeting, placement" in response.text
+    assert "checkpoint cũ không được tự động áp dụng" in response.text
+
+
+@pytest.mark.asyncio
 async def test_openai_audience_semantic_selection_clarifies_ambiguity(monkeypatch):
     import autopilot.chat as chat
     import autopilot.service as service

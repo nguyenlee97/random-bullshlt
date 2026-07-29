@@ -507,24 +507,39 @@ async def route_autopilot_chat(
                 )
 
         audience_ordinals = _audience_selection_ordinals(message)
-        is_openai_audience_review = (
-            run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+        audience_task = next(
+            (task for task in run.get("tasks", []) if task.get("key") == "retrieve_audience"),
+            None,
+        )
+        audience_review_checkpoint = bool(
+            audience_task
+            and audience_task.get("status") == "waiting_review"
             and waiting.get("key") == "retrieve_audience"
         )
-        pending_audience_value = (
-            (waiting.get("pending_artifact") or {}).get("value")
-            or waiting.get("result")
-            or {}
+        current_audience_value = (
+            (
+                (audience_task.get("pending_artifact") or {}).get("value")
+                or audience_task.get("result")
+                or {}
+            )
+            if audience_review_checkpoint
+            else (_artifact(workspace, "audience") or {})
         )
         audience_candidates = (
-            pending_audience_value.get("recommendations")
+            current_audience_value.get("recommendations")
             or [
-                *(pending_audience_value.get("attrs") or []),
-                *(pending_audience_value.get("adjacent_attrs") or []),
+                *(current_audience_value.get("attrs") or []),
+                *(current_audience_value.get("adjacent_attrs") or []),
             ]
         )
+        can_edit_openai_audience = (
+            run.get("conversation_model") == OPENAI_GPT_5_4_MINI
+            and audience_task is not None
+            and audience_task.get("status") in {"waiting_review", "succeeded"}
+            and bool(audience_candidates)
+        )
         if (
-            is_openai_audience_review
+            can_edit_openai_audience
             and audience_ordinals is None
             and review_intent(message) == "question"
         ):
@@ -592,8 +607,7 @@ async def route_autopilot_chat(
                     selection_action.candidate_numbers
                 ))
 
-        if is_openai_audience_review and audience_ordinals is not None:
-            pending_value = pending_audience_value
+        if can_edit_openai_audience and audience_ordinals is not None:
             candidates = audience_candidates
             invalid = [
                 ordinal for ordinal in audience_ordinals
@@ -654,12 +668,23 @@ async def route_autopilot_chat(
             return await _recorded_response(
                 session_id,
                 message,
-                f"Đã cập nhật audience được chọn: {chosen}. "
-                "Nhóm liên quan chỉ được áp dụng vì bạn vừa chọn rõ số mục. "
-                "Checkpoint vẫn đang chờ duyệt; hãy gửi “Xác nhận” riêng để tiếp tục.",
+                (
+                    f"Đã cập nhật audience được chọn: {chosen}. "
+                    "Nhóm liên quan chỉ được áp dụng vì bạn vừa yêu cầu rõ. "
+                    "Checkpoint vẫn đang chờ duyệt; hãy gửi “Xác nhận” riêng để tiếp tục."
+                    if audience_review_checkpoint
+                    else
+                    f"Đã cập nhật audience được chọn: {chosen}. "
+                    "Autopilot đang tính lại Targeting, placement và kế hoạch creative phụ thuộc "
+                    "trên đúng run hiện tại; quyết định checkpoint cũ không được tự động áp dụng."
+                ),
                 tool="autopilot_audience_selection",
                 step=step,
-                suggestions=["Xác nhận", "Gợi ý lại audience", "Hủy"],
+                suggestions=(
+                    ["Xác nhận", "Gợi ý lại audience", "Hủy"]
+                    if audience_review_checkpoint
+                    else []
+                ),
             )
 
         placement_ordinals = _placement_selection_ordinals(message)

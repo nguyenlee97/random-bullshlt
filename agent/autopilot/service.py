@@ -660,9 +660,10 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
         for root in ARTIFACT_REPLAN_ROOT.get(artifact, ())
     }
     affected_keys = _task_descendants(root_keys)
-    # When the operator edits the exact artifact currently waiting for review,
-    # their canonical mutation supersedes the pending Autopilot proposal. The
-    # producer is accepted as an operator override; only its consumers replan.
+    # When the operator edits an artifact produced by Autopilot, their canonical
+    # mutation becomes the accepted producer result. This applies both at that
+    # artifact's own review gate and at a later review checkpoint; only consumers
+    # replan, so a later Audience edit is not overwritten by rerunning retrieval.
     # Input-gate tasks such as prepare_creatives are requeued instead so they
     # can validate the newly uploaded file set before downstream work starts.
     recheck = [
@@ -674,7 +675,7 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
     recheck_ids = {task["task_id"] for task in recheck}
     superseded = [
         task for task in run["tasks"]
-        if task.get("status") == "waiting_review"
+        if task.get("status") in {"waiting_review", "succeeded"}
         and task.get("artifact") in changed_artifacts
         and task["task_id"] not in recheck_ids
         and workspace.get("artifacts", {}).get(task.get("artifact"), {}).get("status") == "approved"
@@ -1123,23 +1124,41 @@ async def select_audience_recommendations(
     actor: str = "campaign_operator",
     reason: str = "",
 ) -> dict:
-    """Select reviewed direct/adjacent catalog rows without approving the gate."""
+    """Select reviewed direct/adjacent rows without granting checkpoint approval.
+
+    At the Audience checkpoint this updates its pending artifact. At a later
+    checkpoint it commits the operator's complete selection to the canonical
+    workspace and replans only dependent tasks.
+    """
     from audience_reach import audience_selection
 
     run = await get_run(run_id)
     if run["status"] in RUN_TERMINAL:
         raise RunConflict("audience selection cannot change after the run is terminal")
+    if any(
+        item.get("key") == "create_order" and item.get("status") == "succeeded"
+        for item in run.get("tasks", [])
+    ):
+        raise RunConflict("audience selection cannot change after order creation")
     task = next(
         (item for item in run["tasks"] if item["key"] == "retrieve_audience"),
         None,
     )
-    if not task or task["status"] != "waiting_review":
-        raise RunConflict("audience recommendation is not waiting for review")
+    if not task:
+        raise RunConflict("audience recommendation is unavailable")
+    editing_pending_review = task.get("status") == "waiting_review"
     pending = deepcopy(task.get("pending_artifact") or {})
-    if pending.get("artifact") != "audience":
-        raise RunConflict("audience review has no pending artifact")
-
-    value = deepcopy(pending.get("value") or {})
+    if editing_pending_review:
+        if pending.get("artifact") != "audience":
+            raise RunConflict("audience review has no pending artifact")
+        value = deepcopy(pending.get("value") or {})
+    else:
+        workspace = await get_workspace(run["session_id"])
+        value = deepcopy(
+            workspace.get("artifacts", {}).get("audience", {}).get("value") or {}
+        )
+        if not value:
+            raise RunConflict("approved audience artifact is unavailable")
     candidates = (
         value.get("recommendations")
         or [*(value.get("attrs") or []), *(value.get("adjacent_attrs") or [])]
@@ -1188,30 +1207,49 @@ async def select_audience_recommendations(
             "selected_count": len(selected),
         },
     })
-    pending["value"] = value
-    evidence = deepcopy(task.get("evidence") or [])
-    evidence.append({
+    selection_evidence = {
         "type": "audience_selection_updated",
         "actor": actor,
         "selected_count": len(selected),
         "segment_ids": selected_ids,
         "reason": selection_reason,
-    })
-    updates = {
-        "result": value,
-        "pending_artifact": pending,
-        "evidence": evidence,
-        "updated_at": _now(),
     }
-    _, tasks, _ = await _collections()
-    if tasks is not None:
-        await tasks.update_one({"_id": task["task_id"]}, {"$set": updates})
+    if editing_pending_review:
+        pending["value"] = value
+        evidence = deepcopy(task.get("evidence") or [])
+        evidence.append(selection_evidence)
+        updates = {
+            "result": value,
+            "pending_artifact": pending,
+            "evidence": evidence,
+            "updated_at": _now(),
+        }
+        _, tasks, _ = await _collections()
+        if tasks is not None:
+            await tasks.update_one({"_id": task["task_id"]}, {"$set": updates})
+        else:
+            _mem_tasks[task["task_id"]].update(updates)
     else:
-        _mem_tasks[task["task_id"]].update(updates)
+        from workspace.service import apply_mutation
+
+        await apply_mutation(
+            run["session_id"],
+            "segment",
+            value,
+            base_revision=workspace["revision"],
+            actor=actor,
+            reason=selection_reason,
+            idempotency_key=(
+                f"{run_id}:audience-selection:r{workspace['revision']}:"
+                + "|".join(selected_ids)
+            ),
+        )
+        await reconcile_workspace_changes(run_id)
     await _emit(run_id, "audience_selection_updated", {
         "task_id": task["task_id"],
         "actor": actor,
         "selected_count": len(selected),
+        "replanned": not editing_pending_review,
     })
     return await get_run(run_id)
 
