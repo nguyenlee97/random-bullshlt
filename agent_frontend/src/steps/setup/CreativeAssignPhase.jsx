@@ -89,6 +89,7 @@ function AssignRow({
   groupedCount,
   strictCompatibility = false,
   recommendedScores = {},
+  identityAware = false,
 }) {
   const assignedFile = files.find(f => f.id === assignedFileId)
   const mismatch = assignedFile
@@ -99,7 +100,7 @@ function AssignRow({
 
   // Rank files by smart score for this zone
   const rankedFiles = [...files]
-    .map(f => ({ ...f, _score: scoreFile(f, zone) }))
+    .map(f => ({ ...f, _score: scoreFile(f, zone, { identityAware }) }))
     .sort((a, b) => b._score - a._score)
 
   return (
@@ -219,7 +220,10 @@ export default function CreativeAssignPhase({
         ? approvedFiles.filter(file => !checkAutopilotMismatch(zone, file))
         : approvedFiles
       const best = [...compatibleFiles]
-        .map(f => ({ ...f, _score: scoreFile(f, zone) }))
+        .map(f => ({
+          ...f,
+          _score: scoreFile(f, zone, { identityAware: openaiCampaignFlow || repairMode }),
+        }))
         .sort((a, b) => b._score - a._score)
         .at(0)
       if (best) newAssignments[zone.id] = best.id
@@ -344,6 +348,7 @@ export default function CreativeAssignPhase({
             groupedCount={countGroupable(zone, assignments[zone.id])}
             strictCompatibility={strictCompatibility}
             recommendedScores={data.recommendedAssignmentScores?.[zone.id] || {}}
+            identityAware={openaiCampaignFlow || repairMode}
           />
         ))}
       </div>

@@ -59,6 +59,104 @@ def _normalized_hint(value: object) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value or "").lower().replace("×", "x"))
 
 
+def _assignment_platform(value: object) -> str:
+    identity = _normalized_hint(value)
+    if not identity:
+        return ""
+    if "znews" in identity or "zingnews" in identity or identity.startswith("zn"):
+        return "znews"
+    if "baomoi" in identity or "zuma" in identity or identity.startswith("bm"):
+        return "baomoi"
+    if "zingmp3" in identity or "zmp3" in identity:
+        return "zmp3"
+    return ""
+
+
+def _assignment_role(value: object) -> str:
+    identity = _normalized_hint(value)
+    if not identity:
+        return ""
+    if "sideleft" in identity or "stickyleft" in identity or identity.endswith("left"):
+        return "side_left"
+    if "sideright" in identity or "stickyright" in identity or identity.endswith("right"):
+        return "side_right"
+    if "sidebanner" in identity or "skyscraper" in identity:
+        return "side"
+    if "background" in identity or "roadblock" in identity:
+        return "background"
+    if (
+        "masthead" in identity
+        or "topbanner" in identity
+        or "topdesktop" in identity
+        or "topmobile" in identity
+    ):
+        return "masthead"
+    if "sidebarbox" in identity or "box300x250" in identity or "zumabox" in identity:
+        return "box"
+    return ""
+
+
+def _role_identity_score(zone_role: str, file_role: str) -> int:
+    if not zone_role or not file_role:
+        return 0
+    if zone_role == file_role:
+        return 12
+    if zone_role in {"side_left", "side_right"} and file_role == "side":
+        return 12
+    if zone_role == "side" and file_role in {"side_left", "side_right"}:
+        return 10
+    if (
+        (zone_role == "side_left" and file_role == "side_right")
+        or (zone_role == "side_right" and file_role == "side_left")
+    ):
+        return -30
+    return -20
+
+
+def creative_assignment_identity_score(file: dict, zone: dict) -> tuple[int, list[str]]:
+    """Score explicit platform, placement role and left/right identity.
+
+    Known platform or direction conflicts are hard negatives. Missing identity
+    remains neutral so measured geometry can still act as a safe fallback.
+    """
+    file_identity = " ".join(str(value or "") for value in (
+        file.get("name"),
+        file.get("formatId"),
+        file.get("intendedFormat"),
+    ))
+    zone_identity = " ".join(str(value or "") for value in (
+        zone.get("id"),
+        zone.get("name"),
+        zone.get("platform"),
+        zone.get("channel"),
+        zone.get("placement"),
+        zone.get("creativeContractId"),
+    ))
+    file_platform = _assignment_platform(file_identity)
+    zone_platform = _assignment_platform(zone_identity)
+    file_role = _assignment_role(file_identity)
+    zone_role = _assignment_role(zone_identity)
+
+    score = 0
+    warnings: list[str] = []
+    if file_platform and zone_platform:
+        if file_platform == zone_platform:
+            score += 12
+        else:
+            score -= 40
+            warnings.append(
+                f"Creative thuộc {file_platform}, không khớp nền tảng {zone_platform}"
+            )
+
+    role_score = _role_identity_score(zone_role, file_role)
+    score += role_score
+    if role_score < 0:
+        warnings.append(
+            f"Creative role {file_role} không khớp placement role {zone_role}"
+        )
+    return score, warnings
+
+
 def match_file_to_format(file: dict, format_spec: dict) -> dict:
     """Match an uploaded file to one planned format without trusting its name alone.
 
@@ -180,6 +278,7 @@ def score_file_for_zone(
     warnings: list[str] = []
     fname = (file.get("name") or "").lower()
     intel = file.get("intel") or {}
+    identity_score, identity_warnings = creative_assignment_identity_score(file, zone)
 
     # Phase 3: files flagged needs_review may not be auto-assigned silently
     if intel.get("effective_status", intel.get("status")) == "needs_review":
@@ -204,10 +303,17 @@ def score_file_for_zone(
                     "explicit_format_hint": 1,
                 }.get(mode, 1)
                 score += _contract_identity_bonus(file, spec)
+                score += identity_score
+                warnings.extend(identity_warnings)
             else:
                 score += 10 if mode in {"exact_size", "strong_ratio"} else 7
         else:
             score -= 7
+            # Positive name hints must never rescue incompatible measured
+            # geometry. Hard identity conflicts still prevent a tied fallback.
+            if prefer_contract_identity and identity_score < 0:
+                score += identity_score
+                warnings.extend(identity_warnings)
             warnings.append(
                 f"Creative không khớp contract {zone.get('creativeContractId')} "
                 f"({match.get('mode')})"
@@ -216,6 +322,30 @@ def score_file_for_zone(
 
     # Skin zones — measured layout first, filename hack last
     is_skin_zone = zone.get("format") == "skin" or zone.get("size") == "skin"
+    if is_skin_zone and prefer_contract_identity:
+        score += identity_score
+        warnings.extend(identity_warnings)
+        zone_role = _assignment_role(
+            f"{zone.get('id', '')} {zone.get('name', '')} "
+            f"{zone.get('creativeContractId', '')}"
+        )
+        if zone_role in {"side", "side_left", "side_right"}:
+            # Side rails are catalogued as skin inventory but use a dedicated
+            # portrait side asset, not a full-page background takeover.
+            if _assignment_role(f"{file.get('name', '')} {file.get('formatId', '')}"):
+                return score, warnings
+            warnings.append("Creative chưa thể hiện rõ role side/left/right")
+        elif intel.get("is_skin") is True:
+            score += 10
+        elif intel.get("is_skin") is False:
+            score -= 5
+            warnings.append("Ảnh không có layout skin/toàn trang (đo từ pixel thật)")
+        elif "skin" in fname:                       # no intel → legacy heuristic
+            score += 4
+        else:
+            score -= 5
+            warnings.append("Zone dạng skin, creative nên đặt tên chứa 'skin'")
+        return score, warnings
     if is_skin_zone:
         if intel.get("is_skin") is True:
             score += 10
@@ -230,6 +360,9 @@ def score_file_for_zone(
         return score, warnings
 
     # Banner zones: name + ratio matching
+    if prefer_contract_identity:
+        score += identity_score
+        warnings.extend(identity_warnings)
     zone_id_lower = zone.get("id", "").lower()
     zone_size = (zone.get("size") or "").lower()
 

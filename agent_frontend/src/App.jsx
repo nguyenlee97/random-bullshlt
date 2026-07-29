@@ -18,6 +18,7 @@ import log from '@/lib/logger'
 import { ArrowLeft, MessageSquare, LayoutDashboard, Sparkles } from 'lucide-react'
 import { DemoProvider } from '@/demo/DemoEngine'
 import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
+import { scoreFile } from '@/steps/setup/setupUtils'
 import { canApproveWorkflowStep, isBriefReady } from '@/lib/workflowValidation'
 import { normalizeAudienceSelection } from '@/lib/audience'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
@@ -1655,16 +1656,41 @@ export default function App() {
       setFormStateWithEvents(prev => {
         const selectedZoneIds = prev.setup?.selectedZoneIds || []
         const files = prev.creative?.files || []
+        const recoZones = prev.setup?.recoZones || []
         const assignments = { ...(prev.setup?.assignments || {}) }
         selectedZoneIds.forEach(zoneId => {
           const formatId = ZONE_FORMAT_MAP[zoneId]  // null = box
           let matched
-          if (formatId === null || formatId === undefined) {
+          const openaiWalkthrough = currentConversationModel === 'openai_gpt_5_4_mini'
+          if (formatId === null || (formatId === undefined && !openaiWalkthrough)) {
             // Box: match the AI-generated file (name starts with "ai-zuma-box")
             matched = files.find(f => /^ai-zuma-box/i.test(f.name))
-          } else {
+          } else if (formatId) {
             // Non-box: match by format filename
             matched = files.find(f => f.name === `${formatId}.png` || f.formatId === formatId)
+          }
+          if (!matched) {
+            // Topic-taxonomy zones are dynamic and are intentionally not
+            // enumerated in the legacy walkthrough map. Fall back to the same
+            // platform/role/ratio scorer used by the visible auto-assign UI.
+            const zone = recoZones.find(item => item.id === zoneId)
+            const approvedFiles = files.filter(file =>
+              ['auto_approved', 'approved_override'].includes(file.analysisStatus)
+            )
+            matched = zone
+              ? [...approvedFiles]
+                .map((file, index) => ({
+                  file,
+                  index,
+                  score: scoreFile(file, zone, {
+                    identityAware: openaiWalkthrough,
+                  }),
+                }))
+                .sort((left, right) =>
+                  right.score - left.score || left.index - right.index
+                )
+                .at(0)?.file
+              : null
           }
           if (matched) assignments[zoneId] = matched.id
         })
@@ -1675,7 +1701,7 @@ export default function App() {
     }
     window.addEventListener('demo:assign_creatives', handler)
     return () => window.removeEventListener('demo:assign_creatives', handler)
-  }, [setFormStateWithEvents])
+  }, [currentConversationModel, setFormStateWithEvents])
 
   // ── Track user interaction to hide Demo button ─────────────────────────
   // Once user sends ANY message (not boot), hide the demo button permanently
