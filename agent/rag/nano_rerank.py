@@ -1,12 +1,14 @@
-"""Bounded GPT-5.4-nano reranker for catalog-backed audience candidates.
+"""Bounded OpenAI reranker for catalog-backed audience candidates.
 
 This is a fixed relevance specialist, not a campaign conversation engine. It
-may only reorder known DMP segment IDs and fails open to the retrieval order.
+may only reorder known DMP segment IDs. A compact structured retry protects the
+walkthrough from transient provider timeouts or oversized rich explanations.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 from copy import deepcopy
 from typing import Any
 from typing import Literal
@@ -14,6 +16,7 @@ from typing import Literal
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
+from agent_logger import alog
 from config import config
 from metrics import RAG_RERANK
 from openai_campaign.tracing import trace_responses_call
@@ -64,9 +67,68 @@ class AudienceRerankResult(BaseModel):
     items: list[AudienceRerankItem] = Field(min_length=1, max_length=50)
 
 
+class CompactAudienceRerankItem(BaseModel):
+    """Retry schema: retain every field required by the deterministic gate."""
+
+    candidate_index: int = Field(ge=0, le=49)
+    segment_id: str = Field(min_length=1, max_length=160)
+    relevance_score: float = Field(ge=0, le=1)
+    match_tier: Literal["recommended", "adjacent", "unrelated"] = "unrelated"
+    match_basis: Literal[
+        "exact_product",
+        "exact_industry",
+        "exact_buyer",
+        "exact_user_interest",
+        "broad_parent",
+        "proxy",
+        "unrelated",
+    ]
+    has_conflict: bool
+
+
+class CompactAudienceRerankResult(BaseModel):
+    items: list[CompactAudienceRerankItem] = Field(min_length=1, max_length=50)
+
+
 _client: AsyncOpenAI | None = None
 _rerank_cache: dict[str, dict] = {}
-_RERANK_SCHEMA_VERSION = 3
+_RERANK_SCHEMA_VERSION = 4
+_MODEL_MAX_INPUT_TOKENS = 272_000
+_DEFAULT_MAX_OUTPUT_TOKENS = 70_000
+
+
+def _rerank_model() -> str:
+    # The legacy AUDIENCE_NANO_RERANK_MODEL deployment variable intentionally
+    # does not win here: several environments still pin it to nano. A new,
+    # explicit stability override remains available if the model changes later.
+    return (
+        os.getenv("AUDIENCE_RERANK_STABILITY_MODEL")
+        or config.OPENAI_CAMPAIGN_MODEL
+        or "gpt-5.4-mini"
+    )
+
+
+def _rerank_max_output_tokens() -> int:
+    explicit = os.getenv("AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS")
+    configured = int(
+        explicit or config.AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS or 0
+    )
+    return min(120_000, max(
+        _DEFAULT_MAX_OUTPUT_TOKENS,
+        configured * 20,
+    ))
+
+
+def _rerank_timeout_seconds() -> float:
+    explicit = os.getenv("AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS")
+    return max(
+        90.0,
+        float(
+            explicit
+            or config.AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS
+            or 0
+        ),
+    )
 
 
 def _get_client() -> AsyncOpenAI:
@@ -74,7 +136,7 @@ def _get_client() -> AsyncOpenAI:
     if _client is None:
         _client = AsyncOpenAI(
             api_key=config.OPENAI_API_KEY,
-            timeout=config.AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS,
+            timeout=_rerank_timeout_seconds(),
             max_retries=0,
         )
     return _client
@@ -99,7 +161,7 @@ def _candidate_id(candidate: dict) -> str:
 def _cache_key(query: str, candidates: list[dict], limit: int) -> str:
     payload = {
         "query": query,
-        "model": config.AUDIENCE_NANO_RERANK_MODEL,
+        "model": _rerank_model(),
         "schema_version": _RERANK_SCHEMA_VERSION,
         "candidates": sorted(
             (
@@ -282,22 +344,43 @@ async def rerank_candidates(
     try:
         api = client or _get_client()
         input_data = json.dumps(payload, ensure_ascii=False)
-        request = {
-            "model": config.AUDIENCE_NANO_RERANK_MODEL,
-            "instructions": instructions,
-            "input": input_data,
-            "text_format": AudienceRerankResult.model_json_schema(),
-            "reasoning": {
-                "effort": config.AUDIENCE_NANO_RERANK_REASONING_EFFORT,
-            },
-            "max_output_tokens": config.AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS,
-            "store": False,
-            "safety_identifier": _safety_identifier(query),
-        }
+        model = _rerank_model()
+        max_output_tokens = _rerank_max_output_tokens()
+        input_characters = len(input_data) + len(instructions)
+        compact_instructions = (
+            "Retry the audience rerank using only the compact schema. Return "
+            "every supplied candidate exactly once. Copy candidate_index and "
+            "segment_id exactly. Score relevance from 0 to 1; classify each as "
+            "recommended, adjacent, or unrelated; choose the closest literal "
+            "match_basis; set has_conflict for exclusions, a different domain, "
+            "or creative-only associations. A proxy cannot be recommended. "
+            "Never invent a segment or sensitive trait."
+        )
         response = None
         parsed = None
         last_error: Exception | None = None
         for attempt in range(2):
+            retry_mode = "rich" if attempt == 0 else "compact"
+            attempt_instructions = (
+                instructions if attempt == 0 else compact_instructions
+            )
+            response_format = (
+                AudienceRerankResult
+                if attempt == 0
+                else CompactAudienceRerankResult
+            )
+            request = {
+                "model": model,
+                "instructions": attempt_instructions,
+                "input": input_data,
+                "text_format": response_format.model_json_schema(),
+                "reasoning": {
+                    "effort": config.AUDIENCE_NANO_RERANK_REASONING_EFFORT,
+                },
+                "max_output_tokens": max_output_tokens,
+                "store": False,
+                "safety_identifier": _safety_identifier(query),
+            }
             try:
                 response = await trace_responses_call(
                     name=(
@@ -306,35 +389,35 @@ async def rerank_candidates(
                         else "openai.audience_nano_rerank_retry"
                     ),
                     session_id=session_id,
-                    model=config.AUDIENCE_NANO_RERANK_MODEL,
+                    model=model,
                     request=request,
                     metadata={
                         "schema": "audience_rerank",
                         "candidate_count": len(bounded),
                         "attempt": attempt + 1,
+                        "retry_mode": retry_mode,
+                        "input_characters": input_characters,
+                        "input_budget_tokens": _MODEL_MAX_INPUT_TOKENS,
+                        "input_truncated": False,
                     },
                     model_parameters={
                         "reasoning_effort": (
                             config.AUDIENCE_NANO_RERANK_REASONING_EFFORT
                         ),
-                        "max_output_tokens": (
-                            config.AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS
-                        ),
+                        "max_output_tokens": max_output_tokens,
                         "store": False,
                     },
                     call=lambda: api.responses.parse(
-                        model=config.AUDIENCE_NANO_RERANK_MODEL,
-                        instructions=instructions,
+                        model=model,
+                        instructions=attempt_instructions,
                         input=input_data,
-                        text_format=AudienceRerankResult,
+                        text_format=response_format,
                         reasoning={
                             "effort": (
                                 config.AUDIENCE_NANO_RERANK_REASONING_EFFORT
                             ),
                         },
-                        max_output_tokens=(
-                            config.AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS
-                        ),
+                        max_output_tokens=max_output_tokens,
                         store=False,
                         safety_identifier=_safety_identifier(query),
                     ),
@@ -357,6 +440,23 @@ async def rerank_candidates(
                 break
             except Exception as exc:
                 last_error = exc
+                try:
+                    await alog(session_id, "warn", {
+                        "audience_rerank_attempt_failed": True,
+                        "attempt": attempt + 1,
+                        "retry_mode": retry_mode,
+                        "model": model,
+                        "candidate_count": len(bounded),
+                        "input_characters": input_characters,
+                        "input_budget_tokens": _MODEL_MAX_INPUT_TOKENS,
+                        "input_truncated": False,
+                        "max_output_tokens": max_output_tokens,
+                        "error_type": type(exc).__name__,
+                        "error_detail": str(exc)[:160],
+                    })
+                except Exception:
+                    # Logging must never prevent the compact retry.
+                    pass
         if parsed is None:
             raise last_error or ValueError("missing structured output")
         raw_indexes = [item.candidate_index for item in parsed.items]
@@ -399,8 +499,14 @@ async def rerank_candidates(
         metadata = {
             "applied": True,
             "mode": "openai_nano",
-            "model": config.AUDIENCE_NANO_RERANK_MODEL,
+            "model": model,
             "candidate_count": len(bounded),
+            "attempts": attempt + 1,
+            "retry_mode": "rich" if attempt == 0 else "compact",
+            "input_characters": input_characters,
+            "input_budget_tokens": _MODEL_MAX_INPUT_TOKENS,
+            "input_truncated": False,
+            "max_output_tokens": max_output_tokens,
             "duplicate_count": len(raw_indexes) - len(set(raw_indexes)),
             "omitted_count": len(omitted),
             "scores": score_by_id,
@@ -419,6 +525,10 @@ async def rerank_candidates(
             "applied": False,
             "mode": "openai_nano",
             "reason": "provider_or_validation_failure",
+            "model": _rerank_model(),
+            "input_budget_tokens": _MODEL_MAX_INPUT_TOKENS,
+            "input_truncated": False,
+            "max_output_tokens": _rerank_max_output_tokens(),
             "error_type": type(exc).__name__,
             "error_detail": str(exc)[:160],
         }

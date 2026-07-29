@@ -172,6 +172,80 @@ def _exact_domain_query_match(segment: dict) -> dict | None:
     return None
 
 
+_FALLBACK_STOPWORDS = {
+    "a", "an", "and", "app", "application", "audience", "brand", "campaign",
+    "customer", "customers", "digital", "for", "in", "of", "online", "people",
+    "product", "the", "to", "user", "users", "vietnam", "with",
+}
+
+
+def _guarded_retrieval_fallback(
+    candidates: list[dict],
+    *,
+    limit: int = 6,
+) -> list[tuple[dict, float, list[str]]]:
+    """Return catalog-only related rows when the model reranker is unavailable.
+
+    These rows are deliberately never promoted to the direct recommendation
+    tier. The score only stabilizes ordering across the already guarded hybrid
+    retrieval result; it is not presented as model confidence.
+    """
+    ranked: list[tuple[dict, float, list[str], int]] = []
+    kind_weight = {
+        "product": 5.0,
+        "industry": 4.0,
+        "buyer": 3.0,
+        "audience": 2.5,
+        "brief": 1.0,
+        "rewrite": 0.75,
+    }
+    for retrieval_index, candidate in enumerate(candidates):
+        candidate_text = _fold_text(" ".join(
+            str(candidate.get(key) or "")
+            for key in (
+                "name", "fullLabel", "category", "subcategory", "context",
+            )
+        ))
+        candidate_tokens = {
+            token for token in candidate_text.split()
+            if len(token) > 2 and token not in _FALLBACK_STOPWORDS
+        }
+        score = 0.0
+        evidence: list[str] = []
+        for match in candidate.get("_query_matches") or []:
+            if not isinstance(match, dict):
+                continue
+            kind = str(match.get("kind") or "rewrite")
+            query = _fold_text(match.get("query"))
+            rank = max(1, int(match.get("query_rank") or 999))
+            query_tokens = {
+                token for token in query.split()
+                if len(token) > 2 and token not in _FALLBACK_STOPWORDS
+            }
+            overlap = sorted(candidate_tokens & query_tokens)
+            weight = kind_weight.get(kind, 0.5)
+            if overlap:
+                score += weight * (1.0 + min(3, len(overlap)))
+                evidence.append(
+                    f"{kind}:{'/'.join(overlap[:3])}"
+                )
+            elif kind in {"product", "industry", "buyer", "audience"} and rank <= 5:
+                score += weight / (rank + 1)
+                evidence.append(f"{kind}:top-{rank}")
+        score += min(1.0, float(candidate.get("_query_hits") or 0) * 0.1)
+        score += min(0.5, float(candidate.get("_fusion_score") or 0))
+        ranked.append((candidate, score, evidence, retrieval_index))
+
+    ranked.sort(key=lambda row: (-row[1], row[3]))
+    selected = [row for row in ranked if row[2]][:limit]
+    if not selected:
+        selected = ranked[:limit]
+    return [
+        (candidate, score, evidence)
+        for candidate, score, evidence, _retrieval_index in selected
+    ]
+
+
 def _guard_reason(brief: dict, segment: dict) -> str | None:
     """Deterministic taxonomy guards for explicit business/consumer conflicts."""
     notes = _fold_text(brief.get("notes"))
@@ -1400,6 +1474,70 @@ async def recommend_rag(
                     decision_row["taxonomy_decision"] = (
                         "sibling_kept_adjacent"
                     )
+
+        # A provider timeout or invalid structured response must not collapse
+        # the audience step into an empty, permanently loading walkthrough.
+        # Keep the deterministic guards above, expose the strongest catalog
+        # retrieval evidence as optional related rows, and never misrepresent
+        # those rows as model-approved direct recommendations.
+        fallback_applied = not bool(rerank_meta.get("applied"))
+        if fallback_applied:
+            recs = []
+            adjacent_recs = []
+            fallback_rows = _guarded_retrieval_fallback(top, limit=6)
+            fallback_labels = {
+                candidate.get("fullLabel") or candidate.get("name", "")
+                for candidate, _score, _evidence in fallback_rows
+            }
+            gate_decisions = []
+            for candidate in top:
+                candidate_id = str(
+                    candidate.get("segmentId")
+                    or candidate.get("_id")
+                    or candidate.get("fullLabel")
+                    or candidate.get("name")
+                    or ""
+                ).strip()
+                full_label = (
+                    candidate.get("fullLabel") or candidate.get("name", "")
+                )
+                is_related = full_label in fallback_labels
+                gate_decisions.append({
+                    "segment_id": candidate_id,
+                    "full_label": full_label,
+                    "score": None,
+                    "model_tier": None,
+                    "match_basis": "retrieval_fallback",
+                    "has_conflict": False,
+                    "decision": "adjacent" if is_related else "rejected",
+                    "gate_rule": (
+                        "guarded_retrieval_related"
+                        if is_related
+                        else "retrieval_fallback_limit"
+                    ),
+                })
+            for candidate, fallback_score, evidence in fallback_rows:
+                label = candidate.get("fullLabel") or candidate.get("name", "")
+                adjacent_recs.append({
+                    "fullLabel": label,
+                    "reason": (
+                        "Liên quan theo kết quả tìm kiếm catalog của brief; "
+                        "bộ xếp hạng AI tạm thời chưa phản hồi nên cần xem lại "
+                        "trước khi chọn."
+                    ),
+                    "tier": "adjacent",
+                    "match_tier": "adjacent",
+                    "match_basis": "retrieval_fallback",
+                    "relevance_score": None,
+                    "matched_signals": evidence[:4],
+                    "missing_signals": ["Chưa có đánh giá từ bộ xếp hạng AI"],
+                    "limitation": (
+                        "Đây là kết quả liên quan dự phòng từ catalog, không "
+                        "phải đề xuất trực tiếp đã được AI xác nhận."
+                    ),
+                    "has_conflict": False,
+                    "_fallback_score": round(fallback_score, 4),
+                })
         quality_gate = {
             "applied": True,
             "threshold": threshold,
@@ -1411,10 +1549,20 @@ async def recommend_rag(
                 1 for item in gate_decisions if item["decision"] == "rejected"
             ),
             "reranker_available": bool(rerank_meta.get("applied")),
+            "fallback_applied": fallback_applied,
+            "fallback_mode": (
+                "guarded_retrieval_adjacent"
+                if fallback_applied
+                else None
+            ),
             "promoted_parent_ids": promoted_parent_ids,
             "decisions": gate_decisions,
         }
-        selector_name = "openai_nano_scores"
+        selector_name = (
+            "guarded_retrieval_adjacent_fallback"
+            if fallback_applied
+            else "openai_nano_scores"
+        )
         if not rerank_meta.get("applied"):
             selector_error = "reranker_unavailable"
     else:

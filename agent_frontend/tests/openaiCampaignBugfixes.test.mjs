@@ -83,6 +83,19 @@ test('OpenAI audience separates direct recommendations from optional expansion',
   assert.doesNotMatch(autopilot, /Catalog có \$\{audienceCatalogCount\} segment/)
 })
 
+test('Audience provider completion always terminates the recommendation spinner', () => {
+  assert.match(audience, /if \(Array\.isArray\(recoFromChat\)\)/)
+  assert.match(audience, /setRecoLoading\(false\)/)
+  assert.match(
+    app,
+    /backend completed without a selectable proposal[\s\S]*?setAudienceRecommendation\(\[\]\)/,
+  )
+  assert.match(
+    app,
+    /log\.error\('audience-entry fetch failed'[\s\S]*?setAudienceRecommendation\(\[\]\)/,
+  )
+})
+
 test('OpenAI vague brief shows clarification instead of an empty approvable audience', () => {
   assert.match(autopilotReview, /value\.clarification_required/)
   assert.match(autopilotReview, /Brief chưa đủ thông tin để chọn audience an toàn/)

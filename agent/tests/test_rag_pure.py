@@ -423,9 +423,15 @@ async def test_nano_reranker_normalizes_duplicates_and_appends_omissions(monkeyp
 async def test_nano_reranker_retries_mismatched_index_and_segment_id(monkeypatch):
     class Responses:
         calls = 0
+        request_shapes = []
 
-        async def parse(self, **_kwargs):
+        async def parse(self, **kwargs):
             self.calls += 1
+            self.request_shapes.append({
+                "model": kwargs["model"],
+                "max_output_tokens": kwargs["max_output_tokens"],
+                "text_format": kwargs["text_format"].__name__,
+            })
             if self.calls == 1:
                 return SimpleNamespace(
                     output_parsed=SimpleNamespace(items=[
@@ -458,6 +464,14 @@ async def test_nano_reranker_retries_mismatched_index_and_segment_id(monkeypatch
     monkeypatch.setattr(
         "rag.nano_rerank.config.OPENAI_API_KEY", "test-key"
     )
+    monkeypatch.setattr(
+        "rag.nano_rerank.config.OPENAI_CAMPAIGN_MODEL", "gpt-5.4-mini"
+    )
+    monkeypatch.setenv("AUDIENCE_NANO_RERANK_MODEL", "gpt-5.4-nano")
+    monkeypatch.setenv(
+        "AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS", "3500"
+    )
+    monkeypatch.setenv("AUDIENCE_NANO_RERANK_TIMEOUT_SECONDS", "30")
     order, meta = await rerank_candidates(
         "food shoppers",
         [{"segmentId": "SEG-1", "fullLabel": "Food"}],
@@ -467,6 +481,24 @@ async def test_nano_reranker_retries_mismatched_index_and_segment_id(monkeypatch
     assert order == [0]
     assert meta["applied"] is True
     assert Client.responses.calls == 2
+    assert Client.responses.request_shapes == [
+        {
+            "model": "gpt-5.4-mini",
+            "max_output_tokens": 70000,
+            "text_format": "AudienceRerankResult",
+        },
+        {
+            "model": "gpt-5.4-mini",
+            "max_output_tokens": 70000,
+            "text_format": "CompactAudienceRerankResult",
+        },
+    ]
+    assert meta["retry_mode"] == "compact"
+    assert meta["attempts"] == 2
+    assert meta["input_budget_tokens"] == 272000
+    assert meta["input_truncated"] is False
+    from rag.nano_rerank import _rerank_timeout_seconds
+    assert _rerank_timeout_seconds() == 90.0
 
 
 @pytest.mark.asyncio
@@ -850,6 +882,116 @@ async def test_openai_score_gate_returns_empty_instead_of_six_weak_segments(monk
     assert result["recommendations"] == []
     assert result["rag"]["quality_gate"]["eligible"] == 0
     assert result["rag"]["quality_gate"]["rejected"] == 8
+
+
+@pytest.mark.asyncio
+async def test_openai_reranker_failure_returns_guarded_related_catalog_rows(
+    monkeypatch,
+):
+    import rag.nano_rerank as nano
+    import rag.recommend as recommend
+
+    candidates = [
+        {
+            "_id": "EDU-1",
+            "segmentId": "EDU-1",
+            "fullLabel": "Higher education",
+            "name": "Higher education",
+            "category": "Education",
+            "_rank": 0,
+            "_query_hits": 3,
+            "_fusion_score": 0.08,
+            "_query_matches": [{
+                "query": "education app",
+                "kind": "product",
+                "query_rank": 2,
+            }],
+            "_rag_index": {"segment_count": 310},
+        },
+        {
+            "_id": "LANG-1",
+            "segmentId": "LANG-1",
+            "fullLabel": "Language learning",
+            "name": "Language learning",
+            "category": "Education",
+            "_rank": 1,
+            "_query_hits": 2,
+            "_fusion_score": 0.06,
+            "_query_matches": [{
+                "query": "English language learners",
+                "kind": "audience",
+                "query_rank": 1,
+            }],
+            "_rag_index": {"segment_count": 310},
+        },
+        {
+            "_id": "SPORT-1",
+            "segmentId": "SPORT-1",
+            "fullLabel": "Soccer fans",
+            "name": "Soccer fans",
+            "category": "Sports",
+            "_rank": 2,
+            "_query_hits": 1,
+            "_fusion_score": 0.01,
+            "_query_matches": [{
+                "query": "English learning app",
+                "kind": "rewrite",
+                "query_rank": 12,
+            }],
+            "_rag_index": {"segment_count": 310},
+        },
+    ]
+
+    async def ready(_session_id):
+        return True
+
+    async def search(_queries, _limit, mode=None):
+        return candidates
+
+    async def unavailable(*_args, **_kwargs):
+        return None, {
+            "applied": False,
+            "mode": "openai_nano",
+            "reason": "provider_or_validation_failure",
+            "error_type": "APITimeoutError",
+        }
+
+    monkeypatch.setattr(recommend, "ensure_index", ready)
+    monkeypatch.setattr(recommend, "_hybrid_search", search)
+    monkeypatch.setattr(nano, "rerank_candidates", unavailable)
+    monkeypatch.setattr(recommend.config, "RAG_QUERY_REWRITE", False)
+    monkeypatch.setattr(recommend.config, "RAG_TOP_FINAL", 25)
+
+    result = await recommend.recommend_rag(
+        "openai-provider-fallback",
+        {
+            "brand": "ELSA",
+            "notes": "English learning app for students and professionals.",
+        },
+        provider="openai",
+        rerank_mode="openai_nano",
+        select_from_rerank_scores=True,
+        enable_query_rewrite=False,
+    )
+
+    assert result["recommendations"] == []
+    assert [
+        item["segmentId"]
+        for item in result["adjacent_recommendations"][:2]
+    ] == ["EDU-1", "LANG-1"]
+    assert len(result["adjacent_recommendations"]) == 2
+    assert all(
+        item["tier"] == "adjacent"
+        for item in result["adjacent_recommendations"]
+    )
+    assert result["rag"]["selector"] == (
+        "guarded_retrieval_adjacent_fallback"
+    )
+    assert result["rag"]["quality_gate"]["fallback_applied"] is True
+    assert result["rag"]["quality_gate"]["fallback_mode"] == (
+        "guarded_retrieval_adjacent"
+    )
+    assert result["rag"]["quality_gate"]["reranker_available"] is False
 
 
 def test_openai_retrieval_merge_prioritizes_explicit_audience_identity():

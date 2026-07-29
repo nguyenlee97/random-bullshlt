@@ -123,9 +123,11 @@ export default function AudienceStep({
 
   // Use audience-entry recommendation from chat — no fallback to dmp-recommend.
   // Per design: audience-entry is the single source of truth for recommendations.
-  // If recoFromChat is null (still loading), show spinner until it arrives.
+  // null means the request is still pending. An empty array is a terminal
+  // response and must stop the spinner so a provider failure cannot leave the
+  // walkthrough looking active forever.
   useEffect(() => {
-    if (recoFromChat && recoFromChat.length > 0) {
+    if (Array.isArray(recoFromChat)) {
       setRecoAttrs(dedupeDmpAttrs(recoFromChat))
       setRecoLoading(false)
     } else if (data.attrs.length > 0) {

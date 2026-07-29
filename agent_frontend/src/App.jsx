@@ -793,6 +793,11 @@ export default function App() {
               // useChat.js sendMessage, so we explicitly apply the workspace update here.
               handleWorkspaceUpdate(proposalBlock.changes)
               log.workspace('audience-entry → auto-applied segment proposal to formState')
+            } else {
+              // The backend completed without a selectable proposal. Preserve
+              // the chat guidance, but mark the recommendation request as
+              // terminal so AudienceStep does not spin forever.
+              setAudienceRecommendation([])
             }
             const msg = {
               id: generateId(),
@@ -805,6 +810,8 @@ export default function App() {
             }
             window.dispatchEvent(new CustomEvent('agent:inject_message', { detail: msg }))
 
+          } else {
+            setAudienceRecommendation([])
           }
         } catch (e) {
           if (
@@ -812,6 +819,7 @@ export default function App() {
             requestConversationId === currentConversationIdRef.current
           ) {
             log.error('audience-entry fetch failed', e.message)
+            setAudienceRecommendation([])
           }
         }
       })()
