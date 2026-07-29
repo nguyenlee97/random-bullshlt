@@ -21,6 +21,7 @@ import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { canApproveWorkflowStep, isBriefReady } from '@/lib/workflowValidation'
 import { normalizeAudienceSelection } from '@/lib/audience'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
+import { ongoingAutopilotConversations } from '@/lib/conversationDeletion'
 import {
   HOME_PATH,
   MANAGE_PATH,
@@ -632,7 +633,7 @@ export default function App() {
         }
         setHistoryLoading(true)
         const [history, modelCatalog] = await Promise.all([
-          AgentAPI.listConversations(),
+          AgentAPI.listConversations(true),
           AgentAPI.listConversationModels().catch(() => ({
             models: [], default_model: null,
           })),
@@ -1257,7 +1258,7 @@ export default function App() {
         await account.login({ email, password })
       }
       setAuthDialogOpen(false)
-      setConversationHistory(await AgentAPI.listConversations())
+      setConversationHistory(await AgentAPI.listConversations(true))
     } catch {
       // useIdentity owns the rendered error and preserves the current workspace.
     }
@@ -1288,7 +1289,7 @@ export default function App() {
     const current = conversationHistory.find(item => item.conversation_id === currentConversationId)
     try {
       await account.logout()
-      const remaining = await AgentAPI.listConversations()
+      const remaining = await AgentAPI.listConversations(true)
       setConversationHistory(remaining)
       if (current?.ownership === 'account') returnToCampaignManager('replace')
     } catch (error) {
@@ -1361,7 +1362,7 @@ export default function App() {
       if (!result?.ok) throw new Error(result?.detail || 'Không thể lưu cách làm việc cho campaign.')
       const workspace = await AgentAPI.getWorkspace()
       if (await archiveIfStale(context)) return false
-      const conversations = await AgentAPI.listConversations()
+      const conversations = await AgentAPI.listConversations(true)
       if (await archiveIfStale(context)) return false
       applyConversationContext({ ...context, workspace, ui_messages: [] })
       setExperienceMode(mode)
@@ -1433,7 +1434,7 @@ export default function App() {
     setHistoryLoading(true)
     setHistoryError('')
     try {
-      setConversationHistory(await AgentAPI.listConversations())
+      setConversationHistory(await AgentAPI.listConversations(true))
     } catch (error) {
       setHistoryError(error.message)
     } finally {
@@ -1449,7 +1450,7 @@ export default function App() {
     if (!identityReady || (experienceMode && !historyOpen)) return undefined
     let cancelled = false
     const refresh = async () => {
-      const items = await AgentAPI.listConversations()
+      const items = await AgentAPI.listConversations(true)
       if (!cancelled) setConversationHistory(items)
     }
     const timer = setInterval(refresh, 4000)
@@ -1488,7 +1489,11 @@ export default function App() {
       setHistoryError('Không thể lưu trữ chiến dịch này.')
       return
     }
-    setConversationHistory(prev => prev.filter(item => item.conversation_id !== conversationId))
+    setConversationHistory(prev => prev.map(item => (
+      item.conversation_id === conversationId
+        ? { ...item, archived_at: new Date().toISOString() }
+        : item
+    )))
   }, [])
 
   const requestDeleteConversation = useCallback((conversation) => {
@@ -1496,11 +1501,21 @@ export default function App() {
     setDeleteTarget({ type: 'one', conversation })
   }, [])
 
-  const requestDeleteAllConversations = useCallback(() => {
+  const requestDeleteAllConversations = useCallback(async () => {
     if (!conversationHistory.length) return
     setDeleteError('')
-    setDeleteTarget({ type: 'all', count: conversationHistory.length })
-  }, [conversationHistory.length])
+    const allConversations = await AgentAPI.listConversations(true)
+    const deletionCandidates = allConversations.length ? allConversations : conversationHistory
+    const ongoingAutopilot = ongoingAutopilotConversations(deletionCandidates)
+    if (ongoingAutopilot.length) {
+      setDeleteTarget({
+        type: 'autopilot-active',
+        conversations: ongoingAutopilot,
+      })
+      return
+    }
+    setDeleteTarget({ type: 'all', count: deletionCandidates.length })
+  }, [conversationHistory])
 
   const closeDeleteDialog = useCallback(() => {
     if (deleteBusy) return

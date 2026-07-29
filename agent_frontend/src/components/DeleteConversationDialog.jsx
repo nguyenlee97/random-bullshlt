@@ -8,13 +8,14 @@ export default function DeleteConversationDialog({
 }) {
   const [phrase, setPhrase] = useState('')
   const deleteAll = target?.type === 'all'
+  const autopilotActive = target?.type === 'autopilot-active'
 
   useEffect(() => setPhrase(''), [target])
   if (!target) return null
 
   const title = target.conversation?.title || 'Campaign chưa đặt tên'
   const phraseMatches = phrase.trim().toLocaleUpperCase('vi-VN') === DELETE_ALL_PHRASE
-  const canConfirm = !busy && (!deleteAll || phraseMatches)
+  const canConfirm = !busy && !autopilotActive && (!deleteAll || phraseMatches)
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[2px]"
@@ -27,21 +28,38 @@ export default function DeleteConversationDialog({
         </button>
 
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-          {deleteAll ? <AlertTriangle className="h-6 w-6" /> : <Trash2 className="h-5 w-5" />}
+          {deleteAll || autopilotActive ? <AlertTriangle className="h-6 w-6" /> : <Trash2 className="h-5 w-5" />}
         </div>
         <h2 id="delete-dialog-title" className="mt-4 pr-10 text-xl font-black text-slate-900">
-          {deleteAll ? 'Xóa toàn bộ lịch sử?' : 'Xóa cuộc trò chuyện này?'}
+          {autopilotActive
+            ? 'Chưa thể xóa toàn bộ lịch sử'
+            : deleteAll ? 'Xóa toàn bộ lịch sử?' : 'Xóa cuộc trò chuyện này?'}
         </h2>
         <div id="delete-dialog-description" className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
-          {deleteAll ? (
+          {autopilotActive ? (
+            <>
+              <p>
+                Có <strong className="text-slate-900">{target.conversations.length} campaign Autopilot</strong> vẫn đang hoạt động.
+                Hãy hoàn tất hoặc hủy các campaign này trước khi xóa toàn bộ lịch sử.
+              </p>
+              <ul className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+                {target.conversations.map(conversation => (
+                  <li key={conversation.conversation_id} className="truncate font-semibold">
+                    {conversation.title || 'Campaign chưa đặt tên'}
+                  </li>
+                ))}
+              </ul>
+              <p>Không có cuộc trò chuyện nào bị xóa.</p>
+            </>
+          ) : deleteAll ? (
             <p>Bạn sắp xóa vĩnh viễn <strong className="text-slate-900">{target.count} cuộc trò chuyện đang hiển thị</strong> và mọi cuộc trò chuyện đã lưu trữ, gồm chat, workspace và dữ liệu Autopilot liên quan.</p>
           ) : (
             <p>“<strong className="text-slate-900">{title}</strong>” sẽ bị xóa vĩnh viễn cùng chat, workspace và dữ liệu Autopilot liên quan.</p>
           )}
-          <p>Campaign/order đã tạo trong AdsPilot vẫn được giữ lại như hồ sơ kinh doanh. Thao tác này không thể hoàn tác.</p>
+          {!autopilotActive && <p>Campaign/order đã tạo trong AdsPilot vẫn được giữ lại như hồ sơ kinh doanh. Thao tác này không thể hoàn tác.</p>}
         </div>
 
-        {deleteAll && (
+        {deleteAll && !autopilotActive && (
           <label className="mt-4 block text-xs font-bold text-slate-700">
             Nhập <span className="text-red-600">{DELETE_ALL_PHRASE}</span> để xác nhận
             <input value={phrase} onChange={event => setPhrase(event.target.value)} disabled={busy} autoFocus
@@ -53,15 +71,24 @@ export default function DeleteConversationDialog({
         {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{error}</p>}
 
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button type="button" onClick={onCancel} disabled={busy}
-            className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            Giữ lại
-          </button>
-          <button type="button" onClick={onConfirm} disabled={!canConfirm}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-            {deleteAll ? 'Xóa toàn bộ' : 'Xóa vĩnh viễn'}
-          </button>
+          {autopilotActive ? (
+            <button type="button" onClick={onCancel}
+              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800">
+              Đã hiểu
+            </button>
+          ) : (
+            <>
+              <button type="button" onClick={onCancel} disabled={busy}
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                Giữ lại
+              </button>
+              <button type="button" onClick={onConfirm} disabled={!canConfirm}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {deleteAll ? 'Xóa toàn bộ' : 'Xóa vĩnh viễn'}
+              </button>
+            </>
+          )}
         </div>
       </section>
     </div>

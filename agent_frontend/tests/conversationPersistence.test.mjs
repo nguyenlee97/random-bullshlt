@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { ongoingAutopilotConversations } from '../src/lib/conversationDeletion.js'
+import { partitionConversationHistory } from '../src/lib/conversationHistory.js'
 
 const api = readFileSync(new URL('../src/api/agentApi.js', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
@@ -30,7 +32,7 @@ test('campaign resume hydrates transcript, workspace, pending proposals and auto
 
 test('fresh loads stay on the homepage until a campaign is explicitly opened', () => {
   assert.match(app, /initializeIdentity\(\{ restoreCurrent: false \}\)/)
-  assert.match(app, /setConversationHistory\(await AgentAPI\.listConversations\(\)\)/)
+  assert.match(app, /setConversationHistory\(await AgentAPI\.listConversations\(true\)\)/)
   assert.match(homepage, /Bạn muốn Agent/)
   assert.match(homepage, /đồng hành thế nào/)
   assert.match(homepage, /Tiếp nối những campaign đang viết dở/)
@@ -51,6 +53,24 @@ test('history UI exposes resume, archive and new campaign actions', () => {
   assert.match(app, /setInterval\(refresh, 4000\)/)
 })
 
+test('archived campaigns remain discoverable in management and workspace history', () => {
+  const conversations = [
+    { conversation_id: 'active', archived_at: null },
+    { conversation_id: 'archived', archived_at: '2026-07-29T10:00:00Z' },
+  ]
+  const partitioned = partitionConversationHistory(conversations)
+
+  assert.deepEqual(partitioned.active.map(item => item.conversation_id), ['active'])
+  assert.deepEqual(partitioned.archived.map(item => item.conversation_id), ['archived'])
+  assert.match(app, /AgentAPI\.listConversations\(true\)/)
+  assert.match(app, /archived_at: new Date\(\)\.toISOString\(\)/)
+  for (const surface of [homepage, history]) {
+    assert.match(surface, /Đang hoạt động/)
+    assert.match(surface, /Đã lưu trữ/)
+    assert.match(surface, /partitionConversationHistory/)
+  }
+})
+
 test('conversation deletion is available individually and in bulk with safety confirmation', () => {
   assert.match(api, /deleteConversation\(conversationId\)/)
   assert.match(api, /deleteAllConversations\(\)/)
@@ -60,6 +80,27 @@ test('conversation deletion is available individually and in bulk with safety co
   assert.match(deleteDialog, /role="alertdialog"/)
   assert.match(deleteDialog, /XÓA TẤT CẢ/)
   assert.match(deleteDialog, /Thao tác này không thể hoàn tác/)
+})
+
+test('bulk deletion warns before deleting conversations with ongoing Autopilot runs', () => {
+  const conversations = [
+    { conversation_id: 'queued', latest_run_summary: { status: 'queued' } },
+    { conversation_id: 'review', latest_run_summary: { status: 'waiting_review' } },
+    { conversation_id: 'paused', latest_run_summary: { status: 'paused' } },
+    { conversation_id: 'done', latest_run_summary: { status: 'completed' } },
+    { conversation_id: 'failed', latest_run_summary: { status: 'failed' } },
+    { conversation_id: 'cancelled', latest_run_summary: { status: 'cancelled' } },
+    { conversation_id: 'copilot' },
+  ]
+
+  assert.deepEqual(
+    ongoingAutopilotConversations(conversations).map(item => item.conversation_id),
+    ['queued', 'review', 'paused'],
+  )
+  assert.match(app, /AgentAPI\.listConversations\(true\)/)
+  assert.match(app, /type: 'autopilot-active'/)
+  assert.match(deleteDialog, /Chưa thể xóa toàn bộ lịch sử/)
+  assert.match(deleteDialog, /Không có cuộc trò chuyện nào bị xóa/)
 })
 
 test('deleting the active conversation returns to management without creating a replacement chat', () => {

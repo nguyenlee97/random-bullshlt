@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import {
   Archive, ArrowLeft, ArrowRight, Bot, Check, Clock3, History, Loader2,
   LogIn, Play, Route, Save, ShieldCheck, Sparkles, Trash2, Zap,
 } from 'lucide-react'
 import AccountMenu from '@/components/AccountMenu'
 import ZaloOACompanion from '@/components/ZaloOACompanion'
+import { partitionConversationHistory } from '@/lib/conversationHistory'
 
 const modes = [
   {
@@ -53,6 +55,10 @@ export default function ExperienceSelector({
   onLinkZalo, onOpenZaloOA, onUnlinkZaloOA,
   onOpenDemo, onBackToLanding,
 }) {
+  const [historyView, setHistoryView] = useState('active')
+  const { active: activeConversations, archived: archivedConversations } = partitionConversationHistory(conversations)
+  const visibleConversations = historyView === 'archived' ? archivedConversations : activeConversations
+
   return (
     <main className="h-screen h-[100dvh] overflow-y-auto overscroll-contain bg-[#eef4fb] px-4 py-5 sm:px-8 sm:py-8">
       <div className="mx-auto max-w-6xl rounded-[28px] border border-white/80 bg-white/60 p-4 shadow-[0_30px_100px_rgba(22,70,130,0.10)] backdrop-blur-xl sm:p-7 lg:p-9">
@@ -169,7 +175,7 @@ export default function ExperienceSelector({
               <p className="mt-1 text-sm text-slate-600">Mọi ý tưởng hay đều xứng đáng được đi đến cùng.</p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">{conversations.length} campaign</span>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">{activeConversations.length} đang hoạt động</span>
               {conversations.length > 0 && (
                 <button type="button" onClick={onDeleteAll}
                   className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-red-600 hover:bg-red-50"
@@ -180,27 +186,43 @@ export default function ExperienceSelector({
             </div>
           </div>
 
+          <div className="mt-5 inline-flex rounded-xl bg-slate-200/70 p-1" role="tablist" aria-label="Loại lịch sử chiến dịch">
+            <button type="button" role="tab" aria-selected={historyView === 'active'} onClick={() => setHistoryView('active')}
+              className={`rounded-lg px-3 py-2 text-xs font-bold transition ${historyView === 'active' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+              Đang hoạt động ({activeConversations.length})
+            </button>
+            <button type="button" role="tab" aria-selected={historyView === 'archived'} onClick={() => setHistoryView('archived')}
+              className={`rounded-lg px-3 py-2 text-xs font-bold transition ${historyView === 'archived' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+              Đã lưu trữ ({archivedConversations.length})
+            </button>
+          </div>
+
           {historyLoading && (
             <div className="mt-5 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/70 py-10 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Đang tải lịch sử…
             </div>
           )}
           {!historyLoading && historyError && <p className="mt-5 rounded-xl bg-red-50 p-3 text-sm text-red-700">{historyError}</p>}
-          {!historyLoading && !historyError && conversations.length === 0 && (
+          {!historyLoading && !historyError && visibleConversations.length === 0 && (
             <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-white/60 px-5 py-10 text-center text-sm text-slate-500">
-              Campaign đầu tiên đang chờ bạn tạo dấu ấn. Bắt đầu ngay ở phía trên.
+              {historyView === 'archived'
+                ? 'Chưa có campaign nào được lưu trữ.'
+                : 'Campaign đầu tiên đang chờ bạn tạo dấu ấn. Bắt đầu ngay ở phía trên.'}
             </div>
           )}
-          {!historyLoading && !historyError && conversations.length > 0 && (
+          {!historyLoading && !historyError && visibleConversations.length > 0 && (
             <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {conversations.map(item => {
+              {visibleConversations.map(item => {
                 const run = item.latest_run_summary
                 const [runLabel, runTone] = runStatus(run?.status)
                 return <article key={item.conversation_id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-200 hover:shadow-md">
                   <button type="button" className="w-full text-left" onClick={() => onResume(item.conversation_id)}>
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">{item.title || 'Campaign mới'}</h3>
-                      <ArrowRight className="h-4 w-4 shrink-0 text-slate-300" />
+                      <div className="flex shrink-0 items-center gap-2">
+                        {item.archived_at && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Đã lưu trữ</span>}
+                        <ArrowRight className="h-4 w-4 text-slate-300" />
+                      </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
                       <span className="rounded-full bg-brand-50 px-2 py-0.5 font-bold text-brand-700">{modeLabel(item.experience_mode)}</span>
@@ -226,10 +248,12 @@ export default function ExperienceSelector({
                         <Save className="h-3 w-3" /> Lưu vào tài khoản
                       </button>
                     )}
-                    <button type="button" onClick={() => onArchive(item.conversation_id)} className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-700"
-                      aria-label={`Lưu trữ ${item.title || 'campaign'}`}>
-                      <Archive className="h-3 w-3" /> Lưu trữ
-                    </button>
+                    {!item.archived_at && (
+                      <button type="button" onClick={() => onArchive(item.conversation_id)} className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-700"
+                        aria-label={`Lưu trữ ${item.title || 'campaign'}`}>
+                        <Archive className="h-3 w-3" /> Lưu trữ
+                      </button>
+                    )}
                     <button type="button" onClick={() => onDelete(item)} className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700"
                       aria-label={`Xóa ${item.title || 'campaign'}`}>
                       <Trash2 className="h-3 w-3" /> Xóa
