@@ -306,6 +306,78 @@ async def test_openai_clarification_discards_provider_working_brief_without_fail
 
 
 @pytest.mark.asyncio
+async def test_complete_zplay_intake_recovers_provider_working_draft_without_repair(
+    monkeypatch,
+):
+    """Regression for production request 6345ecc1f5cc4b4e on 2026-07-29."""
+    import graph.nodes.brief_collector as collector
+    import openai_campaign.engine as engine
+    from graph.nodes.brief_collector import BriefDelegationDecision
+    from session import get_pending_proposal
+
+    forbidden = AsyncMock(side_effect=AssertionError("GreenNode structured call"))
+    monkeypatch.setattr(collector, "structured", forbidden)
+    monkeypatch.setattr(
+        engine, "decide_turn", AsyncMock(return_value=_update_brief_decision()),
+    )
+    client = _Client({
+        "BriefIntakeTurn": {
+            "action": "ask_clarification",
+            "message": "Cần bổ sung Brief.",
+            "brief": {
+                "brand": "ZPlay",
+                "objective": "awareness",
+                "kpi": "Reach, VTR",
+                "budget": 200,
+                "startDate": "2026-07-28",
+                "endDate": "2026-08-04",
+                "notes": (
+                    "Sản phẩm: Nền tảng game và giải đấu esports. "
+                    "Đối tượng: Nam 15–28 tuổi, quan tâm gaming, esports và game online. "
+                    "Thông điệp: Khám phá sân chơi dành cho cộng đồng game thủ."
+                ),
+            },
+            "missing_fields": ["objective", "kpi", "notes"],
+        },
+        "BriefDelegationDecision": BriefDelegationDecision(
+            mode="none",
+            provided_fields=["objective", "kpi", "notes"],
+            delegated_fields=[],
+        ),
+    })
+
+    result = await engine.handle_openai_freeform(
+        "\n".join([
+            "Brand: ZPlay",
+            "Sản phẩm / dịch vụ: Nền tảng game và giải đấu esports",
+            "Objective: awareness",
+            "KPI: Reach, VTR",
+            "Budget: 200 triệu VND",
+            "Thời gian: 28/07/2026 đến 04/08/2026",
+            "Đối tượng mục tiêu: Nam 15–28 tuổi, quan tâm gaming, esports và game online",
+            "Thông điệp chính: Khám phá sân chơi dành cho cộng đồng game thủ",
+        ]),
+        0,
+        "openai-zplay-working-draft-recovery",
+        client=client,
+    )
+
+    pending = await get_pending_proposal(
+        "openai-zplay-working-draft-recovery"
+    )
+    assert result.meta.tool == "workspace_proposal"
+    assert result.blocks[0]["type"] == "workspace_proposal"
+    assert pending["value"]["brand"] == "ZPlay"
+    assert pending["value"]["budget"] == 200.0
+    assert pending["value"]["startDate"] == "2026-07-28"
+    assert pending["value"]["endDate"] == "2026-08-04"
+    assert {call["text_format"].__name__ for call in client.responses.calls} == {
+        "BriefIntakeTurn", "BriefDelegationDecision",
+    }
+    forbidden.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_complete_openai_intake_creates_one_atomic_whole_brief_proposal(
     monkeypatch,
 ):

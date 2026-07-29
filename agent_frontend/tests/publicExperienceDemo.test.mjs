@@ -303,6 +303,11 @@ test('Autopilot walkthrough auto-commits audience and targeting, then stops befo
 
   assert.ok(types.includes('APPLY_AUTOPILOT_BRIEF'))
   assert.ok(types.includes('WAIT_FOR_AUTOPILOT_TASK'))
+  const briefWait = live.find(step => step.type === 'WAIT_FOR_RESPONSE')
+  assert.equal(
+    briefWait.requiredSelector,
+    '[data-demo="workspace-proposal-confirm"][data-workspace-field="brief"]',
+  )
   assert.equal(types.includes('TRIM_AUTOPILOT_AUDIENCE'), false)
   assert.equal(types.includes('CHANGE_AUTOPILOT_TARGETING'), false)
   assert.ok(types.includes('TRIM_AUTOPILOT_PLACEMENTS'))
@@ -329,6 +334,8 @@ test('Autopilot walkthrough auto-commits audience and targeting, then stops befo
   assert.match(engine, /buildAutopilotLiveSteps/)
   assert.match(engine, /whenAutopilotTask/)
   assert.match(engine, /case 'WAIT_FOR_AUTOPILOT_TASK'/)
+  assert.match(engine, /step\.requiredSelector/)
+  assert.match(engine, /Brief chưa được tạo thành công/)
   assert.match(engine, /unexpected:\$\{taskKey\}/)
   assert.match(engine, /Brief cần thêm ngữ cảnh trước khi tìm audience/)
   assert.match(engine, /case 'TRIM_AUTOPILOT_AUDIENCE'/)

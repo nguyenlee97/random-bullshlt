@@ -332,6 +332,35 @@ export function DemoProvider({
           }
           setTimeout(poll, 300)
         })
+        if (step.requiredSelector) {
+          const proposalReady = await new Promise(resolve => {
+            const startedAt = Date.now()
+            const poll = () => {
+              if (document.querySelector(step.requiredSelector)) {
+                resolve(true)
+              } else if (Date.now() - startedAt > (step.requiredTimeout || 5000)) {
+                resolve(false)
+              } else {
+                setTimeout(poll, 200)
+              }
+            }
+            poll()
+          })
+          if (!proposalReady) {
+            log.error(`DemoEngine: required response artifact missing: ${step.requiredSelector}`)
+            setIsWaiting(false)
+            setPhase(PHASE.CONFIRM_LIVE)
+            setPopup({
+              title: 'Brief chưa được tạo thành công',
+              text: 'Agent chưa tạo được đề xuất Brief nên walkthrough đã dừng trước bước review. Bạn có thể thử lại bằng một campaign mới; walkthrough sẽ không giả vờ rằng proposal đã tồn tại.',
+              buttons: [
+                { label: 'Thử lại walkthrough', variant: 'primary', action: 'live' },
+                { label: 'Dừng tại đây', variant: 'ghost', action: 'skip' },
+              ],
+            })
+            return
+          }
+        }
         setIsWaiting(false)
         setStepIdx(prev => prev + 1)
         return

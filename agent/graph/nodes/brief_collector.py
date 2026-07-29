@@ -14,7 +14,7 @@ import re
 import time
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from agent_logger import alog
 from autopilot.capabilities import validate_brief_value
@@ -110,6 +110,11 @@ class BriefTurn(BaseModel):
     )
 
     model_config = {"extra": "forbid"}
+    # OpenAI's lenient transport may expose a complete working draft while it
+    # chooses ask_clarification. Keep that candidate out of serialization and
+    # canonical state; it is eligible only after the server proves that every
+    # required field was explicitly supplied or delegated.
+    _provider_working_brief: BriefDraft | None = PrivateAttr(default=None)
 
     @field_validator("brief", mode="before")
     @classmethod
@@ -484,6 +489,29 @@ async def generate_brief_turn(
     )
     if enforced is not None:
         return enforced, tokens
+
+    # The provider may choose clarification despite already producing a
+    # complete working draft. When transcript evidence proves there is
+    # genuinely nothing left to clarify, reuse that validated draft instead of
+    # asking the provider to reconstruct the same object in a second call.
+    working_brief = getattr(turn, "_provider_working_brief", None)
+    if working_brief is not None:
+        recovered = BriefTurn(
+            action="propose_brief",
+            message=normalized.message,
+            brief=working_brief,
+            reason=normalized.reason,
+            suggestion_fields=normalized.suggestion_fields,
+        )
+        enforced = _enforce_explicit_brief_fields(
+            recovered, state, provided_fields=provided_fields,
+        )
+        if enforced is not None:
+            await alog(state["session_id"], "info", {
+                "event": "brief_working_draft_recovered",
+                "source_action": normalized.action,
+            })
+            return enforced, tokens
 
     # The provider asked for advisory values the user already supplied. Force
     # one schema-repaired proposal instead of repeating an unnecessary question.

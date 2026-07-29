@@ -57,6 +57,10 @@ class _OpenAIBriefIntakeTransport(_OpenAIBriefTurnTransport):
 
 class _OpenAIBriefProposalTransport(_OpenAIBriefTurnTransport):
     action: Literal["propose_brief"]
+    # A repair response has exactly one legal outcome. Making the nested draft
+    # required at the provider schema boundary prevents a formally successful
+    # `propose_brief` response with `brief: null`.
+    brief: BriefDraft
 
 
 # Preserve the schema names in OpenAI traces and test doubles. The classes stay
@@ -154,9 +158,11 @@ async def _openai_structured_runner(
         ) from exc
     if schema_name in _OPENAI_BRIEF_TRANSPORTS:
         parsed_data = parsed.model_dump()
+        provider_working_brief = None
         if parsed_data.get("action") != "propose_brief":
             # A clarification may expose the model's working draft, but it is
             # neither user-approved nor eligible to become canonical state.
+            provider_working_brief = parsed_data.get("brief")
             parsed_data["brief"] = None
         elif parsed_data.get("brief") is not None:
             parsed_data["brief"] = normalize_openai_yearless_dates(
@@ -170,6 +176,10 @@ async def _openai_structured_runner(
             raise StructuredOutputError(
                 f"{schema_name} invalid after OpenAI transport normalization: {exc}"
             ) from exc
+        if provider_working_brief is not None:
+            parsed._provider_working_brief = BriefDraft.model_validate(
+                provider_working_brief
+            )
     return parsed, int(provenance.get("total_tokens") or 0)
 
 

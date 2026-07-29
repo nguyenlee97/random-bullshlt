@@ -76,6 +76,7 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
     },
     {
       type: 'WAIT_FOR_RESPONSE',
+      requiredSelector: '[data-demo="workspace-proposal-confirm"][data-workspace-field="brief"]',
       tooltip: {
         target: '[data-demo="chat-thread"]',
         position: 'right',
