@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { cn, fmt } from '@/lib/utils'
 import { AgentAPI, fetchDmpAttributes } from '@/api/agentApi'
 import { dedupeDmpAttrs, enrichAudienceSelection, normalizeDmpAttr } from '@/lib/audience'
+import { matchesCatalogSearch } from '@/lib/catalogSearch'
 import { Users, Check, Search, Loader2, Sparkles, ChevronDown, ChevronUp, BrainCircuit, X } from 'lucide-react'
 import TargetingPanel from '@/components/TargetingPanel'
 
@@ -62,6 +63,7 @@ export default function AudienceStep({
   const [recoAttrs, setRecoAttrs] = useState([])
   const [recoLoading, setRecoLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('all')
   const [expanded, setExpanded] = useState(false)
   const [reachLoading, setReachLoading] = useState(false)
 
@@ -162,12 +164,19 @@ export default function AudienceStep({
     onChange({ ...data, attrs: newAttrs, size: 0, sizeKnown: false, reach: null })
   }
 
-  // Full list excludes segments already shown in AI reco section
+  const categoryOptions = useMemo(() => (
+    [...new Set(allAttrs.map(attr => attr.category || attr.type).filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right, 'vi'))
+  ), [allAttrs])
+
+  // Full list excludes segments already shown in AI reco section.
   const filtered = allAttrs
     .filter(a => !recoUids.has(a._uid))
-    .filter(a =>
-      !search || a.name?.toLowerCase().includes(search.toLowerCase()) || a.code?.toLowerCase().includes(search.toLowerCase())
-    )
+    .filter(a => categoryFilter === 'all' || (a.category || a.type) === categoryFilter)
+    .filter(a => matchesCatalogSearch([
+      a.name, a.code, a.category, a.type, a.fullLabel,
+      a.subcategory, a.segment_category, a.segment_type,
+    ], search))
 
 
   if (isDone) {
@@ -326,9 +335,22 @@ export default function AudienceStep({
 
       {expanded && (
         <div className="space-y-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm theo tên, mã, danh mục..." className="pl-9 h-9" id="audience-search" />
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_190px]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm theo tên, mã, danh mục..." className="pl-9 h-9" id="audience-search" />
+            </div>
+            <select
+              value={categoryFilter}
+              onChange={event => setCategoryFilter(event.target.value)}
+              className="h-9 rounded-lg border border-border bg-white px-3 text-xs outline-none focus:border-brand-400"
+              aria-label="Lọc audience theo danh mục"
+            >
+              <option value="all">Tất cả danh mục</option>
+              {categoryOptions.map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
           </div>
           {loading ? (
             <div className="flex items-center justify-center py-6">

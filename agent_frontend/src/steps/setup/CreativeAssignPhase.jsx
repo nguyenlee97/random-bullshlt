@@ -174,9 +174,13 @@ function AssignRow({
 }
 
 // ─── Phase 2 component ─────────────────────────────────────────────────────────
-export default function CreativeAssignPhase({ data, onChange, files, allZones, recoZones, repairMode = false }) {
+export default function CreativeAssignPhase({
+  data, onChange, files, allZones, recoZones,
+  repairMode = false, openaiCampaignFlow = false,
+}) {
   const selectedZones = getSelectedZones(data.selectedZoneIds || [], allZones || null, recoZones || null)
   const assignments = data.assignments || {}
+  const strictCompatibility = repairMode || openaiCampaignFlow
 
   const handleAssign = (zoneId, fileId) => {
     onChange({ ...data, assignments: { ...assignments, [zoneId]: fileId } })
@@ -211,11 +215,15 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones, r
         }
         return
       }
-      const best = [...approvedFiles]
+      const compatibleFiles = strictCompatibility
+        ? approvedFiles.filter(file => !checkAutopilotMismatch(zone, file))
+        : approvedFiles
+      const best = [...compatibleFiles]
         .map(f => ({ ...f, _score: scoreFile(f, zone) }))
         .sort((a, b) => b._score - a._score)
         .at(0)
       if (best) newAssignments[zone.id] = best.id
+      else delete newAssignments[zone.id]
     })
     onChange({ ...data, assignments: newAssignments })
   }
@@ -258,7 +266,7 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones, r
   const assignedCount = selectedZones.filter(z => assignments[z.id]).length
   const mismatchCount = selectedZones.filter(z => {
     const f = files.find(f => f.id === assignments[z.id])
-    return f && (repairMode ? checkAutopilotMismatch(z, f) : checkMismatch(z, f))
+    return f && (strictCompatibility ? checkAutopilotMismatch(z, f) : checkMismatch(z, f))
   }).length
 
   return (
@@ -334,7 +342,7 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones, r
             onAssign={handleAssign}
             onGroupSameSize={handleGroupSameSize}
             groupedCount={countGroupable(zone, assignments[zone.id])}
-            strictCompatibility={repairMode}
+            strictCompatibility={strictCompatibility}
             recommendedScores={data.recommendedAssignmentScores?.[zone.id] || {}}
           />
         ))}

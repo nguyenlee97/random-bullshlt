@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { matchesCatalogSearch } from '@/lib/catalogSearch'
 import { ALL_ZONES, getRecommendedZones, calcImpressions } from '@/data/zones'
 import { Sparkles, ChevronDown, ChevronUp, Check, RefreshCw, ArrowRight, Eye, BarChart2, MousePointerClick, DollarSign, AlertTriangle, ExternalLink, Search } from 'lucide-react'
 import { fmtVnd, fmtImp } from './setupUtils'
@@ -16,7 +17,7 @@ function Stat({ icon: Icon, value, color }) {
   )
 }
 
-function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
+function ZoneCard({ zone, selected, onToggle, isReco, isRelated = false, budgetPerZoneM }) {
   const estImp = budgetPerZoneM > 0 ? calcImpressions(zone, budgetPerZoneM) : null
   const conflict = zone.conflict || null
   const contextEvidence = [
@@ -48,7 +49,8 @@ function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
         conflict && !selected && 'border-red-200 bg-red-50/60 hover:border-red-300',
         !conflict && selected && 'border-brand-400 bg-brand-50 shadow-sm',
         !conflict && !selected && isReco && 'border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 hover:border-amber-400',
-        !conflict && !selected && !isReco && 'border-border bg-white hover:border-brand-300 hover:bg-slate-50',
+        !conflict && !selected && isRelated && 'border-sky-300 bg-sky-50/60 hover:border-sky-400',
+        !conflict && !selected && !isReco && !isRelated && 'border-border bg-white hover:border-brand-300 hover:bg-slate-50',
       )}
       id={`zone-${zone.id}`}
     >
@@ -68,6 +70,9 @@ function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
             </span>
             {isReco && !conflict && (
               <Badge className="text-[9px] h-4 px-1 bg-amber-100 text-amber-700 border-amber-300">⭐ Gợi ý</Badge>
+            )}
+            {isRelated && !conflict && (
+              <Badge className="text-[9px] h-4 px-1 bg-sky-100 text-sky-700 border-sky-300">↗ Liên quan</Badge>
             )}
             {conflict && (
               <Badge className="text-[9px] h-4 px-1 bg-red-100 text-red-700 border-red-300 gap-0.5">
@@ -105,10 +110,10 @@ function ZoneCard({ zone, selected, onToggle, isReco, budgetPerZoneM }) {
         </div>
       )}
 
-      {isReco && !conflict && zone.reason && (
-        <p className="text-[10px] text-amber-700 italic pl-6 leading-tight">{zone.reason}</p>
+      {(isReco || isRelated) && !conflict && zone.reason && (
+        <p className={cn('text-[10px] italic pl-6 leading-tight', isRelated ? 'text-sky-700' : 'text-amber-700')}>{zone.reason}</p>
       )}
-      {isReco && !conflict && (
+      {(isReco || isRelated) && !conflict && (
         <div className={cn(
           'ml-6 rounded-md px-2 py-1.5 text-[10px] leading-tight',
           isContextRecommendation
@@ -193,13 +198,17 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
   const [expanded, setExpanded] = useState(false)
   const [query, setQuery] = useState('')
   const [publisher, setPublisher] = useState('all')
+  const [topicFilter, setTopicFilter] = useState('all')
+  const [expandedTopics, setExpandedTopics] = useState(() => new Set())
 
   const selectedIds = data.selectedZoneIds || []
   const recoZones = data.recoZones || []
+  const relatedZones = data.relatedZones || []
   const totalBudget = brief?.budget || 0
   const budgetPerZone = selectedIds.length > 0 ? totalBudget / selectedIds.length : 0
 
   const recoIds = new Set(recoZones.map(z => z.id))
+  const relatedIds = new Set(relatedZones.map(z => z.id))
   // Use real API zones for the full list; fall back to static ALL_ZONES
   const catalog = allZones?.length ? allZones : ALL_ZONES
   const publisherOptions = useMemo(() => (
@@ -208,16 +217,23 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
       .filter(Boolean))]
       .sort((left, right) => left.localeCompare(right, 'vi'))
   ), [catalog])
-  const otherZones = catalog.filter(z => !recoIds.has(z.id))
+  const topicOptions = useMemo(() => (
+    [...new Set(catalog.map(zone => zone.topicId || 'legacy_other'))]
+      .sort((left, right) => (
+        (TOPIC_LABELS[left] || left).localeCompare(TOPIC_LABELS[right] || right, 'vi')
+      ))
+  ), [catalog])
+  const otherZones = catalog.filter(z => !recoIds.has(z.id) && !relatedIds.has(z.id))
   const groupedZones = useMemo(() => {
-    const foldedQuery = query.trim().toLowerCase()
     const filtered = otherZones.filter((zone) => {
       if (publisher !== 'all' && (zone.publisher || zone.platform || zone.siteId) !== publisher) return false
-      if (!foldedQuery) return true
-      return [
-        zone.id, zone.name, zone.topicId, zone.placementFamily,
-        zone.publisher, zone.channel,
-      ].filter(Boolean).join(' ').toLowerCase().includes(foldedQuery)
+      if (topicFilter !== 'all' && (zone.topicId || 'legacy_other') !== topicFilter) return false
+      return matchesCatalogSearch([
+        zone.id, zone.name, zone.topicId, TOPIC_LABELS[zone.topicId],
+        zone.placementFamily, zone.publisher, zone.platform, zone.channel,
+        zone.size, zone.format, zone.placement, zone.pageType,
+        zone.audienceContext, zone.audience_context,
+      ], query)
     })
     return Object.entries(filtered.reduce((groups, zone) => {
       const key = zone.topicId || 'legacy_other'
@@ -229,7 +245,16 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
       if (right === 'legacy_other') return -1
       return (TOPIC_LABELS[left] || left).localeCompare(TOPIC_LABELS[right] || right, 'vi')
     })
-  }, [otherZones, publisher, query])
+  }, [otherZones, publisher, query, topicFilter])
+
+  const toggleTopic = (topicId) => {
+    setExpandedTopics(current => {
+      const next = new Set(current)
+      if (next.has(topicId)) next.delete(topicId)
+      else next.add(topicId)
+      return next
+    })
+  }
 
   const toggleZone = (id) => {
     const next = selectedIds.includes(id)
@@ -240,7 +265,7 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
 
   const handleReRecommend = () => {
     // Reset initialized so SetupStep re-fetches from backend
-    onChange({ ...data, initialized: false, recoZones: [], allZones: [], selectedZoneIds: [], created: false })
+    onChange({ ...data, initialized: false, recoZones: [], relatedZones: [], allZones: [], selectedZoneIds: [], created: false })
   }
 
   return (
@@ -292,6 +317,31 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
         </div>
       </div>
 
+      {relatedZones.length > 0 && (
+        <div data-demo="related-zones-section" className="rounded-xl border border-sky-200 bg-sky-50/60 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-sky-200 bg-sky-100/60">
+            <div>
+              <p className="text-xs font-bold text-sky-800">Ad zones liên quan để mở rộng</p>
+              <p className="text-[10px] text-sky-700">Lựa chọn gần với brief, chưa được chọn</p>
+            </div>
+            <Badge className="bg-sky-100 text-sky-700 border-sky-300">{relatedZones.length} zones</Badge>
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 p-2">
+            {relatedZones.map(zone => (
+              <ZoneCard
+                key={zone.id}
+                zone={zone}
+                selected={selectedIds.includes(zone.id)}
+                onToggle={toggleZone}
+                isReco={false}
+                isRelated
+                budgetPerZoneM={budgetPerZone}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Expand full list */}
       <Button data-demo="expand-zones-btn" variant="outline" size="sm" onClick={() => setExpanded(e => !e)} className="w-full gap-2 text-xs h-9">
         {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -300,7 +350,7 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
 
       {expanded && (
         <div className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_170px_190px] gap-2">
             <label className="relative">
               <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
               <input
@@ -320,10 +370,28 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
                 <option key={publisherName} value={publisherName}>{publisherName}</option>
               ))}
             </select>
+            <select
+              value={topicFilter}
+              onChange={(event) => setTopicFilter(event.target.value)}
+              className="h-9 rounded-lg border border-border bg-white px-3 text-xs outline-none focus:border-brand-400"
+              aria-label="Lọc ad zone theo topic"
+            >
+              <option value="all">Tất cả topics</option>
+              {topicOptions.map(topicId => (
+                <option key={topicId} value={topicId}>{TOPIC_LABELS[topicId] || topicId.replaceAll('_', ' ')}</option>
+              ))}
+            </select>
           </div>
-          {groupedZones.map(([topicId, zones]) => (
+          {groupedZones.map(([topicId, zones]) => {
+            const topicExpanded = Boolean(query.trim()) || topicFilter !== 'all' || expandedTopics.has(topicId)
+            return (
             <section key={topicId} className="rounded-xl border border-border bg-slate-50/70 overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-white">
+              <button
+                type="button"
+                onClick={() => toggleTopic(topicId)}
+                className="flex w-full items-center justify-between px-3 py-2 bg-white text-left hover:bg-slate-50"
+                aria-expanded={topicExpanded}
+              >
                 <div>
                   <p className="text-xs font-bold text-slate-800">{TOPIC_LABELS[topicId] || topicId.replaceAll('_', ' ')}</p>
                   <p className="text-[10px] text-muted-foreground">
@@ -331,10 +399,14 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
                     {topicId !== 'legacy_other' ? ' · ZNews và BaoMoi có thể so sánh cùng topic/format' : ''}
                   </p>
                 </div>
-                <Badge variant="muted" className="text-[10px]">{topicId}</Badge>
-              </div>
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 p-2">
-                {zones
+                <div className="flex items-center gap-2">
+                  <Badge variant="muted" className="text-[10px]">{topicId}</Badge>
+                  {topicExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                </div>
+              </button>
+              {topicExpanded && (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 p-2 border-t border-border">
+                {[...zones]
                   .sort((left, right) => (
                     `${left.placementFamily || ''}:${left.publisher || ''}:${left.id}`
                       .localeCompare(`${right.placementFamily || ''}:${right.publisher || ''}:${right.id}`)
@@ -349,9 +421,10 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
                       budgetPerZoneM={budgetPerZone}
                     />
                   ))}
-              </div>
+                </div>
+              )}
             </section>
-          ))}
+          )})}
           {!groupedZones.length && (
             <p className="py-8 text-center text-xs text-muted-foreground">Không có placement phù hợp bộ lọc.</p>
           )}
@@ -359,14 +432,16 @@ export default function ZoneSelectionPhase({ data, onChange, brief, allZones }) 
       )}
 
       {selectedIds.length > 0 && (
-        <Button
-          onClick={() => onChange({ ...data, phase: 'assign' })}
-          className="w-full gap-2"
-          id="confirm-zones-btn"
-        >
-          <ArrowRight className="w-4 h-4" />
-          Tiếp tục gắn creative vào {selectedIds.length} zones
-        </Button>
+        <div className="sticky bottom-0 z-20 -mx-1 rounded-xl border border-brand-200 bg-white/95 p-2 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur">
+          <Button
+            onClick={() => onChange({ ...data, phase: 'assign' })}
+            className="w-full gap-2"
+            id="confirm-zones-btn"
+          >
+            <ArrowRight className="w-4 h-4" />
+            Tiếp tục gắn creative vào {selectedIds.length} zones
+          </Button>
+        </div>
       )}
     </div>
   )

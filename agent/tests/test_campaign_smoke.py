@@ -180,3 +180,66 @@ async def test_setup_entry_persists_proactive_message(monkeypatch):
 
     assert result["skip"] is False
     assert history[-1] == {"role": "assistant", "content": result["text"]}
+
+
+@pytest.mark.asyncio
+async def test_openai_setup_entry_returns_six_unselected_related_zones(monkeypatch):
+    import handlers.setup as setup_handler
+    import tools.order_api as order_api
+    import tools.zone_catalog as zone_catalog
+    from session import update_form_state
+
+    zones = [
+        {
+            "id": f"ZN-{index:03d}",
+            "name": f"Zone {index}",
+            "reach": 1_000_000 - index,
+            "vi": 80,
+            "ctr": 1.2,
+            "cpm": 20_000,
+            "reason": "Context match",
+            "topicId": "automotive_mobility" if index < 9 else "legacy_other",
+            "recommendation_basis": {"context_match": index < 9},
+        }
+        for index in range(14)
+    ]
+
+    async def fake_zones():
+        return zones
+
+    async def fake_conflicts(*_):
+        return {}
+
+    async def fake_rank(**_):
+        return [dict(zone) for zone in zones]
+
+    monkeypatch.setattr(zone_catalog, "get_all_zones", fake_zones)
+    monkeypatch.setattr(order_api, "fetch_zone_conflicts", fake_conflicts)
+    monkeypatch.setattr(setup_handler, "rank_zones", fake_rank)
+
+    sid = "openai_setup_related"
+    await update_form_state(
+        sid,
+        "brief",
+        {
+            "brand": "Related Zone Brand",
+            "objective": "awareness",
+            "kpi": "Reach",
+            "budget": 100,
+            "startDate": "2030-01-01",
+            "endDate": "2030-01-15",
+        },
+    )
+
+    result = await setup_handler.handle_setup_entry(sid, include_related=True)
+    proposal = result["blocks"][0]["changes"]["value"]
+
+    assert len(proposal["recoZones"]) == 6
+    assert len(proposal["relatedZones"]) == 6
+    assert set(proposal["selectedZoneIds"]) == {
+        zone["id"] for zone in proposal["recoZones"]
+    }
+    assert not set(proposal["selectedZoneIds"]) & {
+        zone["id"] for zone in proposal["relatedZones"]
+    }
+    assert "6 ad zones liên quan" in result["text"]

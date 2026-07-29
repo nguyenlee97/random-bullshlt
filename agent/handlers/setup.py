@@ -40,7 +40,7 @@ async def handle_setup(setup: SetupData, session_id: str) -> AgentResponse:
     )
 
 
-async def handle_setup_entry(session_id: str) -> dict:
+async def handle_setup_entry(session_id: str, *, include_related: bool = False) -> dict:
     """
     GET /api/agent/setup-entry
     Proactive zone recommendation when user enters Step 3 (Setup).
@@ -90,15 +90,37 @@ async def handle_setup_entry(session_id: str) -> dict:
     )
 
     # Annotate conflicts and mark recommendations
-    top_set: set[str] = set()
     available = [z for z in ranked if not conflict_map.get(z["id"])]
-    for z in available[:6]:
-        top_set.add(z["id"])
+    top_ids = [z["id"] for z in available[:6]]
+    top_set = set(top_ids)
     top_zones = [z for z in ranked if z["id"] in top_set]
+    related_zones: list[dict] = []
+    if include_related:
+        top_topics = {
+            str(zone.get("topicId") or "")
+            for zone in top_zones
+            if zone.get("topicId")
+        }
+        remaining = [zone for zone in available if zone["id"] not in top_set]
+        context_related = [
+            zone for zone in remaining
+            if zone.get("recommendation_basis", {}).get("context_match")
+            or str(zone.get("topicId") or "") in top_topics
+        ]
+        context_ids = {zone["id"] for zone in context_related}
+        fallback_related = [
+            zone for zone in remaining if zone["id"] not in context_ids
+        ]
+        related_zones = (context_related + fallback_related)[:6]
+        related_ids = {zone["id"] for zone in related_zones}
+    else:
+        related_ids = set()
 
     for z in ranked:
         z["conflict"] = public_conflict_details(conflict_map.get(z["id"]))
         z["recommended"] = z["id"] in top_set
+        if include_related:
+            z["related"] = z["id"] in related_ids
 
     await update_form_state(session_id, "reco_zones", top_zones)
 
@@ -136,15 +158,21 @@ async def handle_setup_entry(session_id: str) -> dict:
         f"Budget: **{budget:,.0f}M VND**, {segment_count} audience segments), "
         f"em đề xuất **{len(top_zones)} ad zones** tối ưu:\n\n"
         f"{zones_text}\n\n"
-        f"Anh/chị có thể xem chi tiết ở panel phải. "
-        f"Muốn **bỏ zone** nào hoặc **thêm** zone khác, cứ nhắn em nhé!"
+        + (
+            f"Panel phải có thêm **{len(related_zones)} ad zones liên quan** "
+            "để anh/chị cân nhắc; nhóm này chưa được chọn.\n\n"
+            if include_related and related_zones else ""
+        )
+        + "Anh/chị có thể xem chi tiết ở panel phải. "
+        "Muốn **bỏ zone** nào hoặc **thêm** zone khác, cứ nhắn em nhé!"
     )
 
     # ── Workspace proposal value ────────────────────────────────────────────────
     # Includes ALL zones so SetupStep doesn't need a separate fetch
     proposal_value = {
-        "selectedZoneIds": list(top_set),
+        "selectedZoneIds": top_ids,
         "recoZones": top_zones,
+        **({"relatedZones": related_zones} if include_related else {}),
         "allZones": ranked,
         "initialized": True,
         "phase": "zones",
@@ -175,13 +203,27 @@ async def handle_setup_entry(session_id: str) -> dict:
     # Proactive messages are part of the conversation too. Persisting this is
     # essential: otherwise the next free-form turn sees incomplete history and
     # may answer as if the user were still on an earlier campaign step.
+    if include_related:
+        await log_event(session_id, "openai_setup_entry", {
+            "recommended_zone_ids": top_ids,
+            "related_zone_ids": [zone["id"] for zone in related_zones],
+            "ranked_zone_count": len(ranked),
+            "available_zone_count": len(available),
+            "conflicted_zone_count": len(ranked) - len(available),
+        })
     await add_message(session_id, "assistant", reply_text)
 
     return {
         "skip": False,
         "text": reply_text,
         "blocks": blocks,
-        "meta": {"tool": "setup_entry", "model": "none", "step": 3},
+        "meta": {
+            "tool": "setup_entry",
+            "model": "none",
+            "step": 3,
+            "recommended_zone_count": len(top_zones),
+            "related_zone_count": len(related_zones),
+        },
         "suggestions": suggestions,
     }
 

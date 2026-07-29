@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-29.9"
+BUILD_VERSION = "2026-07-29.10"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -27,6 +27,9 @@ BUILD_FEATURES = [
     "openai-audience-sufficiency-fallback",
     "openai-audience-rerun-cache-bypass",
     "openai-audience-reasons-vietnamese",
+    "openai-related-placement-options",
+    "openai-placement-catalog-controls",
+    "openai-guided-safe-auto-assignment",
     "openai-brief-working-draft-recovery",
     "walkthrough-brief-proposal-gate",
     "autopilot-chat-audience-reselection",

@@ -887,7 +887,17 @@ async def setup_entry_endpoint(request: Request, session_id: str = "default"):
     Returns {skip: true} if zones already selected or brief not set.
     """
     await _assert_session_access(request, session_id)
-    return await handle_setup_entry(session_id)
+    from campaign_engines.dispatcher import dispatch_guided
+    from identity import get_conversation_model_for_session
+    from openai_campaign.guided import handle_openai_setup_entry
+
+    model_lock = await get_conversation_model_for_session(session_id)
+    return await dispatch_guided(
+        model_lock["conversation_model"],
+        greennode_handler=handle_setup_entry,
+        openai_handler=handle_openai_setup_entry,
+        session_id=session_id,
+    )
 
 
 @agent_router.get("/report-entry")

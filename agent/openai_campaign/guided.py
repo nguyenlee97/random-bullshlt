@@ -857,3 +857,10 @@ async def handle_openai_audience_entry(
         "provider": "openai", "model": config.OPENAI_CAMPAIGN_MODEL,
     })
     return await _grounded_audience_entry(session_id, brief, client=client)
+
+
+async def handle_openai_setup_entry(session_id: str) -> dict:
+    """Expose related placements only for OpenAI-locked Guided campaigns."""
+    from handlers.setup import handle_setup_entry
+
+    return await handle_setup_entry(session_id, include_related=True)
