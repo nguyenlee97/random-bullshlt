@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-29.12"
+BUILD_VERSION = "2026-07-30.1"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -252,6 +252,7 @@ BUILD_FEATURES = [
     "autopilot-review-question-safety",             # review questions never become approvals and receive artifact-grounded answers
     "report-once-only-showcase-disclosure",         # report model reasons on metrics without repeating UI-only showcase provenance
     "autopilot-report-resume-routing",               # completed runs use report Q&A even when resume restores stale step metadata
+    "openai-report-suggestion-safety",                # report follow-ups stay within supported read-only analysis
     "autopilot-placement-intent-checkpoint",          # critical review stops at the editable preliminary placement proposal
     "zalo-campaign-comparison-summary",               # one owned campaign-list call exposes budget and dates for comparisons
     "zalo-tool-error-observability",                  # Zalo model/tool failures are recorded without weakening mutation safety
