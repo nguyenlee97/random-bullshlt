@@ -1125,7 +1125,11 @@ export function DemoProvider({
       await new Promise(resolve => setTimeout(resolve, 350))
       const s2 = tourModeRef.current === 'autopilot'
         ? buildAutopilotLiveSteps(briefRef.current)
-        : buildStage2Steps(briefRef.current)
+        : buildStage2Steps(briefRef.current, {
+            openaiCampaignFlow: isOpenAIWalkthroughModel(
+              conversationModelRef.current,
+            ),
+          })
       setSteps(s2)
       setStepIdx(0)
       setPhase(PHASE.STAGE2)

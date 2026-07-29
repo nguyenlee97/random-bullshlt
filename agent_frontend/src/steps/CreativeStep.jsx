@@ -116,7 +116,11 @@ function FileCard({ file, onRemove, onPreview, onOverride, onFormat, readOnly = 
   }
 
   return (
-    <div className="group relative rounded-xl border border-border bg-white overflow-hidden hover:border-brand-300 hover:shadow-sm transition-all">
+    <div
+      className="group relative rounded-xl border border-border bg-white overflow-hidden hover:border-brand-300 hover:shadow-sm transition-all"
+      data-demo="creative-file-card"
+      data-file-id={file.id || ''}
+    >
       <div className="h-28 bg-muted/40 flex items-center justify-center overflow-hidden relative">
         {isImage ? (
           <img src={file.dataUrl || file.url} alt={file.name} className="w-full h-full object-cover" />

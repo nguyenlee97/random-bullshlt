@@ -234,7 +234,10 @@ export const STAGE1_STEPS = [
 
 // ─── Stage 2: Live Run (Brief → Audience) ────────────────────────────────────
 // `brief` is a placeholder replaced at runtime with the randomly picked brief.
-export function buildStage2Steps(brief) {
+export function buildStage2Steps(
+  brief,
+  { openaiCampaignFlow = false } = {},
+) {
   return [
     // ── Brief submission ──────────────────────────────────────────────────
     {
@@ -629,52 +632,69 @@ export function buildStage2Steps(brief) {
       delay: 300,
     },
 
-    // ── Wait for image to appear in gallery, then select it ─────────────────
-    {
-      type: 'WAIT_FOR_SELECTOR',
-      target: '[id^="gen-img-ai-zuma-box"]',
-      timeout: 10000,
-      title: '⏳ Xử lý ảnh...',
-      text: 'Đang xử lý và hiển thị ảnh vào thư viện...',
-    },
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '[id^="gen-img-ai-zuma-box"]',
-      position: 'top',
-      title: '🖼️ Ảnh đã được tạo!',
-      text: 'Ảnh AI vừa sinh xong hiển thị trong **thư viện**. Bạn có thể **chọn nhiều ảnh** rồi thêm tất cả vào creative cùng lúc.\n\nNhấn vào ô chọn để đánh dấu ảnh muốn dùng.',
-    },
-    {
-      type: 'CLICK_EL',
-      target: '[data-demo="gen-img-footer"]',
-      tooltip: {
+    // OpenAI persists the generated draft immediately and returns to Upload so
+    // tab navigation cannot discard it. GreenNode retains the legacy gallery
+    // selection flow.
+    ...(openaiCampaignFlow ? [
+      {
+        type: 'WAIT_FOR_SELECTOR',
+        target: '[data-demo="creative-file-card"][data-file-id^="ai-zuma-box"]',
+        timeout: 10000,
+        title: '⏳ Đang lưu creative...',
+        text: 'Ảnh đã tạo xong. Walkthrough đang chờ creative xuất hiện trong danh sách Upload...',
+      },
+      {
+        type: 'HIGHLIGHT_EL',
+        target: '[data-demo="creative-file-card"][data-file-id^="ai-zuma-box"]',
+        position: 'top',
+        title: '🖼️ Creative đã được lưu!',
+        text: 'OpenAI flow tự động lưu ảnh vừa tạo vào creative pool để ảnh không bị mất khi chuyển tab. Walkthrough sẽ tiếp tục chuẩn bị các format còn lại.',
+      },
+    ] : [
+      {
+        type: 'WAIT_FOR_SELECTOR',
+        target: '[id^="gen-img-ai-zuma-box"]',
+        timeout: 10000,
+        title: '⏳ Xử lý ảnh...',
+        text: 'Đang xử lý và hiển thị ảnh vào thư viện...',
+      },
+      {
+        type: 'HIGHLIGHT_EL',
         target: '[id^="gen-img-ai-zuma-box"]',
         position: 'top',
-        title: '✅ Chọn ảnh để thêm vào Creative',
-        text: 'Đang chọn ảnh vừa tạo...',
+        title: '🖼️ Ảnh đã được tạo!',
+        text: 'Ảnh AI vừa sinh xong hiển thị trong **thư viện**. Bạn có thể **chọn nhiều ảnh** rồi thêm tất cả vào creative cùng lúc.\n\nNhấn vào ô chọn để đánh dấu ảnh muốn dùng.',
       },
-      delay: 400,
-    },
-
-    // ── Add to Creative ──────────────────────────────────────────────────────
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '#btn-add-to-creative',
-      position: 'top',
-      title: '➕ Thêm vào Creative',
-      text: 'Nút **Thêm ảnh vào Creative** sẽ chuyển ảnh AI sang tab Upload và đưa vào pool creative của chiến dịch.\n\nSau đó bạn có thể xác nhận và chuyển sang bước Setup!',
-    },
-    {
-      type: 'CLICK_EL',
-      target: '#btn-add-to-creative',
-      tooltip: {
+      {
+        type: 'CLICK_EL',
+        target: '[data-demo="gen-img-footer"]',
+        tooltip: {
+          target: '[id^="gen-img-ai-zuma-box"]',
+          position: 'top',
+          title: '✅ Chọn ảnh để thêm vào Creative',
+          text: 'Đang chọn ảnh vừa tạo...',
+        },
+        delay: 400,
+      },
+      {
+        type: 'HIGHLIGHT_EL',
         target: '#btn-add-to-creative',
         position: 'top',
-        title: '✅ Thêm vào Creative pool...',
-        text: 'Đang thêm ảnh AI vào creative...',
+        title: '➕ Thêm vào Creative',
+        text: 'Nút **Thêm ảnh vào Creative** sẽ chuyển ảnh AI sang tab Upload và đưa vào pool creative của chiến dịch.\n\nSau đó bạn có thể xác nhận và chuyển sang bước Setup!',
       },
-      delay: 300,
-    },
+      {
+        type: 'CLICK_EL',
+        target: '#btn-add-to-creative',
+        tooltip: {
+          target: '#btn-add-to-creative',
+          position: 'top',
+          title: '✅ Thêm vào Creative pool...',
+          text: 'Đang thêm ảnh AI vào creative...',
+        },
+        delay: 300,
+      },
+    ]),
 
     // ── Inject all pre-generated creatives (silent loader) ──────────────────
     {
