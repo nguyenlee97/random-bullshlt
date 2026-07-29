@@ -34,9 +34,30 @@ class AudienceRerankItem(BaseModel):
         "unrelated",
     ]
     has_conflict: bool
-    matched_signals: list[str] = Field(default_factory=list, max_length=6)
-    missing_signals: list[str] = Field(default_factory=list, max_length=6)
-    limitation: str = Field(default="", max_length=320)
+    matched_signals: list[str] = Field(
+        default_factory=list,
+        max_length=6,
+        description=(
+            "Các tín hiệu khớp ngắn gọn bằng tiếng Việt; giữ nguyên tên "
+            "segment trong catalog nếu cần nhắc đến."
+        ),
+    )
+    missing_signals: list[str] = Field(
+        default_factory=list,
+        max_length=6,
+        description=(
+            "Các tín hiệu còn thiếu, diễn đạt ngắn gọn bằng tiếng Việt; giữ "
+            "nguyên tên segment trong catalog nếu cần nhắc đến."
+        ),
+    )
+    limitation: str = Field(
+        default="",
+        max_length=320,
+        description=(
+            "Giới hạn cụ thể của segment, viết bằng tiếng Việt; để trống nếu "
+            "không có giới hạn đáng kể."
+        ),
+    )
 
 
 class AudienceRerankResult(BaseModel):
@@ -45,7 +66,7 @@ class AudienceRerankResult(BaseModel):
 
 _client: AsyncOpenAI | None = None
 _rerank_cache: dict[str, dict] = {}
-_RERANK_SCHEMA_VERSION = 2
+_RERANK_SCHEMA_VERSION = 3
 
 
 def _get_client() -> AsyncOpenAI:
@@ -251,7 +272,11 @@ async def rerank_candidates(
         "Use only supplied zero-based candidate_index values and copy the "
         "corresponding segment_id exactly. The index and ID must refer to the "
         "same candidate. Return every candidate exactly once, and never infer "
-        "sensitive personal traits. Assign relevance scores from 0 to 1."
+        "sensitive personal traits. Assign relevance scores from 0 to 1. "
+        "Write every matched_signals, missing_signals, and limitation value "
+        "in concise, natural Vietnamese because these fields are shown "
+        "directly to Vietnamese users. Keep supplied catalog segment names "
+        "unchanged when referring to them."
     )
 
     try:
