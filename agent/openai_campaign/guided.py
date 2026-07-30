@@ -26,6 +26,7 @@ from tools.audience_library import get_all_segments
 from tools.audience_provenance import catalog_source
 from tools.targeting_options import get_targeting_options
 from audience_reach import audience_selection, estimate_unique_reach
+from workspace.service import replace_pending_proposal
 
 
 class _BriefAnalysis(BaseModel):
@@ -67,8 +68,7 @@ class _TargetingReason(BaseModel):
 
 
 class _TargetingSelection(BaseModel):
-    targeting: dict[str, list[str]]
-    reasoning: list[_TargetingReason] = Field(default_factory=list, max_length=30)
+    selections: list[_TargetingReason] = Field(default_factory=list, max_length=30)
 
 
 BRIEF_INSTRUCTIONS = """
@@ -126,6 +126,8 @@ Quy tắc:
    Không thêm advanced targeting chỉ để làm danh sách trông đầy hơn.
 6. Mỗi dimension được chọn phải có một reasoning item nêu tín hiệu nguồn từ
    brief hoặc selected segment. Không chọn tất cả option của một dimension.
+7. Trả mỗi dimension được chọn trong `selections` với exact field, exact picks
+   và reason. Không trả object có key dimension động.
 """.strip()
 
 
@@ -317,6 +319,10 @@ async def handle_openai_audience(
     total_size = selection["size"]
     size_known = selection["sizeKnown"]
     await update_form_state(session_id, "segment", selection)
+    # The workspace button is also an explicit approval path. Its canonical
+    # commit supersedes the proactive pending draft, so remove the session
+    # pointer before later chat turns can mistake it for an active proposal.
+    await clear_pending_proposal(session_id)
     if segment.targeting:
         await update_form_state(session_id, "targeting", segment.targeting)
     session = await get_or_create_session(session_id)
@@ -582,8 +588,11 @@ async def _recommend_targeting(
         max_output_tokens=1400,
         client=client,
     )
-    targeting = _normalize_targeting(output.targeting, options)
-    reasoning = [item.model_dump(mode="json") for item in output.reasoning]
+    reasoning = [item.model_dump(mode="json") for item in output.selections]
+    targeting = _normalize_targeting(
+        {item["field"]: item["picks"] for item in reasoning},
+        options,
+    )
     await log_event(session_id, "guided_model_provenance", {
         "operation": "targeting", **provenance, "targeting": targeting,
     })
@@ -720,22 +729,27 @@ async def _grounded_audience_entry(
     selection = audience_selection(recommended)
     audience_size = selection["size"]
     size_known = selection["sizeKnown"]
+    proposal_value = {
+        **selection,
+        "targeting": targeting,
+        "recommendations": all_options,
+        "adjacent_attrs": adjacent,
+    }
+    proposal_reason = (
+        f"Agent tìm thấy {len(recommended)} segment khớp trực tiếp và "
+        f"{len(adjacent)} segment liên quan để mở rộng cho brief "
+        f"{brief.get('brand', '')}"
+    )
+    proposal_changes = await replace_pending_proposal(
+        session_id,
+        "segment",
+        proposal_value,
+        actor="openai_campaign_guided",
+        reason=proposal_reason,
+    )
     blocks.append({
         "type": "workspace_proposal",
-        "changes": {
-            "field": "segment",
-            "value": {
-                **selection,
-                "targeting": targeting,
-                "recommendations": all_options,
-                "adjacent_attrs": adjacent,
-            },
-            "reason": (
-                f"Agent tìm thấy {len(recommended)} segment khớp trực tiếp và "
-                f"{len(adjacent)} segment liên quan để mở rộng cho brief "
-                f"{brief.get('brand', '')}"
-            ),
-        },
+        "changes": proposal_changes,
         "is_locked": False, "warning": "",
         "instruction": (
             (

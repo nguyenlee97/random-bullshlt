@@ -891,6 +891,60 @@ async def create_proposal(
     return result
 
 
+async def replace_pending_proposal(
+    session_id: str,
+    field: str,
+    value: Any,
+    *,
+    actor: str,
+    reason: str,
+    operation: str = "replace",
+) -> dict:
+    """Create one durable proposal and make it the session's active draft.
+
+    Guided recommendations are editable previews, not approved workspace state.
+    Keeping the preview server-side lets later ``add``/``remove`` commands use
+    the same draft as the UI instead of rebuilding from an empty artifact.
+    """
+    from session import get_pending_proposal, set_pending_proposal
+
+    workspace = await get_workspace(session_id)
+    previous = await get_pending_proposal(session_id)
+    proposal = await create_proposal(
+        session_id,
+        field,
+        value,
+        base_revision=workspace["revision"],
+        actor=actor,
+        reason=reason,
+    )
+    changes = {
+        "field": field,
+        "value": deepcopy(value),
+        "reason": reason,
+        "operation": operation,
+        "proposal_id": proposal["proposal_id"],
+        "base_revision": proposal["base_revision"],
+        "affected_artifacts": proposal["affected_artifacts"],
+    }
+
+    previous_id = (previous or {}).get("proposal_id")
+    if previous_id and previous_id != proposal["proposal_id"]:
+        try:
+            await reject_proposal(
+                previous_id,
+                actor=actor,
+                reason="superseded_by_new_pending_proposal",
+            )
+        except (KeyError, ValueError):
+            # Session pending state is the routing authority. A stale legacy
+            # pointer must not prevent the new validated draft from surfacing.
+            pass
+
+    await set_pending_proposal(session_id, changes)
+    return changes
+
+
 async def _get_proposal(proposal_id: str) -> dict | None:
     if await _ensure_store():
         return await _proposals.find_one({"_id": proposal_id})

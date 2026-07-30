@@ -251,7 +251,7 @@ export function useChat({
       const proposals = (response?.blocks || []).filter(b => b.type === 'workspace_proposal' && b.changes?.field)
       for (const block of proposals) {
         log.workspace('workspace_proposal block → pre-populating form', block.changes)
-        onWorkspaceUpdate(block.changes)
+        onWorkspaceUpdate(block.changes, { confirmed: false })
       }
     }
 
@@ -265,8 +265,9 @@ export function useChat({
       const STEP_PRIMARY_FIELDS = { 0: 'brief', 1: 'segment', 2: 'creative', 3: 'setup' }
       const updatedField = response.workspace_update.field?.split('.')?.[0]  // 'brief.brand' → 'brief'
       const isCurrentStepField = STEP_PRIMARY_FIELDS[currentStep] === updatedField
+      const isConfirmedUpdate = response.workspace_update.workspace_revision != null
       const alreadyDone = (stepStatuses || [])[currentStep] === 'done'
-      if (isCurrentStepField && !alreadyDone) {
+      if (isConfirmedUpdate && isCurrentStepField && currentStep !== 3 && !alreadyDone) {
         log.step(`workspace_update for step ${currentStep} field "${updatedField}" → auto-advance`)
         setTimeout(() => onStepApproved?.(currentStep), 700)
       }

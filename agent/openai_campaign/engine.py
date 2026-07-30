@@ -501,15 +501,6 @@ async def _handle_openai_freeform_impl(
                 client=api,
                 force=True,
             )
-            proposal = next(
-                (
-                    block.get("changes")
-                    for block in result.get("blocks", [])
-                    if block.get("type") == "workspace_proposal"
-                    and block.get("changes", {}).get("field") == "segment"
-                ),
-                None,
-            )
             meta = result.get("meta") or {}
             return AgentResponse(
                 text=result.get("text") or "",
@@ -519,7 +510,10 @@ async def _handle_openai_freeform_impl(
                     model=meta.get("model", config.OPENAI_CAMPAIGN_MODEL),
                     step=meta.get("step", step),
                 ),
-                workspace_update=proposal,
+                # A rerun creates a new pending draft. Returning that draft as
+                # workspace_update falsely marks Audience confirmed and makes
+                # the frontend advance to Creative before operator approval.
+                workspace_update=None,
                 suggestions=result.get("suggestions") or [],
             )
 

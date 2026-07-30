@@ -673,6 +673,7 @@ async def resolve_legacy_update(
     reason: str = "",
     *,
     source_message: str = "",
+    operation: WorkspaceOperation | None = None,
 ) -> tuple[str, Any, str]:
     """Coerce an old ``update_workspace`` payload into a typed safe command.
 
@@ -686,13 +687,13 @@ async def resolve_legacy_update(
     field = field.strip()
     command: WorkspaceCommand
     typed_field: WorkspaceField
-    operation: WorkspaceOperation = "replace"
+    resolved_operation: WorkspaceOperation = operation or "replace"
     typed_value = value
 
     if field == "brief" or field.startswith("brief."):
         command = "set_brief_fields"
         typed_field = field  # validated by resolve_workspace_intent
-        operation = "set"
+        resolved_operation = "set"
         # Some tool-capable models occasionally omit ``notes`` even when the
         # same user message contains audience, geo, interest, or behavior
         # context. Preserve that authoritative user text losslessly instead of
@@ -751,7 +752,7 @@ async def resolve_legacy_update(
         intent="propose_change",
         command=command,
         field=typed_field,
-        operation=operation,
+        operation=resolved_operation,
         value=typed_value,
         reason=reason,
         confidence=1.0,

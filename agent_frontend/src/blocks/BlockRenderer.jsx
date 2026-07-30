@@ -269,7 +269,7 @@ function WorkspaceProposalBlock({ block }) {
   })()
 
   const isAudience = field === 'segment'
-  const isSetup = field === 'setup'
+  const isSetup = field === 'setup' || field === 'setup.selectedZoneIds'
   const proposalId = changes.proposal_id
   const [decision, setDecision] = useState(changes.status || 'pending')
 

@@ -14,7 +14,7 @@ from typing import Any
 from audience_reach import estimate_unique_reach
 from autopilot.capabilities import validate_brief_value
 from openai_campaign.knowledge import search_ad_knowledge
-from session import set_pending_proposal
+from session import get_pending_proposal
 from tools.audience_library import get_all_segments, search_audience
 from tools.order_api import fetch_zone_conflicts, public_conflict_details
 from tools.registry import execute_tool
@@ -25,7 +25,7 @@ from openai_campaign.placement_inventory import (
     is_openai_recommendable_zone,
 )
 from workspace.intent import InvalidWorkspaceIntent, resolve_legacy_update
-from workspace.service import create_proposal, get_workspace
+from workspace.service import get_workspace, replace_pending_proposal
 
 
 READ_TOOL_NAMES = {
@@ -265,12 +265,22 @@ OPENAI_TOOL_DEFINITIONS = [
                         "invent audience, zone, creative, or targeting IDs."
                     ),
                 },
+                "operation": {
+                    "type": "string",
+                    "enum": ["set", "replace", "add", "remove"],
+                    "description": (
+                        "Mutation semantics. For audience segments and ad-zone "
+                        "lists, use add/remove when the user wants to preserve the "
+                        "current approved or pending-draft selection; use replace "
+                        "only when they explicitly want a new complete selection."
+                    ),
+                },
                 "reason": {
                     "type": "string",
                     "description": "Short user-facing reason for the proposal.",
                 },
             },
-            "required": ["field", "value_json", "reason"],
+            "required": ["field", "value_json", "operation", "reason"],
             "additionalProperties": False,
         },
     },
@@ -339,6 +349,57 @@ def _brief_from_workspace(workspace: dict | None) -> dict:
         return artifact
     brief = value.get("brief")
     return brief if isinstance(brief, dict) else {}
+
+
+def _workspace_with_pending_draft(
+    canonical: dict,
+    pending: dict | None,
+    requested_field: str,
+    client_workspace: dict | None = None,
+) -> dict:
+    """Overlay the active unapproved draft for safe collection operations."""
+    effective = deepcopy(canonical)
+    artifacts = effective.setdefault("artifacts", {})
+    pending_matches_revision = bool(
+        pending and pending.get("base_revision") == canonical.get("revision")
+    )
+    pending_field = str((pending or {}).get("field") or "")
+    pending_value = deepcopy((pending or {}).get("value"))
+
+    if (
+        pending_matches_revision
+        and requested_field == "segment"
+        and pending_field in {"segment", "audience"}
+    ):
+        artifacts.setdefault("audience", {})["value"] = pending_value
+        return effective
+
+    placement_fields = {"setup", "placements", "setup.selectedZoneIds"}
+    if (
+        pending_matches_revision
+        and requested_field in placement_fields
+        and pending_field in placement_fields
+    ):
+        current = deepcopy(artifacts.get("placements", {}).get("value") or {})
+        if pending_field == "setup.selectedZoneIds":
+            current["selectedZoneIds"] = pending_value
+        elif isinstance(pending_value, dict):
+            current = pending_value
+        artifacts.setdefault("placements", {})["value"] = current
+        return effective
+
+    # Guided Setup recommendations are an editable local preview. selectedZoneIds
+    # are safe to use as a draft base because _resolve_placements resolves every
+    # ID against the authoritative zone catalog before creating a proposal.
+    if requested_field in placement_fields:
+        client_setup = (client_workspace or {}).get("setup") or {}
+        client_ids = client_setup.get("selectedZoneIds")
+        if isinstance(client_ids, list):
+            current = deepcopy(artifacts.get("placements", {}).get("value") or {})
+            current["selectedZoneIds"] = client_ids
+            artifacts.setdefault("placements", {})["value"] = current
+
+    return effective
 
 
 def _segment_id(segment: dict) -> str:
@@ -539,12 +600,21 @@ async def execute_openai_tool(
         raise InvalidWorkspaceIntent("Giá trị đề xuất không phải JSON hợp lệ") from exc
 
     canonical = await get_workspace(session_id)
-    field, value, reason = await resolve_legacy_update(
-        str(args.get("field") or ""),
-        value,
+    pending = await get_pending_proposal(session_id)
+    requested_field = str(args.get("field") or "")
+    effective_workspace = _workspace_with_pending_draft(
         canonical,
+        pending,
+        requested_field,
+        workspace,
+    )
+    field, value, reason = await resolve_legacy_update(
+        requested_field,
+        value,
+        effective_workspace,
         str(args.get("reason") or ""),
         source_message=message,
+        operation=str(args.get("operation") or "replace"),
     )
     if field == "setup.selectedZoneIds":
         zone_map = {
@@ -570,23 +640,14 @@ async def execute_openai_tool(
             "Brief ban đầu chưa đầy đủ; phải đề xuất toàn bộ field `brief` "
             "thay vì một field con."
         )
-    proposal = await create_proposal(
+    changes = await replace_pending_proposal(
         session_id,
         field,
         value,
-        base_revision=canonical["revision"],
         actor="openai_campaign_copilot",
         reason=reason,
+        operation=str(args.get("operation") or "replace"),
     )
-    changes = {
-        "field": field,
-        "value": value,
-        "reason": reason,
-        "proposal_id": proposal["proposal_id"],
-        "base_revision": proposal["base_revision"],
-        "affected_artifacts": proposal["affected_artifacts"],
-    }
-    await set_pending_proposal(session_id, changes)
     is_locked, warning = _proposal_warning(field, confirmed_steps)
     ui = {
         "block": {

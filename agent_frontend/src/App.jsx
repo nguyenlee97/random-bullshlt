@@ -476,7 +476,7 @@ export default function App() {
   }, [])
 
   // ── Workspace update from agent (after user confirms proposal) ─────────────
-  const handleWorkspaceUpdate = useCallback((patch) => {
+  const handleWorkspaceUpdate = useCallback((patch, { confirmed = true } = {}) => {
     // patch = { field, value, reason }
     if (!patch?.field) return
     const target = workspacePatchTarget(patch.field)
@@ -537,7 +537,9 @@ export default function App() {
       }
       return next
     })
-    pushWorkspaceEvent(`Agent đã cập nhật "${field}" (đã xác nhận bởi anh/chị)`)
+    if (confirmed) {
+      pushWorkspaceEvent(`Agent đã cập nhật "${field}" (đã xác nhận bởi anh/chị)`)
+    }
     // On mobile: always notify. For key steps, also auto-navigate to Workspace after 2.5s.
     // Suppressed while the guided demo runs — it drives the tabs itself.
     if (experienceMode === 'guided' && window.innerWidth < 768 && !isDemoActiveRef.current) {
@@ -791,7 +793,7 @@ export default function App() {
               // Same as brief: audience is populated immediately so user can edit via
               // workspace panel or chat (bidirectional). Injected messages bypass
               // useChat.js sendMessage, so we explicitly apply the workspace update here.
-              handleWorkspaceUpdate(proposalBlock.changes)
+              handleWorkspaceUpdate(proposalBlock.changes, { confirmed: false })
               log.workspace('audience-entry → auto-applied segment proposal to formState')
             } else {
               // The backend completed without a selectable proposal. Preserve
@@ -860,7 +862,7 @@ export default function App() {
               b => b.type === 'workspace_proposal' && b.changes?.field === 'setup'
             )
             if (proposalBlock?.changes?.value) {
-              handleWorkspaceUpdate(proposalBlock.changes)
+              handleWorkspaceUpdate(proposalBlock.changes, { confirmed: false })
               log.workspace('setup-entry → auto-applied zone proposal to formState')
             }
             const msg = {

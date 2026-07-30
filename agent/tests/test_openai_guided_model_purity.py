@@ -190,14 +190,19 @@ async def test_openai_targeting_evaluates_advanced_catalog_dimensions():
     )
 
     client = _Client([_TargetingSelection(
-        targeting={
-            "geo": ["TP.HCM"],
-            "age": ["25-34"],
-            "gender": ["Male", "Female"],
-            "deviceOS": ["Android"],
-            "interest": ["Automotive"],
-        },
-        reasoning=[
+        selections=[
+            _TargetingReason(field="geo", picks=["TP.HCM"], reason="Brief location."),
+            _TargetingReason(field="age", picks=["25-34"], reason="Brief age range."),
+            _TargetingReason(
+                field="gender",
+                picks=["Male", "Female"],
+                reason="Brief includes both genders.",
+            ),
+            _TargetingReason(
+                field="deviceOS",
+                picks=["Android"],
+                reason="Product platform signal.",
+            ),
             _TargetingReason(
                 field="interest",
                 picks=["Automotive"],
