@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-30.9"
+BUILD_VERSION = "2026-07-30.10"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -54,6 +54,8 @@ BUILD_FEATURES = [
     "zalo-exact-placement-page-capture",
     "creative-contain-blurred-fit",
     "hackathon-unicode-pdf-font",
+    "mobile-manual-bottom-clearance",
+    "adspilot-destructive-admin-surface-removed",
     "system-logs",
     "step-tool-rules",
     "brief-rules",

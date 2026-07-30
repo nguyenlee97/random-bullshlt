@@ -144,10 +144,6 @@ const Api = (() => {
 
   // ── Admin ─────────────────────────────────────────────────────────────────
 
-  function resetDb() {
-    return post('/admin/reset');
-  }
-
   function getStats() {
     return get('/admin/stats');
   }
@@ -191,7 +187,7 @@ const Api = (() => {
     pauseOrder, resumeOrder, archiveOrder, deleteOrder,
     estimateAudience,
     getLogs, clearLogs,
-    resetDb, getStats, healthCheck,
+    getStats, healthCheck,
     uploadCreative,
     getAnalyticsSummary,
   };

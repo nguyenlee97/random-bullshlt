@@ -2144,7 +2144,7 @@ export default function App() {
       autoStart={autoStartDemoMode}
       onAutoStartConsumed={() => setAutoStartDemoMode('')}
     >
-    <div ref={appShellRef} className="fixed inset-0 flex h-screen flex-col overflow-clip bg-gradient-to-br from-slate-50 to-brand-50/30 pb-[env(safe-area-inset-bottom)] md:pb-0">
+    <div ref={appShellRef} className="mobile-app-shell fixed inset-x-0 top-0 flex flex-col overflow-clip bg-gradient-to-br from-slate-50 to-brand-50/30">
       <TopBar
         onReset={handleReset}
         onManage={returnToCampaignManager}

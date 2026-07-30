@@ -53,6 +53,28 @@
   }
 }
 
+.mobile-app-shell {
+  height: var(--visual-viewport-height, 100dvh);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-bottom-clearance, 0px));
+}
+
+.mobile-bottom-helper {
+  display: none;
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  .mobile-bottom-helper {
+    display: block;
+  }
+}
+
+@media (min-width: 768px) and (pointer: fine) {
+  .mobile-app-shell {
+    height: 100vh;
+    padding-bottom: 0;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 5px;

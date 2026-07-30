@@ -192,7 +192,7 @@ test('Copilot demo is restored as a spotlight tour over the real interface', () 
   assert.doesNotMatch(engine, /demo:new_chat/)
   assert.match(app, /window\.scrollTo\(\{ top: 0, left: 0, behavior: 'auto' \}\)/)
   assert.match(app, /appShellRef\.current\?\.scrollTo\(\{ top: 0, left: 0, behavior: 'auto' \}\)/)
-  assert.match(app, /ref=\{appShellRef\} className="fixed inset-0 flex h-screen flex-col overflow-clip/)
+  assert.match(app, /ref=\{appShellRef\} className="mobile-app-shell fixed inset-x-0 top-0 flex flex-col overflow-clip/)
 })
 
 test('Copilot creative walkthrough teaches assets and prompt composition without exposing provider or quota details', () => {
