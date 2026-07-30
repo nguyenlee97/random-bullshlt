@@ -5,6 +5,7 @@ and leases are owned by the durable worker rather than hidden inside prompts.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -57,6 +58,70 @@ def _creative_intel_docs(workspace: dict, intel_docs: list[dict]) -> list[dict]:
     verdict = _artifact(workspace, "creative_verdict", {})
     verdict_docs = verdict.get("files", []) if isinstance(verdict, dict) else []
     return [*verdict_docs, *intel_docs]
+
+
+def _trusted_skipped_creative_verdicts(workspace: dict) -> dict[str, dict]:
+    """Return only server-produced verdicts from an explicit analysis skip.
+
+    The order guard must not trust an override flag copied into the order
+    payload.  This helper instead reads the canonical workspace artifact that
+    the Autopilot worker committed after the operator confirmed the dangerous
+    skip action.
+    """
+    artifact = workspace.get("artifacts", {}).get("creative_verdict", {})
+    value = artifact.get("value") or {}
+    if (
+        artifact.get("updated_by") != "autopilot_worker"
+        or not isinstance(value, dict)
+        or value.get("analysis_skipped") is not True
+    ):
+        return {}
+    trusted: dict[str, dict] = {}
+    for item in value.get("files") or []:
+        analysis_id = str(item.get("analysis_id") or "").strip()
+        override = item.get("override") or {}
+        if (
+            not analysis_id.startswith("skip:")
+            or item.get("analysis_skipped") is not True
+            or item.get("effective_status") != "approved_override"
+            or override.get("approved") is not True
+            or override.get("source") != "autopilot_skip_analysis"
+        ):
+            continue
+        trusted[analysis_id] = item
+    return trusted
+
+
+def _hydrate_trusted_skip_analysis_ids(
+    payload: dict,
+    trusted_verdicts: dict[str, dict],
+) -> dict:
+    """Repair pre-fix drafts without weakening the server-side trust boundary."""
+    if not trusted_verdicts:
+        return payload
+    by_url = {
+        item.get("url"): analysis_id
+        for analysis_id, item in trusted_verdicts.items()
+        if item.get("url")
+    }
+    by_name = {
+        item.get("name"): analysis_id
+        for analysis_id, item in trusted_verdicts.items()
+        if item.get("name")
+    }
+    hydrated = deepcopy(payload)
+    for creative in hydrated.get("creatives") or []:
+        if creative.get("analysisId"):
+            continue
+        analysis_id = (
+            by_url.get(creative.get("url"))
+            or by_name.get(creative.get("name"))
+        )
+        if analysis_id:
+            creative["analysisId"] = analysis_id
+    if hydrated.get("creatives"):
+        hydrated["creative"] = deepcopy(hydrated["creatives"][0])
+    return hydrated
 
 
 async def _normalize_brief(run: dict, workspace: dict) -> CapabilityResult:
@@ -1235,9 +1300,10 @@ async def _build_order_draft(run: dict, workspace: dict) -> CapabilityResult:
     audience = _audience_attrs(_artifact(workspace, "audience", {}))
     targeting = _artifact(workspace, "targeting", {})
     creative = _artifact(workspace, "creative", {})
-    files = enrich_files_with_intel(
-        (creative or {}).get("files", []), await get_intel(run["session_id"])
+    intel_docs = _creative_intel_docs(
+        workspace, await get_intel(run["session_id"])
     )
+    files = enrich_files_with_intel((creative or {}).get("files", []), intel_docs)
     placements = _placement_ids(_artifact(workspace, "placements", {}))
     assignments_value = _artifact(workspace, "assignments", {})
     assignments = assignments_value.get("assignments", assignments_value)
@@ -1272,8 +1338,14 @@ async def _run_order_guard(run: dict, workspace: dict) -> CapabilityResult:
     draft = _artifact(workspace, "order_draft", {})
     payload = draft.get("payload", {}) if isinstance(draft, dict) else {}
     session = await get_or_create_session(run["session_id"])
+    trusted_verdicts = _trusted_skipped_creative_verdicts(workspace)
+    payload = _hydrate_trusted_skip_analysis_ids(payload, trusted_verdicts)
     try:
-        await guard_order(payload, session)
+        await guard_order(
+            payload,
+            session,
+            trusted_creative_verdicts=trusted_verdicts,
+        )
     except OrderValidationError as exc:
         return CapabilityResult(
             value={"passed": False, "reasons": exc.reasons,
@@ -1328,8 +1400,14 @@ async def _create_order(run: dict, workspace: dict) -> CapabilityResult:
         raise RuntimeError("launch approval does not match the current order draft")
     draft = draft_item.get("value") or {}
     payload = draft.get("payload", {}) if isinstance(draft, dict) else {}
+    trusted_verdicts = _trusted_skipped_creative_verdicts(workspace)
+    payload = _hydrate_trusted_skip_analysis_ids(payload, trusted_verdicts)
     # Recheck live catalogs/conflicts immediately before the side effect.
-    await guard_order(payload, await get_or_create_session(run["session_id"]))
+    await guard_order(
+        payload,
+        await get_or_create_session(run["session_id"]),
+        trusted_creative_verdicts=trusted_verdicts,
+    )
     result = await create_order(payload)
     if result.get("error"):
         raise RuntimeError(f"order API rejected launch: {result}")

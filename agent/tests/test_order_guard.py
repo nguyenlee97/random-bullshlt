@@ -6,6 +6,7 @@ import pytest
 from validation.order_guard import (
     GuardContext,
     OrderValidationError,
+    guard_order,
     validate_order_payload,
 )
 
@@ -227,6 +228,51 @@ def test_server_side_creative_verdict_is_required_when_enabled():
         }),
     )
     assert any("không khớp URL" in reason for reason in substituted)
+
+
+@pytest.mark.asyncio
+async def test_guard_accepts_only_explicitly_supplied_server_skip_verdict(monkeypatch):
+    creative = {
+        "name": "b.png",
+        "zones": ["ZN-001", "ZN-002"],
+        "url": "https://api.pawgrammers.io.vn/up/b.png",
+        "analysisId": "skip:run-1:0",
+    }
+
+    async def zone_map():
+        return {zone_id: {"id": zone_id} for zone_id in ZONES}
+
+    async def conflicts(_start, _end):
+        return {}
+
+    async def segments():
+        return [{"_id": value} for value in DMP]
+
+    async def no_stored_verdicts(_session_id, _analysis_ids):
+        return {}
+
+    monkeypatch.setattr("tools.zone_catalog.get_zone_map", zone_map)
+    monkeypatch.setattr("tools.order_api.fetch_zone_conflicts", conflicts)
+    monkeypatch.setattr("tools.audience_library.get_all_segments", segments)
+    monkeypatch.setattr(
+        "creative_intel.service.get_intel_by_ids",
+        no_stored_verdicts,
+    )
+    monkeypatch.setattr("config.config.USE_VLM_CREATIVE", True)
+
+    payload = make_payload(creatives=[creative])
+    session = {"_id": "session-1", "form_state": {"brief": {"budget": 600}}}
+    trusted = {
+        "skip:run-1:0": {
+            "url": creative["url"],
+            "status": "approved_override",
+            "effective_status": "approved_override",
+        },
+    }
+
+    await guard_order(payload, session, trusted_creative_verdicts=trusted)
+    with pytest.raises(OrderValidationError, match="verdict"):
+        await guard_order(payload, session)
 
 
 # ── error type ────────────────────────────────────────────────────────────────

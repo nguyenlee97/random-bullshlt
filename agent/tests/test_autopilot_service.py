@@ -7,7 +7,9 @@ from autopilot.capabilities import (
     CapabilityResult, _analyze_creatives, _assign_creatives, _audience_attrs,
     _build_creatives, _build_order_draft, _create_order, _create_setup_report,
     _derive_targeting, _forecast, _generate_strategy, _launch_approval,
+    _hydrate_trusted_skip_analysis_ids,
     _plan_placement_intent, _prepare_creatives, _rank_placements, _retrieve_audience,
+    _trusted_skipped_creative_verdicts,
 )
 from autopilot import worker
 from campaign_models import LEGACY_CONVERSATION_MODEL, OPENAI_GPT_5_4_MINI
@@ -435,6 +437,71 @@ async def test_autopilot_launch_is_active_and_enables_synthetic_showcase(monkeyp
     }})
     assert report.value["performance_data_available"] is True
     assert report.value["performance_data_mode"] == "synthetic_showcase"
+
+
+@pytest.mark.asyncio
+async def test_skipped_analysis_verdict_is_embedded_in_order_draft(monkeypatch):
+    import creative_intel.service as intel_service
+
+    async def no_intel(_session_id):
+        return []
+
+    monkeypatch.setattr(intel_service, "get_intel", no_intel)
+    skipped = {
+        "analysis_id": "skip:run-skip:0",
+        "name": "hero.png",
+        "url": "https://api.pawgrammers.io.vn/up/hero.png",
+        "status": "approved_override",
+        "effective_status": "approved_override",
+        "analysis_skipped": True,
+        "override": {
+            "approved": True,
+            "source": "autopilot_skip_analysis",
+        },
+    }
+    workspace = {"artifacts": {
+        "brief": {"value": BRIEF},
+        "audience": {"value": {"attrs": []}},
+        "targeting": {"value": {}},
+        "creative": {"value": {"files": [{
+            "name": "hero.png",
+            "url": "https://api.pawgrammers.io.vn/up/hero.png",
+            "width": 300,
+            "height": 250,
+        }]}},
+        "creative_verdict": {
+            "updated_by": "autopilot_worker",
+            "value": {
+                "analysis_skipped": True,
+                "files": [skipped],
+            },
+        },
+        "placements": {"value": {"selectedZoneIds": ["z1"]}},
+        "assignments": {"value": {"assignments": {"z1": 0}}},
+    }}
+
+    draft = await _build_order_draft(
+        {"session_id": "skip-draft", "run_id": "run-skip"},
+        workspace,
+    )
+
+    assert draft.value["payload"]["creatives"][0]["analysisId"] == "skip:run-skip:0"
+    assert _trusted_skipped_creative_verdicts(workspace) == {
+        "skip:run-skip:0": skipped,
+    }
+    repaired = _hydrate_trusted_skip_analysis_ids(
+        {
+            "creatives": [{
+                "name": "hero.png",
+                "url": "https://api.pawgrammers.io.vn/up/hero.png",
+            }],
+        },
+        {"skip:run-skip:0": skipped},
+    )
+    assert repaired["creatives"][0]["analysisId"] == "skip:run-skip:0"
+    assert repaired["creative"]["analysisId"] == "skip:run-skip:0"
+    workspace["artifacts"]["creative_verdict"]["updated_by"] = "campaign_operator"
+    assert _trusted_skipped_creative_verdicts(workspace) == {}
 
 
 @pytest.mark.asyncio

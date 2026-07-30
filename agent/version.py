@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-30.10"
+BUILD_VERSION = "2026-07-30.11"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -281,4 +281,6 @@ BUILD_FEATURES = [
     "typed-guardrail-policy",                         # legacy-compatible enforce + shadow decision modes
     "owned-agent-order-reads",                        # campaign status tools use server-derived ownership scope
     "privacy-safe-zone-conflicts",                    # availability omits other campaign identity
+    "autopilot-preference-sequence",                  # creative approach unlocks approval-policy choice with chat guidance
+    "autopilot-skip-analysis-order-guard",             # explicit server-side skip verdicts remain valid at both safety gates
 ]

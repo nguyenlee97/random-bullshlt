@@ -269,6 +269,16 @@ export default function AutopilotPanel({
       const result = await AgentAPI.setWorkspacePreferences('autopilot', effectivePolicy, value)
       if (result?.ok === false) throw new Error(result?.detail || 'Không thể lưu lựa chọn creative.')
       await loadPrerequisites()
+      window.dispatchEvent(new CustomEvent('agent:inject_message', {
+        detail: {
+          id: `autopilot_creative_source_${Date.now()}`,
+          role: 'assistant',
+          content: `✅ Đã chọn **${value === 'upload' ? 'Tôi sẽ tải creative lên' : 'Để AI tự tạo creative'}**. Bước tiếp theo, hãy chọn **cách Agent xin duyệt** để xác định các checkpoint trước khi bắt đầu Autopilot.`,
+          blocks: [],
+          timestamp: new Date().toISOString(),
+          metadata: { tool: 'autopilot_creative_source_selected', model: 'none' },
+        },
+      }))
     } catch (err) {
       setCreativeSource(null)
       setError(err.message)
@@ -278,6 +288,10 @@ export default function AutopilotPanel({
   }
 
   const choosePolicy = value => {
+    if (!creativeSource) {
+      setError('Hãy chọn cách chuẩn bị creative trước khi chọn cách Agent xin duyệt.')
+      return
+    }
     if (value === 'auto_build_draft' && creativeSource === 'upload') {
       setError('Chế độ tự động hoàn toàn chỉ khả dụng khi chọn AI tự tạo creative.')
       return
@@ -579,6 +593,7 @@ export default function AutopilotPanel({
   const displayBrief = canonicalBrief || brief || {}
   const briefErrors = useMemo(() => validateBrief(canonicalBrief), [canonicalBrief])
   const briefReady = Boolean(canonicalBrief) && briefErrors.length === 0 && !pendingProposals.length && !prerequisitesLoading
+  const policyLocked = !creativeSource
   const briefHasDecisionContext = Boolean(String(displayBrief?.kpi || '').trim() && String(displayBrief?.notes || '').trim())
   const startBlockers = [
     !briefReady ? 'brief đã duyệt và hợp lệ' : null,
@@ -833,24 +848,31 @@ export default function AutopilotPanel({
               <div className="mb-4">
                 <p className="text-sm font-black text-slate-900">Chọn cách Agent xin duyệt</p>
                 <p className="mt-1 text-xs leading-5 text-slate-500">Có thể tạm dừng Autopilot bất cứ lúc nào; campaign này vẫn giữ nguyên mode đã chọn từ trang chủ.</p>
+                {policyLocked && (
+                  <p id="autopilot-policy-locked" className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold leading-5 text-amber-800">
+                    🔒 Hãy chọn cách chuẩn bị creative trước. Các chế độ xin duyệt sẽ mở ngay sau bước đó.
+                  </p>
+                )}
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
                 {policyOptions.map(item => {
                   const uploadBlocksAutomatic = (
                     item.value === 'auto_build_draft' && creativeSource === 'upload'
                   )
+                  const policyDisabled = policyLocked || uploadBlocksAutomatic || loading
                   const tooltipId = `autopilot-policy-tooltip-${item.value}`
                   return (
                     <div key={item.value} className="group relative">
                       <button type="button" onClick={() => choosePolicy(item.value)}
+                        disabled={policyDisabled}
                         data-demo={`autopilot-policy-${item.value}`}
                         aria-pressed={policy === item.value}
-                        aria-disabled={uploadBlocksAutomatic}
-                        aria-describedby={uploadBlocksAutomatic ? tooltipId : undefined}
-                        className={`min-h-24 w-full rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${uploadBlocksAutomatic ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400' : policy === item.value ? 'border-brand-400 bg-brand-50 text-brand-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50/50'}`}>
+                        aria-disabled={policyDisabled}
+                        aria-describedby={policyLocked ? 'autopilot-policy-locked' : uploadBlocksAutomatic ? tooltipId : undefined}
+                        className={`min-h-24 w-full rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${policyDisabled ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400' : policy === item.value ? 'border-brand-400 bg-brand-50 text-brand-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50/50'}`}>
                         <span className="block text-xs font-bold leading-5">{item.label}</span>
                         <span className="mt-1 block text-[10px] opacity-70">{item.note}</span>
-                        {policy === item.value && !uploadBlocksAutomatic && <span className="mt-3 inline-flex items-center gap-1 text-[10px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đang chọn</span>}
+                        {policy === item.value && !policyDisabled && <span className="mt-3 inline-flex items-center gap-1 text-[10px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đang chọn</span>}
                       </button>
                       {uploadBlocksAutomatic && (
                         <span id={tooltipId} role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-[10px] font-semibold leading-4 text-white shadow-lg group-hover:block group-focus-within:block">

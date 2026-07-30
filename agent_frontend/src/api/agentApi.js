@@ -1809,6 +1809,10 @@ export const AgentAPI = {
   async setWorkspacePreferences(experienceMode, approvalPolicy = null, creativeSource = null) {
     try {
       if (WORKSPACE_REVISION == null) await this.getWorkspace()
+      const preferenceMutationId = (
+        globalThis.crypto?.randomUUID?.()
+        || `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      )
       const res = await agentFetch(`${AGENT_URL}/api/agent/workspace/preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1819,7 +1823,9 @@ export const AgentAPI = {
           creative_source: creativeSource,
           base_revision: WORKSPACE_REVISION,
           actor: 'campaign_operator',
-          idempotency_key: `experience:${SESSION_ID}:${experienceMode}:${approvalPolicy || ''}:${creativeSource || ''}`,
+          // Each click is a distinct operator mutation. Reusing a value-derived
+          // key prevents A -> B -> A preference changes from applying the last A.
+          idempotency_key: `experience:${SESSION_ID}:${preferenceMutationId}`,
         }),
         signal: AbortSignal.timeout(5000),
       })

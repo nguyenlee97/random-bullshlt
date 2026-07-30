@@ -191,10 +191,18 @@ def validate_order_payload(payload: dict, ctx: GuardContext) -> list[str]:
     return reasons
 
 
-async def guard_order(payload: dict, session: dict) -> None:
+async def guard_order(
+    payload: dict,
+    session: dict,
+    *,
+    trusted_creative_verdicts: dict[str, dict] | None = None,
+) -> None:
     """
     Async wrapper: gathers live context and raises OrderValidationError on failure.
     Call this in handlers/setup.py::_order_create and in any agentic order path.
+
+    ``trusted_creative_verdicts`` is internal-only input for server-produced
+    Autopilot skip approvals. It is never populated from the order payload.
     """
     import asyncio
 
@@ -226,6 +234,11 @@ async def guard_order(payload: dict, session: dict) -> None:
             if c.get("analysisId")
         ]
         creative_verdicts = await get_intel_by_ids(session.get("_id", "default"), analysis_ids)
+        creative_verdicts.update({
+            analysis_id: verdict
+            for analysis_id, verdict in (trusted_creative_verdicts or {}).items()
+            if analysis_id in analysis_ids
+        })
     ctx = GuardContext(
         brief=brief,
         known_zone_ids=set(zone_map.keys()),

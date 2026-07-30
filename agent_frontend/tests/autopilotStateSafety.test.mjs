@@ -24,7 +24,8 @@ test('creative source stays locked until the canonical brief is confirmed', () =
 
 test('uploaded creative disables fully automatic policy with an accessible tooltip', () => {
   assert.match(panel, /item\.value === 'auto_build_draft' && creativeSource === 'upload'/)
-  assert.match(panel, /aria-disabled=\{uploadBlocksAutomatic\}/)
+  assert.match(panel, /const policyDisabled = policyLocked \|\| uploadBlocksAutomatic \|\| loading/)
+  assert.match(panel, /aria-disabled=\{policyDisabled\}/)
   assert.match(panel, /role="tooltip"/)
   assert.match(panel, /group-hover:block group-focus-within:block/)
   assert.match(panel, /value === 'upload' && policy === 'auto_build_draft'/)

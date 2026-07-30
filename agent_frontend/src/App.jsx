@@ -1863,11 +1863,14 @@ export default function App() {
         // its proactive audience request) behind the operator's back. The run
         // begins only from the explicit "Bắt đầu Autopilot" action above.
         if (experienceMode === 'autopilot') {
+          const autopilotConfirmation = target.step === 0
+            ? '✅ Brief đã được xác nhận. Bước tiếp theo, hãy chọn **cách chuẩn bị creative** trong workspace: tải creative lên hoặc để AI tự tạo.'
+            : '✅ Đã cập nhật workspace. Autopilot sẽ dùng thay đổi này khi bạn bấm **Bắt đầu Autopilot**.'
           window.dispatchEvent(new CustomEvent('agent:inject_message', {
             detail: {
               id: `autopilot_update_${Date.now()}`,
               role: 'assistant',
-              content: '✅ Đã cập nhật workspace. Autopilot sẽ dùng thay đổi này khi bạn bấm **Bắt đầu Autopilot**.',
+              content: autopilotConfirmation,
               blocks: [],
               timestamp: new Date().toISOString(),
               metadata: { tool: 'workspace_confirmed', model: 'none', step: target.step },

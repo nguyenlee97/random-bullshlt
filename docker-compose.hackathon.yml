@@ -1,0 +1,284 @@
+name: advertising-agent-hackathon
+
+services:
+  frontend:
+    build:
+      context: ./agent_frontend
+      args:
+        VITE_AGENT_URL: /agent
+        VITE_BACKEND_URL: /backend
+        VITE_ADSPILOT_URL: /adspilot/
+        VITE_ANALYTICS_URL: /analytics/
+        VITE_DEMO_NAMESPACE: ${DEMO_NAMESPACE:-zah4-hackathon}
+        VITE_ZALO_OA_ID: ${ZALO_OA_ID:-847163434345003951}
+        VITE_ZALO_OA_NAME: ${ZALO_OA_NAME:-Advertising Agent}
+        VITE_ZALO_OA_QR_IMAGE: ${ZALO_OA_QR_IMAGE:-/zalo-oa-qr-hackathon.png}
+        VITE_ZNEWS_URL: https://zah-4.123c.vn/znews/
+        VITE_BAOMOI_URL: https://zah-4.123c.vn/baomoi/
+        VITE_ZINGMP3_URL: https://zah-4.123c.vn/zingmp3/
+    environment:
+      AGENT_API_KEY: ${AGENT_API_KEY:?set AGENT_API_KEY in stack.env}
+    ports:
+      - "127.0.0.1:5175:80"
+    depends_on:
+      agent:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      adspilot:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
+      znews:
+        condition: service_healthy
+      baomoi:
+        condition: service_healthy
+      zingmp3:
+        condition: service_healthy
+      smoney:
+        condition: service_healthy
+      dicungcon:
+        condition: service_healthy
+      zagoo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  agent:
+    build: ./agent
+    env_file:
+      - ./deploy/hackathon/agent.env
+    environment:
+      AGENT_API_KEY: ${AGENT_API_KEY:?set AGENT_API_KEY in stack.env}
+      MONGODB_URI: mongodb://mongo:27017/camp_ads
+      MONGODB_DB: camp_ads
+      BACKEND_URL: http://backend:3000
+      QDRANT_URL: http://qdrant:6333
+      CORS_ORIGINS: https://zah-4.123c.vn
+      ADSPILOT_URL: https://zah-4.123c.vn/adspilot/
+      ANALYTICS_URL: https://zah-4.123c.vn/analytics/
+      LOCAL_ZNEWS_URL: https://zah-4.123c.vn/znews/
+      LOCAL_BAOMOI_URL: https://zah-4.123c.vn/baomoi/
+      LOCAL_ZINGMP3_URL: https://zah-4.123c.vn/zingmp3/
+      LOCAL_SMONEY_URL: https://zah-4.123c.vn/smoney/
+      LOCAL_DICUNGCON_URL: https://zah-4.123c.vn/dicungcon/
+      LOCAL_ZAGOO_URL: https://zah-4.123c.vn/zagoo/
+      ALLOWED_CREATIVE_URL_HOSTS: zah-4.123c.vn,localhost,127.0.0.1
+      ZALO_WEB_WORKSPACE_URL: https://zah-4.123c.vn
+      ZALO_PUBLIC_API_URL: https://zah-4.123c.vn/agent/api/agent
+      DEMO_NAMESPACE: ${DEMO_NAMESPACE:-zah4-hackathon}
+      RATE_LIMIT_ENABLED: "true"
+      ACCOUNT_COOKIE_SECURE: "true"
+      ANONYMOUS_COOKIE_SECURE: "true"
+      USE_CAMPAIGN_AUTOPILOT: "true"
+      OPENAI_CAMPAIGN_ENABLED: "true"
+      GREENNODE_CAMPAIGN_ENABLED: "false"
+      USE_RAG_AUDIENCE: "true"
+      AUDIENCE_RERANK_MODE: openai_nano
+      PLACEMENT_RAG_ENABLED: "true"
+      PLACEMENT_RERANK_ENABLED: "true"
+      RAG_QUERY_REWRITE: "false"
+      RAG_USE_CRITIC_SELECTOR: "false"
+      USE_LANGGRAPH_FREEFORM: "false"
+      USE_VLM_CREATIVE: "true"
+      ZALO_AUTOPILOT_CONVERSATION_MODEL: openai_gpt_5_4_mini
+      CRITIC_API_KEY: ""
+      CRITIC_BASE_URL: ""
+      CRITIC_MODEL: ""
+      JUDGE_API_KEY: ""
+      JUDGE_BASE_URL: ""
+      JUDGE_MODEL: ""
+      RERANK_URL: ""
+      RERANK_MODEL: ""
+      LANGFUSE_PUBLIC_KEY: ""
+      LANGFUSE_SECRET_KEY: ""
+      LANGFUSE_HOST: ""
+      LANGFUSE_BASE_URL: ""
+      ZALO_LOGIN_ENABLED: ${ZALO_LOGIN_ENABLED:-false}
+      ZALO_OA_ENABLED: ${ZALO_OA_ENABLED:-false}
+      ZALO_AGENT_WORKER_ENABLED: ${ZALO_AGENT_WORKER_ENABLED:-false}
+      ZALO_OUTBOUND_ENABLED: ${ZALO_OUTBOUND_ENABLED:-false}
+      ZALO_OPENAI_ENABLED: ${ZALO_OPENAI_ENABLED:-false}
+      ZALO_OA_TOKEN_STORE_PATH: /app/data/zalo/tokens.json
+    volumes:
+      - "./docs/knowledge base:/docs/knowledge base:ro"
+      - hf_cache:/root/.cache/huggingface
+      - fastembed_cache:/tmp/fastembed_cache
+      - zalo_tokens:/app/data/zalo
+    depends_on:
+      mongo:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import httpx; httpx.get('http://localhost:8080/health').raise_for_status()"
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./deploy/hackathon/backend.env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/adspilot
+      PORT: "3000"
+      NODE_ENV: production
+      PUBLIC_BASE_URL: https://zah-4.123c.vn
+      ALLOWED_ORIGINS: https://zah-4.123c.vn
+      SITE_URL_MODE: local
+      LOCAL_ZNEWS_URL: https://zah-4.123c.vn/znews/
+      LOCAL_BAOMOI_URL: https://zah-4.123c.vn/baomoi/
+      LOCAL_ZINGMP3_URL: https://zah-4.123c.vn/zingmp3/
+      LOCAL_SMONEY_URL: https://zah-4.123c.vn/smoney/
+      LOCAL_DICUNGCON_URL: https://zah-4.123c.vn/dicungcon/
+      LOCAL_ZAGOO_URL: https://zah-4.123c.vn/zagoo/
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      mongo:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  seed:
+    build: ./backend
+    command:
+      - sh
+      - -c
+      - >-
+        node seed/index.js &&
+        node seed/seed-audience-missing.js &&
+        node seed/migrate-np6-catalog.js --apply --deployment-id=zah4-hackathon-np6
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/adspilot
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: "no"
+
+  mongo:
+    image: mongo:8
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  adspilot:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./adspilot_frontend:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck: &static-health
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  analytics:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./analytics_frontend:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck: *static-health
+    restart: unless-stopped
+
+  znews:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./znews_replicate:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck: *static-health
+    restart: unless-stopped
+
+  baomoi:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./baomoi_replicate:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck: *static-health
+    restart: unless-stopped
+
+  zingmp3:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./zingmp3_replicate:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck: *static-health
+    restart: unless-stopped
+
+  smoney:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./smoney_replicate:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck: *static-health
+    restart: unless-stopped
+
+  dicungcon:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./dicungcon_replicate:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck: *static-health
+    restart: unless-stopped
+
+  zagoo:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./zagoo_replicate:/usr/share/nginx/html:ro
+      - ./ops/nginx/static-site.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck: *static-health
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+  qdrant_data:
+  backend_uploads:
+  hf_cache:
+  fastembed_cache:
+  zalo_tokens:
