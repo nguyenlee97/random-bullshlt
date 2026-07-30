@@ -490,7 +490,7 @@ export function LandingAudience() {
     <section ref={sectionRef} className="v3-who-section" aria-labelledby="who-title" data-section="02">
       <div className="v3-section-inner is-narrow">
         <ChapterHeader number="02" title="WHO ADVERTISING AGENT HELPS" trailing={<em className="v3-chapter-pill is-dark"><i /> USER TARGETING</em>} />
-        <h2 id="who-title">Advertising Agent giúp mọi đội ngũ đứng sau chiến dịch <em>bức tốc.</em></h2>
+        <h2 id="who-title">Advertising Agent giúp mọi đội ngũ đứng sau chiến dịch <em>bứt tốc.</em></h2>
         <div className="v3-persona-grid" data-who-grid data-persona-carousel>
           {personas.map((persona, index) => (
             <article key={persona.eyebrow} className="v3-persona-card scroll-reveal" data-scroll-reveal style={{ '--reveal-delay': `${index * 100}ms` }}>
