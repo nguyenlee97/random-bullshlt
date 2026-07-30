@@ -251,6 +251,11 @@ export function DemoProvider({
       return
     }
 
+    if (step.whenSelector && !document.querySelector(step.whenSelector)) {
+      setStepIdx(prev => prev + 1)
+      return
+    }
+
     // Skip manual-review-only steps when analysis already auto-approved every
     // creative. This branches the walkthrough without changing either model
     // provider's underlying campaign workflow.
@@ -589,6 +594,7 @@ export function DemoProvider({
         const expected = new Set(step.taskKeys || [])
         const timeout = step.timeout || 120000
         const unexpectedGraceMs = step.unexpectedGraceMs ?? 4000
+        const ignoredWaitingReasons = new Set(step.ignoreWaitingReasons || [])
         const startedAt = Date.now()
         let unexpectedTask = ''
         let unexpectedSince = 0
@@ -596,15 +602,23 @@ export function DemoProvider({
           const poll = () => {
             const canvas = document.querySelector('[data-demo="autopilot-canvas"]')
             const taskKey = canvas?.getAttribute('data-autopilot-waiting-task') || ''
+            const waitingReason = canvas?.getAttribute('data-autopilot-waiting-reason') || ''
             const status = canvas?.getAttribute('data-autopilot-status') || ''
             const observation = classifyAutopilotCheckpointObservation({
               expectedTaskKeys: [...expected],
               taskKey,
               status,
-              lastHandledTask: autopilotWaitingTaskRef.current,
+              lastHandledTask: step.allowHandledTask
+                ? ''
+                : autopilotWaitingTaskRef.current,
             })
 
-            if (observation === AUTOPILOT_CHECKPOINT_OBSERVATION.EXPECTED) {
+            if (
+              observation === AUTOPILOT_CHECKPOINT_OBSERVATION.EXPECTED
+              && ignoredWaitingReasons.has(waitingReason)
+            ) {
+              setTimeout(poll, 500)
+            } else if (observation === AUTOPILOT_CHECKPOINT_OBSERVATION.EXPECTED) {
               resolve(taskKey)
             } else if (observation === AUTOPILOT_CHECKPOINT_OBSERVATION.TERMINAL) {
               resolve('')

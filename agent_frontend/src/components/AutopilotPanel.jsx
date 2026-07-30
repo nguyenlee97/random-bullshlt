@@ -698,6 +698,7 @@ export default function AutopilotPanel({
       data-demo="autopilot-canvas"
       data-autopilot-status={run?.status || 'not_started'}
       data-autopilot-waiting-task={waiting?.key || ''}
+      data-autopilot-waiting-reason={waiting?.result?.reason || ''}
       className="h-full w-full overflow-y-auto bg-slate-50/70 p-3 sm:p-5"
       aria-label="Không gian Campaign Autopilot"
     >
@@ -1337,6 +1338,7 @@ export default function AutopilotPanel({
                   <>
                     <button
                       type="button"
+                      data-demo="autopilot-creative-analysis-start"
                       onClick={() => chooseCreativeAnalysis('analyze')}
                       disabled={loading}
                       className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-600 disabled:bg-slate-300 sm:min-w-0 sm:flex-none"

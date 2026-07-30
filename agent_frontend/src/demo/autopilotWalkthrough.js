@@ -426,6 +426,31 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
         text: 'Nếu có file cần người xem lại, walkthrough sẽ mở nhánh duyệt thủ công. Nếu tất cả đều đạt, nó vẫn dừng ở phần kết quả trước khi sang gán creative.',
       },
       {
+        type: 'CLICK_EL',
+        target: '[data-demo="autopilot-creative-analysis-start"]',
+        whenAutopilotTask: 'analyze_creatives',
+        whenSelector: '[data-demo="autopilot-creative-analysis-start"]',
+        tooltip: {
+          target: '[data-demo="autopilot-creative-analysis-start"]',
+          position: 'top',
+          title: 'Bắt đầu Creative Intelligence',
+          text: 'Walkthrough đang xác nhận lựa chọn Phân tích creative. Sau bước này, Agent sẽ tự cập nhật khi mọi verdict hoàn tất.',
+        },
+      },
+      {
+        type: 'WAIT_FOR_AUTOPILOT_TASK',
+        taskKeys: ['analyze_creatives', 'assign_creatives'],
+        whenAutopilotTask: 'analyze_creatives',
+        allowHandledTask: true,
+        ignoreWaitingReasons: [
+          'analysis_confirmation_required',
+          'analysis_in_progress',
+        ],
+        timeout: 180000,
+        title: 'Đang chờ kết quả Creative Intelligence',
+        text: 'Walkthrough chờ quá trình phân tích tự hoàn tất. Nó chỉ mở nhánh duyệt thủ công nếu một creative thực sự không đạt.',
+      },
+      {
         type: 'TOOLTIP',
         target: '[data-demo="autopilot-review-artifact"][data-autopilot-task="analyze_creatives"]',
         whenAutopilotTask: 'analyze_creatives',

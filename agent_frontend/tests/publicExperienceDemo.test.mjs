@@ -342,6 +342,9 @@ test('Autopilot walkthrough auto-commits audience and targeting, then stops befo
   assert.match(engine, /whenAutopilotTask/)
   assert.match(engine, /case 'WAIT_FOR_AUTOPILOT_TASK'/)
   assert.match(engine, /step\.requiredSelector/)
+  assert.match(engine, /step\.whenSelector/)
+  assert.match(engine, /step\.ignoreWaitingReasons/)
+  assert.match(engine, /step\.allowHandledTask/)
   assert.match(engine, /Brief chưa được tạo thành công/)
   assert.match(engine, /unexpected:\$\{taskKey\}/)
   assert.match(engine, /Brief cần thêm ngữ cảnh trước khi tìm audience/)
@@ -355,8 +358,31 @@ test('Autopilot walkthrough auto-commits audience and targeting, then stops befo
   assert.match(workspacePane, /data-demo="autopilot-editor-save"/)
   assert.match(assignmentEditor, /data-demo="autopilot-creative-assignment-editor"/)
   assert.match(autopilot, /data-demo="autopilot-review-approve"/)
+  assert.match(autopilot, /data-demo="autopilot-creative-analysis-start"/)
+  assert.match(autopilot, /data-autopilot-waiting-reason/)
   assert.match(autopilot, /data-demo="autopilot-plan-details"/)
   assert.match(autopilot, /data-demo="autopilot-technical-details"/)
+
+  const analysisStart = live.find(
+    step => step.type === 'CLICK_EL'
+      && step.target === '[data-demo="autopilot-creative-analysis-start"]',
+  )
+  assert.ok(analysisStart)
+  assert.equal(analysisStart.whenAutopilotTask, 'analyze_creatives')
+  assert.equal(
+    analysisStart.whenSelector,
+    '[data-demo="autopilot-creative-analysis-start"]',
+  )
+  const analysisCompletionWait = live.find(
+    step => step.type === 'WAIT_FOR_AUTOPILOT_TASK'
+      && step.allowHandledTask
+      && step.ignoreWaitingReasons?.includes('analysis_in_progress'),
+  )
+  assert.ok(analysisCompletionWait)
+  assert.deepEqual(analysisCompletionWait.ignoreWaitingReasons, [
+    'analysis_confirmation_required',
+    'analysis_in_progress',
+  ])
 
   const launchWait = live.findIndex(
     step => step.type === 'WAIT_FOR_AUTOPILOT_TASK' && step.taskKeys.includes('launch_approval'),
