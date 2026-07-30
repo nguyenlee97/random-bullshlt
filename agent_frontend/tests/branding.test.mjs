@@ -343,6 +343,7 @@ test('Autopilot chat is state-aware and reuses the full report module', async ()
 
 test('frontend rebuilds cannot turn missing chunks into a blank page', async () => {
   const nginx = await source('agent_frontend/nginx.conf')
+  const deployWorkflow = await source('.github/workflows/deploy-frontend-production.yml')
   const main = await source('agent_frontend/src/main.jsx')
   const boundary = await source('agent_frontend/src/components/AppRuntimeBoundary.jsx')
   const workspace = await source('agent_frontend/src/components/WorkspacePane/index.jsx')
@@ -356,6 +357,10 @@ test('frontend rebuilds cannot turn missing chunks into a blank page', async () 
   assert.match(boundary, /Tải lại giao diện/)
   assert.doesNotMatch(workspace, /lazy\(/)
   assert.doesNotMatch(blocks, /lazy\(/)
+  assert.match(deployWorkflow, /find "\$release_path" -type d -exec chmod 0755/)
+  assert.match(deployWorkflow, /find "\$release_path" -type f -exec chmod 0644/)
+  assert.match(deployWorkflow, /grep '\^\/assets\/'/)
+  assert.match(deployWorkflow, /https:\/\/agent\.pawgrammers\.io\.vn\$\{asset_path\}/)
 })
 
 test('report analysis answers import the icon used by their rich block', async () => {
