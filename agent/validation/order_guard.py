@@ -13,13 +13,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from urllib.parse import urlparse
 
 # Budget ceilings (VND). Env-overridable via config; defaults here for pure-fn use.
 DEFAULT_MAX_ORDER_BUDGET_VND = 5_000_000_000  # 5 tỷ
 MAX_CAMPAIGN_DAYS = 370
 
 ALLOWED_OBJECTIVES = {"awareness", "consideration", "conversion", "retention"}
-ALLOWED_CREATIVE_URL_HOSTS = ("api.pawgrammers.io.vn", "localhost", "127.0.0.1")
+DEFAULT_ALLOWED_CREATIVE_URL_HOSTS = (
+    "api.pawgrammers.io.vn",
+    "localhost",
+    "127.0.0.1",
+)
 
 
 class OrderValidationError(Exception):
@@ -47,6 +52,7 @@ class GuardContext:
     require_creative_verdict: bool = False
     max_budget_vnd: int = DEFAULT_MAX_ORDER_BUDGET_VND
     today: date | None = None        # injectable for tests
+    allowed_creative_url_hosts: tuple[str, ...] = DEFAULT_ALLOWED_CREATIVE_URL_HOSTS
 
 
 def _parse_date(s: str) -> date | None:
@@ -146,7 +152,13 @@ def validate_order_payload(payload: dict, ctx: GuardContext) -> list[str]:
             )
         url = c.get("url") or ""
         if url and not url.startswith("data:"):
-            host_ok = any(h in url for h in ALLOWED_CREATIVE_URL_HOSTS)
+            try:
+                creative_host = (urlparse(url).hostname or "").lower()
+            except Exception:
+                creative_host = ""
+            host_ok = creative_host in {
+                host.lower() for host in ctx.allowed_creative_url_hosts
+            }
             if not host_ok:
                 reasons.append(f"Creative URL không thuộc host cho phép: {url[:80]}")
 
@@ -222,6 +234,7 @@ async def guard_order(payload: dict, session: dict) -> None:
         creative_verdicts=creative_verdicts,
         require_creative_verdict=config.USE_VLM_CREATIVE,
         max_budget_vnd=getattr(config, "MAX_ORDER_BUDGET_VND", DEFAULT_MAX_ORDER_BUDGET_VND),
+        allowed_creative_url_hosts=config.ALLOWED_CREATIVE_URL_HOSTS,
     )
 
     reasons = validate_order_payload(payload, ctx)

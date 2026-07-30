@@ -2,6 +2,7 @@
 from models import AgentResponse, ResponseMeta
 from session import get_or_create_session, log_event
 from tools.order_api import fetch_order
+from config import config
 
 
 async def handle_result(session_id: str) -> AgentResponse:
@@ -57,8 +58,8 @@ async def handle_result(session_id: str) -> AgentResponse:
         {
             "type": "info",
             "text": (
-                "🔗 Xem chi tiết: [Trình quản lý quảng cáo](https://adspilot.pawgrammers.io.vn)\n\n"
-                "📊 Theo dõi hiệu quả: [Analytics](https://analytics.pawgrammers.io.vn)"
+                f"🔗 Xem chi tiết: [Trình quản lý quảng cáo]({config.ADSPILOT_URL})\n\n"
+                f"📊 Theo dõi hiệu quả: [Analytics]({config.ANALYTICS_URL})"
             ),
         },
     ]

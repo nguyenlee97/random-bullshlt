@@ -46,6 +46,19 @@ def _audience_attrs(value: Any) -> list[dict]:
     return value.get("attrs") or value.get("recommendations") or []
 
 
+def _creative_intel_docs(workspace: dict, intel_docs: list[dict]) -> list[dict]:
+    """Merge canonical verdicts with live Intel, preferring real analyses.
+
+    A deliberate operator skip is stored as a creative-verdict artifact rather
+    than as a fabricated Creative Intel job.  Placement compatibility and
+    assignment still need to see that explicit approval.  Real Intel documents
+    are appended last so they remain authoritative when both sources exist.
+    """
+    verdict = _artifact(workspace, "creative_verdict", {})
+    verdict_docs = verdict.get("files", []) if isinstance(verdict, dict) else []
+    return [*verdict_docs, *intel_docs]
+
+
 async def _normalize_brief(run: dict, workspace: dict) -> CapabilityResult:
     raw = _artifact(workspace, "brief", {})
     brief = BriefData.model_validate(raw).model_dump()
@@ -800,6 +813,56 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
             evidence=[{"type": "input_required", "artifact": "creative"}],
             force_review=True,
         )
+    if run.get("creative_analysis_mode") not in {"analyze", "skip"}:
+        return CapabilityResult(
+            value={
+                "ready": False,
+                "reason": "analysis_confirmation_required",
+                "message": (
+                    "Creative đã sẵn sàng. Chọn Bắt đầu phân tích để chạy "
+                    "Creative Intelligence, hoặc Bỏ qua phân tích để duyệt "
+                    "thủ công toàn bộ creative."
+                ),
+                "review_action": "retry",
+                "files": files,
+            },
+            evidence=[{
+                "type": "creative_analysis_confirmation",
+                "count": len(files),
+            }],
+            force_review=True,
+        )
+    if run.get("creative_analysis_mode") == "skip":
+        skipped_docs = [{
+            "analysis_id": f"skip:{run.get('run_id', run['session_id'])}:{index}",
+            "name": file.get("name"),
+            "url": file.get("url"),
+            "status": "approved_override",
+            "effective_status": "approved_override",
+            "review_reasons": [],
+            "override": {
+                "approved": True,
+                "reason": "Operator chose to skip Creative Intelligence analysis",
+                "source": "autopilot_skip_analysis",
+            },
+            "analysis_skipped": True,
+        } for index, file in enumerate(files)]
+        return CapabilityResult(
+            value={
+                "batch_id": f"skip:{run.get('run_id', run['session_id'])}",
+                "files": skipped_docs,
+                "analysis_skipped": True,
+                "warning": (
+                    "Creative Intelligence was skipped by the operator. "
+                    "All creatives were manually approved without analysis."
+                ),
+            },
+            evidence=[{
+                "type": "creative_analysis_skipped",
+                "count": len(skipped_docs),
+                "actor": run.get("creative_analysis_actor", "campaign_operator"),
+            }],
+        )
     docs = await get_intel(run["session_id"])
     known_urls = {doc.get("url") for doc in docs}
     pending_files = [item for item in files if item.get("url") not in known_urls]
@@ -814,6 +877,7 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
                 "ready": False, "reason": "analysis_in_progress",
                 "message": "Creative đang được phân tích. Tiếp tục sau khi có verdict.",
                 "review_action": "retry",
+                "files": docs,
             },
             evidence=[{"type": "creative_jobs", "statuses": sorted(statuses)}],
             force_review=True,
@@ -827,6 +891,7 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
                 "analysis_ids": [doc.get("analysis_id") for doc in review_docs],
                 "message": "Creative cần được người dùng duyệt hoặc thay thế.",
                 "review_action": "retry",
+                "files": docs,
             },
             evidence=[{"type": "creative_review", "count": len(review_docs)}],
             force_review=True,
@@ -862,9 +927,10 @@ async def _rank_placements(run: dict, workspace: dict) -> CapabilityResult:
     brief = _artifact(workspace, "brief", {})
     audience = _artifact(workspace, "audience", {})
     creative = _artifact(workspace, "creative", {})
-    files = enrich_files_with_intel(
-        (creative or {}).get("files", []), await get_intel(run["session_id"])
+    intel_docs = _creative_intel_docs(
+        workspace, await get_intel(run["session_id"])
     )
+    files = enrich_files_with_intel((creative or {}).get("files", []), intel_docs)
     intent = _artifact(workspace, "placement_intent", {})
     candidate_ids = set(intent.get("candidate_zone_ids") or [])
     ranked = await rank_zones(
@@ -1004,7 +1070,10 @@ async def _assign_creatives(run: dict, workspace: dict) -> CapabilityResult:
     from tools.zone_catalog import get_zone_map
     creative = _artifact(workspace, "creative", {})
     files = (creative or {}).get("files", [])
-    files = enrich_files_with_intel(files, await get_intel(run["session_id"]))
+    intel_docs = _creative_intel_docs(
+        workspace, await get_intel(run["session_id"])
+    )
+    files = enrich_files_with_intel(files, intel_docs)
     placement_value = _artifact(workspace, "placements", {})
     zone_ids = _placement_ids(placement_value)
     zone_map = await get_zone_map()

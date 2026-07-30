@@ -157,6 +157,33 @@ def test_creative_foreign_url_rejected():
     assert any("host cho phép" in r for r in reasons)
 
 
+def test_environment_specific_creative_host_is_allowed_exactly():
+    creative = {
+        "name": "b.png",
+        "zones": ["ZN-001", "ZN-002"],
+        "url": "https://zah-4.123c.vn/uploads/b.png",
+    }
+    reasons = validate_order_payload(
+        make_payload(creatives=[creative]),
+        make_ctx(allowed_creative_url_hosts=("zah-4.123c.vn",)),
+    )
+    assert reasons == []
+
+
+def test_allowed_creative_host_cannot_be_smuggled_in_path_or_subdomain():
+    for url in (
+        "https://evil.example/api.pawgrammers.io.vn/b.png",
+        "https://api.pawgrammers.io.vn.evil.example/b.png",
+    ):
+        creative = {
+            "name": "b.png",
+            "zones": ["ZN-001", "ZN-002"],
+            "url": url,
+        }
+        reasons = validate_order_payload(make_payload(creatives=[creative]), make_ctx())
+        assert any("host" in reason.lower() for reason in reasons)
+
+
 def test_every_placement_requires_a_creative():
     reasons = validate_order_payload(
         make_payload(creatives=[{

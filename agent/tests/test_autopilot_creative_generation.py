@@ -19,6 +19,17 @@ def _image_b64(size=(16, 16)) -> str:
     return base64.b64encode(output.getvalue()).decode("ascii")
 
 
+def _edge_marked_image_b64(size=(400, 100)) -> str:
+    image = Image.new("RGB", size, color=(0, 180, 80))
+    for x in range(80):
+        for y in range(size[1]):
+            image.putpixel((x, y), (230, 30, 30))
+            image.putpixel((size[0] - x - 1, y), (30, 60, 230))
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return base64.b64encode(output.getvalue()).decode("ascii")
+
+
 class _Response:
     def __init__(self, status_code, payload=None, headers=None, text=""):
         self.status_code = status_code
@@ -28,6 +39,20 @@ class _Response:
 
     def json(self):
         return self._payload
+
+
+def test_fit_png_preserves_full_composition_in_different_target_ratio():
+    fitted = base64.b64decode(
+        generation._fit_png(_edge_marked_image_b64(), 200, 200)
+    )
+    with Image.open(BytesIO(fitted)) as image:
+        assert image.size == (200, 200)
+        # The foreground is scaled to 200x50 and centered. Both source edges
+        # remain visible; the old center-crop implementation removed them.
+        left = image.getpixel((2, 100))
+        right = image.getpixel((197, 100))
+        assert left[0] > left[2]
+        assert right[2] > right[0]
 
 
 @pytest.mark.asyncio
@@ -106,6 +131,7 @@ async def test_generate_creative_resizes_uploads_and_records_provenance(monkeypa
     assert result["name"].startswith("ai-zuma-box-")
     assert result["source"] == "ai_generated"
     assert result["generation"]["promptFingerprint"] == "prompt-sha"
+    assert result["generation"]["fitMode"] == "contain_with_blurred_background"
 
 
 @pytest.mark.asyncio

@@ -87,6 +87,10 @@ function SuggestionChips({ suggestions, onSend, busy }) {
     if (busy) return
     if (chip.action === 'send') {
       onSend?.(chip.text)
+    } else if (chip.action === 'open_report') {
+      window.dispatchEvent(new CustomEvent('agent:open_report', {
+        detail: { campaignId: chip.campaignId || '' },
+      }))
     } else {
       // prefill — set the composer input so user can complete the request naturally
       window.dispatchEvent(new CustomEvent('agent:prefill_composer', { detail: { text: chip.text } }))
@@ -103,11 +107,13 @@ function SuggestionChips({ suggestions, onSend, busy }) {
           title={
             chip.action === 'prefill'
               ? `Điền vào ô chat: "${chip.text}"`
-              : `Gửi: "${chip.text}"`
+              : chip.action === 'open_report'
+                ? 'Mở tab Báo cáo phân tích'
+                : `Gửi: "${chip.text}"`
           }
           className={cn(
             'text-[11px] font-semibold rounded-full px-2.5 py-1 border transition-all duration-150 disabled:opacity-40 active:scale-95',
-            chip.action === 'send'
+            ['send', 'open_report'].includes(chip.action)
               ? 'bg-brand-50 text-brand-700 border-brand-200 hover:bg-brand-100 hover:border-brand-300'
               : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
           )}

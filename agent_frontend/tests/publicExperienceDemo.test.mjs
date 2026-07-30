@@ -13,7 +13,11 @@ import {
 } from '../src/lib/publicExperience.js'
 import { AUTOPILOT_TOUR_STEPS } from '../src/demo/autopilotTour.js'
 import { buildAutopilotLiveSteps } from '../src/demo/autopilotWalkthrough.js'
-import { compatiblePlacementIndexes } from '../src/demo/demoPlacementCompatibility.js'
+import {
+  compatiblePlacementIndexes,
+  samplePlacementIndexes,
+  supportedPlacementIndexes,
+} from '../src/demo/demoPlacementCompatibility.js'
 import { calculateCoverCrop } from '../src/demo/demoCreativeFit.js'
 import { DEMO_BRIEFS, getDemoDateRange, pickRandomBrief } from '../src/demo/demoScripts.js'
 
@@ -140,8 +144,8 @@ test('landing v3 implements the handed-off structure, assets, and production nav
   assert.match(landing, /mode-visual-autopilot/)
   assert.match(landing, /<em>chuyển động\.<\/em>/)
   assert.doesNotMatch(landing, /310 segments/)
-  assert.match(landing, /\{ label: 'Ad Server', href: 'https:\/\/adspilot\.pawgrammers\.io\.vn' \}/)
-  assert.match(landing, /\{ label: 'Analytics', href: 'https:\/\/analytics\.pawgrammers\.io\.vn' \}/)
+  assert.match(landing, /VITE_ADSPILOT_URL \|\| 'https:\/\/adspilot\.pawgrammers\.io\.vn'/)
+  assert.match(landing, /VITE_ANALYTICS_URL \|\| 'https:\/\/analytics\.pawgrammers\.io\.vn'/)
   assert.doesNotMatch(landing, /\{ label: 'Audience', href:/)
   assert.doesNotMatch(landing, /\{ label: 'Publisher', href:/)
   assert.doesNotMatch(landing, /TourCompleteModal|Tour hoàn tất|updateTourQuery/)
@@ -390,7 +394,7 @@ test('Autopilot walkthrough can use every pre-generated scenario creative withou
   assert.match(overlay, /role="status"/)
 })
 
-test('Autopilot upload walkthrough keeps the highest-ranked placements covered by existing creative ratios', () => {
+test('Autopilot upload walkthrough randomly samples creative-compatible placements', () => {
   const formats = [
     { formatId: 'znews-top-banner', width: 2224, height: 480, intendedFormat: 'banner' },
     { formatId: 'znews-side-banner', width: 736, height: 1456, intendedFormat: 'banner' },
@@ -400,7 +404,14 @@ test('Autopilot upload walkthrough keeps the highest-ranked placements covered b
     { size: '1160x250', creativeContractId: 'znews-category-masthead-v1' },
     { size: '300x600', creativeContractId: 'display-halfpage-300x600-v1' },
   ]
-  assert.deepEqual(compatiblePlacementIndexes(candidates, formats, 2), [1, 2])
+  const picked = compatiblePlacementIndexes(candidates, formats, 2, () => 0)
+  assert.equal(picked.length, 2)
+  assert.deepEqual(new Set(picked), new Set([1, 2]))
+  assert.deepEqual(samplePlacementIndexes([0, 1, 2, 3], 2, () => 0), [1, 2])
+  assert.deepEqual(
+    supportedPlacementIndexes(candidates, 2, () => 0),
+    [1, 2],
+  )
 
   const brief = pickRandomBrief(new Date(2026, 6, 23, 12, 0, 0))
   const trim = buildAutopilotLiveSteps(brief, { creativeSource: 'upload' })
@@ -408,7 +419,10 @@ test('Autopilot upload walkthrough keeps the highest-ranked placements covered b
   assert.ok(trim.creativeFormats.length > 0)
   assert.match(trim.title, /khớp creative/)
   assert.match(engine, /compatiblePlacementIndexes/)
+  assert.match(engine, /supportedPlacementIndexes/)
   assert.match(autopilotReview, /data-zone-contract=/)
+  assert.match(autopilotReview, /creativeRequirements/)
+  assert.match(autopilotReview, /Kích thước/)
 })
 
 test('OpenAI walkthrough converts demo image bytes to the declared delivery dimensions', () => {

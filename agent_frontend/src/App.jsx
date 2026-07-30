@@ -187,6 +187,7 @@ export default function App() {
   const campaignEpochRef = useRef(0)
   const pendingEntryStartRef = useRef('')
   const landingEntryAttemptRef = useRef(0)
+  const autopilotMilestonesShownRef = useRef(new Set())
   useEffect(() => {
     currentConversationIdRef.current = currentConversationId
   }, [currentConversationId])
@@ -935,6 +936,75 @@ export default function App() {
   }, [applyReportEntryResponse, currentConversationId])
 
   useEffect(() => {
+    const openReport = event => {
+      initializeReport(event.detail?.campaignId || '').catch(error => {
+        log.error('open report action failed', error.message)
+      })
+    }
+    window.addEventListener('agent:open_report', openReport)
+    return () => window.removeEventListener('agent:open_report', openReport)
+  }, [initializeReport])
+
+  useEffect(() => {
+    if (experienceMode !== 'autopilot') return
+    const milestones = autopilotSummary?.milestones || []
+    if (!milestones.length) return
+    const existingMessages = new Set(
+      messages.map(message => String(message?.content || '').trim()).filter(Boolean),
+    )
+    milestones.forEach(milestone => {
+      const key = String(milestone?.key || '').trim()
+      const content = String(milestone?.message || '').trim()
+      if (!key || !content || autopilotMilestonesShownRef.current.has(key)) return
+      autopilotMilestonesShownRef.current.add(key)
+
+      const metadata = milestone.metadata || {}
+      const campaignId = String(
+        metadata.campaign_id || autopilotSummary?.reportCampaignId || '',
+      ).trim()
+      if (campaignId && ['report_generating', 'report_ready'].includes(metadata.kind)) {
+        reportEntryFiredRef.current = campaignId
+        setFormState(prev => ({
+          ...prev,
+          report: { ...prev.report, campaignId },
+        }))
+      }
+      if (existingMessages.has(content)) return
+      window.dispatchEvent(new CustomEvent('agent:inject_message', {
+        detail: {
+          id: generateId(),
+          role: 'assistant',
+          content,
+          blocks: [],
+          timestamp: milestone.created_at || new Date().toISOString(),
+          metadata: {
+            tool: 'autopilot_milestone',
+            model: 'none',
+            step: metadata.kind === 'report_ready' ? 5 : currentStepRef.current,
+            milestone_key: key,
+            milestone_kind: metadata.kind || '',
+            campaign_id: campaignId || undefined,
+          },
+          suggestions: metadata.kind === 'report_ready'
+            ? [{
+                label: 'Mở tab Báo cáo phân tích',
+                text: 'Mở báo cáo',
+                action: 'open_report',
+                campaignId,
+              }]
+            : [],
+        },
+      }))
+      existingMessages.add(content)
+    })
+  }, [
+    autopilotSummary?.milestones,
+    autopilotSummary?.reportCampaignId,
+    experienceMode,
+    messages,
+  ])
+
+  useEffect(() => {
     if (
       experienceMode === 'guided' &&
       currentStep === 5 &&
@@ -1118,6 +1188,7 @@ export default function App() {
     audienceEntryFiredRef.current = false
     setupEntryFiredRef.current = false
     reportEntryFiredRef.current = false
+    autopilotMilestonesShownRef.current = new Set()
     setFormState(initialState)
     setStepStatuses(STEPS.map(() => 'pending'))
     setCanonicalWorkspace(null)

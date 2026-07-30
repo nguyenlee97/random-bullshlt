@@ -200,6 +200,18 @@ async def set_preferences(
         raise ValueError("at least one preference is required")
 
     current = await get_workspace(session_id)
+    effective_policy = approval_policy or current.get("approval_policy")
+    effective_source = creative_source or current.get("creative_source")
+    if creative_source is not None:
+        brief = current.get("artifacts", {}).get("brief", {})
+        if brief.get("status") != "approved" or not brief.get("value"):
+            raise ValueError(
+                "brief must be confirmed before choosing a creative source"
+            )
+    if effective_source == "upload" and effective_policy == "auto_build_draft":
+        raise ValueError(
+            "auto_build_draft is unavailable when creative_source is upload"
+        )
     if experience_mode is not None:
         # The conversation record captures the explicit homepage choice. A
         # legacy workspace's historical ``guided`` default is not a choice and

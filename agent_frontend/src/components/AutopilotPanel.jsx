@@ -4,7 +4,10 @@ import {
   ExternalLink, ImageIcon, ListChecks, ShieldCheck, Sparkles, Square, Upload, X,
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
-import AutopilotReview from '@/components/AutopilotReview'
+import AutopilotReview, {
+  AssignmentReview,
+  CreativeAnalysisReview,
+} from '@/components/AutopilotReview'
 import StrategySimulator from '@/components/StrategySimulator'
 import AutopilotOutcome from '@/components/AutopilotOutcome'
 import { creativePlacementCoverage } from '@/lib/campaignOutcome'
@@ -148,12 +151,15 @@ export default function AutopilotPanel({
   const [creativeDirection, setCreativeDirection] = useState('')
   const [creativeAssets, setCreativeAssets] = useState([])
   const [creativeAssetIds, setCreativeAssetIds] = useState(new Set())
+  const [composingPrompt, setComposingPrompt] = useState(false)
   const policyOptions = useMemo(() => POLICY_OPTIONS.map(item => (
     item.value === 'critical_only'
       ? { ...item, note: `${openaiCampaignFlow ? 3 : 5} checkpoint · Khuyến nghị` }
       : item
   )), [openaiCampaignFlow])
-  const [assetName, setAssetName] = useState('')
+  const [assetDraft, setAssetDraft] = useState({
+    name: '', kind: 'logo', useInstruction: '', required: true,
+  })
   const [assetUploading, setAssetUploading] = useState(false)
   const [run, setRun] = useState(initialRun)
   const [loading, setLoading] = useState(false)
@@ -179,7 +185,7 @@ export default function AutopilotPanel({
   const uploadAutopilotAsset = useCallback(async event => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file || !assetName.trim()) {
+    if (!file || !assetDraft.name.trim()) {
       setError('Hãy đặt tên asset trước khi chọn ảnh.')
       return
     }
@@ -189,22 +195,56 @@ export default function AutopilotPanel({
         const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file)
       })
       const asset = await AgentAPI.createCreativeAsset({
-        name: assetName, kind: 'style_reference', useInstruction: creativeDirection,
-        required: true, dataUrl,
+        ...assetDraft,
+        dataUrl,
       })
       setCreativeAssets(previous => [asset, ...previous])
       setCreativeAssetIds(previous => new Set([...previous, asset.asset_id]))
-      setAssetName('')
+      setAssetDraft({
+        name: '', kind: 'logo', useInstruction: '', required: true,
+      })
     } catch (uploadError) {
       setError(uploadError.message)
     } finally {
       setAssetUploading(false)
     }
-  }, [assetName, creativeDirection])
+  }, [assetDraft])
+
+  const composeAutopilotPrompt = useCallback(async () => {
+    if (composingPrompt) return
+    setComposingPrompt(true)
+    setError('')
+    try {
+      const result = await AgentAPI.composeCreativePrompt({
+        brief: workspaceSnapshot?.artifacts?.brief?.value || brief || {},
+        formatId: 'zuma-box',
+        assetIds: [...creativeAssetIds],
+        direction: creativeDirection,
+      })
+      const direction = result?.prompt_spec?.creative_direction
+      if (!direction) throw new Error(result?.detail || 'AI chưa thể soạn creative direction.')
+      setCreativeDirection(direction)
+    } catch (composeError) {
+      setError(composeError.message || 'Không thể soạn creative direction.')
+    } finally {
+      setComposingPrompt(false)
+    }
+  }, [
+    brief, composingPrompt, creativeAssetIds, creativeDirection,
+    workspaceSnapshot,
+  ])
 
   useEffect(() => {
     if (canonicalWorkspace) {
       setWorkspaceSnapshot(canonicalWorkspace)
+      if (['review_every_stage', 'critical_only', 'auto_build_draft'].includes(canonicalWorkspace.approval_policy)) {
+        setPolicy(
+          canonicalWorkspace.creative_source === 'upload'
+          && canonicalWorkspace.approval_policy === 'auto_build_draft'
+            ? 'critical_only'
+            : canonicalWorkspace.approval_policy,
+        )
+      }
       if (['upload', 'ai_generate'].includes(canonicalWorkspace.creative_source)) {
         setCreativeSource(canonicalWorkspace.creative_source)
       }
@@ -212,12 +252,21 @@ export default function AutopilotPanel({
   }, [canonicalWorkspace])
 
   const chooseCreativeSource = async value => {
-    if (loading) return
+    if (loading || !briefReady) {
+      setError('Hãy xác nhận Brief trước khi chọn cách chuẩn bị creative.')
+      return
+    }
+    const effectivePolicy = (
+      value === 'upload' && policy === 'auto_build_draft'
+        ? 'critical_only'
+        : policy
+    )
     setLoading(true)
     setCreativeSource(value)
+    setPolicy(effectivePolicy)
     setError('')
     try {
-      const result = await AgentAPI.setWorkspacePreferences('autopilot', policy, value)
+      const result = await AgentAPI.setWorkspacePreferences('autopilot', effectivePolicy, value)
       if (result?.ok === false) throw new Error(result?.detail || 'Không thể lưu lựa chọn creative.')
       await loadPrerequisites()
     } catch (err) {
@@ -226,6 +275,23 @@ export default function AutopilotPanel({
     } finally {
       setLoading(false)
     }
+  }
+
+  const choosePolicy = value => {
+    if (value === 'auto_build_draft' && creativeSource === 'upload') {
+      setError('Chế độ tự động hoàn toàn chỉ khả dụng khi chọn AI tự tạo creative.')
+      return
+    }
+    setPolicy(value)
+    setError('')
+  }
+
+  const scrollToReviewArtifact = event => {
+    event?.preventDefault?.()
+    const target = document.getElementById('autopilot-review-artifact')
+    if (!target) return
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    target.focus?.({ preventScroll: true })
   }
 
   const loadPrerequisites = useCallback(async () => {
@@ -409,6 +475,29 @@ export default function AutopilotPanel({
     }
   }
 
+  const chooseCreativeAnalysis = async mode => {
+    if (!run?.run_id || loading) return
+    if (
+      mode === 'skip'
+      && !globalThis.confirm?.(
+        'Bỏ qua phân tích sẽ tự duyệt toàn bộ creative mà không chạy Creative Intelligence. Bạn vẫn muốn tiếp tục?',
+      )
+    ) return
+    setLoading(true)
+    setError('')
+    try {
+      const next = await AgentAPI.chooseAutopilotCreativeAnalysis(run.run_id, mode)
+      if (!next?.run_id) {
+        throw new Error(next?.detail || 'Không thể cập nhật lựa chọn phân tích creative.')
+      }
+      setRun(next)
+    } catch (analysisError) {
+      setError(analysisError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const orderedTasks = useMemo(() => [...(run?.tasks || [])].sort((left, right) => (
     (TASK_ORDER_INDEX[left.key] ?? TASK_ORDER.length) - (TASK_ORDER_INDEX[right.key] ?? TASK_ORDER.length)
   )), [run?.tasks])
@@ -440,6 +529,15 @@ export default function AutopilotPanel({
     creativeValue,
     workspaceSnapshot?.artifacts?.creative_verdict?.value,
   ).files || []
+  const analysisTask = taskByKey.analyze_creatives
+  const analysisValue = analysisTask?.result
+    || analysisTask?.pending_artifact?.value
+    || workspaceSnapshot?.artifacts?.creative_verdict?.value
+    || {}
+  const analysisConfirmationRequired = (
+    waiting?.key === 'analyze_creatives'
+    && waiting?.result?.reason === 'analysis_confirmation_required'
+  )
   const assignmentResult = taskByKey.assign_creatives?.result
     || taskByKey.assign_creatives?.pending_artifact?.value
     || workspaceSnapshot?.artifacts?.assignments?.value
@@ -513,7 +611,11 @@ export default function AutopilotPanel({
         }]
       : waiting?.key === 'assign_creatives'
         ? [{
-            label: 'Dùng đề xuất hoặc chỉnh phân bổ',
+            label: Object.keys(
+              waiting.result?.assignments || assignmentResult.assignments || {},
+            ).length
+              ? 'Chỉnh lại phân bổ creative'
+              : 'Dùng đề xuất hoặc chỉnh phân bổ',
             action: () => onOpenAssignments?.({
               placements: placementResult,
               creativeFiles,
@@ -521,27 +623,32 @@ export default function AutopilotPanel({
             }),
           }]
         : ['prepare_creatives', 'analyze_creatives', 'rank_placements'].includes(waiting?.key)
-          ? waiting?.key === 'rank_placements' && placementRecovery?.kind === 'creative_format_mismatch'
-            ? [
-                placementRecovery.can_adapt_existing
-                  ? { label: 'Crop/scale ảnh hiện có', action: onOpenCreative }
-                  : null,
-                placementRecovery.can_generate_missing
-                  ? {
-                      label: `Tạo ${recoveryFormats.length} asset đúng format`,
-                      action: () => generateCreativeRecovery(
-                        recoveryFormats.map(item => item.format_id).filter(Boolean),
-                      ),
-                    }
-                  : null,
-                { label: 'Tải creative khác', action: onOpenCreative },
-              ].filter(Boolean)
-            : [{
-                label: waiting?.result?.reason === 'missing_creative'
-                  ? 'Tải creative lên'
-                  : 'Chỉnh hoặc thay creative',
-                action: onOpenCreative,
-              }]
+          ? analysisConfirmationRequired
+            ? []
+            : waiting?.key === 'analyze_creatives'
+              && !['creative_needs_review', 'missing_creative'].includes(waiting?.result?.reason)
+              ? []
+            : waiting?.key === 'rank_placements' && placementRecovery?.kind === 'creative_format_mismatch'
+              ? [
+                  placementRecovery.can_adapt_existing
+                    ? { label: 'Crop/scale ảnh hiện có', action: onOpenCreative }
+                    : null,
+                  placementRecovery.can_generate_missing
+                    ? {
+                        label: `Tạo ${recoveryFormats.length} asset đúng format`,
+                        action: () => generateCreativeRecovery(
+                          recoveryFormats.map(item => item.format_id).filter(Boolean),
+                        ),
+                      }
+                    : null,
+                  { label: 'Tải creative khác', action: onOpenCreative },
+                ].filter(Boolean)
+              : [{
+                  label: waiting?.result?.reason === 'missing_creative'
+                    ? 'Tải creative lên'
+                    : 'Chỉnh hoặc thay creative',
+                  action: onOpenCreative,
+                }]
           : []
 
   useEffect(() => {
@@ -563,8 +670,13 @@ export default function AutopilotPanel({
       waitingTaskId: waiting?.task_id || null,
       waitingTaskKey: waiting?.key || null,
       waitingMessage: waitingMessage || '',
+      milestones: run.milestones || [],
+      reportCampaignId: run.report_campaign_id || null,
     } : null)
-  }, [onStatusChange, progress, run?.status, waiting?.task_id, waiting?.key, waitingMessage])
+  }, [
+    onStatusChange, progress, run?.status, run?.report_campaign_id,
+    run?.milestones, waiting?.task_id, waiting?.key, waitingMessage,
+  ])
 
   return (
     <section
@@ -630,39 +742,78 @@ export default function AutopilotPanel({
           <div data-demo="autopilot-creative-source" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-3">
               <p className="text-sm font-black text-slate-900">Creative cho chiến dịch</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">Chọn cách chuẩn bị creative. Lựa chọn này độc lập với chính sách duyệt của Agent.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                {briefReady
+                  ? 'Chọn cách chuẩn bị creative. Lựa chọn này độc lập với chính sách duyệt của Agent.'
+                  : 'Hãy xác nhận Brief trước. Nguồn creative chỉ được chọn sau khi Brief đã khóa để tránh revision và workspace lệch nhau.'}
+              </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <button type="button" onClick={() => chooseCreativeSource('upload')}
                 data-demo="autopilot-source-upload"
+                disabled={!briefReady || loading}
                 aria-pressed={creativeSource === 'upload'}
-                className={`rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${creativeSource === 'upload' ? 'border-brand-400 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-brand-200 hover:bg-brand-50/50'}`}>
+                aria-describedby={!briefReady ? 'autopilot-creative-source-locked' : undefined}
+                className={`rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-50 ${creativeSource === 'upload' ? 'border-brand-400 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-brand-200 hover:bg-brand-50/50'}`}>
                 <span className="flex items-center gap-2 text-sm font-bold text-slate-900"><Upload className="h-4 w-4 text-brand-600" /> Tôi sẽ tải creative lên</span>
                 <span className="mt-2 block text-xs leading-5 text-slate-500">Agent sẽ tạm dừng ở bước Creative để bạn tải file và duyệt kết quả phân tích.</span>
                 {creativeSource === 'upload' && <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đã chọn</span>}
               </button>
               <button type="button" onClick={() => chooseCreativeSource('ai_generate')}
                 data-demo="autopilot-source-ai"
+                disabled={!briefReady || loading}
                 aria-pressed={creativeSource === 'ai_generate'}
-                className={`rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${creativeSource === 'ai_generate' ? 'border-brand-400 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-brand-200 hover:bg-brand-50/50'}`}>
+                aria-describedby={!briefReady ? 'autopilot-creative-source-locked' : undefined}
+                className={`rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-50 ${creativeSource === 'ai_generate' ? 'border-brand-400 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-brand-200 hover:bg-brand-50/50'}`}>
                 <span className="flex items-center gap-2 text-sm font-bold text-slate-900"><Sparkles className="h-4 w-4 text-brand-600" /> Để AI tự tạo creative</span>
                 <span className="mt-2 block text-xs leading-5 text-slate-500">Agent tự tạo, lưu và kiểm tra creative. Bạn chỉ cần review nếu có rủi ro hoặc độ tin cậy thấp.</span>
                 {creativeSource === 'ai_generate' && <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đã chọn</span>}
               </button>
             </div>
+            {!briefReady && (
+              <p id="autopilot-creative-source-locked" className="mt-3 text-[11px] font-semibold text-amber-700">
+                Nguồn creative đang khóa cho đến khi Brief được xác nhận.
+              </p>
+            )}
           </div>
 
           {creativeSource === 'ai_generate' && <div className="rounded-2xl border border-sky-200 bg-sky-50/50 p-4 space-y-3" data-testid="autopilot-creative-intake">
             <div><p className="text-sm font-black text-slate-900">Creative direction & assets cho Autopilot</p>
               <p className="mt-1 text-xs text-slate-500">Thông tin này được khóa vào run; Agent tự soạn prompt riêng cho từng format.</p></div>
-            <textarea value={creativeDirection} onChange={event => setCreativeDirection(event.target.value)} rows={3}
-              data-demo="autopilot-creative-direction"
-              placeholder="Ví dụ: trẻ trung, màu đỏ thương hiệu, logo ở góc trái, tô bún bò là hero visual, không tự thêm giá…"
-              className="w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs" />
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <input value={assetName} onChange={event => setAssetName(event.target.value)} placeholder="Tên asset: Logo Hutao / Tô bún bò…"
-                className="rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs" />
-              <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-sky-700 px-4 py-2 text-xs font-bold text-white">
+            <div className="space-y-2">
+              <textarea value={creativeDirection} onChange={event => setCreativeDirection(event.target.value)} rows={4}
+                data-demo="autopilot-creative-direction"
+                placeholder="Prompt tùy chỉnh: mô tả phong cách, bố cục, thông điệp, màu thương hiệu và điều cần tránh…"
+                className="w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs" />
+              <button type="button" onClick={composeAutopilotPrompt} disabled={composingPrompt}
+                className="inline-flex items-center gap-2 rounded-xl border border-sky-300 bg-white px-3 py-2 text-xs font-bold text-sky-800 hover:bg-sky-100 disabled:opacity-60">
+                {composingPrompt ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                AI đề xuất prompt từ Brief & assets
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input value={assetDraft.name} onChange={event => setAssetDraft(current => ({ ...current, name: event.target.value }))} placeholder="Tên asset: Logo Hutao / Tô bún bò…"
+                className="sm:col-span-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs" />
+              <select value={assetDraft.kind} onChange={event => setAssetDraft(current => ({ ...current, kind: event.target.value }))}
+                className="rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs">
+                <option value="logo">Logo</option>
+                <option value="product">Product</option>
+                <option value="packshot">Packshot</option>
+                <option value="character">Character</option>
+                <option value="style_reference">Style reference</option>
+                <option value="background">Background</option>
+                <option value="legal">Legal artwork</option>
+              </select>
+              <label className="flex items-center gap-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-[11px] text-sky-800">
+                <input type="checkbox" checked={assetDraft.required}
+                  onChange={event => setAssetDraft(current => ({ ...current, required: event.target.checked }))} />
+                Bắt buộc xuất hiện
+              </label>
+              <input value={assetDraft.useInstruction}
+                onChange={event => setAssetDraft(current => ({ ...current, useInstruction: event.target.value }))}
+                placeholder="Cách dùng: logo góc trái, giữ nguyên màu…"
+                className="sm:col-span-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs" />
+              <label className="sm:col-span-2 inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-sky-700 px-4 py-2 text-xs font-bold text-white">
                 {assetUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                 Thêm ảnh<input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={assetUploading} onChange={uploadAutopilotAsset} />
               </label>
@@ -684,16 +835,31 @@ export default function AutopilotPanel({
                 <p className="mt-1 text-xs leading-5 text-slate-500">Có thể tạm dừng Autopilot bất cứ lúc nào; campaign này vẫn giữ nguyên mode đã chọn từ trang chủ.</p>
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
-                {policyOptions.map(item => (
-                  <button key={item.value} type="button" onClick={() => setPolicy(item.value)}
-                    data-demo={`autopilot-policy-${item.value}`}
-                    aria-pressed={policy === item.value}
-                    className={`min-h-24 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${policy === item.value ? 'border-brand-400 bg-brand-50 text-brand-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50/50'}`}>
-                    <span className="block text-xs font-bold leading-5">{item.label}</span>
-                    <span className="mt-1 block text-[10px] opacity-70">{item.note}</span>
-                    {policy === item.value && <span className="mt-3 inline-flex items-center gap-1 text-[10px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đang chọn</span>}
-                  </button>
-                ))}
+                {policyOptions.map(item => {
+                  const uploadBlocksAutomatic = (
+                    item.value === 'auto_build_draft' && creativeSource === 'upload'
+                  )
+                  const tooltipId = `autopilot-policy-tooltip-${item.value}`
+                  return (
+                    <div key={item.value} className="group relative">
+                      <button type="button" onClick={() => choosePolicy(item.value)}
+                        data-demo={`autopilot-policy-${item.value}`}
+                        aria-pressed={policy === item.value}
+                        aria-disabled={uploadBlocksAutomatic}
+                        aria-describedby={uploadBlocksAutomatic ? tooltipId : undefined}
+                        className={`min-h-24 w-full rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${uploadBlocksAutomatic ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400' : policy === item.value ? 'border-brand-400 bg-brand-50 text-brand-800 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50/50'}`}>
+                        <span className="block text-xs font-bold leading-5">{item.label}</span>
+                        <span className="mt-1 block text-[10px] opacity-70">{item.note}</span>
+                        {policy === item.value && !uploadBlocksAutomatic && <span className="mt-3 inline-flex items-center gap-1 text-[10px] font-bold text-brand-700"><Check className="h-3 w-3" /> Đang chọn</span>}
+                      </button>
+                      {uploadBlocksAutomatic && (
+                        <span id={tooltipId} role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-[10px] font-semibold leading-4 text-white shadow-lg group-hover:block group-focus-within:block">
+                          Creative tải lên cần người dùng cung cấp và duyệt file, nên không thể dùng chế độ tự động hoàn toàn.
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
               <p className="mt-3 rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-2 text-[11px] leading-5 text-brand-800">
                 {policy === 'critical_only'
@@ -908,6 +1074,46 @@ export default function AutopilotPanel({
             </section>
           )}
 
+          {analysisValue?.files?.length > 0 && !analysisConfirmationRequired && (
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="autopilot-analysis-result-title">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-brand-600">Creative Intelligence</p>
+                  <h3 id="autopilot-analysis-result-title" className="mt-1 text-sm font-black text-slate-900">Kết quả phân tích creative</h3>
+                  <p className="mt-1 text-[11px] text-slate-500">Kết quả vẫn hiển thị sau khi duyệt để bạn không phải mở Creative Store kiểm tra lại.</p>
+                </div>
+                {analysisValue.analysis_skipped && <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-700">Đã bỏ qua phân tích</span>}
+              </div>
+              <CreativeAnalysisReview value={analysisValue} />
+            </section>
+          )}
+
+          {Object.keys(assignmentResult.assignments || {}).length > 0 && (
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="autopilot-assignment-result-title">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-brand-600">Creative delivery map</p>
+                  <h3 id="autopilot-assignment-result-title" className="mt-1 text-sm font-black text-slate-900">Creative đã gán theo Ad Zone</h3>
+                  <p className="mt-1 text-[11px] text-slate-500">Phân bổ này được giữ lại trong run kể cả sau khi bạn duyệt và tiếp tục.</p>
+                </div>
+                {!runTerminal && (
+                  <button type="button" onClick={() => onOpenAssignments?.({
+                    placements: placementResult,
+                    creativeFiles,
+                    assignmentValue: assignmentResult,
+                  })} className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-[11px] font-bold text-brand-700 hover:bg-brand-100">
+                    Chỉnh lại phân bổ creative
+                  </button>
+                )}
+              </div>
+              <AssignmentReview
+                value={assignmentResult}
+                creativeFiles={creativeFiles}
+                placementValue={placementResult}
+              />
+            </section>
+          )}
+
           {run.status === 'completed' && orderResult ? (
             <AutopilotOutcome
               workspace={workspaceSnapshot}
@@ -1071,7 +1277,13 @@ export default function AutopilotPanel({
                     </summary>
                     <p className="mt-1.5 text-[11px] leading-4 text-amber-800">{waitingMessage}</p>
                   </details>
-                  <a href="#autopilot-review-artifact" className="mt-1.5 inline-flex text-[11px] font-bold text-amber-900 underline underline-offset-2">Xem nội dung cần review ngay phía trên</a>
+                  <button
+                    type="button"
+                    onClick={scrollToReviewArtifact}
+                    className="mt-1.5 inline-flex text-[11px] font-bold text-amber-900 underline underline-offset-2"
+                  >
+                    Xem nội dung cần review ngay phía trên
+                  </button>
                   {briefRetry && !retryReady && (
                     <p className="mt-1 text-[11px] font-semibold text-amber-900">
                       {pendingBrief ? 'Duyệt hoặc hủy đề xuất Brief trong Chat trước.' : `Sửa Brief trước khi kiểm tra lại: ${briefErrors.join(', ')}.`}
@@ -1099,16 +1311,46 @@ export default function AutopilotPanel({
                     Gợi ý lại audience
                   </button>
                 )}
+                {analysisConfirmationRequired && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => chooseCreativeAnalysis('analyze')}
+                      disabled={loading}
+                      className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-600 disabled:bg-slate-300 sm:min-w-0 sm:flex-none"
+                    >
+                      Bắt đầu phân tích
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => chooseCreativeAnalysis('skip')}
+                      disabled={loading}
+                      className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50 sm:min-w-0 sm:flex-none"
+                    >
+                      Bỏ qua phân tích
+                    </button>
+                  </>
+                )}
                 <button onClick={cancelRunWithConfirmation} disabled={loading} className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:min-w-0 sm:flex-none">Hủy run</button>
-                <button
+                {!analysisConfirmationRequired && <button
                   data-demo="autopilot-review-approve"
                   data-autopilot-task={waiting.key}
                   onClick={() => review(waiting, true)}
                   disabled={loading || (retryAction && !retryReady) || !audienceReviewReady || (waiting.key === 'plan_placement_intent' && !placementSelection.length)}
                   className={`min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300 sm:min-w-0 sm:flex-none ${waiting.key === 'launch_approval' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-500 hover:bg-brand-600'}`}
                 >
-                  {retryAction ? 'Kiểm tra lại' : waiting.key === 'launch_approval' ? 'Duyệt & tạo order' : 'Duyệt & tiếp tục'}
-                </button>
+                  {retryAction
+                    ? waiting.key === 'analyze_creatives'
+                      ? waiting.result?.reason === 'analysis_in_progress'
+                        ? 'Cập nhật kết quả phân tích'
+                        : waiting.result?.reason === 'creative_needs_review'
+                          ? 'Đã xử lý, phân tích lại'
+                          : 'Kiểm tra creative'
+                      : 'Kiểm tra lại'
+                    : waiting.key === 'launch_approval'
+                      ? 'Duyệt & tạo order'
+                      : 'Duyệt & tiếp tục'}
+                </button>}
               </div>
             </div>
           )}

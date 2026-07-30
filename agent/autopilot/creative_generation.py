@@ -7,7 +7,7 @@ import hashlib
 from io import BytesIO
 
 import httpx
-from PIL import Image, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 
 from campaign_models import OPENAI_GPT_5_4_MINI
 from config import config
@@ -60,14 +60,35 @@ def _assert_current_inputs(
 
 
 def _fit_png(image_b64: str, width: int, height: int) -> str:
-    """Crop an image to the target ratio and encode exact-size PNG bytes."""
+    """Fit a generated image without discarding edge content.
+
+    GPT Image output sizes do not always share the placement's aspect ratio.
+    A center crop can remove logos, products, text, or other intentionally
+    placed content near an edge.  Use a blurred cover image as the background
+    and scale the complete source into the target frame instead.  The delivery
+    asset still has exact placement dimensions, while the foreground keeps its
+    original composition and aspect ratio.
+    """
     source = base64.b64decode(image_b64)
     with Image.open(BytesIO(source)) as image:
-        fitted = ImageOps.fit(
-            image.convert("RGB"), (width, height), method=Image.Resampling.LANCZOS
+        rgb = ImageOps.exif_transpose(image).convert("RGB")
+        background = ImageOps.fit(
+            rgb,
+            (width, height),
+            method=Image.Resampling.LANCZOS,
         )
+        blur_radius = max(2.0, min(width, height) / 32)
+        background = background.filter(ImageFilter.GaussianBlur(blur_radius))
+        foreground = ImageOps.contain(
+            rgb,
+            (width, height),
+            method=Image.Resampling.LANCZOS,
+        )
+        left = (width - foreground.width) // 2
+        top = (height - foreground.height) // 2
+        background.paste(foreground, (left, top))
         output = BytesIO()
-        fitted.save(output, format="PNG", optimize=True)
+        background.save(output, format="PNG", optimize=True)
     return base64.b64encode(output.getvalue()).decode("ascii")
 
 
@@ -222,6 +243,7 @@ async def generate_creative(
         "vlmVerdict": vlm_verdict,
         "vlmProvenance": vlm_provenance,
         "exactDimensionsVerified": True,
+        "fitMode": "contain_with_blurred_background",
         "formatId": format_id,
         "variant": variant,
         "briefRevision": brief_revision,

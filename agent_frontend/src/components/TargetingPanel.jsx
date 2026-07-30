@@ -7,7 +7,8 @@ const ADVANCED_TARGETING_KEYS = [
 ]
 
 // ─── Fetch & cache targeting options from the real API ───────────────────────
-const TARGETING_API = 'https://api.pawgrammers.io.vn/api/targeting/options'
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'https://api.pawgrammers.io.vn').replace(/\/$/, '')
+const TARGETING_API = `${BACKEND_URL}/api/targeting/options`
 let _optionsCache = null
 async function fetchTargetingOptions() {
   if (_optionsCache) return _optionsCache

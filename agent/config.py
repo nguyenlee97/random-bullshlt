@@ -142,6 +142,41 @@ class Config:
 
     # ── VPS Backend API ───────────────────────────────────────────────────────
     BACKEND_URL: str = os.getenv("BACKEND_URL", "https://api.pawgrammers.io.vn")
+    ADSPILOT_URL: str = os.getenv(
+        "ADSPILOT_URL", "https://adspilot.pawgrammers.io.vn"
+    )
+    ANALYTICS_URL: str = os.getenv(
+        "ANALYTICS_URL", "https://analytics.pawgrammers.io.vn"
+    )
+    # Public publisher URLs are environment-specific equivalents of the same
+    # six placement surfaces. Production keeps the hosted domains; the
+    # isolated hackathon stack maps them to paths on its verified host.
+    LOCAL_ZNEWS_URL: str = os.getenv(
+        "LOCAL_ZNEWS_URL", "https://znews-stg.pawgrammers.io.vn"
+    )
+    LOCAL_BAOMOI_URL: str = os.getenv(
+        "LOCAL_BAOMOI_URL", "https://baomoi-stg.pawgrammers.io.vn"
+    )
+    LOCAL_ZINGMP3_URL: str = os.getenv(
+        "LOCAL_ZINGMP3_URL", "https://zingmp3-stg.pawgrammers.io.vn"
+    )
+    LOCAL_SMONEY_URL: str = os.getenv(
+        "LOCAL_SMONEY_URL", "https://smoney-stg.pawgrammers.io.vn"
+    )
+    LOCAL_DICUNGCON_URL: str = os.getenv(
+        "LOCAL_DICUNGCON_URL", "https://dicungcon-stg.pawgrammers.io.vn"
+    )
+    LOCAL_ZAGOO_URL: str = os.getenv(
+        "LOCAL_ZAGOO_URL", "https://zagoo-stg.pawgrammers.io.vn"
+    )
+    ALLOWED_CREATIVE_URL_HOSTS: tuple[str, ...] = tuple(
+        host.strip().lower()
+        for host in os.getenv(
+            "ALLOWED_CREATIVE_URL_HOSTS",
+            "api.pawgrammers.io.vn,localhost,127.0.0.1",
+        ).split(",")
+        if host.strip()
+    )
 
     # ── MongoDB (VPS, Option A: port exposed) ─────────────────────────────────
     MONGODB_URI: str = os.getenv("MONGODB_URI", "mongodb://localhost:27017")

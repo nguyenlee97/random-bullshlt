@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   buildPDF,
@@ -72,4 +74,11 @@ test('PDF stays unavailable until records and all six analyses are ready', () =>
     () => validatePackage([], analyses()),
     error => error.code === 'REPORT_NOT_READY',
   );
+});
+
+test('backend container installs the Unicode font required by PDF export', () => {
+  const dockerfile = fs.readFileSync(
+    path.join(__dirname, '..', 'Dockerfile'), 'utf8',
+  );
+  assert.match(dockerfile, /fonts-dejavu-core/);
 });

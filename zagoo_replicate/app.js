@@ -1,6 +1,8 @@
-const ZAGOO_API_BASE = ['localhost', '127.0.0.1'].includes(location.hostname)
+const ZAGOO_API_BASE = window.__ADSTACK_CONFIG__?.apiBase || (
+  ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://localhost:3000/api'
-  : 'https://api.pawgrammers.io.vn/api';
+  : 'https://api.pawgrammers.io.vn/api'
+);
 const ZAGOO_ALLOW_FALLBACK = window.__ADSTACK_CONFIG__?.allowFallbackAds ?? true;
 
 function zagooEscape(value) {

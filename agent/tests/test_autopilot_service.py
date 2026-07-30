@@ -154,6 +154,48 @@ async def test_run_rejects_unknown_creative_source():
 
 
 @pytest.mark.asyncio
+async def test_creative_analysis_requires_explicit_start_or_skip():
+    result = await _analyze_creatives(
+        {"run_id": "analysis-gate", "session_id": "analysis-gate"},
+        {"artifacts": {"creative": {"value": {"files": [{
+            "name": "creative.png",
+            "url": "https://example.test/creative.png",
+        }]}}}},
+    )
+    assert result.force_review is True
+    assert result.value["reason"] == "analysis_confirmation_required"
+    assert result.value["review_action"] == "retry"
+
+
+@pytest.mark.asyncio
+async def test_skip_creative_analysis_is_explicit_and_requeues_task():
+    await _seed("analysis-skip")
+    run = await service.create_run(
+        "analysis-skip",
+        creative_source="ai_generate",
+        idempotency_key="analysis-skip",
+    )
+    task_id = f"{run['run_id']}:analyze_creatives"
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result={
+            "reason": "analysis_confirmation_required",
+            "review_action": "retry",
+        },
+    )
+    service._mem_runs[run["run_id"]]["status"] = "waiting_review"
+
+    updated = await service.choose_creative_analysis(
+        run["run_id"], "skip", actor="operator-test",
+    )
+
+    assert updated["creative_analysis_mode"] == "skip"
+    task = next(item for item in updated["tasks"] if item["task_id"] == task_id)
+    assert task["status"] == "queued"
+    assert task["review_level"] == "none"
+
+
+@pytest.mark.asyncio
 async def test_run_cannot_start_while_workspace_proposal_is_pending():
     session_id = "pending-start"
     workspace = await get_workspace(session_id)
@@ -1781,10 +1823,51 @@ async def test_stale_creative_verdict_is_recommitted_against_current_strategy(mo
 
     monkeypatch.setattr(creative_service, "get_intel", fake_intel)
     monkeypatch.setattr(capabilities, "get_workspace", fake_workspace)
-    result = await _analyze_creatives({"session_id": "stale-verdict"}, workspace)
+    result = await _analyze_creatives({
+        "session_id": "stale-verdict",
+        "creative_analysis_mode": "analyze",
+    }, workspace)
     assert result.externally_committed is False
     assert result.value == {"batch_id": "batch-1", "files": docs}
     assert result.evidence[0]["revalidated"] is True
+
+
+@pytest.mark.asyncio
+async def test_operator_can_skip_creative_analysis_with_auditable_verdict():
+    workspace = {
+        "artifacts": {
+            "creative": {"value": {"files": [
+                {"name": "hero.png", "url": "https://example.test/hero.png"},
+                {"name": "box.png", "url": "https://example.test/box.png"},
+            ]}},
+        },
+    }
+
+    result = await _analyze_creatives(
+        {
+            "run_id": "skip-analysis",
+            "session_id": "skip-analysis",
+            "creative_analysis_mode": "skip",
+            "creative_analysis_actor": "campaign_operator",
+        },
+        workspace,
+    )
+
+    assert result.force_review is False
+    assert result.value["analysis_skipped"] is True
+    assert len(result.value["files"]) == 2
+    assert {
+        item["effective_status"] for item in result.value["files"]
+    } == {"approved_override"}
+    assert all(
+        item["override"]["source"] == "autopilot_skip_analysis"
+        for item in result.value["files"]
+    )
+    assert result.evidence == [{
+        "type": "creative_analysis_skipped",
+        "count": 2,
+        "actor": "campaign_operator",
+    }]
 
 
 @pytest.mark.asyncio

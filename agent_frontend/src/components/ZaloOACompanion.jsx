@@ -1,7 +1,10 @@
 import { CheckCircle2, ExternalLink, Link2, MessageCircleMore } from 'lucide-react'
 import ZaloIcon from '@/components/ZaloIcon'
 
-const ZALO_OA_URL = 'https://zalo.me/2224936774907333597'
+const ZALO_OA_ID = import.meta.env.VITE_ZALO_OA_ID || '2224936774907333597'
+const ZALO_OA_NAME = import.meta.env.VITE_ZALO_OA_NAME || 'IOT Generation'
+const ZALO_OA_QR_IMAGE = import.meta.env.VITE_ZALO_OA_QR_IMAGE || ''
+const ZALO_OA_URL = `https://zalo.me/${ZALO_OA_ID}`
 
 export default function ZaloOACompanion({ identity, onOpenZaloOA }) {
   const providers = identity?.user?.providers || []
@@ -68,7 +71,7 @@ export default function ZaloOACompanion({ identity, onOpenZaloOA }) {
           </div>
         </div>
 
-        <a
+        {ZALO_OA_QR_IMAGE && <a
           href={ZALO_OA_URL}
           target="_blank"
           rel="noreferrer"
@@ -76,12 +79,12 @@ export default function ZaloOACompanion({ identity, onOpenZaloOA }) {
           className="mx-auto flex w-full shrink-0 flex-col items-center rounded-2xl border border-blue-100 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-200"
         >
           <img
-            src="/zalo-oa-qr.jpg"
-            alt="Mã QR theo dõi Zalo OA của Advertising Agent"
+            src={ZALO_OA_QR_IMAGE}
+            alt={`Mã QR theo dõi Zalo OA ${ZALO_OA_NAME}`}
             className="h-32 w-32 rounded-xl object-cover"
           />
           <span className="mt-2 text-center text-[11px] font-bold text-slate-700">Quét mã để theo dõi OA</span>
-        </a>
+        </a>}
       </div>
 
       <p className="relative mt-3 text-[10px] leading-4 text-slate-500">

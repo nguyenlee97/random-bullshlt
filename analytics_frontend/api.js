@@ -8,7 +8,7 @@ const isLocal = window.location.hostname === 'localhost' || window.location.host
 const localApiOverride = isLocal
   ? new URLSearchParams(window.location.search).get('apiBase')
   : '';
-export const API_BASE = localApiOverride || (
+export const API_BASE = window.__ADSTACK_CONFIG__?.apiBase || localApiOverride || (
   isLocal ? 'http://localhost:3000/api' : 'https://api.pawgrammers.io.vn/api'
 );
 

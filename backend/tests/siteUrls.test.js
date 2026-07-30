@@ -74,6 +74,23 @@ test('NP-6 category links retain their topic route in local mode', () => {
   );
 });
 
+test('local mode rewrites nested renderer URLs used by screenshots and reports', () => {
+  const placement = {
+    siteId: 'znews',
+    channel: 'znews-cong-nghe',
+    pageTemplate: 'category',
+    siteUrl: 'https://znews-stg.pawgrammers.io.vn/cong-nghe.html',
+    renderer: {
+      engine: 'static-replica',
+      siteUrl: 'https://znews-stg.pawgrammers.io.vn/cong-nghe.html',
+    },
+  };
+  const mapped = withPublicSiteUrl(placement, localEnv);
+  assert.equal(mapped.siteUrl, 'http://localhost:5176/cong-nghe.html');
+  assert.equal(mapped.renderer.siteUrl, mapped.siteUrl);
+  assert.equal(mapped.renderer.engine, placement.renderer.engine);
+});
+
 test('ad serving excludes soft-deleted campaigns', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'routes', 'ads.js'), 'utf8');
   assert.match(source, /status: 'active',[\s\S]*deletedAt: null,[\s\S]*placements: zone/);

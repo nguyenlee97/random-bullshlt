@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-30.8"
+BUILD_VERSION = "2026-07-30.9"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -46,6 +46,14 @@ BUILD_FEATURES = [
     "walkthrough-brief-proposal-gate",
     "autopilot-chat-audience-reselection",
     "autopilot-creative-draft-poll-guard",
+    "autopilot-safe-review-anchor",
+    "autopilot-brief-gated-creative-source",
+    "autopilot-explicit-creative-analysis",
+    "autopilot-persistent-creative-results",
+    "autopilot-chat-milestones",
+    "zalo-exact-placement-page-capture",
+    "creative-contain-blurred-fit",
+    "hackathon-unicode-pdf-font",
     "system-logs",
     "step-tool-rules",
     "brief-rules",

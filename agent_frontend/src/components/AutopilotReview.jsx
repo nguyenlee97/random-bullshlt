@@ -308,7 +308,7 @@ function CreativeReview({ value, formatPlan }) {
   )
 }
 
-function AssignmentReview({ value, creativeFiles = [], placementValue = {} }) {
+export function AssignmentReview({ value, creativeFiles = [], placementValue = {} }) {
   const assignments = value.assignments || {}
   const zones = placementValue.zones || placementValue.candidates || []
   const zoneById = new Map(zones.map(zone => [String(zone.id), zone]))
@@ -366,6 +366,120 @@ function AssignmentReview({ value, creativeFiles = [], placementValue = {} }) {
   )
 }
 
+const CREATIVE_STATUS = {
+  auto_approved: {
+    label: 'Đạt kiểm tra tự động',
+    className: 'border-green-200 bg-green-50 text-green-800',
+  },
+  approved_override: {
+    label: 'Đã duyệt thủ công',
+    className: 'border-sky-200 bg-sky-50 text-sky-800',
+  },
+  needs_review: {
+    label: 'Cần người vận hành review',
+    className: 'border-amber-300 bg-amber-50 text-amber-900',
+  },
+  queued: {
+    label: 'Đang chờ phân tích',
+    className: 'border-brand-200 bg-brand-50 text-brand-800',
+  },
+  analyzing: {
+    label: 'Đang phân tích',
+    className: 'border-brand-200 bg-brand-50 text-brand-800',
+  },
+}
+
+const creativeFindings = file => {
+  const deterministic = file.deterministic || {}
+  const vlm = file.vlm || file.generation?.vlmVerdict || {}
+  const reasons = [
+    ...(file.review_reasons || file.reviewReasons || []),
+    ...(vlm.review_notes || []),
+  ]
+  const observations = [
+    deterministic.width && deterministic.height
+      ? `Kích thước đo được: ${deterministic.width}×${deterministic.height}px`
+      : null,
+    deterministic.is_skin_layout === true ? 'Phát hiện bố cục skin/background' : null,
+    vlm.confidence ? `Độ tin cậy VLM: ${vlm.confidence}` : null,
+    file.override?.reason ? `Duyệt thủ công: ${file.override.reason}` : null,
+  ].filter(Boolean)
+  return { reasons, observations }
+}
+
+export function CreativeAnalysisReview({ value }) {
+  const files = value.files || []
+  if (!files.length) {
+    return <Empty>{value.message || 'Creative chưa có kết quả phân tích để review.'}</Empty>
+  }
+  return (
+    <div className="space-y-3" data-testid="autopilot-creative-analysis-results">
+      {value.analysis_skipped && (
+        <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-3 text-xs leading-5 text-red-900">
+          <p className="font-black">Đã bỏ qua Creative Intelligence</p>
+          <p className="mt-1">
+            Creative được duyệt thủ công để tiếp tục mà không có kết quả phân tích.
+            Hãy kiểm tra trực quan trước khi launch.
+          </p>
+        </div>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {files.map((file, index) => {
+          const status = file.effective_status || file.status || 'queued'
+          const style = CREATIVE_STATUS[status] || CREATIVE_STATUS.queued
+          const { reasons, observations } = creativeFindings(file)
+          return (
+            <article
+              key={file.analysis_id || file.analysisId || file.url || index}
+              className={`overflow-hidden rounded-xl border ${style.className}`}
+            >
+              {file.url && (
+                <div className="flex h-32 items-center justify-center bg-white/70 p-2">
+                  <img
+                    src={file.url}
+                    alt={file.name || `Creative ${index + 1}`}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
+              )}
+              <div className="space-y-2 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="min-w-0 break-words text-xs font-black text-slate-900">
+                    {file.name || file.url || `Creative ${index + 1}`}
+                  </p>
+                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[9px] font-black">
+                    {style.label}
+                  </span>
+                </div>
+                {reasons.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wide">Điểm cần lưu ý</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-4 text-[10px] leading-4">
+                      {reasons.map((reason, reasonIndex) => (
+                        <li key={`${reason}:${reasonIndex}`}>{reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {observations.length > 0 && (
+                  <ul className="space-y-1 text-[10px] leading-4 text-slate-600">
+                    {observations.map(item => <li key={item}>• {item}</li>)}
+                  </ul>
+                )}
+                {!reasons.length && !observations.length && (
+                  <p className="text-[10px] leading-4 text-slate-600">
+                    Không có cảnh báo bổ sung trong kết quả phân tích.
+                  </p>
+                )}
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function GenericReview({ task, value, creativeFiles, placementValue }) {
   if (task.key === 'forecast') {
     return <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -385,13 +499,7 @@ function GenericReview({ task, value, creativeFiles, placementValue }) {
     return <AssignmentReview value={value} creativeFiles={creativeFiles} placementValue={placementValue} />
   }
   if (task.key === 'analyze_creatives') {
-    const files = value.files || []
-    return files.length ? <ul className="grid gap-2 sm:grid-cols-2">{files.map((file, index) => (
-      <li key={file.analysis_id || file.analysisId || index} className="rounded-xl border border-slate-200 px-3 py-2.5">
-        <p className="text-xs font-bold text-slate-900">{file.name || file.url || `Creative ${index + 1}`}</p>
-        <p className="mt-1 text-[10px] font-semibold text-brand-700">{file.effective_status || file.status || 'Đã phân tích'}</p>
-      </li>
-    ))}</ul> : <Empty>{value.message || 'Creative chưa có verdict để review.'}</Empty>
+    return <CreativeAnalysisReview value={value} />
   }
   if (task.key === 'launch_approval' || task.key === 'build_order_draft') {
     const placements = placementIdsFromValue(value)

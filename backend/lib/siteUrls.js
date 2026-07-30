@@ -56,7 +56,15 @@ function withPublicSiteUrl(placement, env = process.env) {
   const plain = placement && typeof placement.toObject === 'function'
     ? placement.toObject()
     : { ...placement };
-  return { ...plain, siteUrl: publicSiteUrl(plain, env) };
+  const siteUrl = publicSiteUrl(plain, env);
+  const renderer = (
+    env.SITE_URL_MODE === 'local'
+    && plain.renderer
+    && typeof plain.renderer === 'object'
+  )
+    ? { ...plain.renderer, siteUrl }
+    : plain.renderer;
+  return { ...plain, siteUrl, renderer };
 }
 
 module.exports = { publicSiteUrl, withPublicSiteUrl, localCategoryPath };

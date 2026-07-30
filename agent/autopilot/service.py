@@ -180,6 +180,173 @@ async def _emit(run_id: str, event_type: str, payload: dict | None = None) -> di
     return event
 
 
+async def record_milestone(
+    run_id: str,
+    key: str,
+    message: str,
+    *,
+    metadata: dict | None = None,
+) -> dict | None:
+    """Persist one operator-visible run milestone and its chat transcript.
+
+    A task can be delivered more than once after an SSE reconnect or worker
+    retry.  ``key`` is therefore a durable idempotency boundary, not merely a
+    frontend rendering hint.
+    """
+    normalized_key = str(key or "").strip()
+    normalized_message = str(message or "").strip()
+    if not normalized_key or not normalized_message:
+        raise ValueError("milestone key and message are required")
+
+    milestone = {
+        "key": normalized_key,
+        "message": normalized_message,
+        "metadata": deepcopy(metadata or {}),
+        "created_at": _now(),
+    }
+    runs, _, _ = await _collections()
+    if runs is not None:
+        result = await runs.update_one(
+            {"_id": run_id, "milestone_keys": {"$ne": normalized_key}},
+            {
+                "$addToSet": {"milestone_keys": normalized_key},
+                "$push": {"milestones": milestone},
+                "$set": {"updated_at": _now()},
+            },
+        )
+        if result.matched_count == 0:
+            existing = await runs.find_one({"_id": run_id})
+            if not existing:
+                raise KeyError(f"run not found: {run_id}")
+            return None
+    else:
+        async with _lock:
+            run = _mem_runs.get(run_id)
+            if not run:
+                raise KeyError(f"run not found: {run_id}")
+            keys = run.setdefault("milestone_keys", [])
+            if normalized_key in keys:
+                return None
+            keys.append(normalized_key)
+            run.setdefault("milestones", []).append(milestone)
+            run["updated_at"] = _now()
+
+    run = await get_run(run_id)
+    from session import add_message
+    await add_message(run["session_id"], "assistant", normalized_message)
+    await _emit(run_id, "run_milestone", {
+        "key": normalized_key,
+        "message": normalized_message,
+        "metadata": deepcopy(metadata or {}),
+    })
+    return _public(milestone)
+
+
+def _milestone_identity(item: dict) -> str:
+    return str(
+        item.get("fullLabel")
+        or item.get("label")
+        or item.get("name")
+        or item.get("placement")
+        or item.get("id")
+        or item.get("_id")
+        or ""
+    ).strip()
+
+
+def _task_milestone(task: dict, result: Any) -> tuple[str, str, dict] | None:
+    """Build concise, factual chat copy from a completed task result."""
+    value = result if isinstance(result, dict) else {}
+    attempt = int(task.get("attempts") or 1)
+    key_suffix = f"{task['task_id']}:{attempt}"
+
+    if task.get("key") == "retrieve_audience":
+        attrs = value.get("attrs") or value.get("selected") or []
+        names = [name for name in map(_milestone_identity, attrs) if name]
+        if not names:
+            return None
+        size = int(value.get("size") or value.get("estimated_size") or 0)
+        size_text = f"\nQuy mô ước tính: **{size:,} người**." if size else ""
+        return (
+            f"audience_selected:{key_suffix}",
+            "✅ **Audience đã chọn**\n\n"
+            + "\n".join(f"- {name}" for name in names[:8])
+            + (f"\n- +{len(names) - 8} segment khác" if len(names) > 8 else "")
+            + size_text,
+            {"kind": "audience_selected", "count": len(names), "size": size},
+        )
+
+    if task.get("key") == "derive_targeting":
+        rows = []
+        for name, raw in value.items():
+            if raw in (None, "", []):
+                continue
+            rendered = ", ".join(map(str, raw)) if isinstance(raw, list) else str(raw)
+            rows.append(f"- **{name}:** {rendered}")
+        if not rows:
+            rows = ["- Không giới hạn thêm; dùng targeting rộng theo brief đã duyệt."]
+        return (
+            f"targeting_applied:{key_suffix}",
+            "✅ **Targeting Params đã thiết lập**\n\n" + "\n".join(rows),
+            {"kind": "targeting_applied", "dimensions": len(rows)},
+        )
+
+    if task.get("key") == "rank_placements":
+        zones = value.get("zones") or value.get("placements") or []
+        names = [name for name in map(_milestone_identity, zones) if name]
+        selected_ids = value.get("selectedZoneIds") or value.get("selected_zone_ids") or []
+        if not names and selected_ids:
+            names = [str(item) for item in selected_ids]
+        if not names:
+            return None
+        return (
+            f"placements_selected:{key_suffix}",
+            "✅ **Ad Zone đã chọn**\n\n"
+            + "\n".join(f"- {name}" for name in names[:8])
+            + (f"\n- +{len(names) - 8} vị trí khác" if len(names) > 8 else ""),
+            {"kind": "placements_selected", "count": len(names)},
+        )
+
+    if task.get("key") == "create_order":
+        order = value.get("order") or {}
+        order_id = str(order.get("id") or order.get("_id") or "").strip()
+        return (
+            f"campaign_launched:{key_suffix}",
+            "🚀 **Campaign đã launch thành công**"
+            + (f"\n\nMã campaign: **{order_id}**." if order_id else ""),
+            {"kind": "campaign_launched", "campaign_id": order_id},
+        )
+
+    if task.get("key") == "create_setup_report":
+        return (
+            f"setup_report_created:{key_suffix}",
+            "✅ **Báo cáo setup đã được tạo thành công** và đã lưu cùng campaign.",
+            {"kind": "setup_report_created"},
+        )
+    return None
+
+
+async def _record_task_milestone(task: dict, result: Any) -> None:
+    milestone = _task_milestone(task, result)
+    if not milestone:
+        return
+    key, message, metadata = milestone
+    try:
+        await record_milestone(
+            task["run_id"], key, message, metadata=metadata,
+        )
+    except Exception as exc:
+        # Chat observability must never turn a successfully committed campaign
+        # artifact into a failed/retried business task.
+        from agent_logger import alog
+        run = await get_run(task["run_id"])
+        await alog(run["session_id"], "warn", {
+            "handler": "autopilot_milestone",
+            "task_id": task.get("task_id"),
+            "error": str(exc)[:300],
+        })
+
+
 def _task_id(run_id: str, key: str) -> str:
     return f"{run_id}:{key}"
 
@@ -247,7 +414,7 @@ async def create_run(
     session_id: str,
     *,
     approval_policy: str = "critical_only",
-    creative_source: str = "upload",
+    creative_source: str | None = None,
     actor: str = "campaign_operator",
     idempotency_key: str = "",
     creative_direction: str = "",
@@ -255,8 +422,16 @@ async def create_run(
 ) -> dict:
     if approval_policy not in APPROVAL_POLICIES:
         raise ValueError("unsupported approval_policy")
+    if creative_source is None:
+        creative_source = (
+            "ai_generate" if approval_policy == "auto_build_draft" else "upload"
+        )
     if creative_source not in {"upload", "ai_generate"}:
         raise ValueError("creative_source must be upload or ai_generate")
+    if creative_source == "upload" and approval_policy == "auto_build_draft":
+        raise ValueError(
+            "auto_build_draft is unavailable when creative_source is upload"
+        )
     key = idempotency_key.strip() or f"autopilot:{session_id}:{uuid.uuid4().hex}"
     runs, tasks, _ = await _collections()
     if runs is not None:
@@ -319,6 +494,8 @@ async def create_run(
         "created_at": now, "updated_at": now,
         "preference_revision": pref["workspace_revision"],
         "trace_id": trace_id,
+        "milestone_keys": [],
+        "milestones": [],
     }
     task_docs = _new_tasks(run_id, model_lock["conversation_model"])
     if runs is not None:
@@ -921,6 +1098,7 @@ async def complete_task(
     await _emit(task["run_id"], "task_waiting_review" if waiting else "task_completed",
                 {"task_id": task_id})
     if not waiting:
+        await _record_task_milestone(task, result)
         await _queue_ready_dependents(task["run_id"])
     await _refresh_run_status(task["run_id"])
     return await get_run(task["run_id"])
@@ -1034,11 +1212,70 @@ async def review_task(
     await _emit(run_id, "task_approved" if approved else "task_rejected",
                 {"task_id": task_id, "actor": actor, "reason": reason})
     if approved and not retry_after_review:
+        await _record_task_milestone({**task, **updates}, task.get("result"))
         await _queue_ready_dependents(run_id)
     await _refresh_run_status(run_id)
     if retry_after_review:
         await reconcile_workspace_changes(run_id)
     return await get_run(run_id)
+
+
+async def choose_creative_analysis(
+    run_id: str,
+    mode: str,
+    *,
+    actor: str = "campaign_operator",
+) -> dict:
+    """Record the explicit analyze/skip decision and resume the analysis task."""
+    if mode not in {"analyze", "skip"}:
+        raise ValueError("creative analysis mode must be analyze or skip")
+    run = await get_run(run_id)
+    if run["status"] in RUN_TERMINAL:
+        raise RunConflict("creative analysis cannot change on a terminal run")
+    task = next(
+        (item for item in run["tasks"] if item.get("key") == "analyze_creatives"),
+        None,
+    )
+    if (
+        not task
+        or task.get("status") != "waiting_review"
+        or (task.get("result") or {}).get("reason")
+        != "analysis_confirmation_required"
+    ):
+        raise RunConflict(
+            "creative analysis choice is available only before analysis starts"
+        )
+
+    await _set_run(run_id, {
+        "creative_analysis_mode": mode,
+        "creative_analysis_actor": actor,
+        "creative_analysis_decided_at": _now(),
+    })
+    if mode == "skip":
+        # The dangerous Skip button is itself the explicit human approval.
+        # Do not ask the same operator to approve the synthetic override again.
+        _, tasks, _ = await _collections()
+        updates = {"review_level": "none", "updated_at": _now()}
+        if tasks is not None:
+            await tasks.update_one({"_id": task["task_id"]}, {"$set": updates})
+        else:
+            _mem_tasks[task["task_id"]].update(updates)
+    await _emit(run_id, "creative_analysis_selected", {
+        "mode": mode,
+        "actor": actor,
+        "task_id": task["task_id"],
+    })
+    return await review_task(
+        run_id,
+        task["task_id"],
+        approved=True,
+        actor=actor,
+        reason=(
+            "Operator started Creative Intelligence analysis"
+            if mode == "analyze"
+            else "Operator explicitly skipped Creative Intelligence analysis"
+        ),
+    )
 
 
 async def rerun_review_task(

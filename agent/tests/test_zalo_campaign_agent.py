@@ -598,19 +598,30 @@ async def test_live_screenshot_uses_short_lived_opaque_media_url(monkeypatch):
     Image.new("RGB", (120, 90), "blue").save(jpeg_buffer, format="JPEG")
 
     monkeypatch.setattr(
-        "handlers.screenshot.handle_screenshot",
-        AsyncMock(return_value={
+        agent.config,
+        "LOCAL_BAOMOI_URL",
+        "https://zah-4.123c.vn/baomoi/",
+    )
+    screenshot_capture = AsyncMock(return_value={
             "ok": True,
             "zones": [{
                 "id": "BaoMoi_Masthead", "label": "Masthead",
                 "crop_b64": base64.b64encode(png_buffer.getvalue()).decode(),
             }],
             "full_b64": base64.b64encode(jpeg_buffer.getvalue()).decode(),
-        }),
+        })
+    monkeypatch.setattr(
+        "handlers.screenshot.handle_screenshot",
+        screenshot_capture,
     )
     campaign = _campaign("ORD-LIVE", "Live Demo")
     campaign["order"]["placements"] = ["BaoMoi_Masthead"]
     response = await agent._live_response(campaign, requested_site="baomoi")
+    screenshot_capture.assert_awaited_once_with(
+        url="https://zah-4.123c.vn/baomoi/",
+        session_id=campaign["session_id"],
+        zone_ids=["BaoMoi_Masthead"],
+    )
     assert response[0] == "Đây là ảnh live quảng cáo trên BaoMoi:"
     assert response[1]["kind"] == "image"
     assert "/zalo/media/" in response[1]["image_url"]
@@ -623,3 +634,73 @@ async def test_live_screenshot_uses_short_lived_opaque_media_url(monkeypatch):
         jpeg_buffer.getvalue(), "image/jpeg",
     )
     assert token not in agent._mem_media
+
+
+@pytest.mark.asyncio
+async def test_live_screenshot_uses_exact_snapshot_category_pages(monkeypatch):
+    import zalo_campaign_agent as agent
+
+    monkeypatch.setattr(
+        agent.config, "LOCAL_ZNEWS_URL", "https://zah-4.123c.vn/znews/",
+    )
+    monkeypatch.setattr(
+        agent.config, "LOCAL_BAOMOI_URL", "https://zah-4.123c.vn/baomoi/",
+    )
+    screenshot_capture = AsyncMock(return_value={
+        "ok": True, "zones": [], "full_b64": None,
+    })
+    monkeypatch.setattr(
+        "handlers.screenshot.handle_screenshot", screenshot_capture,
+    )
+
+    campaign = _campaign("ORD-CATEGORY-LIVE", "Gaming Launch")
+    campaign["order"]["placements"] = [
+        "Znews_Gaming_Masthead",
+        "Znews_Gaming_SidebarBox",
+        "BaoMoi_Gaming_SidebarBox",
+    ]
+    campaign["order"]["placementSnapshots"] = [
+        {
+            "id": "Znews_Gaming_Masthead",
+            "publisher": "ZNews",
+            "siteUrl": "https://znews-stg.pawgrammers.io.vn/cong-nghe.html",
+        },
+        {
+            "id": "Znews_Gaming_SidebarBox",
+            "publisher": "ZNews",
+            "siteUrl": "https://znews-stg.pawgrammers.io.vn/cong-nghe.html",
+        },
+        {
+            "id": "BaoMoi_Gaming_SidebarBox",
+            "publisher": "BaoMoi",
+            "siteUrl": (
+                "https://baomoi-stg.pawgrammers.io.vn/"
+                "category.html?topic=gaming"
+            ),
+        },
+    ]
+
+    response = await agent._live_response(campaign)
+
+    assert screenshot_capture.await_count == 2
+    assert screenshot_capture.await_args_list[0].kwargs == {
+        "url": "https://zah-4.123c.vn/znews/cong-nghe.html",
+        "session_id": campaign["session_id"],
+        "zone_ids": [
+            "Znews_Gaming_Masthead",
+            "Znews_Gaming_SidebarBox",
+        ],
+    }
+    assert screenshot_capture.await_args_list[1].kwargs == {
+        "url": "https://zah-4.123c.vn/baomoi/category.html?topic=gaming",
+        "session_id": campaign["session_id"],
+        "zone_ids": ["BaoMoi_Gaming_SidebarBox"],
+    }
+    assert response == [
+        "Đây là ảnh live quảng cáo trên Znews:",
+        "Đây là ảnh live quảng cáo trên BaoMoi:",
+    ]
+    live_text = agent._live_text(campaign)
+    assert "https://zah-4.123c.vn/znews/cong-nghe.html" in live_text
+    assert "https://zah-4.123c.vn/baomoi/category.html?topic=gaming" in live_text
+    assert "https://zah-4.123c.vn/znews/\n" not in live_text

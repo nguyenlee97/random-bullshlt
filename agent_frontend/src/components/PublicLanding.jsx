@@ -8,8 +8,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import mascotImageUrl from '../../public/brand/advertising-agent-mascot.png'
 
 const ecosystemLinks = [
-  { label: 'Ad Server', href: 'https://adspilot.pawgrammers.io.vn' },
-  { label: 'Analytics', href: 'https://analytics.pawgrammers.io.vn' },
+  { label: 'Ad Server', href: import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn' },
+  { label: 'Analytics', href: import.meta.env.VITE_ANALYTICS_URL || 'https://analytics.pawgrammers.io.vn' },
 ]
 
 const orbitNodes = [

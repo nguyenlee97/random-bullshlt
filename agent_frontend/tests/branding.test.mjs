@@ -406,7 +406,18 @@ test('report answers use adaptive metrics and suppress meaningless trend deltas'
   assert.match(thread, /showSuggestions=\{msg\.id === lastAssistantId\}/)
 })
 
-test('homepage exposes a responsive Zalo OA companion with the supplied QR', async () => {
+test('legacy zone fallbacks resolve navigation from deployment environment', async () => {
+  const zones = await source('agent_frontend/src/data/zones.js')
+  const dockerfile = await source('agent_frontend/Dockerfile')
+  assert.match(zones, /VITE_BACKEND_URL/)
+  assert.match(zones, /VITE_ZNEWS_URL/)
+  assert.match(zones, /VITE_BAOMOI_URL/)
+  assert.match(zones, /VITE_ZINGMP3_URL/)
+  assert.match(zones, /export const ALL_ZONES = RAW_ZONES\.map/)
+  assert.match(dockerfile, /ARG VITE_ZNEWS_URL=/)
+})
+
+test('homepage exposes a responsive configurable Zalo OA companion', async () => {
   const home = await source('agent_frontend/src/components/ExperienceSelector.jsx')
   const companion = await source('agent_frontend/src/components/ZaloOACompanion.jsx')
   const qr = await readFile(path.resolve(root, 'agent_frontend/public/zalo-oa-qr.jpg'))
@@ -414,8 +425,9 @@ test('homepage exposes a responsive Zalo OA companion with the supplied QR', asy
   assert.match(home, /<ZaloOACompanion identity=\{identity\} onOpenZaloOA=\{onOpenZaloOA\} \/>/)
   assert.match(companion, /Tiếp tục cùng Agent trên Zalo/)
   assert.match(companion, /Theo dõi OA để hỏi nhanh về trạng thái campaign/)
-  assert.match(companion, /https:\/\/zalo\.me\/2224936774907333597/)
-  assert.match(companion, /src="\/zalo-oa-qr\.jpg"/)
+  assert.match(companion, /VITE_ZALO_OA_ID/)
+  assert.match(companion, /VITE_ZALO_OA_QR_IMAGE/)
+  assert.match(companion, /src=\{ZALO_OA_QR_IMAGE\}/)
   assert.match(companion, /lg:sticky lg:top-6/)
   assert.doesNotMatch(companion, /min-\[1680px\]:fixed/)
   assert.match(companion, /aria-label="Mở Zalo OA bằng mã QR"/)

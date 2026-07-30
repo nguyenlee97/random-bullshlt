@@ -20,3 +20,6 @@ ds-bundle/
 .design-sync/learnings/
 .design-sync/node_modules
 output
+deploy/hackathon/stack.env
+deploy/hackathon/agent.env
+deploy/hackathon/backend.env

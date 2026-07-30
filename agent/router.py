@@ -1252,6 +1252,10 @@ class _AutopilotCreativeRecoveryRequest(_AutopilotActionRequest):
     format_ids: list[str] = []
 
 
+class _AutopilotCreativeAnalysisRequest(_AutopilotActionRequest):
+    mode: str
+
+
 def _autopilot_error(exc: Exception) -> HTTPException:
     from autopilot.service import RunConflict
     if isinstance(exc, KeyError):
@@ -1427,6 +1431,25 @@ async def autopilot_generate_creative_recovery(
             request.format_ids,
             actor=request.actor,
             reason=request.reason,
+        )
+    except (KeyError, ValueError, RunConflict) as exc:
+        raise _autopilot_error(exc) from exc
+
+
+@agent_router.post("/autopilot/runs/{run_id}/creative-analysis")
+async def autopilot_choose_creative_analysis(
+    run_id: str,
+    raw_request: Request,
+    request: _AutopilotCreativeAnalysisRequest,
+):
+    from autopilot.service import RunConflict, choose_creative_analysis
+    try:
+        await _assert_run_access(raw_request, run_id)
+        _require_autopilot_worker()
+        return await choose_creative_analysis(
+            run_id,
+            request.mode,
+            actor=request.actor,
         )
     except (KeyError, ValueError, RunConflict) as exc:
         raise _autopilot_error(exc) from exc

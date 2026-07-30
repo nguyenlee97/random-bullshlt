@@ -11,9 +11,9 @@
 
 // ── Config ──────────────────────────────────────────────────────────────────
 const _isVPS  = !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1');
-const AD_API_BASE = _isVPS
+const AD_API_BASE = window.__ADSTACK_CONFIG__?.apiBase || (_isVPS
     ? 'https://api.pawgrammers.io.vn/api'
-    : 'http://localhost:3000/api';
+    : 'http://localhost:3000/api');
 
 const AD_SITE_ID  = 'baomoi.com';
 const AD_TIMEOUT  = 4000;

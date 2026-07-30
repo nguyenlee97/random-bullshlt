@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 import json
 import re
 import unicodedata
-from urllib.parse import quote
+from urllib.parse import quote, urlparse, urlunparse
 import uuid
 
 from pymongo import ReturnDocument
@@ -400,18 +400,83 @@ async def _setup_text(campaign: dict) -> str:
     )
 
 
+def _placement_site_key(zone_id: str, snapshot: dict | None = None) -> str:
+    snapshot = snapshot or {}
+    publisher = _fold(snapshot.get("publisher") or snapshot.get("siteId") or "")
+    folded_id = _fold(zone_id).replace(" ", "")
+    if "zingmp3" in publisher or "zingmp3" in folded_id or "zmp3" in folded_id:
+        return "zingmp3"
+    if "baomoi" in publisher or "baomoi" in folded_id or folded_id.startswith("bm"):
+        return "baomoi"
+    return "znews"
+
+
+def _configured_site_url(site_key: str, page_url: str | None = None) -> str:
+    """Map a stored catalog page onto this environment's publisher origin."""
+    base_url = {
+        "baomoi": config.LOCAL_BAOMOI_URL,
+        "znews": config.LOCAL_ZNEWS_URL,
+        "zingmp3": config.LOCAL_ZINGMP3_URL,
+    }[site_key]
+    if not page_url:
+        return str(base_url)
+    try:
+        base = urlparse(str(base_url))
+        page = urlparse(str(page_url))
+        base_path = base.path.rstrip("/")
+        if (
+            page.scheme == base.scheme
+            and page.netloc.lower() == base.netloc.lower()
+            and (
+                not base_path
+                or page.path == base_path
+                or page.path.startswith(f"{base_path}/")
+            )
+        ):
+            return str(page_url)
+        page_path = page.path if page.path and page.path != "/" else "/"
+        target_path = f"{base_path}{page_path}" if base_path else page_path
+        return urlunparse((
+            base.scheme, base.netloc, target_path, "", page.query, page.fragment,
+        ))
+    except Exception:
+        return str(base_url)
+
+
+def _live_capture_targets(order: dict) -> list[dict]:
+    """Resolve immutable placement snapshots to exact publisher page captures."""
+    snapshots = {
+        str(item.get("id")): item
+        for item in order.get("placementSnapshots") or []
+        if isinstance(item, dict) and item.get("id")
+    }
+    grouped: dict[tuple[str, str], dict] = {}
+    for value in order.get("placements") or []:
+        zone_id = str(value)
+        snapshot = snapshots.get(zone_id) or {}
+        site_key = _placement_site_key(zone_id, snapshot)
+        page_url = _configured_site_url(site_key, snapshot.get("siteUrl"))
+        key = (site_key, page_url)
+        if key not in grouped:
+            grouped[key] = {
+                "site_key": site_key,
+                "label": {
+                    "baomoi": "BaoMoi",
+                    "znews": "Znews",
+                    "zingmp3": "ZingMP3",
+                }[site_key],
+                "url": page_url,
+                "zone_ids": [],
+            }
+        grouped[key]["zone_ids"].append(zone_id)
+    return list(grouped.values())
+
+
 def _live_text(campaign: dict) -> str:
     order = campaign["order"]
-    sites = []
-    for zone in order.get("placements") or []:
-        folded = _fold(zone)
-        if "zmp3" in folded or "zingmp3" in folded:
-            sites.append("https://zingmp3-stg.pawgrammers.io.vn")
-        elif "bm" in folded or "baomoi" in folded:
-            sites.append("https://baomoi-stg.pawgrammers.io.vn")
-        else:
-            sites.append("https://znews-stg.pawgrammers.io.vn")
-    sites = list(dict.fromkeys(sites))
+    sites = list(dict.fromkeys(
+        target["url"] for target in _live_capture_targets(order)
+    ))
     creative_urls = [
         str(item.get("url")) for item in order.get("creatives") or []
         if isinstance(item, dict) and item.get("url")
@@ -552,42 +617,32 @@ async def _live_response(
 ) -> list[str | dict]:
     """Capture site groups in the order: heading, zone image(s), full site."""
     order = campaign["order"]
-    placements = [str(item) for item in order.get("placements") or []]
-    specs = {
-        "baomoi": ("BaoMoi", "https://baomoi-stg.pawgrammers.io.vn"),
-        "znews": ("Znews", "https://znews-stg.pawgrammers.io.vn"),
-        "zingmp3": ("ZingMP3", "https://zingmp3-stg.pawgrammers.io.vn"),
-    }
-    placement_groups: dict[str, list[str]] = {key: [] for key in specs}
-    for zone in placements:
-        folded = _fold(zone).replace(" ", "")
-        if "zingmp3" in folded or "zmp3" in folded:
-            placement_groups["zingmp3"].append(zone)
-        elif "baomoi" in folded or folded.startswith("bm"):
-            placement_groups["baomoi"].append(zone)
-        else:
-            placement_groups["znews"].append(zone)
-
-    if requested_site not in {*specs, "all"}:
+    targets = _live_capture_targets(order)
+    supported_sites = {"baomoi", "znews", "zingmp3"}
+    if requested_site not in {*supported_sites, "all"}:
         return ["Mình chưa hỗ trợ site live này."]
-    selected = (
-        [requested_site] if requested_site != "all"
-        else [key for key in specs if placement_groups[key]]
-    )
+    selected = [
+        target for target in targets
+        if requested_site == "all" or target["site_key"] == requested_site
+    ]
     if not selected:
+        if requested_site != "all" and targets:
+            label = {
+                "baomoi": "BaoMoi",
+                "znews": "Znews",
+                "zingmp3": "ZingMP3",
+            }[requested_site]
+            return [f"Campaign này không có placement trên {label}, nên mình không thể chụp ảnh live của site đó."]
         return ["Campaign này chưa có placement để chụp ảnh live."]
-    if requested_site != "all" and not placement_groups[requested_site]:
-        label = specs[requested_site][0]
-        return [f"Campaign này không có placement trên {label}, nên mình không thể chụp ảnh live của site đó."]
 
     from handlers.screenshot import handle_screenshot
     parts: list[str | dict] = []
-    for site_key in selected:
-        label, url = specs[site_key]
+    for target in selected:
+        label, url = target["label"], target["url"]
         try:
             screenshot = await handle_screenshot(
                 url=url, session_id=campaign["session_id"],
-                zone_ids=placement_groups[site_key],
+                zone_ids=target["zone_ids"],
             )
         except Exception:
             screenshot = {"ok": False}

@@ -18,6 +18,8 @@ import io
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+from config import config
+
 # ── Allowed domains (whitelist) ────────────────────────────────────────────────
 ALLOWED_DOMAINS = {
     "znews-stg.pawgrammers.io.vn",
@@ -64,6 +66,24 @@ SITE_ZONES = {
         ("Zagoo_Interstitial_Desktop", "Game Interstitial Desktop"),
         ("Zagoo_Interstitial_Mobile", "Game Interstitial Mobile"),
     ],
+}
+
+_PRODUCTION_DOMAIN_BY_SITE = {
+    "znews": "znews-stg.pawgrammers.io.vn",
+    "baomoi": "baomoi-stg.pawgrammers.io.vn",
+    "zingmp3": "zingmp3-stg.pawgrammers.io.vn",
+    "smoney": "smoney-stg.pawgrammers.io.vn",
+    "dicungcon": "dicungcon-stg.pawgrammers.io.vn",
+    "zagoo": "zagoo-stg.pawgrammers.io.vn",
+}
+
+_PUBLISHER_CONFIG_ATTRS = {
+    "znews": "LOCAL_ZNEWS_URL",
+    "baomoi": "LOCAL_BAOMOI_URL",
+    "zingmp3": "LOCAL_ZINGMP3_URL",
+    "smoney": "LOCAL_SMONEY_URL",
+    "dicungcon": "LOCAL_DICUNGCON_URL",
+    "zagoo": "LOCAL_ZAGOO_URL",
 }
 
 # Friendly label lookup (id → label) for all sites combined
@@ -119,12 +139,55 @@ _LIMIT_CLIP_DOMAINS = {
     "baomoi.com",
 }
 
-def _is_allowed(url: str) -> bool:
+def _path_matches_base(path: str, base_path: str) -> bool:
+    prefix = (base_path or "").rstrip("/")
+    return not prefix or path == prefix or path.startswith(f"{prefix}/")
+
+
+def _site_key(url: str) -> str | None:
     try:
-        host = urlparse(url).hostname or ""
-        return host in ALLOWED_DOMAINS
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        production_site = next(
+            (
+                site
+                for site, domain in _PRODUCTION_DOMAIN_BY_SITE.items()
+                if host == domain
+            ),
+            None,
+        )
+        if production_site and parsed.scheme == "https":
+            return production_site
+
+        for site, attr in _PUBLISHER_CONFIG_ATTRS.items():
+            base = urlparse(str(getattr(config, attr, "") or ""))
+            if (
+                parsed.scheme == base.scheme
+                and parsed.netloc.lower() == base.netloc.lower()
+                and _path_matches_base(parsed.path, base.path)
+            ):
+                return site
     except Exception:
-        return False
+        pass
+    return None
+
+
+def _is_allowed(url: str) -> bool:
+    return _site_key(url) is not None
+
+
+def _site_zones(url: str) -> list[tuple[str, str]]:
+    site = _site_key(url)
+    domain = _PRODUCTION_DOMAIN_BY_SITE.get(site or "")
+    return SITE_ZONES.get(domain or "", [])
+
+
+def _allowed_url_labels() -> list[str]:
+    configured = [
+        str(getattr(config, attr, "") or "").rstrip("/")
+        for attr in _PUBLISHER_CONFIG_ATTRS.values()
+    ]
+    return sorted({*ALLOWED_DOMAINS, *(url for url in configured if url)})
 
 
 def _host(url: str) -> str:
@@ -277,11 +340,10 @@ async def handle_screenshot(url: str, session_id: str, zone_ids: list[str] | Non
     if not _is_allowed(url):
         return {
             "ok": False,
-            "error": f"Domain not in whitelist. Allowed: {', '.join(sorted(ALLOWED_DOMAINS))}",
+            "error": f"Publisher URL not in whitelist. Allowed: {', '.join(_allowed_url_labels())}",
         }
 
-    host = _host(url)
-    all_site_zones = SITE_ZONES.get(host, [])
+    all_site_zones = _site_zones(url)
 
     # Filter to only the zone IDs the user selected (if provided)
     if zone_ids:
@@ -425,8 +487,7 @@ async def handle_screenshot(url: str, session_id: str, zone_ids: list[str] | Non
                 #   image doesn't include thousands of pixels of irrelevant feed.
                 # • All other sites: full scroll height so marketers see the
                 #   whole page state.
-                host = _host(url)
-                if host in _LIMIT_CLIP_DOMAINS:
+                if _site_key(url) == "baomoi":
                     if raw_zones:
                         deepest = max(z["bbox"]["y"] + z["bbox"]["height"] for z in raw_zones)
                         clip_h = min(int(deepest) + 400, MAX_HEIGHT_PX)
