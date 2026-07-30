@@ -89,6 +89,45 @@ async def enqueue_image(
     return doc
 
 
+async def _enqueue_creative_media_once(
+    *, thread: dict, workspace: dict, idempotency_key: str, run_id: str,
+) -> None:
+    """Prepare every creative for OA delivery and enqueue it once per milestone."""
+    from openai_campaign.zalo_review import creative_media_parts
+    from zalo_campaign_agent import _prepare_remote_review_media_parts
+
+    prepared_parts = await _prepare_remote_review_media_parts(
+        creative_media_parts(workspace)
+    )
+    for part_index, part in enumerate(prepared_parts, 1):
+        part_key = f"{idempotency_key}:creative:{part_index}"
+        if isinstance(part, dict) and part.get("kind") == "image":
+            await enqueue_image(
+                thread=thread,
+                image_url=part["image_url"],
+                byte_size=part.get("byte_size"),
+                idempotency_key=part_key,
+            )
+        else:
+            await enqueue_text(
+                thread=thread,
+                text=str(part),
+                idempotency_key=part_key,
+                run_id=run_id,
+            )
+
+
+def _is_creative_creation_checkpoint(task: dict | None) -> bool:
+    if not task or task.get("key") != "analyze_creatives":
+        return False
+    value = (
+        (task.get("pending_artifact") or {}).get("value")
+        or task.get("result")
+        or {}
+    )
+    return value.get("reason") == "analysis_confirmation_required"
+
+
 async def _claim_event() -> dict | None:
     collections = await _collections()
     if collections is None:
@@ -389,37 +428,15 @@ async def _process_progress_once() -> bool:
                 )
                 if (
                     is_openai_run
-                    and event_task
-                    and event_task.get("key") in {
-                        "analyze_creatives", "assign_creatives",
-                    }
+                    and event.get("type") == "task_waiting_review"
+                    and _is_creative_creation_checkpoint(event_task)
                 ):
-                    from openai_campaign.zalo_review import (
-                        assignment_media_parts,
-                        creative_media_parts,
+                    await _enqueue_creative_media_once(
+                        thread=thread,
+                        workspace=workspace,
+                        idempotency_key=idempotency_key,
+                        run_id=run["run_id"],
                     )
-                    media_parts = (
-                        creative_media_parts(workspace)
-                        if event_task.get("key") == "analyze_creatives"
-                        else assignment_media_parts(
-                            (
-                                (event_task.get("pending_artifact") or {}).get("value")
-                                or event_task.get("result")
-                                or {}
-                            ),
-                            workspace,
-                        )
-                    )
-                    for image_index, part in enumerate(
-                        media_parts, 1
-                    ):
-                        await enqueue_image(
-                            thread=thread,
-                            image_url=part["image_url"],
-                            idempotency_key=(
-                                f"{idempotency_key}:creative:{image_index}"
-                            ),
-                        )
 
         # Existing subscriptions may already have delivered the old generic
         # waiting-review event. Emit the richer v2 summary once without replaying
@@ -443,35 +460,13 @@ async def _process_progress_once() -> bool:
                         idempotency_key=f"run-review-summary:{marker}",
                         run_id=run["run_id"],
                     )
-                    if waiting_task.get("key") in {
-                        "analyze_creatives", "assign_creatives",
-                    }:
-                        from openai_campaign.zalo_review import (
-                            assignment_media_parts,
-                            creative_media_parts,
+                    if _is_creative_creation_checkpoint(waiting_task):
+                        await _enqueue_creative_media_once(
+                            thread=thread,
+                            workspace=workspace,
+                            idempotency_key=f"run-review-summary:{marker}",
+                            run_id=run["run_id"],
                         )
-                        media_parts = (
-                            creative_media_parts(workspace)
-                            if waiting_task.get("key") == "analyze_creatives"
-                            else assignment_media_parts(
-                                (
-                                    (waiting_task.get("pending_artifact") or {}).get("value")
-                                    or waiting_task.get("result")
-                                    or {}
-                                ),
-                                workspace,
-                            )
-                        )
-                        for image_index, part in enumerate(
-                            media_parts, 1
-                        ):
-                            await enqueue_image(
-                                thread=thread,
-                                image_url=part["image_url"],
-                                idempotency_key=(
-                                    f"run-review-summary:{marker}:creative:{image_index}"
-                                ),
-                            )
                 review_markers.add(marker)
                 new_review_markers.append(marker)
         terminal_key = f"terminal:{run.get('status')}"

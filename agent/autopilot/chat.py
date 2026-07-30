@@ -122,6 +122,22 @@ def _is_creative_preview_request(message: str) -> bool:
     )
 
 
+def _creative_analysis_choice(message: str) -> str | None:
+    """Parse the same explicit Analyze/Skip choice exposed by the workspace UI."""
+    folded = _fold(message)
+    if re.search(
+        r"\b(skip(?: duyet)?(?: creative)?|bo qua(?: phan tich)?|khong phan tich)\b",
+        folded,
+    ):
+        return "skip"
+    if re.search(
+        r"\b(phan tich(?: creative)?|bat dau phan tich|kiem tra creative)\b",
+        folded,
+    ):
+        return "analyze"
+    return None
+
+
 def _artifact(workspace: dict, name: str) -> Any:
     return (workspace.get("artifacts", {}).get(name, {}) or {}).get("value")
 
@@ -367,6 +383,7 @@ async def route_autopilot_chat(
 ) -> AgentResponse | None:
     """Intercept chat only when this session is an Autopilot campaign/run."""
     from autopilot.service import (
+        choose_creative_analysis,
         get_latest_run,
         rerun_review_task,
         review_task,
@@ -406,6 +423,79 @@ async def route_autopilot_chat(
         ):
             creative_value = _artifact(workspace, "creative") or {}
             creative_files = creative_value.get("files") or []
+            waiting_value = (
+                (waiting.get("pending_artifact") or {}).get("value")
+                or waiting.get("result")
+                or {}
+            )
+            if (
+                waiting.get("key") == "analyze_creatives"
+                and waiting_value.get("reason") == "analysis_confirmation_required"
+            ):
+                creative_items = _creative_review_items(workspace)
+                if _is_creative_preview_request(message):
+                    media_parts = [
+                        {"kind": "image", "image_url": item["url"]}
+                        for item in creative_items
+                        if str(item.get("url") or "").startswith("https://")
+                    ]
+                    return await _recorded_response(
+                        session_id,
+                        message,
+                        _creative_review_summary(creative_items),
+                        tool="autopilot_creative_preview",
+                        step=step,
+                        suggestions=[
+                            "Phân tích creative",
+                            "Skip duyệt creative",
+                            "Hủy",
+                        ],
+                        media_parts=media_parts,
+                    )
+                analysis_choice = _creative_analysis_choice(message)
+                if analysis_choice:
+                    try:
+                        await choose_creative_analysis(
+                            run["run_id"],
+                            analysis_choice,
+                            actor="zalo_campaign_operator",
+                        )
+                    except Exception as exc:
+                        return await _recorded_response(
+                            session_id,
+                            message,
+                            f"Chưa thể cập nhật lựa chọn creative: {str(exc)}. "
+                            "Checkpoint chưa thay đổi.",
+                            tool="autopilot_creative_analysis_conflict",
+                            step=step,
+                        )
+                    text = (
+                        "Đã bắt đầu Phân tích creative. Agent sẽ gửi kết quả VLM "
+                        "cho từng creative khi hoàn tất."
+                        if analysis_choice == "analyze"
+                        else
+                        "Đã Skip duyệt creative: bỏ qua Creative Intelligence và "
+                        "duyệt thủ công toàn bộ creative. Quyết định này được lưu "
+                        "trong audit trail."
+                    )
+                    return await _recorded_response(
+                        session_id,
+                        message,
+                        text,
+                        tool="autopilot_creative_analysis_choice",
+                        step=step,
+                    )
+                return await _recorded_response(
+                    session_id,
+                    message,
+                    "Creative đã sẵn sàng. Hãy chọn “Phân tích creative” để chạy "
+                    "Creative Intelligence hoặc “Skip duyệt creative” để bỏ qua "
+                    "phân tích và duyệt thủ công toàn bộ. “Xác nhận” đơn lẻ chưa "
+                    "chọn thay bạn.",
+                    tool="autopilot_creative_analysis_choice_required",
+                    step=step,
+                    suggestions=["Phân tích creative", "Skip duyệt creative", "Xem creative"],
+                )
             from creative_intel.service import (
                 approve_override,
                 sync_generation_vlm_reviews,

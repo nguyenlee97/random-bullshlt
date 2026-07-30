@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-31.2"
+BUILD_VERSION = "2026-07-31.3"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -287,4 +287,5 @@ BUILD_FEATURES = [
     "autopilot-checkpoint-chat-grounding",             # review Q&A prioritizes bounded evidence for the active checkpoint
     "autopilot-faq-valid-bounded-input",                # oversized review artifacts retain exact questions in valid JSON
     "report-budget-delivery-normalization",             # new synthetic delivery stays within budget without ratio drift
+    "zalo-creative-review-ui-parity",                    # analyze/skip semantics, one-time OA-safe creative delivery
 ]

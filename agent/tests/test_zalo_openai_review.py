@@ -241,12 +241,71 @@ def test_openai_assignment_review_resolves_zone_and_creative_names():
     assert "Masthead → Creative A (1160×280)" in text
     assert "Creative A: mixi-banner.png · đạt kiểm tra" in text
     assert "Xác nhận” để duyệt phân bổ" in text
+    assert "Ảnh không được gửi lại tự động ở bước này" in text
     assert assignment_media_parts(
         task["pending_artifact"]["value"], _workspace()
     ) == [{
         "kind": "image",
         "image_url": "https://example.test/mixi-banner.png",
     }]
+
+
+def test_openai_creative_analysis_confirmation_matches_workspace_choices():
+    run, task = _run("analyze_creatives", {
+        "ready": False,
+        "reason": "analysis_confirmation_required",
+        "files": _workspace()["artifacts"]["creative"]["value"]["files"],
+    })
+
+    text = _progress_message(run, _event(task), workspace=_workspace())
+
+    assert "Creative đã sẵn sàng: 1 file" in text
+    assert "1160×280px" in text
+    assert "Phân tích creative" in text
+    assert "Skip duyệt creative" in text
+    assert "Chấp nhận creative 1 vì" not in text
+
+
+def test_openai_creative_milestone_shows_each_vlm_analysis():
+    workspace = _workspace()
+    verdict = workspace["artifacts"]["creative_verdict"]["value"]["files"][0]
+    verdict.update({
+        "deterministic": {"width": 1160, "height": 280},
+        "vlm": {
+            "confidence": 0.98,
+            "brand_visible": True,
+            "brief_fit": {
+                "primary_subject_matches": True,
+                "objective_message_matches": True,
+                "required_elements_match": True,
+            },
+        },
+    })
+    task = {
+        "task_id": "task-creative-completed",
+        "key": "analyze_creatives",
+        "status": "succeeded",
+        "result": workspace["artifacts"]["creative_verdict"]["value"],
+    }
+    run = {
+        "run_id": "run-creative-completed",
+        "conversation_model": OPENAI_GPT_5_4_MINI,
+        "tasks": [task],
+    }
+
+    text = render_openai_milestone_message(
+        run,
+        task,
+        workspace=workspace,
+    )
+
+    assert "Creative 1 · đạt kiểm tra" in text
+    assert "1160×280px · độ tin cậy VLM 98%" in text
+    assert "thương hiệu hiển thị" in text
+    assert "chủ thể chính phù hợp" in text
+    assert "thông điệp đúng mục tiêu" in text
+    assert "đủ yếu tố bắt buộc" in text
+    assert "Tất cả creative đã đạt; không cần duyệt thủ công từng file." in text
 
 
 def test_openai_launch_review_shows_material_order_facts_and_side_effect():
@@ -485,3 +544,234 @@ async def test_existing_waiting_run_receives_v2_summary_once_without_replaying_e
         "openai-review-v2:run-review:retrieve_audience"
     ]
     assert "delivered_event_ids" not in update
+
+
+@pytest.mark.asyncio
+async def test_creative_media_prepares_and_enqueues_every_part_once(monkeypatch):
+    import zalo_campaign_agent
+    import zalo_worker
+
+    prepared = [
+        {
+            "kind": "image",
+            "image_url": f"https://example.test/safe-{index}.jpg",
+            "byte_size": 900_000 - index,
+        }
+        for index in range(1, 4)
+    ]
+    prepared.append("Link ảnh gốc")
+    prepare = AsyncMock(return_value=prepared)
+    enqueue_image = AsyncMock()
+    enqueue_text = AsyncMock()
+    monkeypatch.setattr(
+        zalo_campaign_agent,
+        "_prepare_remote_review_media_parts",
+        prepare,
+    )
+    monkeypatch.setattr(zalo_worker, "enqueue_image", enqueue_image)
+    monkeypatch.setattr(zalo_worker, "enqueue_text", enqueue_text)
+
+    await zalo_worker._enqueue_creative_media_once(
+        thread={"thread_id": "thread-1", "external_uid": "user-1"},
+        workspace=_workspace(),
+        idempotency_key="run-event:event-creative",
+        run_id="run-creative",
+    )
+
+    prepare.assert_awaited_once_with(creative_media_parts(_workspace()))
+    assert enqueue_image.await_count == 3
+    assert [
+        call.kwargs["byte_size"] for call in enqueue_image.await_args_list
+    ] == [899_999, 899_998, 899_997]
+    enqueue_text.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_assignment_checkpoint_does_not_resend_creative_media(monkeypatch):
+    import autopilot.service as autopilot_service
+    import workspace.service as workspace_service
+    import zalo_worker
+
+    run, task = _run("assign_creatives", {
+        "assignments": {"ZONE-1": 0},
+        "warnings": [],
+    })
+    run["status"] = "waiting_review"
+    event = {
+        "event_id": "event-assignment-review",
+        "type": "task_waiting_review",
+        "payload": {"task_id": task["task_id"]},
+    }
+    subscription = {
+        "_id": "subscription-assignment",
+        "run_id": run["run_id"],
+        "thread_id": "thread-1",
+        "status": "active",
+        "delivered_event_ids": [],
+    }
+    thread = {
+        "_id": "thread-1",
+        "thread_id": "thread-1",
+        "external_uid": "zalo-user-1",
+        "active_campaign_conversation_id": "conversation-1",
+    }
+
+    class FakeCollection:
+        def __init__(self, document=None):
+            self.document = document
+
+        async def find_one(self, *_args, **_kwargs):
+            return self.document
+
+        async def update_one(self, *_args, **_kwargs):
+            return None
+
+    collections = {
+        "subscriptions": FakeCollection(subscription),
+        "threads": FakeCollection(thread),
+    }
+    enqueue = AsyncMock()
+    media = AsyncMock()
+    monkeypatch.setattr(zalo_worker, "_collections", AsyncMock(return_value=collections))
+    monkeypatch.setattr(zalo_worker, "enqueue_text", enqueue)
+    monkeypatch.setattr(zalo_worker, "_enqueue_creative_media_once", media)
+    monkeypatch.setattr(autopilot_service, "get_run", AsyncMock(return_value=run))
+    monkeypatch.setattr(autopilot_service, "list_events", AsyncMock(return_value=[event]))
+    monkeypatch.setattr(workspace_service, "get_workspace", AsyncMock(return_value=_workspace()))
+
+    assert await zalo_worker._process_progress_once() is True
+    enqueue.assert_awaited_once()
+    media.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_creative_creation_checkpoint_sends_media_once(monkeypatch):
+    import autopilot.service as autopilot_service
+    import workspace.service as workspace_service
+    import zalo_worker
+
+    run, task = _run(
+        "analyze_creatives",
+        {
+            "ready": False,
+            "reason": "analysis_confirmation_required",
+            "files": _workspace()["artifacts"]["creative"]["value"]["files"],
+        },
+    )
+    run["status"] = "waiting_review"
+    run["session_id"] = "conversation-1"
+    event = {
+        "event_id": "event-creative-created",
+        "type": "task_waiting_review",
+        "payload": {"task_id": task["task_id"]},
+    }
+    subscription = {
+        "_id": "subscription-analysis",
+        "run_id": run["run_id"],
+        "thread_id": "thread-1",
+        "status": "active",
+        "delivered_event_ids": [],
+    }
+    thread = {
+        "_id": "thread-1",
+        "thread_id": "thread-1",
+        "external_uid": "zalo-user-1",
+        "active_campaign_conversation_id": "conversation-1",
+    }
+
+    class FakeCollection:
+        def __init__(self, document=None):
+            self.document = document
+
+        async def find_one(self, *_args, **_kwargs):
+            return self.document
+
+        async def update_one(self, *_args, **_kwargs):
+            return None
+
+    collections = {
+        "subscriptions": FakeCollection(subscription),
+        "threads": FakeCollection(thread),
+    }
+    enqueue = AsyncMock()
+    media = AsyncMock()
+    monkeypatch.setattr(zalo_worker, "_collections", AsyncMock(return_value=collections))
+    monkeypatch.setattr(zalo_worker, "enqueue_text", enqueue)
+    monkeypatch.setattr(zalo_worker, "_enqueue_creative_media_once", media)
+    monkeypatch.setattr(autopilot_service, "get_run", AsyncMock(return_value=run))
+    monkeypatch.setattr(autopilot_service, "list_events", AsyncMock(return_value=[event]))
+    monkeypatch.setattr(workspace_service, "get_workspace", AsyncMock(return_value=_workspace()))
+
+    assert await zalo_worker._process_progress_once() is True
+    enqueue.assert_awaited_once()
+    media.assert_awaited_once_with(
+        thread=thread,
+        workspace=_workspace(),
+        idempotency_key=(
+            "run-review-summary:"
+            "openai-review-v2:run-review:analyze_creatives"
+        ),
+        run_id=run["run_id"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_completed_analysis_does_not_resend_creative_media(monkeypatch):
+    import autopilot.service as autopilot_service
+    import workspace.service as workspace_service
+    import zalo_worker
+
+    run, task = _run(
+        "analyze_creatives",
+        _workspace()["artifacts"]["creative_verdict"]["value"],
+    )
+    task["status"] = "succeeded"
+    task["result"] = task["pending_artifact"]["value"]
+    task["pending_artifact"] = None
+    run["status"] = "running"
+    run["session_id"] = "conversation-1"
+    event = {
+        "event_id": "event-analysis-completed",
+        "type": "task_completed",
+        "payload": {"task_id": task["task_id"]},
+    }
+    subscription = {
+        "_id": "subscription-analysis-completed",
+        "run_id": run["run_id"],
+        "thread_id": "thread-1",
+        "status": "active",
+        "delivered_event_ids": [],
+    }
+    thread = {
+        "_id": "thread-1",
+        "thread_id": "thread-1",
+        "external_uid": "zalo-user-1",
+        "active_campaign_conversation_id": "conversation-1",
+    }
+
+    class FakeCollection:
+        def __init__(self, document=None):
+            self.document = document
+
+        async def find_one(self, *_args, **_kwargs):
+            return self.document
+
+        async def update_one(self, *_args, **_kwargs):
+            return None
+
+    collections = {
+        "subscriptions": FakeCollection(subscription),
+        "threads": FakeCollection(thread),
+    }
+    enqueue = AsyncMock()
+    media = AsyncMock()
+    monkeypatch.setattr(zalo_worker, "_collections", AsyncMock(return_value=collections))
+    monkeypatch.setattr(zalo_worker, "enqueue_text", enqueue)
+    monkeypatch.setattr(zalo_worker, "_enqueue_creative_media_once", media)
+    monkeypatch.setattr(autopilot_service, "get_run", AsyncMock(return_value=run))
+    monkeypatch.setattr(autopilot_service, "list_events", AsyncMock(return_value=[event]))
+    monkeypatch.setattr(workspace_service, "get_workspace", AsyncMock(return_value=_workspace()))
+
+    assert await zalo_worker._process_progress_once() is True
+    enqueue.assert_awaited_once()
+    media.assert_not_awaited()

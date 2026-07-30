@@ -391,7 +391,24 @@ def _creative_analysis_lines(value: dict, workspace: dict) -> list[str]:
     creative = _artifact(workspace, "creative") or {}
     files = creative.get("files") or []
     verdict_value = _artifact(workspace, "creative_verdict") or {}
-    verdicts = verdict_value.get("files") or []
+    verdicts = value.get("files") or verdict_value.get("files") or []
+    if value.get("reason") == "analysis_confirmation_required":
+        lines = [f"Creative đã sẵn sàng: {len(files)} file"]
+        for index, file in enumerate(files, 1):
+            if not isinstance(file, dict):
+                continue
+            size = (
+                f"{file.get('width')}×{file.get('height')}px"
+                if file.get("width") and file.get("height")
+                else "chưa rõ kích thước"
+            )
+            label = file.get("formatId") or file.get("name") or f"Creative {index}"
+            lines.append(f"{index}. Creative {index} · {_plain(label, 70)} · {size}")
+        lines.append(
+            "Chọn Phân tích creative để chạy Creative Intelligence, hoặc Skip duyệt "
+            "để bỏ qua phân tích và duyệt thủ công toàn bộ creative."
+        )
+        return lines
     if value.get("reason") == "analysis_in_progress":
         return [
             f"Agent đang kiểm tra {len(files)} creative.",
@@ -418,11 +435,63 @@ def _creative_analysis_lines(value: dict, workspace: dict) -> list[str]:
         lines.append(
             f"{index}. Creative {index} · {status_labels.get(status, status)}"
         )
+        deterministic = verdict.get("deterministic") or {}
+        width = deterministic.get("width") or file.get("width")
+        height = deterministic.get("height") or file.get("height")
+        vlm = verdict.get("vlm") or {}
+        detail = []
+        if width and height:
+            detail.append(f"{width}×{height}px")
+        try:
+            confidence = round(float(vlm.get("confidence")) * 100)
+        except (TypeError, ValueError):
+            confidence = None
+        if confidence is not None:
+            detail.append(f"độ tin cậy VLM {confidence}%")
+        if detail:
+            lines.append("   " + " · ".join(detail))
+        analysis = []
+        if vlm.get("brand_visible") is True:
+            analysis.append("thương hiệu hiển thị")
+        brief_fit = vlm.get("brief_fit") or {}
+        if brief_fit.get("primary_subject_matches") is True:
+            analysis.append("chủ thể chính phù hợp")
+        if brief_fit.get("objective_message_matches") is True:
+            analysis.append("thông điệp đúng mục tiêu")
+        if brief_fit.get("required_elements_match") is True:
+            analysis.append("đủ yếu tố bắt buộc")
+        if analysis:
+            lines.append("   Phân tích: " + "; ".join(analysis))
         reasons = verdict.get("review_reasons") or []
         if reasons:
             lines.append("   Cảnh báo: " + "; ".join(
                 _plain(reason, 120) for reason in reasons[:2]
             ))
+    if files and all(
+        (
+            next(
+                (
+                    item for item in verdicts
+                    if item.get("analysis_id") == file.get("analysisId")
+                    or (item.get("url") and item.get("url") == file.get("url"))
+                    or (item.get("name") and item.get("name") == file.get("name"))
+                ),
+                {},
+            ).get("effective_status")
+            or next(
+                (
+                    item for item in verdicts
+                    if item.get("analysis_id") == file.get("analysisId")
+                    or (item.get("url") and item.get("url") == file.get("url"))
+                    or (item.get("name") and item.get("name") == file.get("name"))
+                ),
+                {},
+            ).get("status")
+        ) in {"auto_approved", "approved_override"}
+        for file in files
+        if isinstance(file, dict)
+    ):
+        lines.append("Tất cả creative đã đạt; không cần duyệt thủ công từng file.")
     return lines
 
 
@@ -531,18 +600,29 @@ def render_openai_review_message(
         )
     elif key == "analyze_creatives":
         lines = _creative_analysis_lines(value, workspace)
-        action = (
-            "Nhắn “Xem creative” để nhận ảnh. Nếu một creative cần duyệt thủ công, "
-            "hãy thay/tạo lại hoặc nhắn “Chấp nhận creative 1 vì …” với lý do cụ thể. "
-            "Nhắn “Hủy” để dừng."
-        )
+        if value.get("reason") == "analysis_confirmation_required":
+            action = (
+                "Nhắn “Phân tích creative” để chạy VLM, hoặc “Skip duyệt creative” "
+                "để bỏ qua phân tích và duyệt thủ công toàn bộ. Nhắn “Xem creative” "
+                "để nhận ảnh hoặc “Hủy” để dừng."
+            )
+        elif value.get("reason") == "analysis_in_progress":
+            action = (
+                "Không cần xác nhận lúc này. Agent sẽ tự tiếp tục và gửi kết quả "
+                "phân tích cho từng creative khi hoàn tất."
+            )
+        else:
+            action = (
+                "Chỉ creative không đạt VLM mới cần thay/tạo lại hoặc được chấp nhận "
+                "thủ công kèm lý do. Nhắn “Xem creative” để nhận ảnh hoặc “Hủy” để dừng."
+            )
     elif key == "assign_creatives":
         lines = _assignment_lines(value, workspace)
         action = (
-            "Các ảnh được gửi ngay sau tin nhắn này. Trả lời “Xác nhận” để duyệt "
+            "Ảnh không được gửi lại tự động ở bước này. Trả lời “Xác nhận” để duyệt "
             "phân bổ, “Xem creative” để nhận lại ảnh, “Hủy” để dừng, hoặc mở "
-            "workspace để chỉnh creative. Creative có cảnh báo phải được thay thế "
-            "hoặc duyệt thủ công kèm lý do trước khi xác nhận."
+            "workspace để chỉnh creative. Chỉ creative bị VLM đánh dấu “cần duyệt "
+            "thủ công” mới phải được thay thế hoặc chấp nhận kèm lý do."
         )
     elif key == "launch_approval":
         lines = _launch_lines(value, workspace)

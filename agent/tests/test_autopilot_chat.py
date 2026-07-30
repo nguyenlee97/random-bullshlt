@@ -752,6 +752,73 @@ async def test_openai_creative_preview_returns_images_and_generic_confirm_is_blo
 
 
 @pytest.mark.asyncio
+async def test_openai_creative_analysis_requires_and_records_ui_choice(monkeypatch):
+    import autopilot.chat as chat
+    import autopilot.service as service
+    import workspace.service as workspace_service
+
+    workspace = {
+        "experience_mode": "autopilot",
+        "artifacts": {
+            "creative": {"value": {"files": [{
+                "name": "generated.png",
+                "url": "https://example.test/generated.png",
+                "width": 1160,
+                "height": 280,
+            }]}},
+        },
+    }
+    value = {
+        "ready": False,
+        "reason": "analysis_confirmation_required",
+        "files": workspace["artifacts"]["creative"]["value"]["files"],
+    }
+    run = {
+        "run_id": "run-analysis-choice",
+        "status": "waiting_review",
+        "conversation_model": "openai_gpt_5_4_mini",
+        "tasks": [{
+            "task_id": "task-analysis-choice",
+            "key": "analyze_creatives",
+            "status": "waiting_review",
+            "result": value,
+            "pending_artifact": {"value": value},
+        }],
+    }
+    choose = AsyncMock()
+    review = AsyncMock()
+    monkeypatch.setattr(chat, "add_message", AsyncMock())
+    monkeypatch.setattr(workspace_service, "get_workspace", AsyncMock(return_value=workspace))
+    monkeypatch.setattr(service, "get_latest_run", AsyncMock(return_value=run))
+    monkeypatch.setattr(service, "choose_creative_analysis", choose)
+    monkeypatch.setattr(service, "review_task", review)
+
+    required = await route_autopilot_chat(
+        "Xác nhận",
+        "session-analysis-choice",
+        3,
+    )
+    assert required.meta.tool == "autopilot_creative_analysis_choice_required"
+    assert "Phân tích creative" in required.text
+    assert "Skip duyệt creative" in required.text
+    choose.assert_not_awaited()
+    review.assert_not_awaited()
+
+    started = await route_autopilot_chat(
+        "Phân tích creative",
+        "session-analysis-choice",
+        3,
+    )
+    assert started.meta.tool == "autopilot_creative_analysis_choice"
+    choose.assert_awaited_once_with(
+        "run-analysis-choice",
+        "analyze",
+        actor="zalo_campaign_operator",
+    )
+    review.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_openai_creative_preview_uses_canonical_approval_with_advisory(monkeypatch):
     import autopilot.chat as chat
     import autopilot.service as service
