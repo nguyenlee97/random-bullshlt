@@ -976,6 +976,138 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
     return {"changed": True, "reason": "workspace_changed", "run": await get_run(run_id)}
 
 
+async def resume_completed_creative_analysis(run_id: str) -> dict:
+    """Resume an analysis checkpoint once every expected VLM job is terminal.
+
+    Creative Intelligence commits its verdict asynchronously after the
+    Autopilot capability has returned ``analysis_in_progress``. That commit is
+    intentionally an internal workspace mutation, so normal workspace
+    reconciliation must not treat it as an operator edit. Instead, the worker
+    explicitly retries this task after all of its expected jobs are committed.
+    """
+    run = await get_run(run_id)
+    if run.get("status") in RUN_TERMINAL:
+        return {"changed": False, "reason": "terminal", "run": run}
+    task = next(
+        (
+            item for item in run.get("tasks", [])
+            if item.get("key") == "analyze_creatives"
+        ),
+        None,
+    )
+    result = (task or {}).get("result") or {}
+    if (
+        not task
+        or task.get("status") != "waiting_review"
+        or result.get("reason") != "analysis_in_progress"
+        or run.get("creative_analysis_mode") != "analyze"
+    ):
+        return {"changed": False, "reason": "not_waiting_for_analysis", "run": run}
+
+    expected = list(result.get("files") or [])
+    if not expected:
+        return {"changed": False, "reason": "missing_expected_jobs", "run": run}
+
+    from creative_intel.service import get_intel
+
+    intel_docs = await get_intel(run["session_id"])
+    by_id = {
+        str(item.get("analysis_id")): item
+        for item in intel_docs
+        if item.get("analysis_id")
+    }
+    by_url = {
+        str(item.get("url")): item
+        for item in intel_docs
+        if item.get("url")
+    }
+    matched: list[dict] = []
+    for item in expected:
+        doc = None
+        if item.get("analysis_id"):
+            doc = by_id.get(str(item["analysis_id"]))
+        if doc is None and item.get("url"):
+            doc = by_url.get(str(item["url"]))
+        if doc is None:
+            return {"changed": False, "reason": "analysis_jobs_missing", "run": run}
+        matched.append(doc)
+
+    statuses = {
+        str(item.get("effective_status") or item.get("status") or "queued")
+        for item in matched
+    }
+    terminal_statuses = {"auto_approved", "needs_review", "approved_override"}
+    if not statuses or not statuses.issubset(terminal_statuses):
+        return {
+            "changed": False,
+            "reason": "analysis_still_running",
+            "statuses": sorted(statuses),
+            "run": run,
+        }
+
+    now = _now()
+    updates = {
+        "status": "queued",
+        "result": None,
+        "evidence": [],
+        "pending_artifact": None,
+        "review_decision": None,
+        "lease_owner": None,
+        "lease_expires_at": None,
+        "updated_at": now,
+    }
+    _, tasks, _ = await _collections()
+    changed = False
+    if tasks is not None:
+        updated = await tasks.update_one(
+            {
+                "_id": task["task_id"],
+                "status": "waiting_review",
+                "result.reason": "analysis_in_progress",
+            },
+            {
+                "$set": updates,
+                "$unset": {"completed_at": "", "started_at": ""},
+            },
+        )
+        changed = updated.modified_count == 1
+    else:
+        async with _lock:
+            current = _mem_tasks.get(task["task_id"])
+            if (
+                current
+                and current.get("status") == "waiting_review"
+                and (current.get("result") or {}).get("reason")
+                == "analysis_in_progress"
+            ):
+                current.update(updates)
+                current.pop("completed_at", None)
+                current.pop("started_at", None)
+                changed = True
+
+    if not changed:
+        return {
+            "changed": False,
+            "reason": "analysis_already_resumed",
+            "run": await get_run(run_id),
+        }
+
+    await _emit(run_id, "task_retry_scheduled", {
+        "task_id": task["task_id"],
+        "actor": "creative_intel_worker",
+        "reason": "Creative Intelligence verdicts completed",
+        "automatic": True,
+        "statuses": sorted(statuses),
+    })
+    await _refresh_run_status(run_id)
+    return {
+        "changed": True,
+        "reason": "analysis_completed",
+        "statuses": sorted(statuses),
+        "run": await get_run(run_id),
+    }
+
+
 async def reconcile_active_runs() -> int:
     runs, _, _ = await _collections()
     if runs is not None:
@@ -984,6 +1116,8 @@ async def reconcile_active_runs() -> int:
         docs = [run for run in _mem_runs.values() if run["status"] not in RUN_TERMINAL]
     count = 0
     for run in docs:
+        resumed = await resume_completed_creative_analysis(run["run_id"])
+        count += int(bool(resumed.get("changed")))
         result = await reconcile_workspace_changes(run["run_id"])
         count += int(bool(result.get("changed")))
     return count

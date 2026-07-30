@@ -198,6 +198,97 @@ async def test_skip_creative_analysis_is_explicit_and_requeues_task():
 
 
 @pytest.mark.asyncio
+async def test_completed_creative_analysis_automatically_resumes_checkpoint(monkeypatch):
+    import creative_intel.service as creative_service
+
+    await _seed("analysis-auto-resume")
+    run = await service.create_run(
+        "analysis-auto-resume",
+        creative_source="ai_generate",
+        idempotency_key="analysis-auto-resume",
+    )
+    task_id = f"{run['run_id']}:analyze_creatives"
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result={
+            "reason": "analysis_in_progress",
+            "review_action": "retry",
+            "files": [
+                {"analysis_id": "ci-1", "url": "https://example.test/one.png"},
+                {"analysis_id": "ci-2", "url": "https://example.test/two.png"},
+            ],
+        },
+        completed_at=service._now(),
+    )
+    service._mem_runs[run["run_id"]].update(
+        status="waiting_review",
+        creative_analysis_mode="analyze",
+    )
+
+    async def completed_intel(_session_id):
+        return [
+            {"analysis_id": "ci-1", "effective_status": "auto_approved"},
+            {"analysis_id": "ci-2", "effective_status": "needs_review"},
+        ]
+
+    monkeypatch.setattr(creative_service, "get_intel", completed_intel)
+    resumed = await service.resume_completed_creative_analysis(run["run_id"])
+
+    assert resumed["changed"] is True
+    assert resumed["reason"] == "analysis_completed"
+    assert resumed["run"]["status"] == "queued"
+    task = next(
+        item for item in resumed["run"]["tasks"] if item["task_id"] == task_id
+    )
+    assert task["status"] == "queued"
+    assert task["result"] is None
+    assert "completed_at" not in task
+    events = await service.list_events(run["run_id"])
+    retry = next(item for item in events if item["type"] == "task_retry_scheduled")
+    assert retry["payload"]["automatic"] is True
+    assert retry["payload"]["actor"] == "creative_intel_worker"
+
+
+@pytest.mark.asyncio
+async def test_in_progress_creative_analysis_remains_waiting(monkeypatch):
+    import creative_intel.service as creative_service
+
+    await _seed("analysis-still-running")
+    run = await service.create_run(
+        "analysis-still-running",
+        creative_source="ai_generate",
+        idempotency_key="analysis-still-running",
+    )
+    task_id = f"{run['run_id']}:analyze_creatives"
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result={
+            "reason": "analysis_in_progress",
+            "review_action": "retry",
+            "files": [{"analysis_id": "ci-running"}],
+        },
+    )
+    service._mem_runs[run["run_id"]].update(
+        status="waiting_review",
+        creative_analysis_mode="analyze",
+    )
+
+    async def running_intel(_session_id):
+        return [{"analysis_id": "ci-running", "effective_status": "analyzing"}]
+
+    monkeypatch.setattr(creative_service, "get_intel", running_intel)
+    unchanged = await service.resume_completed_creative_analysis(run["run_id"])
+
+    assert unchanged["changed"] is False
+    assert unchanged["reason"] == "analysis_still_running"
+    current = await service.get_run(run["run_id"])
+    task = next(item for item in current["tasks"] if item["task_id"] == task_id)
+    assert current["status"] == "waiting_review"
+    assert task["status"] == "waiting_review"
+    assert task["result"]["reason"] == "analysis_in_progress"
+
+
+@pytest.mark.asyncio
 async def test_run_cannot_start_while_workspace_proposal_is_pending():
     session_id = "pending-start"
     workspace = await get_workspace(session_id)
