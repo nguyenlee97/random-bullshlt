@@ -18,6 +18,9 @@ test('mobile header offers persisted manual bottom-clearance choices', () => {
   assert.match(topBar, /--mobile-bottom-clearance/)
   assert.match(topBar, /mobile-bottom-clearance-btn/)
   assert.match(topBar, /mobile-bottom-attention-button/)
+  assert.match(topBar, /createPortal/)
+  assert.match(topBar, /dialogRef/)
+  assert.match(topBar, /document\.body/)
   assert.match(topBar, /max-h-\[calc\(var\(--visual-viewport-height,100dvh\)-4\.5rem\)\]/)
   assert.match(topBar, /Nếu ô Chat hoặc nút gửi bị che/)
   assert.match(css, /@keyframes mobile-bottom-attention-flash/)
@@ -27,6 +30,7 @@ test('mobile header offers persisted manual bottom-clearance choices', () => {
 test('workspace reset requires explicit confirmation and keeps current history recoverable', () => {
   assert.match(topBar, /setResetConfirmOpen\(true\)/)
   assert.match(topBar, /role="alertdialog"/)
+  assert.match(topBar, /resetConfirmOpen && typeof document !== 'undefined' && createPortal/)
   assert.match(topBar, /Đặt lại workspace\?/)
   assert.match(topBar, /Campaign và lịch sử hiện tại vẫn được lưu/)
   assert.match(topBar, /onReset\?\.\(\)/)

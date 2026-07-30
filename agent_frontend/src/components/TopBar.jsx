@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowUpFromLine, Bot, Check, RotateCcw, Play, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDemo } from '@/demo/DemoEngine'
@@ -35,6 +36,7 @@ function MobileBottomClearanceControl() {
     }
   })
   const controlRef = useRef(null)
+  const dialogRef = useRef(null)
 
   useEffect(() => {
     document.documentElement.style.setProperty('--mobile-bottom-clearance', `${clearance}px`)
@@ -48,7 +50,12 @@ function MobileBottomClearanceControl() {
   useEffect(() => {
     if (!open) return undefined
     const closeOutside = event => {
-      if (!controlRef.current?.contains(event.target)) setOpen(false)
+      if (
+        !controlRef.current?.contains(event.target)
+        && !dialogRef.current?.contains(event.target)
+      ) {
+        setOpen(false)
+      }
     }
     const closeOnEscape = event => {
       if (event.key === 'Escape') setOpen(false)
@@ -98,8 +105,9 @@ function MobileBottomClearanceControl() {
         )}
       </Button>
 
-      {open && (
+      {open && typeof document !== 'undefined' && createPortal(
         <div
+          ref={dialogRef}
           role="dialog"
           aria-label="Điều chỉnh khoảng trống đáy màn hình"
           className="fixed inset-x-2 top-[calc(env(safe-area-inset-top,0px)+3.5rem)] z-[80] max-h-[calc(var(--visual-viewport-height,100dvh)-4.5rem)] w-auto overflow-y-auto overscroll-contain rounded-2xl border border-violet-200 bg-white p-3 shadow-2xl"
@@ -135,7 +143,8 @@ function MobileBottomClearanceControl() {
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
@@ -211,7 +220,7 @@ export default function TopBar({
           onLinkZalo={onLinkZalo} onOpenZaloOA={onOpenZaloOA} onUnlinkZaloOA={onUnlinkZaloOA} compact />
       </div>
 
-      {resetConfirmOpen && (
+      {resetConfirmOpen && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-3"
           role="presentation"
@@ -253,7 +262,8 @@ export default function TopBar({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </header>
   )
