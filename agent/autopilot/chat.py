@@ -206,20 +206,80 @@ def _creative_review_summary(items: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _read_only_context(workspace: dict, run: dict) -> dict:
-    names = (
+_REVIEW_CONTEXT_ARTIFACTS = {
+    "generate_strategy": ("brief", "strategy"),
+    "retrieve_audience": ("brief", "strategy", "audience"),
+    "derive_targeting": ("brief", "audience", "targeting"),
+    "plan_placement_intent": (
+        "brief", "strategy", "targeting", "placement_intent",
+    ),
+    "plan_creative_formats": (
+        "brief", "placement_intent", "creative_format_plan",
+    ),
+    "prepare_creatives": (
+        "brief", "creative_format_plan", "creative",
+    ),
+    "analyze_creatives": (
+        "brief", "creative_format_plan", "creative", "creative_verdict",
+    ),
+    "rank_placements": (
+        "brief", "placement_intent", "creative_verdict", "placements",
+    ),
+    "assign_creatives": (
+        "brief", "creative", "creative_verdict", "placements", "assignments",
+    ),
+    "forecast": (
+        "brief", "targeting", "placements", "assignments", "forecast",
+    ),
+    "build_order_draft": ("brief", "forecast", "order_draft"),
+    "run_order_guard": (
+        "brief", "creative_verdict", "assignments", "forecast", "order_draft",
+    ),
+    "launch_approval": (
+        "brief", "strategy", "creative_verdict", "placements", "assignments",
+        "forecast", "order_draft",
+    ),
+}
+
+
+def _read_only_context(
+    workspace: dict, run: dict, waiting: dict | None = None,
+) -> dict:
+    all_names = (
         "brief", "strategy", "audience", "targeting", "placement_intent",
         "creative_format_plan", "creative", "creative_verdict", "placements",
         "assignments", "forecast", "order_draft", "order", "report",
     )
-    return {
-        "run": {
-            "run_id": run.get("run_id"),
-            "status": run.get("status"),
-            "trace_id": run.get("trace_id"),
-        },
-        "artifacts": {name: _artifact(workspace, name) for name in names},
+    names = (
+        _REVIEW_CONTEXT_ARTIFACTS.get(waiting.get("key"), ("brief",))
+        if waiting
+        else all_names
+    )
+    context = {}
+    if waiting:
+        # Keep the active review evidence first so bounded model input can never
+        # lose the checkpoint behind unrelated historical artifacts.
+        context["review_checkpoint"] = {
+            "task_id": waiting.get("task_id"),
+            "key": waiting.get("key"),
+            "title": waiting.get("title"),
+            "result": waiting.get("result"),
+            "evidence": waiting.get("evidence") or [],
+            "pending_artifact": (
+                (waiting.get("pending_artifact") or {}).get("value")
+            ),
+        }
+    context["run"] = {
+        "run_id": run.get("run_id"),
+        "status": run.get("status"),
+        "trace_id": run.get("trace_id"),
     }
+    context["artifacts"] = {
+        name: value
+        for name in names
+        if (value := _artifact(workspace, name)) is not None
+    }
+    return context
 
 
 async def _answer_run_question(
@@ -230,7 +290,10 @@ async def _answer_run_question(
         "Bạn là trợ lý đọc kết quả và checkpoint của Campaign Autopilot. Chỉ trả lời bằng "
         "tiếng Việt từ JSON artifact được cung cấp. Không gọi công cụ, không đề xuất hoặc "
         "thực hiện thay đổi workspace, không xem câu hỏi là quyết định duyệt, không bịa số "
-        "liệu. Forecast phải được gọi rõ là ước tính. Trả lời trực tiếp, ngắn và cụ thể."
+        "liệu. Forecast phải được gọi rõ là ước tính. Trả lời trực tiếp câu hỏi trước, ngắn "
+        "và cụ thể. Khi có review_checkpoint, ưu tiên dữ liệu checkpoint đó và không tóm tắt "
+        "audience, strategy hay trạng thái không liên quan. Nếu thiếu bằng chứng cần thiết, "
+        "nói rõ dữ liệu nào chưa có thay vì thay thế bằng trạng thái khác."
     )
     user = (
         f"ARTIFACT JSON:\n"
@@ -534,8 +597,7 @@ async def route_autopilot_chat(
         )
         can_edit_openai_audience = (
             run.get("conversation_model") == OPENAI_GPT_5_4_MINI
-            and audience_task is not None
-            and audience_task.get("status") in {"waiting_review", "succeeded"}
+            and audience_review_checkpoint
             and bool(audience_candidates)
         )
         if (
@@ -800,17 +862,7 @@ async def route_autopilot_chat(
                 step=step,
             )
         if intent == "question":
-            context = _read_only_context(workspace, run)
-            context["review_checkpoint"] = {
-                "task_id": waiting.get("task_id"),
-                "key": waiting.get("key"),
-                "title": waiting.get("title"),
-                "result": waiting.get("result"),
-                "evidence": waiting.get("evidence") or [],
-                "pending_artifact": (
-                    (waiting.get("pending_artifact") or {}).get("value")
-                ),
-            }
+            context = _read_only_context(workspace, run, waiting)
             try:
                 text, answer_model = await _answer_run_question(
                     session_id=session_id,

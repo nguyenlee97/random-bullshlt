@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-30.11"
+BUILD_VERSION = "2026-07-31.2"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -283,4 +283,8 @@ BUILD_FEATURES = [
     "privacy-safe-zone-conflicts",                    # availability omits other campaign identity
     "autopilot-preference-sequence",                  # creative approach unlocks approval-policy choice with chat guidance
     "autopilot-skip-analysis-order-guard",             # explicit server-side skip verdicts remain valid at both safety gates
+    "autopilot-active-checkpoint-routing",             # completed audience tasks cannot steal later checkpoint commands
+    "autopilot-checkpoint-chat-grounding",             # review Q&A prioritizes bounded evidence for the active checkpoint
+    "autopilot-faq-valid-bounded-input",                # oversized review artifacts retain exact questions in valid JSON
+    "report-budget-delivery-normalization",             # new synthetic delivery stays within budget without ratio drift
 ]

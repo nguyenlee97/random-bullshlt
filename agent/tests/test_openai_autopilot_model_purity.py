@@ -101,6 +101,93 @@ async def test_completed_openai_autopilot_qa_never_calls_greennode(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_openai_autopilot_qa_preserves_question_in_oversized_valid_input(
+    monkeypatch,
+):
+    import json
+
+    import openai_campaign.autopilot as openai_autopilot
+
+    question = "Nên chọn Masthead hay cặp SideLeft SideRight nhỉ?"
+    candidates = [
+        {
+            "id": f"ZONE-{index}",
+            "channel": "Znews_FoodDining_Masthead",
+            "publisher": "Znews",
+            "format": "Masthead",
+            "size": "1160x250",
+            "reach": 230_000,
+            "cpm": 65_000,
+            "ctr": 0.012,
+            "vi": 0.82,
+            "lifecycleStatus": "active",
+            "creativeRequirements": {"width": 2224, "height": 480},
+            "rerank_meta": {"raw": "x" * 7000},
+            "score_components": {"raw": "y" * 3000},
+            "provenance": {"raw": "z" * 2000},
+        }
+        for index in range(8)
+    ]
+    placement = {
+        "kind": "placement_intent",
+        "candidate_zone_ids": [item["id"] for item in candidates],
+        "candidates": candidates,
+    }
+    context = {
+        "review_checkpoint": {
+            "task_id": "task-placement",
+            "key": "plan_placement_intent",
+            "title": "Ad zone đề xuất ban đầu",
+            "result": placement,
+            "pending_artifact": placement,
+        },
+        "run": {"run_id": "run-placement", "status": "waiting_review"},
+        "artifacts": {
+            "brief": {"objective": "awareness", "budget": 250},
+            "placement_intent": placement,
+        },
+    }
+    captured = {}
+
+    async def fake_generate_structured(**kwargs):
+        captured.update(kwargs)
+        return (
+            openai_autopilot._AutopilotReadOnlyAnswer(
+                answer="Masthead nổi bật hơn; cặp side có CPM hiệu quả hơn.",
+            ),
+            {"provider": "openai", "model": "gpt-5.4-mini"},
+        )
+
+    monkeypatch.setattr(
+        openai_autopilot, "generate_structured", fake_generate_structured,
+    )
+
+    answer, _ = await openai_autopilot.answer_openai_autopilot_question(
+        session_id="oversized-faq",
+        message=question,
+        context=context,
+    )
+
+    model_input = captured["input_data"]
+    parsed = json.loads(model_input)
+    checkpoint = parsed["artifact_context"]["review_checkpoint"]
+    retained = checkpoint["pending_artifact"]["candidates"]
+
+    assert answer.startswith("Masthead nổi bật hơn")
+    assert len(model_input) <= openai_autopilot._READONLY_INPUT_MAX_CHARS
+    assert model_input.index('"question"') < model_input.index('"artifact_context"')
+    assert parsed["question"] == question
+    assert "result" not in checkpoint
+    assert len(retained) == 8
+    assert retained[0]["cpm"] == 65_000
+    assert retained[0]["reach"] == 230_000
+    assert "rerank_meta" not in retained[0]
+    assert "score_components" not in retained[0]
+    assert "provenance" not in retained[0]
+    assert "placement_intent" not in parsed["artifact_context"]["artifacts"]
+
+
+@pytest.mark.asyncio
 async def test_openai_review_question_is_read_only_and_never_approves(monkeypatch):
     import autopilot.chat as chat
     import autopilot.service as service

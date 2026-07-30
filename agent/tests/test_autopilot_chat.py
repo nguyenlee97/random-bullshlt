@@ -162,6 +162,7 @@ async def test_openai_placement_ordinals_edit_then_require_separate_confirmation
     import workspace.service as workspace_service
 
     selections = []
+    audience_selections = []
     approvals = []
     candidates = [
         {"id": "ZONE-1", "name": "Masthead"},
@@ -169,9 +170,20 @@ async def test_openai_placement_ordinals_edit_then_require_separate_confirmation
         {"id": "ZONE-3", "name": "Side box"},
         {"id": "ZONE-4", "name": "Footer"},
     ]
+    audience = {
+        "recommendations": [
+            {"segmentId": "AUD-1", "fullLabel": "Coffee"},
+            {"segmentId": "AUD-2", "fullLabel": "Restaurants"},
+            {"segmentId": "AUD-3", "fullLabel": "Travel"},
+            {"segmentId": "AUD-4", "fullLabel": "Lifestyle"},
+        ],
+    }
 
     async def fake_workspace(_session_id):
-        return {"experience_mode": "autopilot", "artifacts": {}}
+        return {
+            "experience_mode": "autopilot",
+            "artifacts": {"audience": {"value": audience}},
+        }
 
     async def fake_run(_session_id):
         value = {"candidate_zone_ids": [item["id"] for item in candidates],
@@ -180,8 +192,107 @@ async def test_openai_placement_ordinals_edit_then_require_separate_confirmation
             "run_id": "run-zones",
             "status": "waiting_review",
             "conversation_model": "openai_gpt_5_4_mini",
+            "tasks": [
+                {
+                    "task_id": "task-audience",
+                    "key": "retrieve_audience",
+                    "status": "succeeded",
+                    "result": audience,
+                },
+                {
+                    "task_id": "task-zones",
+                    "key": "plan_placement_intent",
+                    "title": "Ad zone đề xuất ban đầu",
+                    "status": "waiting_review",
+                    "result": value,
+                    "pending_artifact": {
+                        "artifact": "placement_intent",
+                        "value": value,
+                    },
+                },
+            ],
+        }
+
+    async def fake_select(run_id, zone_ids, *, actor, reason):
+        selections.append((run_id, zone_ids, actor, reason))
+        return {"run_id": run_id}
+
+    async def fake_review(run_id, task_id, *, approved, actor, reason):
+        approvals.append((run_id, task_id, approved))
+        return {"run_id": run_id}
+
+    async def fake_select_audience(*args, **kwargs):
+        audience_selections.append((args, kwargs))
+
+    monkeypatch.setattr(chat, "add_message", AsyncMock())
+    monkeypatch.setattr(workspace_service, "get_workspace", fake_workspace)
+    monkeypatch.setattr(service, "get_latest_run", fake_run)
+    monkeypatch.setattr(service, "select_placement_intent", fake_select)
+    monkeypatch.setattr(
+        service, "select_audience_recommendations", fake_select_audience,
+    )
+    monkeypatch.setattr(service, "review_task", fake_review)
+
+    edited = await route_autopilot_chat(
+        "Tôi muốn chọn zone 1,2,3",
+        "session-zones",
+        3,
+    )
+
+    assert edited.meta.tool == "autopilot_placement_selection"
+    assert selections[0][1] == ["ZONE-1", "ZONE-2", "ZONE-3"]
+    assert audience_selections == []
+    assert approvals == []
+    assert "vẫn đang chờ duyệt" in edited.text
+
+    confirmed = await route_autopilot_chat("Xác nhận", "session-zones", 3)
+    assert confirmed.meta.tool == "autopilot_review_chat"
+    assert approvals == [("run-zones", "task-zones", True)]
+
+
+@pytest.mark.asyncio
+async def test_openai_placement_question_uses_focused_checkpoint_context(monkeypatch):
+    import autopilot.chat as chat
+    import autopilot.service as service
+    import workspace.service as workspace_service
+
+    candidates = [
+        {
+            "id": "ZONE-MASTHEAD", "name": "Masthead",
+            "format": "banner", "cpm": 65000, "reach": 230000,
+        },
+        {
+            "id": "ZONE-BACKGROUND", "name": "Background",
+            "format": "skin", "cpm": 48000, "reach": 230000,
+        },
+    ]
+    answer = AsyncMock(return_value=(
+        "Background có CPM thấp hơn; Masthead nổi bật hơn. Với awareness, "
+        "ưu tiên Background nếu mục tiêu chính là độ phủ.",
+        {"provider": "openai", "model": "gpt-5.4-mini"},
+    ))
+
+    async def fake_workspace(_session_id):
+        return {
+            "experience_mode": "autopilot",
+            "artifacts": {
+                "brief": {"value": {"objective": "awareness", "budget": 250}},
+                "strategy": {"value": {"selected": "reach_first"}},
+                "audience": {"value": {"attrs": [{"fullLabel": "Coffee"}]}},
+                "targeting": {"value": {"gender": ["Female"]}},
+                "placement_intent": {"value": {"candidates": candidates}},
+                "report": {"value": {"status": "not_started"}},
+            },
+        }
+
+    async def fake_run(_session_id):
+        value = {"candidates": candidates}
+        return {
+            "run_id": "run-placement-question",
+            "status": "waiting_review",
+            "conversation_model": "openai_gpt_5_4_mini",
             "tasks": [{
-                "task_id": "task-zones",
+                "task_id": "task-placement-question",
                 "key": "plan_placement_intent",
                 "title": "Ad zone đề xuất ban đầu",
                 "status": "waiting_review",
@@ -193,34 +304,29 @@ async def test_openai_placement_ordinals_edit_then_require_separate_confirmation
             }],
         }
 
-    async def fake_select(run_id, zone_ids, *, actor, reason):
-        selections.append((run_id, zone_ids, actor, reason))
-        return {"run_id": run_id}
-
-    async def fake_review(run_id, task_id, *, approved, actor, reason):
-        approvals.append((run_id, task_id, approved))
-        return {"run_id": run_id}
-
     monkeypatch.setattr(chat, "add_message", AsyncMock())
+    monkeypatch.setattr(chat, "_answer_openai_autopilot_question", answer)
     monkeypatch.setattr(workspace_service, "get_workspace", fake_workspace)
     monkeypatch.setattr(service, "get_latest_run", fake_run)
-    monkeypatch.setattr(service, "select_placement_intent", fake_select)
-    monkeypatch.setattr(service, "review_task", fake_review)
+    monkeypatch.setattr(service, "review_task", AsyncMock())
 
-    edited = await route_autopilot_chat(
-        "Tôi muốn chọn zone 1,2,3",
-        "session-zones",
+    response = await route_autopilot_chat(
+        "Masthead và Background cái nào tốt hơn trong trường hợp này nhỉ",
+        "session-placement-question",
         3,
     )
 
-    assert edited.meta.tool == "autopilot_placement_selection"
-    assert selections[0][1] == ["ZONE-1", "ZONE-2", "ZONE-3"]
-    assert approvals == []
-    assert "vẫn đang chờ duyệt" in edited.text
-
-    confirmed = await route_autopilot_chat("Xác nhận", "session-zones", 3)
-    assert confirmed.meta.tool == "autopilot_review_chat"
-    assert approvals == [("run-zones", "task-zones", True)]
+    assert response.meta.tool == "autopilot_review_qa"
+    assert "Background có CPM thấp hơn" in response.text
+    context = answer.await_args.kwargs["context"]
+    assert next(iter(context)) == "review_checkpoint"
+    assert context["review_checkpoint"]["key"] == "plan_placement_intent"
+    assert context["review_checkpoint"]["pending_artifact"]["candidates"] == candidates
+    assert set(context["artifacts"]) == {
+        "brief", "strategy", "targeting", "placement_intent",
+    }
+    assert "audience" not in context["artifacts"]
+    assert "report" not in context["artifacts"]
 
 
 @pytest.mark.asyncio
@@ -377,12 +483,10 @@ async def test_openai_audience_semantic_selection_accepts_natural_zalo_phrases(
 
 
 @pytest.mark.asyncio
-async def test_openai_can_expand_audience_during_later_creative_review(monkeypatch):
+async def test_openai_later_checkpoint_does_not_mutate_completed_audience(monkeypatch):
     import autopilot.chat as chat
     import autopilot.service as service
-    import openai_campaign.autopilot as openai_autopilot
     import workspace.service as workspace_service
-    from openai_campaign.autopilot import AudienceReviewSelectionAction
 
     selections = []
     candidates = [
@@ -430,20 +534,17 @@ async def test_openai_can_expand_audience_during_later_creative_review(monkeypat
 
     message = "Tôi muốn mở rộng thêm tệp Parenting vào 2 TA hiện tại"
     monkeypatch.setattr(chat, "add_message", AsyncMock())
+    monkeypatch.setattr(
+        chat,
+        "_answer_openai_autopilot_question",
+        AsyncMock(return_value=(
+            "Audience đã hoàn tất; yêu cầu này không thay đổi checkpoint Creative hiện tại.",
+            {"provider": "openai", "model": "gpt-5.4-mini"},
+        )),
+    )
     monkeypatch.setattr(workspace_service, "get_workspace", fake_workspace)
     monkeypatch.setattr(service, "get_latest_run", fake_run)
     monkeypatch.setattr(service, "select_audience_recommendations", fake_select)
-    monkeypatch.setattr(
-        openai_autopilot,
-        "classify_openai_audience_review_selection",
-        AsyncMock(return_value=AudienceReviewSelectionAction(
-            intent="select",
-            candidate_numbers=[1, 2, 3],
-            explicit=True,
-            ambiguous=False,
-            evidence=message,
-        )),
-    )
 
     response = await route_autopilot_chat(
         message,
@@ -451,10 +552,9 @@ async def test_openai_can_expand_audience_during_later_creative_review(monkeypat
         2,
     )
 
-    assert response.meta.tool == "autopilot_audience_selection"
-    assert selections[0][1] == ["INT159", "INT117", "INT118"]
-    assert "Targeting, placement" in response.text
-    assert "checkpoint cũ không được tự động áp dụng" in response.text
+    assert response.meta.tool == "autopilot_review_qa"
+    assert selections == []
+    assert "không thay đổi checkpoint Creative" in response.text
 
 
 @pytest.mark.asyncio

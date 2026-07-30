@@ -131,6 +131,59 @@ async function callOpenAI(messages, { temperature = 0.7, max_completion_tokens =
   return parsed;
 }
 
+// Preserve the model's relative delivery shape while keeping newly generated
+// reports inside the campaign budget. Scaling every delivery volume by the
+// same factor keeps CPM, CTR, CPA, frequency, trends, and zone rankings stable.
+function normalizeGeneratedRecordsToBudget(records, budget) {
+  if (!Array.isArray(records) || records.length === 0) return [];
+
+  const campaignBudget = Number(budget);
+  const totalSpend = records.reduce((sum, row) => {
+    const spend = Number(row?.spend);
+    return sum + (Number.isFinite(spend) && spend > 0 ? spend : 0);
+  }, 0);
+
+  if (!Number.isFinite(campaignBudget) || campaignBudget <= 0
+      || totalSpend <= campaignBudget || totalSpend <= 0) {
+    return records;
+  }
+
+  const targetSpend = campaignBudget * 0.85;
+  const scale = targetSpend / totalSpend;
+  const scaleCount = value => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric > 0
+      ? Math.round(numeric * scale)
+      : 0;
+  };
+  const roundMetric = value => Math.round(value * 1000) / 1000;
+
+  const normalized = records.map((row) => {
+    const impressions = scaleCount(row.impressions);
+    const clicks = scaleCount(row.clicks);
+    const spend = scaleCount(row.spend);
+    const reach = scaleCount(row.reach);
+    const conversions = scaleCount(row.conversions);
+    return {
+      ...row,
+      impressions,
+      clicks,
+      spend,
+      reach,
+      conversions,
+      ctr: impressions > 0 ? roundMetric(clicks / impressions * 100) : 0,
+      cpm: impressions > 0 ? roundMetric(spend / impressions * 1000) : 0,
+    };
+  });
+
+  const normalizedSpend = normalized.reduce((sum, row) => sum + row.spend, 0);
+  console.log(
+    `[reportGen] Normalized generated delivery to budget: `
+    + `${Math.round(totalSpend)} -> ${normalizedSpend} VND (scale=${scale.toFixed(4)})`
+  );
+  return normalized;
+}
+
 // ─── Generate synthetic analytics records ────────────────────────────────────
 async function generateRecords(campaign) {
   const { campaignId, brand, objective, budget, startDate, zones } = campaign;
@@ -177,7 +230,7 @@ OUTPUT FORMAT: Return JSON with key "records" containing the array.
     { role: 'user', content: prompt },
   ], { temperature: 0.8, max_completion_tokens: 16000 });
 
-  return result.records || [];
+  return normalizeGeneratedRecordsToBudget(result.records || [], budget);
 }
 
 // ─── Generate analysis for one report type ───────────────────────────────────
@@ -391,5 +444,5 @@ async function getReportStatus(campaignId) {
 
 module.exports = {
   generateReports, getReportStatus, REPORT_TYPES, QUESTIONS_MAP,
-  buildOpenAIRequestBody, generateAnalysis,
+  buildOpenAIRequestBody, generateAnalysis, normalizeGeneratedRecordsToBudget,
 };
