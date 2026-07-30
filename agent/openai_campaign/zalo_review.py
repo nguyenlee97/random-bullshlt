@@ -105,6 +105,7 @@ def _name(item: dict, fallback: str) -> str:
         or item.get("name")
         or item.get("code")
         or item.get("_id")
+        or item.get("id")
         or fallback,
         100,
     )
@@ -225,17 +226,6 @@ def _placement_lines(value: dict) -> list[str]:
         line = f"{index}. {label}"
         if metric:
             line += " · " + " · ".join(metric)
-        relevance = zone.get("topic_relevance") or {}
-        matched = (
-            relevance.get("matched_keywords")
-            or relevance.get("matched_segments")
-            or relevance.get("matched_subcategories")
-            or relevance.get("matched_topics")
-            or []
-        )
-        reason = ", ".join(_plain(item, 24) for item in matched[:2])
-        if reason:
-            line += f" · khớp: {reason}"
         lines.append(line)
     if zones:
         lines.append(

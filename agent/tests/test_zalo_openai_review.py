@@ -134,8 +134,7 @@ def test_openai_placement_review_shows_inventory_metrics_and_estimate_disclosure
     run, task = _run("plan_placement_intent", {
         "candidate_zone_ids": ["ZONE-1"],
         "candidates": [{
-            "id": "ZONE-1",
-            "name": "Masthead",
+            "id": "BaoMoi_FoodDining_Background",
             "channel": "BaoMoi",
             "cpm": 42_000,
             "reach": 2_500_000,
@@ -144,9 +143,10 @@ def test_openai_placement_review_shows_inventory_metrics_and_estimate_disclosure
 
     text = _progress_message(run, _event(task), workspace=_workspace())
 
-    assert "Masthead" in text
+    assert "BaoMoi_FoodDining_Background" in text
     assert "CPM 42.000đ" in text
     assert "reach 2,5 triệu" in text
+    assert "khớp:" not in text
     assert "ước tính" in text
     assert "Ad zone đề xuất ban đầu" in text
     assert "Chọn zone 1,2,3" in text

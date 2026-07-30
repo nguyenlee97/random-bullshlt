@@ -935,6 +935,7 @@ async def test_openai_placement_intent_limits_one_topic_without_changing_greenno
     )
 
     openai_topics = [zone["topicId"] for zone in openai.value["candidates"]]
+    assert len(openai.value["candidates"]) == 8
     assert openai_topics.count("home_garden_diy") == 6
     assert openai_topics.count("technology_science") == 2
     assert len(greennode.value["candidates"]) == 12

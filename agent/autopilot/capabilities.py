@@ -423,7 +423,7 @@ async def _derive_targeting(run: dict, workspace: dict) -> CapabilityResult:
 def _diverse_openai_placement_candidates(
     zones: list[dict],
     *,
-    limit: int = 12,
+    limit: int = 8,
     max_per_topic: int = 6,
     max_per_topic_family: int = 2,
 ) -> list[dict]:
