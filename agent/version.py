@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-31.5"
+BUILD_VERSION = "2026-07-31.6"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -290,4 +290,6 @@ BUILD_FEATURES = [
     "zalo-creative-review-ui-parity",                    # analyze/skip semantics, one-time OA-safe creative delivery
     "creative-analysis-auto-resume",                      # completed VLM jobs wake Zalo and Agent UI without a manual refresh
     "autopilot-walkthrough-analysis-choice",              # walkthrough follows the explicit analyze choice and automatic verdict refresh
+    "walkthrough-paced-creative-review",                   # creative analysis and assignment pause at explicit read checkpoints
+    "responsive-header-attention-controls",                # confirmed reset plus safe animated Tour and mobile bottom helper
 ]

@@ -62,6 +62,43 @@
   display: none;
 }
 
+@keyframes tour-attention-flash {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.18), 0 6px 16px rgba(245, 158, 11, 0.22);
+    filter: saturate(1);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.2), 0 8px 22px rgba(245, 158, 11, 0.38);
+    filter: saturate(1.28);
+  }
+}
+
+@keyframes mobile-bottom-attention-flash {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.16);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(124, 58, 237, 0.2);
+    transform: translateY(-1px);
+  }
+}
+
+.tour-attention-button {
+  animation: tour-attention-flash 1.45s ease-in-out infinite;
+}
+
+.mobile-bottom-attention-button {
+  animation: mobile-bottom-attention-flash 1.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-attention-button,
+  .mobile-bottom-attention-button {
+    animation: none;
+  }
+}
+
 @media (max-width: 767px), (pointer: coarse) {
   .mobile-bottom-helper {
     display: block;

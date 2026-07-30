@@ -486,6 +486,36 @@ test('Autopilot demo lets users choose UI tour or interactive walkthrough immedi
   )
 })
 
+test('Autopilot walkthrough pauses for creative analysis and assignment explanations', () => {
+  const brief = pickRandomBrief(new Date(2026, 6, 23, 12, 0, 0))
+  const live = buildAutopilotLiveSteps(brief, { creativeSource: 'ai_generate' })
+  const analysisReadStep = live.find(
+    step => step.type === 'TOOLTIP'
+      && step.title === 'Phân tích creative trước khi gán',
+  )
+  const analysisResultStep = live.find(
+    step => step.type === 'TOOLTIP'
+      && step.title === 'Phân tích creative đã hoàn tất',
+  )
+  const assignmentReviewStep = live.find(
+    step => step.type === 'TOOLTIP'
+      && step.title === 'Kiểm tra gán creative trước khi lưu',
+  )
+  assert.ok(analysisReadStep)
+  assert.ok(analysisResultStep)
+  assert.ok(assignmentReviewStep)
+  assert.match(analysisReadStep.text, /bấm \*\*Tiếp theo\*\*/)
+  assert.match(analysisResultStep.text, /Gán creative/)
+  assert.match(assignmentReviewStep.text, /chưa lưu/)
+  assert.ok(live.some(
+    step => step.type === 'WAIT_FOR_AUTOPILOT_TASK'
+      && step.taskKeys.includes('assign_creatives')
+      && step.allowHandledTask,
+  ))
+  assert.match(topBar, /tour-attention-button/)
+  assert.match(styles, /@keyframes tour-attention-flash/)
+})
+
 test('mobile tour guidance uses target-aware docking with manual move and collapse controls', () => {
   assert.match(overlay, /data-demo="mobile-guide-box"/)
   assert.match(overlay, /data-mobile-dock=\{resolvedDock\}/)

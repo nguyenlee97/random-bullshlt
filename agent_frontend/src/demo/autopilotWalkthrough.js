@@ -426,6 +426,15 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
         text: 'Nếu có file cần người xem lại, walkthrough sẽ mở nhánh duyệt thủ công. Nếu tất cả đều đạt, nó vẫn dừng ở phần kết quả trước khi sang gán creative.',
       },
       {
+        type: 'TOOLTIP',
+        target: '[data-demo="autopilot-creative-analysis-start"]',
+        whenAutopilotTask: 'analyze_creatives',
+        whenSelector: '[data-demo="autopilot-creative-analysis-start"]',
+        position: 'top',
+        title: 'Phân tích creative trước khi gán',
+        text: 'Creative đã được tạo nhưng chưa được phép đi tiếp ngay. Bước kế tiếp sẽ chạy Creative Intelligence cho từng ảnh. Hãy bấm **Tiếp theo** sau khi bạn đã đọc và sẵn sàng bắt đầu phân tích.',
+      },
+      {
         type: 'CLICK_EL',
         target: '[data-demo="autopilot-creative-analysis-start"]',
         whenAutopilotTask: 'analyze_creatives',
@@ -519,8 +528,16 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
       },
     ]),
     {
+      type: 'TOOLTIP',
+      target: '[data-demo="autopilot-creative-plan"]',
+      position: 'top',
+      title: 'Phân tích creative đã hoàn tất',
+      text: 'Mỗi creative đã có verdict cuối cùng hoặc phê duyệt thủ công hợp lệ. Hãy dành thời gian xem lại format, kích thước và số placement mà từng asset có thể phủ; walkthrough chỉ chuyển sang **Gán creative** khi bạn bấm **Tiếp theo**.',
+    },
+    {
       type: 'WAIT_FOR_AUTOPILOT_TASK',
       taskKeys: ['assign_creatives'],
+      allowHandledTask: true,
       timeout: 240000,
       title: 'Đang chờ checkpoint Gán creative',
       text: 'Agent đang giữ lại placement tương thích và chuẩn bị phân bổ các ảnh đã duyệt.',
@@ -572,6 +589,13 @@ export function buildAutopilotLiveSteps(brief, options = {}) {
       timeout: 30000,
       title: 'Đang kiểm tra assignment',
       text: 'Mỗi placement phải có một creative đã được duyệt trước khi lưu.',
+    },
+    {
+      type: 'TOOLTIP',
+      target: '[data-demo="autopilot-editor-save"][data-autopilot-editor-artifact="assignments"]',
+      position: 'top',
+      title: 'Kiểm tra gán creative trước khi lưu',
+      text: 'Đề xuất đã được điền nhưng chưa lưu. Hãy đọc từng hàng để biết placement nào dùng creative nào. Khi bạn bấm **Tiếp theo**, walkthrough mới ghi phân bổ này vào campaign.',
     },
     {
       type: 'CLICK_EL',
