@@ -63,6 +63,33 @@ def test_validator_merges_partial_brief_without_dropping_existing_fields():
     )
 
 
+@pytest.mark.parametrize(
+    ("field", "raw", "expected"),
+    [
+        ("brief.startDate", "29/07/2026", "2026-07-29"),
+        (
+            "brief.endDate",
+            "ng\u00e0y 5 th\u00e1ng 8 n\u0103m 2026",
+            "2026-08-05",
+        ),
+    ],
+)
+def test_validator_normalizes_localized_brief_date_edits(field, raw, expected):
+    current = {
+        "brand": "A",
+        "objective": "awareness",
+        "budget": 10,
+        "startDate": "2026-07-29",
+        "endDate": "2026-08-05",
+    }
+    command = validate_workspace_intent(
+        _change(field=field, value=raw),
+        current,
+    )
+    assert command[0] == field
+    assert command[1] == expected
+
+
 def test_validator_rejects_invalid_or_hallucinated_values():
     with pytest.raises(InvalidWorkspaceIntent):
         validate_workspace_intent(

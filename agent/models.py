@@ -4,7 +4,9 @@ Matches agentApi.js frontend payload exactly.
 """
 from __future__ import annotations
 from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from brief_dates import normalize_brief_date
 
 
 # ── Inbound: form data sub-models ────────────────────────────────────────────
@@ -15,9 +17,14 @@ class BriefData(BaseModel):
     objective: str = Field(default="awareness", max_length=32)
     kpi: str = Field(default="", max_length=500)
     budget: float = Field(default=0, ge=0, le=5000)  # triệu VND
-    startDate: str = Field(default="", max_length=32)
-    endDate: str = Field(default="", max_length=32)
+    startDate: str = Field(default="", max_length=64)
+    endDate: str = Field(default="", max_length=64)
     notes: str = Field(default="", max_length=12000)
+
+    @field_validator("startDate", "endDate", mode="before")
+    @classmethod
+    def normalize_campaign_dates(cls, value):
+        return normalize_brief_date(value)
 
 
 class CreativeFile(BaseModel):

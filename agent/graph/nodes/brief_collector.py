@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_valid
 
 from agent_logger import alog
 from autopilot.capabilities import validate_brief_value
+from brief_dates import normalize_brief_date
 from graph.state import AgentState
 from graph.structured import StructuredOutputError, structured
 from handlers.freeform import _WORKSPACE_SUGGESTIONS, _build_update_summary
@@ -59,8 +60,16 @@ class BriefDraft(BaseModel):
         le=5000,
         description="Campaign budget in millions of VND; 2 means 2,000,000 VND",
     )
-    startDate: str = Field(min_length=10, max_length=10)
-    endDate: str = Field(min_length=10, max_length=10)
+    startDate: str = Field(
+        min_length=10,
+        max_length=64,
+        description="Campaign start date. Canonical output is YYYY-MM-DD.",
+    )
+    endDate: str = Field(
+        min_length=10,
+        max_length=64,
+        description="Campaign end date. Canonical output is YYYY-MM-DD.",
+    )
     notes: str = Field(default="", max_length=12000)
 
     model_config = {"extra": "forbid"}
@@ -83,6 +92,11 @@ class BriefDraft(BaseModel):
         if amount >= 100_000:
             amount /= 1_000_000
         return amount
+
+    @field_validator("startDate", "endDate", mode="before")
+    @classmethod
+    def normalize_campaign_dates(cls, value):
+        return normalize_brief_date(value)
 
 
 MissingBriefField = Literal[

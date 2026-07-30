@@ -75,6 +75,54 @@ def test_yearless_dates_are_rolled_forward_from_stale_model_year():
     assert repaired["endDate"] == "2026-07-17"
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("2026-07-29", "2026-07-29"),
+        ("2026-07-29T08:30:00+07:00", "2026-07-29"),
+        ("29/07/2026", "2026-07-29"),
+        ("29-7-2026", "2026-07-29"),
+        ("29.07.2026", "2026-07-29"),
+        (
+            "ng\u00e0y 29 th\u00e1ng 7 n\u0103m 2026",
+            "2026-07-29",
+        ),
+        ("2026/7/29", "2026-07-29"),
+        ("July 29, 2026", "2026-07-29"),
+    ],
+)
+def test_brief_draft_normalizes_common_date_formats(raw, expected):
+    value = BriefDraft(
+        **{
+            **MIXIFOOD_DRAFT.model_dump(),
+            "startDate": raw,
+            "endDate": raw,
+        }
+    )
+    assert value.startDate == expected
+    assert value.endDate == expected
+
+
+def test_brief_draft_does_not_guess_an_invalid_calendar_date():
+    value = BriefDraft(
+        **{
+            **MIXIFOOD_DRAFT.model_dump(),
+            "startDate": "31/02/2026",
+        }
+    )
+    assert value.startDate == "31/02/2026"
+
+
+def test_brief_draft_does_not_accept_an_iso_looking_prefix():
+    value = BriefDraft(
+        **{
+            **MIXIFOOD_DRAFT.model_dump(),
+            "startDate": "2026-07-29garbage",
+        }
+    )
+    assert value.startDate == "2026-07-29garbage"
+
+
 def test_minimax_nested_json_string_is_coerced_then_strictly_validated():
     turn = BriefTurn.model_validate({
         "action": "propose_brief",

@@ -329,8 +329,10 @@ async def test_complete_zplay_intake_recovers_provider_working_draft_without_rep
                 "objective": "awareness",
                 "kpi": "Reach, VTR",
                 "budget": 200,
-                "startDate": "2026-07-28",
-                "endDate": "2026-08-04",
+                # Regression: the provider sometimes preserves the localized
+                # walkthrough dates even though canonical state requires ISO.
+                "startDate": "28/07/2026",
+                "endDate": "04/08/2026",
                 "notes": (
                     "Sản phẩm: Nền tảng game và giải đấu esports. "
                     "Đối tượng: Nam 15–28 tuổi, quan tâm gaming, esports và game online. "

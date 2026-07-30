@@ -17,6 +17,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from brief_dates import normalize_brief_date
 from config import config
 from graph.structured import StructuredOutputError, structured
 from tools.audience_library import get_all_segments, search_audience
@@ -263,9 +264,10 @@ def _budget(value: Any) -> int | float:
 
 
 def _iso_date(value: Any, field: str) -> str:
-    text = _text(value, field, limit=10)
+    text = _text(value, field, limit=64)
+    normalized = normalize_brief_date(text)
     try:
-        return date.fromisoformat(text).isoformat()
+        return date.fromisoformat(normalized).isoformat()
     except ValueError as exc:
         raise InvalidWorkspaceIntent(f"{field} phải theo định dạng YYYY-MM-DD") from exc
 
