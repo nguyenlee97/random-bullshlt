@@ -11,19 +11,35 @@ from collections.abc import Iterable
 
 
 CATEGORY_MASTHEAD_FAMILY = "category_masthead"
+CATEGORY_BACKGROUND_FAMILY = "category_background"
+
+
+def _publisher_key(zone: dict) -> str:
+    publisher = str(zone.get("publisher") or zone.get("siteId") or "").lower()
+    zone_id = str(zone.get("id") or "").lower()
+    if "znews" in publisher or zone_id.startswith("znews_"):
+        return "znews"
+    if "baomoi" in publisher or zone_id.startswith("baomoi_"):
+        return "baomoi"
+    return publisher
 
 
 def is_openai_recommendable_zone(zone: dict) -> bool:
     """Return whether a catalog row can enter an OpenAI placement flow.
 
-    The family check intentionally protects deployments still serving the
-    previous np6-2026-03 catalog, where category mastheads are marked active.
-    ZNews hides them in its default skin mode and BaoMoi clears them whenever
-    category background inventory is live.
+    The publisher/family checks protect mixed-version deployments as well as
+    the canonical lifecycle state. ZNews category pages use masthead hero
+    inventory, while BaoMoi category pages retain their background hero.
     """
     if str(zone.get("lifecycleStatus") or "active").lower() != "active":
         return False
-    return zone.get("placementFamily") != CATEGORY_MASTHEAD_FAMILY
+    publisher = _publisher_key(zone)
+    family = zone.get("placementFamily")
+    if publisher == "znews" and family == CATEGORY_BACKGROUND_FAMILY:
+        return False
+    if publisher == "baomoi" and family == CATEGORY_MASTHEAD_FAMILY:
+        return False
+    return True
 
 
 def filter_openai_recommendable_zones(zones: Iterable[dict]) -> list[dict]:

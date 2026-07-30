@@ -10,8 +10,24 @@ const AD_ZONES = {
     inline: 'ZingNews_Masthead_Inline_1'
 };
 
+function isRetiredCategoryBackground(zoneId) {
+    return /^Znews_[A-Za-z]+_Background$/.test(zoneId || '');
+}
+
+function removeRetiredCategoryBackgrounds() {
+    let removed = false;
+    document.querySelectorAll('[data-zone$="_Background"]').forEach(container => {
+        if (isRetiredCategoryBackground(container.getAttribute('data-zone'))) {
+            container.remove();
+            removed = true;
+        }
+    });
+    if (removed) document.body.style.backgroundImage = 'none';
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     console.log("[AdAgent] Page loaded. Initializing ad slots and media lazy-loading...");
+    removeRetiredCategoryBackgrounds();
     
     // Load top banner and sidebar ads immediately
     initAdSlot(AD_ZONES.masthead);
@@ -372,25 +388,29 @@ function populateScheduleWidget() {
 // Detects the current category page and injects the correct ad zone elements.
 (function injectCategoryAdZones() {
     const PAGE_ZONES = {
-        'the-thao':   'TheThao',
-        'kinh-doanh': 'KinhDoanh',
-        'cong-nghe':  'CongNghe',
-        'giai-tri':   'GiaiTri',
-        'doi-song':   'DoiSong',
-        'suc-khoe':   'SucKhoe',
+        'the-thao':   { legacy: 'TheThao', masthead: 'SportsOutdoors' },
+        'kinh-doanh': { legacy: 'KinhDoanh', masthead: 'BusinessFinance' },
+        'cong-nghe':  { legacy: 'CongNghe', masthead: 'TechnologyScience' },
+        'giai-tri':   { legacy: 'GiaiTri', masthead: 'EntertainmentCulture' },
+        'doi-song':   { legacy: 'DoiSong', masthead: 'LifestyleFoodShopping' },
+        'suc-khoe':   { legacy: 'SucKhoe', masthead: 'HealthWellness' },
     };
 
     function inject() {
         // Detect which category we're on from the URL pathname
         const path = window.location.pathname;
-        let prefix = null;
-        for (const [slug, p] of Object.entries(PAGE_ZONES)) {
-            if (path.includes(slug)) { prefix = p; break; }
+        let zoneCodes = null;
+        for (const [slug, codes] of Object.entries(PAGE_ZONES)) {
+            if (path.includes(slug)) { zoneCodes = codes; break; }
         }
-        if (!prefix) return;  // Not a category page — skip
+        if (!zoneCodes) return;
+        const prefix = zoneCodes.legacy;
+        const mastheadCode = zoneCodes.masthead;
 
         // Already injected guard
-        if (document.getElementById(`Znews_${prefix}_Background`)) return;
+        if (document.body.dataset.np6CategoryZones === prefix) return;
+        document.body.dataset.np6CategoryZones = prefix;
+        removeRetiredCategoryBackgrounds();
 
         // Helper: if HTML already has a [data-zone] element, assign our ID to it.
         function tagExisting(zoneSuffix) {
@@ -399,13 +419,17 @@ function populateScheduleWidget() {
             return false;
         }
 
-        // ── Background ────────────────────────────────────────────────────────
-        if (!tagExisting('Background')) {
-            const bg = document.createElement('div');
-            bg.id = `Znews_${prefix}_Background`;
-            bg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:0;'
-                             + 'pointer-events:none;z-index:-999;';
-            document.body.appendChild(bg);
+        // ── Category masthead ─────────────────────────────────────────────────
+        const mastheadZoneId = `Znews_${mastheadCode}_Masthead`;
+        if (!document.querySelector(`[data-zone="${mastheadZoneId}"]`)) {
+            const masthead = document.createElement('div');
+            masthead.id = mastheadZoneId;
+            masthead.className = 'ad-container np6-topic-masthead';
+            masthead.dataset.zone = mastheadZoneId;
+            masthead.setAttribute('aria-label', 'Top banner ad');
+            const page = document.querySelector('.center-wrapper');
+            document.body.insertBefore(masthead, page || document.body.firstChild);
+            initAdSlot(mastheadZoneId, masthead);
         }
 
         // ── Sticky side panels ────────────────────────────────────────────────

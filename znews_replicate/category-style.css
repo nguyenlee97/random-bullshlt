@@ -503,8 +503,7 @@ body[data-admode="masthead"] .np6-topic-masthead {
     display: block !important;
 }
 body[data-admode="masthead"] > .ad-skin,
-body[data-admode="masthead"] > .ad-side-left,
-body[data-admode="masthead"] > .ad-side-right {
+body[data-admode="masthead"] > [data-zone$="_Background"] {
     display: none !important;
 }
 body[data-admode="masthead"] .page-wrapper.category-page {

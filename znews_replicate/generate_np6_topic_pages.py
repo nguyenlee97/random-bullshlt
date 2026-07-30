@@ -308,11 +308,20 @@ def build_page(topic: dict) -> str:
     _, footer_tail = remainder.split('<footer id="footer">', 1)
     footer = '<footer id="footer">' + footer_tail
 
-    match = re.search(r'Znews_([A-Za-z]+)_Background', prefix)
-    if not match:
+    source_codes = set(re.findall(
+        r'Znews_([A-Za-z]+)_(?:Masthead|Background|SideLeft|SideRight)',
+        prefix,
+    ))
+    if not source_codes:
         raise RuntimeError(f"Cannot find source zone prefix in {topic['base']}")
-    source_code = match.group(1)
-    prefix = prefix.replace(f"Znews_{source_code}_", f"Znews_{topic['code']}_")
+    for source_code in source_codes:
+        prefix = prefix.replace(f"Znews_{source_code}_", f"Znews_{topic['code']}_")
+    prefix = re.sub(
+        r'<div(?=[^>]*data-zone="Znews_[A-Za-z]+_Background")[^>]*>\s*</div>\s*',
+        "",
+        prefix,
+        count=1,
+    )
     prefix = re.sub(
         r'<script[^>]+src="[^"]*zplayer-autoplay-countdown-plugin[^"]*"[^>]*>\s*</script>',
         "",
@@ -344,7 +353,7 @@ def build_page(topic: dict) -> str:
     )
     prefix = re.sub(
         r'href="category-style\.css(?:\?[^"]*)?"',
-        'href="category-style.css?v=np6-2026-02-menu-1"',
+        'href="category-style.css?v=np6-2026-05-1"',
         prefix,
     )
     masthead = f"""
@@ -365,17 +374,17 @@ def build_page(topic: dict) -> str:
     )
     footer = re.sub(
         r'src="api\.js(?:\?[^"]*)?"',
-        'src="api.js?v=np6-2026-02-4"',
+        'src="api.js?v=np6-2026-05-1"',
         footer,
     )
     footer = re.sub(
         r'src="app\.js(?:\?[^"]*)?"',
-        'src="app.js?v=np6-2026-02-4"',
+        'src="app.js?v=np6-2026-05-1"',
         footer,
     )
     footer = footer.replace(
         "</body>",
-        '<script src="np6-topic-page.js?v=np6-2026-02-menu-2"></script>\n</body>',
+        '<script src="np6-topic-page.js?v=np6-2026-05-1"></script>\n</body>',
         1,
     )
     return prefix + build_content(topic) + footer

@@ -110,17 +110,17 @@
 
   const params = new URLSearchParams(location.search);
   const evidence = params.get('evidence') === '1';
-  const adMode = params.get('admode') === 'masthead' ? 'masthead' : 'skin';
+  const adMode = 'masthead';
 
   document.body.dataset.admode = adMode;
   if (!evidence) return;
   document.body.classList.add('np6-evidence-mode');
 
-  const background = document.querySelector('[data-zone$="_Background"]');
-  if (background) {
+  const masthead = document.querySelector('[data-zone$="_Masthead"].np6-topic-masthead');
+  if (masthead) {
     const badge = document.createElement('span');
     badge.className = 'np6-background-evidence';
-    badge.textContent = background.dataset.zone;
+    badge.textContent = masthead.dataset.zone;
     document.body.appendChild(badge);
   }
 })();

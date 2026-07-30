@@ -32,11 +32,11 @@ test('NP-6 v2 retains 35 legacy plus 214 category and 9 property placements', as
   assert.equal(catalog.placements.length, 258);
   assert.equal(catalog.placements.length - legacy.placements.length, 223);
   assert.equal(new Set(catalog.placements.map((placement) => placement.id)).size, 258);
-  assert.equal(catalog.catalogVersion, 'np6-2026-04');
-  assert.equal(catalog.topicTaxonomy.length, 25);
+  assert.equal(catalog.catalogVersion, 'np6-2026-05');
+  assert.equal(catalog.topicTaxonomy.length, 26);
   assert.equal(
     catalog.topicTaxonomy.filter((topic) => topic.lifecycleStatus === 'active').length,
-    23,
+    24,
   );
 });
 
@@ -44,7 +44,7 @@ test('all NP-6 placements have durable context, contracts, and honest lifecycle 
   const catalog = buildZonesCatalog(await workbookRows());
   const contractIds = new Set(catalog.creativeContracts.map((contract) => contract.id));
   const additions = catalog.placements.filter(
-    (placement) => placement.catalogVersion === 'np6-2026-04',
+    (placement) => placement.catalogVersion === 'np6-2026-05',
   );
 
   assert.equal(additions.length, 223);
@@ -54,13 +54,16 @@ test('all NP-6 placements have durable context, contracts, and honest lifecycle 
     assert.ok(contractIds.has(placement.creativeContractId), placement.id);
     assert.equal(placement.audienceContext.primaryTopics[0], placement.topicId);
     assert.equal(placement.metricSource, 'synthetic_inventory_v3');
-    if (placement.placementFamily === 'category_masthead') {
+    const retiredHero = (
+      (placement.publisher === 'ZNews'
+        && placement.placementFamily === 'category_background')
+      || (placement.publisher === 'BaoMoi'
+        && placement.placementFamily === 'category_masthead')
+    );
+    if (retiredHero) {
       assert.equal(placement.lifecycleStatus, 'retired');
       assert.equal(placement.provenance.commercialStatus, 'unavailable');
-      assert.equal(
-        placement.provenance.retirementReason,
-        'category_page_skin_mode_hides_masthead',
-      );
+      assert.ok(placement.provenance.retirementReason);
     } else {
       assert.equal(placement.lifecycleStatus, 'active');
     }
@@ -78,13 +81,18 @@ test('all active placements have audience metadata, including the 35 legacy IDs'
     assert.ok(placement.topicId, placement.id);
     assert.ok(placement.audienceContext, placement.id);
     assert.ok(placement.audienceContext.primaryTopics.length > 0, placement.id);
-    assert.ok(placement.audienceContext.contextScope || placement.catalogVersion === 'np6-2026-04');
+    assert.ok(placement.audienceContext.contextScope || placement.catalogVersion === 'np6-2026-05');
   }
 
   const broadHomepage = active.find((placement) => placement.id === 'ZingNews_Masthead');
-  assert.equal(broadHomepage.topicId, 'society_news_law');
-  assert.equal(broadHomepage.audienceContext.contextScope, 'broad_news_homepage');
-  assert.equal(broadHomepage.audienceContext.confidence, 0.55);
+  assert.equal(broadHomepage.topicId, 'general');
+  assert.equal(broadHomepage.audienceContext.contextScope, 'general_homepage');
+  assert.equal(broadHomepage.audienceContext.universalRelevance, true);
+
+  const baomoiHomepage = active.find((placement) => placement.id === 'BaoMoi_Masthead');
+  assert.equal(baomoiHomepage.topicId, 'general');
+  assert.equal(baomoiHomepage.audienceContext.contextScope, 'general_homepage');
+  assert.equal(baomoiHomepage.audienceContext.universalRelevance, true);
 
   const musicHomepage = active.find((placement) => placement.id === 'ZingMP3_Masthead');
   assert.equal(musicHomepage.topicId, 'music_live_events');
@@ -122,14 +130,13 @@ test('the three observed properties add exactly nine provenance-aware placements
 test('every recommendable topic and family has a cross-publisher comparison pair', async () => {
   const catalog = buildZonesCatalog(await workbookRows());
   const requiredFamilies = [
-    'category_background',
     'category_side_left',
     'category_side_right',
     'category_sidebar',
   ];
 
   for (const topic of catalog.topicTaxonomy.filter(
-    (item) => item.lifecycleStatus === 'active'
+    (item) => item.lifecycleStatus === 'active' && item.id !== 'general'
   )) {
     for (const family of requiredFamilies) {
       const groupId = `${topic.id}:${family}`;
@@ -144,16 +151,29 @@ test('every recommendable topic and family has a cross-publisher comparison pair
   }
 });
 
-test('all 46 category mastheads are retained as retired historical inventory', async () => {
+test('ZNews uses category mastheads while BaoMoi keeps category backgrounds', async () => {
   const catalog = buildZonesCatalog(await workbookRows());
   const mastheads = catalog.placements.filter(
     (placement) => placement.placementFamily === 'category_masthead',
   );
+  const backgrounds = catalog.placements.filter(
+    (placement) => placement.placementFamily === 'category_background',
+  );
 
   assert.equal(mastheads.length, 46);
-  assert.ok(mastheads.every((placement) => placement.lifecycleStatus === 'retired'));
-  assert.ok(mastheads.some((placement) => placement.publisher === 'ZNews'));
-  assert.ok(mastheads.some((placement) => placement.publisher === 'BaoMoi'));
+  assert.equal(backgrounds.length, 48);
+  assert.ok(mastheads
+    .filter((placement) => placement.publisher === 'ZNews')
+    .every((placement) => placement.lifecycleStatus === 'active'));
+  assert.ok(mastheads
+    .filter((placement) => placement.publisher === 'BaoMoi')
+    .every((placement) => placement.lifecycleStatus === 'retired'));
+  assert.ok(backgrounds
+    .filter((placement) => placement.publisher === 'ZNews')
+    .every((placement) => placement.lifecycleStatus === 'retired'));
+  assert.ok(backgrounds
+    .filter((placement) => placement.publisher === 'BaoMoi')
+    .every((placement) => placement.lifecycleStatus === 'active'));
 });
 
 test('Zone schema retains NP-6 fields when persisted', async () => {
@@ -164,14 +184,14 @@ test('Zone schema retains NP-6 fields when persisted', async () => {
     (placement) => placement.id === 'Znews_FamilyParenting_Masthead',
   );
 
-  assert.equal(persisted.catalogVersion, 'np6-2026-04');
-  assert.equal(persisted.topicTaxonomy.length, 25);
+  assert.equal(persisted.catalogVersion, 'np6-2026-05');
+  assert.equal(persisted.topicTaxonomy.length, 26);
   assert.equal(sample.topicId, 'family_parenting');
   assert.equal(sample.renderer.templateId, 'znews-static-category-v3');
   assert.equal(sample.audienceContext.taxonomyVersion, 'placement-topics-v2');
   assert.equal(sample.siteUrl, 'https://znews-stg.pawgrammers.io.vn/gia-dinh.html');
   assert.equal(sample.creativeContractId, 'znews-category-masthead-v1');
-  assert.equal(sample.lifecycleStatus, 'retired');
+  assert.equal(sample.lifecycleStatus, 'active');
 });
 
 test('Campaign schema retains the placement catalog snapshot', () => {

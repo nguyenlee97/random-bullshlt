@@ -25,7 +25,7 @@ test('BaoMoi reusable renderer covers the exact 23-topic active taxonomy', () =>
   }
 });
 
-test('each active ZNews topic uses a static category route with five exact zones', () => {
+test('each active ZNews topic uses a static category route with four exact zones', () => {
   const legacyCodes = {
     business_finance: 'KinhDoanh',
     health_wellness: 'SucKhoe',
@@ -37,7 +37,6 @@ test('each active ZNews topic uses a static category route with five exact zones
     const html = read('znews_replicate', topic.znewsPath.slice(1));
     for (const suffix of [
       'Masthead',
-      'Background',
       'SideLeft',
       'SideRight',
       'SidebarBox',
@@ -48,8 +47,20 @@ test('each active ZNews topic uses a static category route with five exact zones
       const id = `Znews_${code}_${suffix}`;
       assert.match(html, new RegExp(`data-zone="${id}"`), `${topic.id} missing ${id}`);
     }
+    assert.doesNotMatch(html, /data-zone="Znews_[A-Za-z]+_Background"/);
     assert.match(html, /np6-topic-page\.js/);
     assert.match(html, /api\.js/);
+  }
+});
+
+test('no retained ZNews category route exposes a background mount', () => {
+  for (const topic of TOPICS) {
+    const html = read('znews_replicate', topic.znewsPath.slice(1));
+    assert.doesNotMatch(
+      html,
+      /data-zone="Znews_[A-Za-z]+_Background"/,
+      `${topic.id} still exposes a category background`,
+    );
   }
 });
 

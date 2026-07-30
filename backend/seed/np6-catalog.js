@@ -1,4 +1,4 @@
-const NP6_CATALOG_VERSION = 'np6-2026-04';
+const NP6_CATALOG_VERSION = 'np6-2026-05';
 const NP6_TAXONOMY_VERSION = 'placement-topics-v2';
 
 const BASE_TOPICS = [
@@ -379,6 +379,22 @@ const TOPICS = [
     lifecycleStatus: 'active',
   })),
 ];
+
+const GENERAL_TOPIC = {
+  id: 'general',
+  code: 'General',
+  slug: 'general',
+  label: 'General',
+  labelVi: 'Tổng hợp',
+  keywordsVi: [],
+  keywordsEn: [],
+  dmpCategories: [],
+  secondaryTopics: [],
+  lifecycleStatus: 'active',
+  universalRelevance: true,
+};
+
+const TOPIC_TAXONOMY = [GENERAL_TOPIC, ...TOPICS];
 
 const CREATIVE_CONTRACTS = [
   {
@@ -810,6 +826,7 @@ function topicAudienceContext(topic) {
     intentSignals: [],
     exclusions: topic.exclusions || [],
     confidence: 0.9,
+    universalRelevance: topic.universalRelevance === true,
   };
 }
 
@@ -877,7 +894,16 @@ function makePlacement({ publisher, topic, family, channel, channelReach, siteUr
   }[family];
   const id = `${prefix}_${topic.code}_${suffix}`;
   const spec = familySpec(family);
-  const isRetiredCategoryMasthead = family === 'category_masthead';
+  const isRetiredCategoryBackground = (
+    publisher === 'ZNews' && family === 'category_background'
+  );
+  const isRetiredCategoryMasthead = (
+    publisher === 'BaoMoi' && family === 'category_masthead'
+  );
+  const isRetired = isRetiredCategoryBackground || isRetiredCategoryMasthead;
+  const retirementReason = isRetiredCategoryBackground
+    ? 'znews_category_masthead_replaces_background'
+    : (isRetiredCategoryMasthead ? 'baomoi_category_background_conflict' : null);
   const size = family === 'category_masthead'
     ? (publisher === 'ZNews' ? '1160x250' : '1160x280')
     : spec.size;
@@ -897,8 +923,8 @@ function makePlacement({ publisher, topic, family, channel, channelReach, siteUr
     device: ['desktop'],
     creativeContractId: contractFor(publisher, family),
     catalogVersion: NP6_CATALOG_VERSION,
-    recordRevision: isRetiredCategoryMasthead ? 2 : 1,
-    lifecycleStatus: isRetiredCategoryMasthead ? 'retired' : 'active',
+    recordRevision: isRetired ? 3 : 1,
+    lifecycleStatus: isRetired ? 'retired' : 'active',
     testSiteZone: id,
     siteUrl,
     renderer: {
@@ -911,19 +937,17 @@ function makePlacement({ publisher, topic, family, channel, channelReach, siteUr
     provenance: {
       classification: 'demo_fixture',
       sourceType: 'live_layout_observation_plus_synthetic_fixture',
-      commercialStatus: isRetiredCategoryMasthead
+      commercialStatus: isRetired
         ? 'unavailable'
         : 'recommendable',
-      retirementReason: isRetiredCategoryMasthead
-        ? 'category_page_skin_mode_hides_masthead'
-        : null,
-      evidenceIds: isRetiredCategoryMasthead
+      retirementReason,
+      evidenceIds: isRetired
         ? [
             'np6-category-census-2026-07-25',
-            'category-masthead-visibility-audit-2026-07-29',
+            'category-hero-conflict-policy-2026-07-30',
           ]
         : ['np6-category-census-2026-07-25'],
-      verifiedAt: isRetiredCategoryMasthead ? '2026-07-29' : '2026-07-25',
+      verifiedAt: isRetired ? '2026-07-30' : '2026-07-25',
     },
     ...deriveNp6Metrics(publisher, family, channelReach),
   };
@@ -1109,8 +1133,8 @@ function legacyTopic(placement) {
   }
   if (placement.siteId === 'znews' || placement.siteId === 'baomoi') {
     return {
-      topic: TOPICS.find((item) => item.id === 'society_news_law'),
-      scope: 'broad_news_homepage',
+      topic: GENERAL_TOPIC,
+      scope: 'general_homepage',
     };
   }
   return { topic: null, scope: 'unclassified' };
@@ -1130,10 +1154,12 @@ function enrichLegacyPlacements(placements) {
     const audienceContext = topic ? topicAudienceContext(topic) : null;
     if (audienceContext) {
       audienceContext.contextScope = scope;
-      // A broad news homepage is valid fallback inventory, but its inferred
-      // topic affinity must stay weaker than an explicit category page.
-      if (scope === 'broad_news_homepage') audienceContext.confidence = 0.55;
     }
+    const isRetiredZnewsBackground = (
+      publisher === 'ZNews'
+      && scope === 'category'
+      && family === 'category_background'
+    );
     return {
       ...placement,
       publisher,
@@ -1144,19 +1170,29 @@ function enrichLegacyPlacements(placements) {
       device: ['desktop'],
       creativeContractId: legacyContract(placement, family),
       catalogVersion: 'legacy-35',
-      recordRevision: scope === 'category' ? 1 : 2,
-      lifecycleStatus: topic?.lifecycleStatus === 'retired' ? 'retired' : 'active',
+      recordRevision: isRetiredZnewsBackground ? 3 : (scope === 'category' ? 1 : 2),
+      lifecycleStatus: (
+        isRetiredZnewsBackground || topic?.lifecycleStatus === 'retired'
+      ) ? 'retired' : 'active',
       flexible: Boolean(placement.flexible),
       audienceContext,
       provenance: {
         classification: 'demo_fixture',
+        commercialStatus: isRetiredZnewsBackground ? 'unavailable' : 'recommendable',
+        retirementReason: isRetiredZnewsBackground
+          ? 'znews_category_masthead_replaces_background'
+          : null,
         sourceType: scope === 'category'
           ? 'legacy_forced_mapping'
           : 'legacy_contextual_enrichment',
-        evidenceIds: scope === 'category'
-          ? []
+        evidenceIds: isRetiredZnewsBackground
+          ? ['category-hero-conflict-policy-2026-07-30']
+          : scope === 'category'
+            ? []
           : ['np6-legacy-metadata-audit-2026-07-26'],
-        verifiedAt: scope === 'category' ? null : '2026-07-26',
+        verifiedAt: isRetiredZnewsBackground
+          ? '2026-07-30'
+          : (scope === 'category' ? null : '2026-07-26'),
       },
     };
   });
@@ -1209,12 +1245,12 @@ function applyNp6Catalog(baseCatalog, options = {}) {
     catalogVersion: NP6_CATALOG_VERSION,
     taxonomyVersion: NP6_TAXONOMY_VERSION,
     revision: 1,
-    previousVersion: 'np6-2026-03',
+    previousVersion: 'np6-2026-04',
     groups: extendGroups(baseCatalog.groups),
     channels,
     placements: [...legacy, ...additions],
     creativeContracts: CREATIVE_CONTRACTS,
-    topicTaxonomy: TOPICS,
+    topicTaxonomy: TOPIC_TAXONOMY,
   };
 }
 
@@ -1222,6 +1258,8 @@ module.exports = {
   NP6_CATALOG_VERSION,
   NP6_TAXONOMY_VERSION,
   TOPICS,
+  GENERAL_TOPIC,
+  TOPIC_TAXONOMY,
   CREATIVE_CONTRACTS,
   EXISTING_TOPIC_IDS,
   FAMILY_PROFILES,

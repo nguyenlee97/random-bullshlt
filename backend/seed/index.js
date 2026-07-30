@@ -10,9 +10,9 @@
  *   - Audio/video formats converted to banner/skin.
  *   - Legacy baseline: 35 placements (23 mock-mapped + 12 real-only)
  *   - NP-6 v2 retains 214 topic placements plus 9 observed property
- *     placements without changing legacy IDs (258 total). Category mastheads
- *     are retained as retired historical inventory because normal category
- *     page rendering uses the mutually exclusive skin/background layout.
+ *     placements without changing legacy IDs (258 total). ZNews category pages
+ *     use mastheads and retire backgrounds; BaoMoi retains the inverse hero
+ *     policy so conflicting hero formats never enter one recommendation set.
  *
  * Usage:
  *   node seed/index.js              — skip collections that already have data

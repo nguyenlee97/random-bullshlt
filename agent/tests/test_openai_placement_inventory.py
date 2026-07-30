@@ -19,10 +19,15 @@ def _zone(
         "id": zone_id,
         "placementFamily": family,
         "lifecycleStatus": lifecycle,
+        "siteId": (
+            "znews" if zone_id.startswith("Znews_")
+            else "baomoi" if zone_id.startswith("BaoMoi_")
+            else None
+        ),
     }
 
 
-def test_openai_inventory_excludes_category_mastheads_even_on_old_catalog():
+def test_openai_inventory_uses_znews_masthead_not_background_on_old_catalog():
     old_active_masthead = _zone(
         "Znews_FoodDining_Masthead",
         family="category_masthead",
@@ -32,11 +37,25 @@ def test_openai_inventory_excludes_category_mastheads_even_on_old_catalog():
         family="category_background",
     )
 
-    assert not is_openai_recommendable_zone(old_active_masthead)
-    assert is_openai_recommendable_zone(category_background)
+    assert is_openai_recommendable_zone(old_active_masthead)
+    assert not is_openai_recommendable_zone(category_background)
     assert filter_openai_recommendable_zones(
         [old_active_masthead, category_background]
-    ) == [category_background]
+    ) == [old_active_masthead]
+
+
+def test_openai_inventory_uses_baomoi_background_not_masthead():
+    masthead = _zone(
+        "BaoMoi_FoodDining_Masthead",
+        family="category_masthead",
+    )
+    background = _zone(
+        "BaoMoi_FoodDining_Background",
+        family="category_background",
+    )
+
+    assert not is_openai_recommendable_zone(masthead)
+    assert is_openai_recommendable_zone(background)
 
 
 def test_openai_inventory_excludes_any_retired_catalog_row():
@@ -66,14 +85,14 @@ def test_openai_zone_tool_result_recounts_filtered_inventory():
 
 
 @pytest.mark.asyncio
-async def test_openai_autopilot_excludes_masthead_without_changing_legacy(
+async def test_openai_autopilot_excludes_znews_background_without_changing_legacy(
     monkeypatch,
 ):
     ranked = [
         {
             **_zone(
-                "Znews_FoodDining_Masthead",
-                family="category_masthead",
+                "Znews_FoodDining_Background",
+                family="category_background",
             ),
             "topicId": "food_dining",
             "score": 100,
@@ -122,6 +141,6 @@ async def test_openai_autopilot_excludes_masthead_without_changing_legacy(
     ]
     assert openai_result.evidence[0]["retired_inventory_excluded"] == 1
     assert legacy_result.value["candidate_zone_ids"] == [
-        "Znews_FoodDining_Masthead",
+        "Znews_FoodDining_Background",
         "Znews_FoodDining_SidebarBox",
     ]

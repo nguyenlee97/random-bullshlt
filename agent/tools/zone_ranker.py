@@ -155,6 +155,8 @@ def _relevance_score(zone: dict) -> float:
 
 
 def _is_context_match(zone: dict) -> bool:
+    if (zone.get("audienceContext") or {}).get("universalRelevance") is True:
+        return True
     retrieval = zone.get("placement_retrieval") or {}
     lexical = float((zone.get("topic_relevance") or {}).get("score") or 0)
     if retrieval.get("applied") is True:

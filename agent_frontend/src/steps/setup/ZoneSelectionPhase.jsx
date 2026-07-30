@@ -166,6 +166,7 @@ function ZoneCard({ zone, selected, onToggle, isReco, isRelated = false, budgetP
 }
 
 const TOPIC_LABELS = {
+  general: 'Tổng hợp (Trang chủ)',
   business_finance: 'Kinh doanh & Tài chính',
   health_wellness: 'Sức khỏe & Wellness',
   sports_outdoors: 'Thể thao & Ngoài trời',

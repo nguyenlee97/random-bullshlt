@@ -109,6 +109,18 @@ def score_placement_relevance(zone: dict, context: dict | None) -> dict:
             "signal": "no_topic_signal",
         }
 
+    if audience_context.get("universalRelevance") is True:
+        confidence = float(audience_context.get("confidence") or 1)
+        return {
+            "score": round(0.18 * confidence, 4),
+            "matched_keywords": [],
+            "matched_categories": [],
+            "matched_subcategories": [],
+            "matched_segments": [],
+            "matched_topics": ["general"],
+            "signal": "universal_homepage",
+        }
+
     # DMP category names are scored only against explicit category affinities.
     # Keeping them out of keyword/topic matching prevents broad labels such as
     # "Business and industry" from overpowering a specific education brief.

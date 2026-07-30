@@ -75,6 +75,21 @@ def test_missing_campaign_context_is_neutral_not_invented():
     assert result["signal"] == "no_topic_signal"
 
 
+def test_general_homepage_is_related_to_every_nonempty_campaign_context():
+    context = build_placement_context(
+        {"brand": "Auto Nova", "notes": "Ra mắt mẫu xe điện đô thị"},
+        {"attrs": [{"name": "Electric vehicle shoppers"}]},
+    )
+    general = _zone("general", [], [])
+    general["audienceContext"]["universalRelevance"] = True
+
+    result = score_placement_relevance(general, context)
+
+    assert result["score"] == 0.162
+    assert result["matched_topics"] == ["general"]
+    assert result["signal"] == "universal_homepage"
+
+
 def test_segment_affinity_separates_gaming_from_movies_in_same_category():
     context = build_placement_context(
         {"brand": "Arena Pass", "notes": "Gói ưu đãi cho người chơi game"},
