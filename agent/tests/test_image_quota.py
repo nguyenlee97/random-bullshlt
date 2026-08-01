@@ -80,3 +80,36 @@ async def test_quota_is_shared_across_sessions_for_same_actor():
     assert (
         await image_quota.status(actor)
     )["remaining"] == image_quota.DAILY_LIMIT - 1
+
+
+@pytest.mark.asyncio
+async def test_generated_gallery_is_owner_and_session_scoped_and_keeps_final_crop():
+    owner = {"user_id": "gallery-owner"}
+    stranger = {"user_id": "gallery-stranger"}
+    await image_quota.reserve(owner, "gallery-job", session_id="conversation-a", metadata={
+        "format_id": "zuma-box", "width": 300, "height": 250,
+    })
+    await image_quota.succeed("gallery-job", {
+        "raw_url": "https://example.test/uploads/raw.png", "width": 300, "height": 250,
+    })
+
+    jobs = await image_quota.list_session_jobs(owner, "conversation-a")
+    assert [job["job_id"] for job in jobs] == ["gallery-job"]
+    assert await image_quota.list_session_jobs(owner, "conversation-b") == []
+    assert await image_quota.list_session_jobs(stranger, "conversation-a") == []
+    assert "actor_key" not in jobs[0]
+    assert (await image_quota.get_session_job(owner, "conversation-a", "gallery-job"))["job_id"] == "gallery-job"
+    with pytest.raises(KeyError):
+        await image_quota.get_session_job(stranger, "conversation-a", "gallery-job")
+
+    finalized = await image_quota.merge_job_result(
+        owner, "conversation-a", "gallery-job",
+        {"final_url": "https://example.test/uploads/final.png"},
+    )
+    assert finalized["result"]["raw_url"].endswith("raw.png")
+    assert finalized["result"]["final_url"].endswith("final.png")
+
+    with pytest.raises(KeyError):
+        await image_quota.merge_job_result(
+            stranger, "conversation-a", "gallery-job", {"final_url": "bad"}
+        )

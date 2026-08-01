@@ -1058,7 +1058,9 @@ export async function prepareCreativeFiles(
     })),
     uploaded: prepared.length > 0,
   }
-  const creativeCommit = await AgentAPI.commitWorkspace('creative', creativeDraft)
+  const creativeCommit = await AgentAPI.commitWorkspace('creative', creativeDraft, {
+    mergeCreativeAdditions: true,
+  })
   if (!creativeCommit?.ok) {
     throw new Error(
       creativeCommit?.conflict
@@ -1717,7 +1719,7 @@ export const AgentAPI = {
    * @param {string} field - e.g. 'brief', 'segment'
    * @param {any} value - The value to persist
    */
-  async commitWorkspace(field, value) {
+  async commitWorkspace(field, value, options = {}) {
     try {
       if (WORKSPACE_REVISION == null) await this.getWorkspace()
       const idempotencyKey = _mutationKey(field, value)
@@ -1739,6 +1741,47 @@ export const AgentAPI = {
       if (res.status === 409) {
         const conflict = data?.detail || data
         WORKSPACE_REVISION = conflict?.actual_revision ?? WORKSPACE_REVISION
+        if (options.mergeCreativeAdditions && field === 'creative' && conflict?.workspace) {
+          const canonical = conflict.workspace?.artifacts?.creative?.value || {}
+          const canonicalFiles = Array.isArray(canonical.files) ? canonical.files : []
+          const requestedFiles = Array.isArray(value?.files) ? value.files : []
+          const identity = file => String(file?.id || file?.url || file?.name || '').trim()
+          const mergedFiles = [...canonicalFiles]
+          const existing = new Set(canonicalFiles.map(identity).filter(Boolean))
+          requestedFiles.forEach(file => {
+            const key = identity(file)
+            if (!key || existing.has(key)) return
+            existing.add(key)
+            mergedFiles.push(file)
+          })
+          const mergedValue = { ...canonical, ...value, files: mergedFiles, uploaded: mergedFiles.length > 0 }
+          const retry = await agentFetch(`${AGENT_URL}/api/agent/commit-workspace`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: SESSION_ID,
+              field,
+              value: mergedValue,
+              base_revision: conflict.actual_revision,
+              idempotency_key: _mutationKey(field, mergedValue),
+              actor: 'campaign_operator',
+              reason: 'guided_workspace_creative_additive_rebase',
+            }),
+            signal: AbortSignal.timeout(5000),
+          })
+          const retryData = await retry.json().catch(() => ({}))
+          if (retry.ok) {
+            WORKSPACE_REVISION = retryData.workspace_revision ?? WORKSPACE_REVISION
+            await this.getWorkspace()
+            return { ...retryData, rebased: true }
+          }
+          const retryConflict = retryData?.detail || retryData
+          WORKSPACE_REVISION = retryConflict?.actual_revision ?? WORKSPACE_REVISION
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('agent:workspace_conflict', { detail: retryConflict }))
+          }
+          return { ok: false, conflict: true, ...retryConflict }
+        }
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('agent:workspace_conflict', { detail: conflict }))
         }
@@ -2228,6 +2271,32 @@ export const AgentAPI = {
     } catch {
       return { remaining: 20, max: 20 }
     }
+  },
+
+  async listGeneratedImages() {
+    try {
+      const res = await agentFetch(
+        `${AGENT_URL}/api/agent/generated-images?session_id=${SESSION_ID}`,
+        { signal: AbortSignal.timeout(10000) }
+      )
+      if (!res.ok) return []
+      const data = await res.json()
+      return data.jobs || []
+    } catch {
+      return []
+    }
+  },
+
+  async finalizeGeneratedImage(jobId, dataUrl) {
+    const res = await agentFetch(`${AGENT_URL}/api/agent/generated-images/finalize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: SESSION_ID, job_id: jobId, data_url: dataUrl }),
+      signal: AbortSignal.timeout(60000),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data?.detail || `HTTP ${res.status}`)
+    return data.job
   },
 
   async listCreativeAssets() {

@@ -494,9 +494,16 @@ body .page-wrapper.category-page {
 .np6-topic-masthead {
     display: none !important;
     width: 1160px;
+    max-width: calc(100vw - 24px);
     height: 250px;
-    margin: 82px auto 0;
+    margin: 82px auto 0 !important;
     position: relative;
+    float: none !important;
+    clear: both;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    box-sizing: border-box;
     z-index: 20;
 }
 body[data-admode="masthead"] .np6-topic-masthead {

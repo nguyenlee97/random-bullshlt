@@ -47,3 +47,12 @@ def test_openai_image_prompt_contains_product_and_selected_audience_context():
     assert "Cửa hàng bán phân bón" in prompt
     assert "Agriculture (industry), Farmers" in prompt
     assert "location: miền Tây" in prompt
+
+
+def test_side_slider_prompt_requires_full_bleed_without_blank_docking_space():
+    for format_id in ("zuma-Left", "zuma-Right"):
+        prompt = _build_prompt(AD_FORMATS[format_id], {"brand": "Demo"})
+        assert "Fill all 465x1200 pixels" in prompt
+        assert "Do not reserve blank, grey, transparent, or docking space" in prompt
+        assert "Leave the left side as plain" not in prompt
+        assert "Leave the right side as plain" not in prompt

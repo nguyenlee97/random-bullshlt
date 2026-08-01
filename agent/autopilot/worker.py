@@ -12,6 +12,7 @@ from autopilot.capabilities import execute
 from autopilot.service import (
     _needs_review,
     _set_run,
+    artifact_invalidation_exclusions,
     claim_next_task,
     complete_task,
     fail_task,
@@ -161,6 +162,9 @@ async def _process(task: dict) -> None:
                     base_artifact_revision=context["artifact_revision"],
                     actor="autopilot_worker",
                     reason=f"Autopilot capability {task['capability']} completed",
+                    affected_exclusions=artifact_invalidation_exclusions(
+                        run, task["artifact"]
+                    ),
                 )
                 pending_artifact = None
         completed = await complete_task(

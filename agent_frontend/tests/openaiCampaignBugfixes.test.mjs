@@ -27,11 +27,11 @@ test('OpenAI image generation carries audience context without changing GreenNod
   assert.match(router, /if use_openai_context:/)
 })
 
-test('OpenAI cropped images become Creative drafts before step navigation', () => {
-  assert.match(
-    generator,
-    /if \(openaiCampaignFlow\) \{[\s\S]*?onAddToCreative\(\[newImg\]\)/,
-  )
+test('OpenAI cropped images remain durable gallery drafts until explicitly selected', () => {
+  assert.match(generator, /AgentAPI\.finalizeGeneratedImage\(pendingCrop\.jobId, croppedDataUrl\)/)
+  assert.match(generator, /AgentAPI\.listGeneratedImages\(\)/)
+  assert.match(generator, /onAddToCreative\(toAdd\)/)
+  assert.doesNotMatch(generator, /onAddToCreative\(\[newImg\]\)/)
   assert.match(creative, /filter\(img => !existing\.some\(f => f\.id === img\.id\)\)/)
   assert.match(creative, /files: \[\.\.\.existing, \.\.\.toAdd\], uploaded: true/)
 })

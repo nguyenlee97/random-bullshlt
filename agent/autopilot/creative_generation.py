@@ -59,7 +59,7 @@ def _assert_current_inputs(
         raise RuntimeError("creative format plan changed while AI creative was being generated")
 
 
-def _fit_png(image_b64: str, width: int, height: int) -> str:
+def _fit_png(image_b64: str, width: int, height: int, format_id: str = "") -> str:
     """Fit a generated image without discarding edge content.
 
     GPT Image output sizes do not always share the placement's aspect ratio.
@@ -72,6 +72,15 @@ def _fit_png(image_b64: str, width: int, height: int) -> str:
     source = base64.b64decode(image_b64)
     with Image.open(BytesIO(source)) as image:
         rgb = ImageOps.exif_transpose(image).convert("RGB")
+        if format_id in {"zuma-Left", "zuma-Right"}:
+            full_bleed = ImageOps.fit(
+                rgb,
+                (width, height),
+                method=Image.Resampling.LANCZOS,
+            )
+            output = BytesIO()
+            full_bleed.save(output, format="PNG", optimize=True)
+            return base64.b64encode(output.getvalue()).decode("ascii")
         background = ImageOps.fit(
             rgb,
             (width, height),
@@ -190,7 +199,15 @@ async def generate_creative(
 
     width = int(generated["width"])
     height = int(generated["height"])
-    png_b64 = _fit_png(generated["imageB64"], width, height)
+    generated_b64 = generated.get("imageB64") or ""
+    if not generated_b64 and generated.get("imageUrl"):
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            recovered = await client.get(generated["imageUrl"])
+            recovered.raise_for_status()
+            generated_b64 = base64.b64encode(recovered.content).decode("ascii")
+    if not generated_b64:
+        raise RuntimeError("AI creative generation returned no recoverable image")
+    png_b64 = _fit_png(generated_b64, width, height, format_id)
     try:
         vlm_verdict, vlm_provenance = await inspect_generated_creative(
             run["session_id"], image_b64=png_b64, brief=brief,
@@ -224,6 +241,19 @@ async def generate_creative(
     stored = response.json()
     if not stored.get("ok") or not stored.get("url"):
         raise RuntimeError("AI creative upload returned no durable asset URL")
+    try:
+        from image_quota import merge_job_result
+        await merge_job_result(actor, run["session_id"], idempotency_key, {
+            "final_url": stored["url"],
+            "final_filename": stored.get("filename"),
+            "final_mime_type": "image/png",
+            "width": width, "height": height,
+            "autopilot_run_id": run["run_id"],
+        })
+    except (KeyError, ValueError):
+        # Assets generated before the durable gallery existed remain recoverable
+        # through their deterministic upload URL.
+        pass
 
     current = await get_workspace(run["session_id"])
     _assert_current_inputs(
@@ -243,7 +273,10 @@ async def generate_creative(
         "vlmVerdict": vlm_verdict,
         "vlmProvenance": vlm_provenance,
         "exactDimensionsVerified": True,
-        "fitMode": "contain_with_blurred_background",
+        "fitMode": (
+            "full_bleed_cover" if format_id in {"zuma-Left", "zuma-Right"}
+            else "contain_with_blurred_background"
+        ),
         "formatId": format_id,
         "variant": variant,
         "briefRevision": brief_revision,

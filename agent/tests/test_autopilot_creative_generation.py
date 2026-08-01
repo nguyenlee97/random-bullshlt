@@ -55,6 +55,16 @@ def test_fit_png_preserves_full_composition_in_different_target_ratio():
         assert right[2] > right[0]
 
 
+def test_side_slider_fit_is_opaque_full_bleed_without_blurred_letterbox():
+    fitted = base64.b64decode(
+        generation._fit_png(_image_b64((40, 40)), 465, 1200, "zuma-Left")
+    )
+    with Image.open(BytesIO(fitted)) as image:
+        assert image.size == (465, 1200)
+        assert image.mode == "RGB"
+        assert image.getpixel((0, 0)) == image.getpixel((232, 600))
+
+
 @pytest.mark.asyncio
 async def test_generate_creative_resizes_uploads_and_records_provenance(monkeypatch):
     calls = {"generate": 0, "post": None}

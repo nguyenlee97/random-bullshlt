@@ -60,12 +60,8 @@ STANDARD_PLAN: tuple[dict[str, Any], ...] = (
      "deps": ["normalize_brief"], "artifact": None, "review": "none"},
     {"key": "generate_strategy", "capability": "generate_strategy_options",
      "deps": ["validate_brief"], "artifact": "strategy", "review": "stage"},
-    {"key": "retrieve_audience", "capability": "retrieve_and_rank_audience",
-     "deps": ["generate_strategy"], "artifact": "audience", "review": "critical"},
-    {"key": "derive_targeting", "capability": "derive_targeting_and_exclusions",
-     "deps": ["retrieve_audience"], "artifact": "targeting", "review": "critical"},
     {"key": "plan_placement_intent", "capability": "plan_placement_intent",
-     "deps": ["derive_targeting"], "artifact": "placement_intent", "review": "critical"},
+     "deps": ["generate_strategy"], "artifact": "placement_intent", "review": "critical"},
     {"key": "plan_creative_formats", "capability": "plan_creative_formats",
      "deps": ["plan_placement_intent"], "artifact": "creative_format_plan",
      "review": "stage"},
@@ -80,6 +76,11 @@ STANDARD_PLAN: tuple[dict[str, Any], ...] = (
     {"key": "assign_creatives", "capability": "assign_creatives_to_placements",
      "deps": ["analyze_creatives", "rank_placements"], "artifact": "assignments",
      "review": "critical"},
+    {"key": "retrieve_audience", "capability": "retrieve_and_rank_audience",
+     "deps": ["generate_strategy"], "after": ["assign_creatives"],
+     "artifact": "audience", "review": "critical"},
+    {"key": "derive_targeting", "capability": "derive_targeting_and_exclusions",
+     "deps": ["retrieve_audience"], "artifact": "targeting", "review": "critical"},
     {"key": "forecast", "capability": "forecast_reach_cost_and_risk",
      "deps": ["derive_targeting", "assign_creatives"], "artifact": "forecast",
      "review": "stage"},
@@ -98,6 +99,16 @@ STANDARD_PLAN: tuple[dict[str, Any], ...] = (
 )
 
 PLAN_ORDER = {spec["key"]: index for index, spec in enumerate(STANDARD_PLAN)}
+
+
+def artifact_invalidation_exclusions(run: dict, artifact: str) -> set[str]:
+    """Keep demo-v2's approved Placement/Creative stage stable after Audience."""
+    if run.get("flow_version") != "demo_v2" or artifact not in {"audience", "targeting"}:
+        return set()
+    return {
+        "placement_intent", "creative_format_plan", "creative",
+        "creative_verdict", "placements", "assignments",
+    }
 
 _mem_runs: dict[str, dict] = {}
 _mem_tasks: dict[str, dict] = {}
@@ -385,10 +396,15 @@ def _new_tasks(run_id: str, conversation_model: str = "") -> list[dict]:
         "key": spec["key"],
         "plan_index": plan_index,
         "capability": spec["capability"],
-        "dependencies": [_task_id(run_id, dep) for dep in spec["deps"]],
+        "dependencies": [
+            _task_id(run_id, dep)
+            for dep in dict.fromkeys([*spec["deps"], *spec.get("after", [])])
+        ],
+        "semantic_dependencies": [_task_id(run_id, dep) for dep in spec["deps"]],
+        "sequence_after": [_task_id(run_id, dep) for dep in spec.get("after", [])],
         "artifact": spec["artifact"],
         "review_level": _task_review_level(spec, conversation_model),
-        "status": "queued" if not spec["deps"] else "pending",
+        "status": "queued" if not spec["deps"] and not spec.get("after") else "pending",
         "attempts": 0,
         "max_attempts": config.AUTOPILOT_TASK_MAX_ATTEMPTS,
         "lease_owner": None,
@@ -480,7 +496,7 @@ async def create_run(
         "_id": run_id, "run_id": run_id, "session_id": session_id,
         "workspace_id": workspace["workspace_id"],
         "workspace_revision": workspace["revision"],
-        "plan_revision": 1, "status": "queued",
+        "plan_revision": 1, "flow_version": "demo_v2", "status": "queued",
         "approval_policy": approval_policy, "started_by": actor,
         "creative_source": creative_source,
         "creative_direction": " ".join(str(creative_direction or "").split())[:1200],
@@ -1269,6 +1285,7 @@ async def review_task(
         else _mem_tasks.get(task_id)
     if not task or task.get("run_id") != run_id:
         raise KeyError(f"task not found: {task_id}")
+    run = await get_run(run_id)
     if task["status"] != "waiting_review":
         if (
             approved
@@ -1282,7 +1299,6 @@ async def review_task(
         approved and (task.get("result") or {}).get("review_action") == "retry"
     )
     if retry_after_review and task.get("key") == "validate_brief":
-        run = await get_run(run_id)
         pending = await list_pending_proposals(run["session_id"])
         if any(item.get("field") == "brief" for item in pending):
             raise RunConflict(
@@ -1329,6 +1345,9 @@ async def review_task(
             base_artifact_revision=pending["base_artifact_revision"],
             actor="autopilot_review",
             reason=f"approved by {actor}: {reason}".strip(),
+            affected_exclusions=artifact_invalidation_exclusions(
+                run, pending["artifact"]
+            ),
         )
     updates = {
         "status": "queued" if retry_after_review else (

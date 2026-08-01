@@ -11,6 +11,48 @@ import { AgentAPI } from '@/api/agentApi'
 import { AD_FORMATS, AD_FORMATS_MAP } from '@/data/adFormats'
 import ImageCropModal from './ImageCropModal'
 
+const MAX_PARALLEL_GENERATIONS = 2
+
+function browserAssetUrl(url) {
+  if (!url) return ''
+  try {
+    const parsed = new URL(url, window.location.origin)
+    return parsed.pathname.startsWith('/uploads/') ? parsed.pathname : url
+  } catch {
+    return url
+  }
+}
+
+function galleryImage(job) {
+  const result = job.result || {}
+  const metadata = job.metadata || {}
+  const formatId = metadata.format_id || job.formatId || ''
+  const finalUrl = result.final_url || ''
+  return {
+    id: job.job_id,
+    name: result.final_filename || `ai-${formatId}-${job.job_id}.png`,
+    type: result.final_mime_type || 'image/png',
+    size: result.bytes || 0,
+    dataUrl: browserAssetUrl(finalUrl),
+    url: finalUrl,
+    width: result.width || AD_FORMATS_MAP[formatId]?.width,
+    height: result.height || AD_FORMATS_MAP[formatId]?.height,
+    formatId,
+    aiGenerated: true,
+    generation: {
+      provider: metadata.provider,
+      model: metadata.model,
+      promptVersion: metadata.promptVersion,
+      promptFingerprint: metadata.promptFingerprint,
+      generationSize: metadata.generationSize,
+      finalSize: metadata.finalSize,
+      jobId: job.job_id,
+      requestId: result.request_id,
+      assetIds: metadata.asset_ids || [],
+    },
+  }
+}
+
 // ─── Format Card ──────────────────────────────────────────────────────────────
 function FormatCard({ fmt, selected, onClick }) {
   const ratio = (fmt.width / fmt.height).toFixed(1)
@@ -147,9 +189,11 @@ export default function AdImageGenerator({
   openaiCampaignFlow = false,
 }) {
   const [selectedFormatId, setSelectedFormatId] = useState(null)
-  const [generating, setGenerating]             = useState(false)
   const [error, setError]                       = useState('')
-  const [generatedImages, setGeneratedImages]   = useState([])
+  const [generationJobs, setGenerationJobs]     = useState([])
+  const [hiddenJobIds, setHiddenJobIds]         = useState(new Set())
+  const [deferredCropIds, setDeferredCropIds]   = useState(new Set())
+  const [finalizing, setFinalizing]             = useState(false)
   const [selectedIds, setSelectedIds]           = useState(new Set())
   const [briefExpanded, setBriefExpanded]       = useState(false)
   const [lightboxImg, setLightboxImg]           = useState(null)
@@ -166,19 +210,51 @@ export default function AdImageGenerator({
   // { b64, formatId, width, height }
   const [pendingCrop, setPendingCrop] = useState(null)
 
-  useEffect(() => {
-    AgentAPI.listCreativeAssets().then(setAssets)
+  const refreshGeneratedJobs = useCallback(async () => {
+    const jobs = await AgentAPI.listGeneratedImages()
+    setGenerationJobs(previous => {
+      const serverIds = new Set(jobs.map(job => job.job_id))
+      const localOnly = previous.filter(job => job.localOnly && !serverIds.has(job.job_id))
+      return [...jobs, ...localOnly]
+    })
   }, [])
 
+  useEffect(() => {
+    AgentAPI.listCreativeAssets().then(setAssets)
+    refreshGeneratedJobs()
+  }, [refreshGeneratedJobs])
+
+  const activeGenerationCount = generationJobs.filter(job =>
+    ['reserved', 'generating'].includes(job.status)
+  ).length
+  const generating = activeGenerationCount > 0
+
+  useEffect(() => {
+    if (!generationJobs.some(job => ['reserved', 'ambiguous'].includes(job.status))) return undefined
+    const timer = window.setInterval(refreshGeneratedJobs, 3000)
+    return () => window.clearInterval(timer)
+  }, [generationJobs, refreshGeneratedJobs])
+
   const handleGenerate = useCallback(async () => {
-    if (!selectedFormatId || generating) return
-    setGenerating(true)
+    if (!selectedFormatId || activeGenerationCount >= MAX_PARALLEL_GENERATIONS) return
     setError('')
 
-    const result = await AgentAPI.generateAdImage(brief, selectedFormatId, customPrompt, {
+    const jobId = `guided:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
+    const formatId = selectedFormatId
+    setGenerationJobs(previous => [...previous, {
+      job_id: jobId,
+      status: 'generating',
+      localOnly: true,
+      created_at: new Date().toISOString(),
+      metadata: { format_id: formatId },
+      result: {},
+    }])
+
+    const result = await AgentAPI.generateAdImage(brief, formatId, customPrompt, {
       assetIds: [...selectedAssetIds], promptSpec, quality: promptSpec?.quality || 'medium',
       campaignFlow: openaiCampaignFlow ? 'openai' : '',
       audienceContext: openaiCampaignFlow ? segment : {},
+      idempotencyKey: jobId,
     })
 
     if (!result.ok) {
@@ -188,30 +264,15 @@ export default function AdImageGenerator({
       setError(unavailableToday
         ? 'Tạm thời chưa thể tạo thêm ảnh hôm nay. Vui lòng thử lại vào ngày mai.'
         : (result.error || 'Tạo ảnh thất bại — hãy thử lại'))
-      setGenerating(false)
+      setGenerationJobs(previous => previous.map(job =>
+        job.job_id === jobId ? { ...job, status: result.jobStatus || 'failed' } : job
+      ))
+      await refreshGeneratedJobs()
       return
     }
 
-    // Open crop modal instead of auto-cropping
-    setPendingCrop({
-      b64:      result.imageB64,
-      formatId: selectedFormatId,
-      width:    result.width,
-      height:   result.height,
-      generation: {
-        provider: result.provider,
-        model: result.model,
-        promptVersion: result.promptVersion,
-        promptFingerprint: result.promptFingerprint,
-        generationSize: result.generationSize,
-        finalSize: result.finalSize,
-        jobId: result.jobId,
-        requestId: result.requestId,
-        assetIds: [...selectedAssetIds],
-      },
-    })
-    setGenerating(false)
-  }, [selectedFormatId, generating, brief, customPrompt, selectedAssetIds, promptSpec, openaiCampaignFlow, segment])
+    await refreshGeneratedJobs()
+  }, [selectedFormatId, activeGenerationCount, brief, customPrompt, selectedAssetIds, promptSpec, openaiCampaignFlow, segment, refreshGeneratedJobs])
 
   const handleFormatSelect = useCallback((formatId) => {
     setSelectedFormatId(formatId)
@@ -265,45 +326,66 @@ export default function AdImageGenerator({
   }, [brief, selectedFormatId, selectedAssetIds, customPrompt, composingPrompt])
 
   // ── After crop modal resolves ─────────────────────────────────────────────
-  const finishImage = useCallback((croppedDataUrl, fmtId, w, h, generation = null) => {
-    const timestamp = Date.now()
-    const newImg = {
-      id: `ai-${fmtId}-${timestamp}`,
-      name: `ai-${fmtId}-${timestamp}.png`,
-      type: 'image/png',
-      size: Math.round(croppedDataUrl.length * 0.75),
-      dataUrl: croppedDataUrl,
-      width: w,
-      height: h,
-      formatId: fmtId,
-      aiGenerated: true,
-      generation,
+  const visibleJobs = generationJobs.filter(job => !hiddenJobIds.has(job.job_id))
+  const generatedImages = visibleJobs
+    .filter(job => job.status === 'succeeded' && job.result?.final_url)
+    .map(galleryImage)
+  const readyToCrop = visibleJobs.filter(job =>
+    job.status === 'succeeded' && job.result?.raw_url && !job.result?.final_url
+  )
+
+  useEffect(() => {
+    if (pendingCrop || finalizing) return
+    const next = readyToCrop.find(job => !deferredCropIds.has(job.job_id))
+    if (!next) return
+    const formatId = next.metadata?.format_id || ''
+    setPendingCrop({
+      jobId: next.job_id,
+      b64: browserAssetUrl(next.result.raw_url),
+      formatId,
+      width: next.result.width || AD_FORMATS_MAP[formatId]?.width,
+      height: next.result.height || AD_FORMATS_MAP[formatId]?.height,
+    })
+  }, [readyToCrop, deferredCropIds, pendingCrop, finalizing])
+
+  const finishImage = useCallback(async (croppedDataUrl) => {
+    if (!pendingCrop || finalizing) return
+    setFinalizing(true)
+    setError('')
+    try {
+      const updated = await AgentAPI.finalizeGeneratedImage(pendingCrop.jobId, croppedDataUrl)
+      setGenerationJobs(previous => previous.map(job =>
+        job.job_id === updated.job_id ? updated : job
+      ))
+      setDeferredCropIds(previous => {
+        const next = new Set(previous)
+        next.delete(pendingCrop.jobId)
+        return next
+      })
+      setPendingCrop(null)
+    } catch (cropError) {
+      setError(cropError.message || 'Không thể lưu ảnh đã crop.')
+    } finally {
+      setFinalizing(false)
     }
-    setGeneratedImages(prev => [newImg, ...prev])
-    if (openaiCampaignFlow) {
-      // A generated image is a draft, not an approved artifact, but it must be
-      // lifted into the parent Creative form immediately so step navigation
-      // cannot unmount and discard it.
-      onAddToCreative([newImg])
-    }
-    setPendingCrop(null)
-  }, [onAddToCreative, openaiCampaignFlow])
+  }, [pendingCrop, finalizing])
 
   const handleCropConfirm = useCallback((croppedDataUrl) => {
     if (!pendingCrop) return
-    const fmt = AD_FORMATS_MAP[pendingCrop.formatId]
-    finishImage(croppedDataUrl, pendingCrop.formatId, fmt?.width ?? pendingCrop.width, fmt?.height ?? pendingCrop.height, pendingCrop.generation)
+    finishImage(croppedDataUrl)
   }, [pendingCrop, finishImage])
 
   const handleScale = useCallback((scaledDataUrl) => {
     if (!pendingCrop) return
-    const fmt = AD_FORMATS_MAP[pendingCrop.formatId]
-    finishImage(scaledDataUrl, pendingCrop.formatId, fmt?.width ?? pendingCrop.width, fmt?.height ?? pendingCrop.height, pendingCrop.generation)
+    finishImage(scaledDataUrl)
   }, [pendingCrop, finishImage])
 
   const handleCropCancel = useCallback(() => {
+    if (pendingCrop?.jobId) {
+      setDeferredCropIds(previous => new Set([...previous, pendingCrop.jobId]))
+    }
     setPendingCrop(null)
-  }, [])
+  }, [pendingCrop])
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
@@ -314,7 +396,7 @@ export default function AdImageGenerator({
   }
 
   const removeGen = (id) => {
-    setGeneratedImages(prev => prev.filter(i => i.id !== id))
+    setHiddenJobIds(previous => new Set([...previous, id]))
     setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
   }
 
@@ -534,11 +616,11 @@ export default function AdImageGenerator({
       {/* The server still enforces the per-actor daily generation limit. */}
       <Button
         onClick={handleGenerate}
-        disabled={!selectedFormatId || generating}
+        disabled={!selectedFormatId || activeGenerationCount >= MAX_PARALLEL_GENERATIONS}
         className="w-full gap-2"
         id="btn-ai-generate"
       >
-        {generating ? (
+        {activeGenerationCount >= MAX_PARALLEL_GENERATIONS ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
             Đang tạo ảnh... (có thể mất 30-60 giây)
@@ -550,6 +632,50 @@ export default function AdImageGenerator({
           </>
         )}
       </Button>
+
+      {(generating || readyToCrop.length > 0) && (
+        <div className="grid grid-cols-2 gap-2" data-testid="generated-image-job-list">
+          {visibleJobs.filter(job => ['reserved', 'generating'].includes(job.status)).map(job => {
+            const fmt = AD_FORMATS_MAP[job.metadata?.format_id] || {}
+            return (
+              <div key={job.job_id} className="h-36 rounded-xl border border-violet-200 bg-violet-50/60 flex flex-col items-center justify-center gap-2 p-3 text-center">
+                <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
+                <p className="text-[11px] font-semibold text-violet-800">Đang tạo creative</p>
+                <p className="text-[10px] text-violet-600">{fmt.label || 'AI creative'}</p>
+              </div>
+            )
+          })}
+          {readyToCrop.map(job => {
+            const formatId = job.metadata?.format_id || ''
+            const fmt = AD_FORMATS_MAP[formatId] || {}
+            return (
+              <div key={job.job_id} className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+                <img src={browserAssetUrl(job.result.raw_url)} alt={fmt.label || 'Generated creative'} className="w-full h-24 object-cover" />
+                <div className="p-2">
+                  <p className="text-[10px] font-semibold truncate">{fmt.label || formatId}</p>
+                  <Button size="sm" variant="outline" className="w-full h-7 mt-1 text-[10px]"
+                    onClick={() => {
+                      setDeferredCropIds(previous => {
+                        const next = new Set(previous)
+                        next.delete(job.job_id)
+                        return next
+                      })
+                      setPendingCrop({
+                        jobId: job.job_id,
+                        b64: browserAssetUrl(job.result.raw_url),
+                        formatId,
+                        width: job.result.width || fmt.width,
+                        height: job.result.height || fmt.height,
+                      })
+                    }}>
+                    Crop / scale
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Gallery */}
       {generatedImages.length > 0 && (
@@ -592,7 +718,7 @@ export default function AdImageGenerator({
         </Button>
       )}
 
-      {generatedImages.length === 0 && !generating && (
+      {generatedImages.length === 0 && !generating && readyToCrop.length === 0 && (
         <div className="flex flex-col items-center gap-2 py-6 text-center text-muted-foreground">
           <Sparkles className="w-8 h-8 text-violet-300" />
           <p className="text-xs">Chọn định dạng và bấm <strong>Tạo ảnh AI</strong> để bắt đầu.</p>

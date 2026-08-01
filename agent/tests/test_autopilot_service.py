@@ -86,6 +86,11 @@ async def test_run_start_is_idempotent_and_has_fixed_plan():
     assert [task["plan_index"] for task in first["tasks"]] == list(
         range(len(service.STANDARD_PLAN))
     )
+    assert first["flow_version"] == "demo_v2"
+    by_key = {task["key"]: task for task in first["tasks"]}
+    assert by_key["assign_creatives"]["plan_index"] < by_key["retrieve_audience"]["plan_index"]
+    assert by_key["assign_creatives"]["task_id"] in by_key["retrieve_audience"]["dependencies"]
+    assert by_key["assign_creatives"]["task_id"] not in by_key["retrieve_audience"]["semantic_dependencies"]
 
 
 @pytest.mark.asyncio
@@ -1536,9 +1541,34 @@ async def test_critical_policy_auto_commits_audience_and_targeting(monkeypatch):
         "normalize_brief",
         "validate_brief",
         "generate_strategy",
-        "retrieve_audience",
-        "derive_targeting",
+        "plan_placement_intent",
     ):
+        task = await service.claim_next_task("worker-streamlined")
+        assert task["key"] == expected_key
+        await worker._process(task)
+
+    run = await service.get_run(run["run_id"])
+    placement = next(task for task in run["tasks"] if task["key"] == "plan_placement_intent")
+    assert placement["status"] == "waiting_review"
+    await service.review_task(run["run_id"], placement["task_id"], approved=True)
+
+    for expected_key in (
+        "plan_creative_formats",
+        "prepare_creatives",
+        "analyze_creatives",
+        "rank_placements",
+        "assign_creatives",
+    ):
+        task = await service.claim_next_task("worker-streamlined")
+        assert task["key"] == expected_key
+        await worker._process(task)
+
+    run = await service.get_run(run["run_id"])
+    assignment = next(task for task in run["tasks"] if task["key"] == "assign_creatives")
+    assert assignment["status"] == "waiting_review"
+    await service.review_task(run["run_id"], assignment["task_id"], approved=True)
+
+    for expected_key in ("retrieve_audience", "derive_targeting"):
         task = await service.claim_next_task("worker-streamlined")
         assert task["key"] == expected_key
         await worker._process(task)
@@ -1548,7 +1578,10 @@ async def test_critical_policy_auto_commits_audience_and_targeting(monkeypatch):
     workspace = await get_workspace("worker-streamlined-critical")
     assert by_key["retrieve_audience"]["status"] == "succeeded"
     assert by_key["derive_targeting"]["status"] == "succeeded"
-    assert by_key["plan_placement_intent"]["status"] == "queued"
+    assert by_key["plan_placement_intent"]["status"] == "succeeded"
+    assert by_key["assign_creatives"]["status"] == "succeeded"
+    assert workspace["artifacts"]["placement_intent"]["status"] == "approved"
+    assert workspace["artifacts"]["assignments"]["status"] == "approved"
     assert workspace["artifacts"]["audience"]["value"]["attrs"] == [direct]
     assert workspace["artifacts"]["audience"]["value"]["adjacent_attrs"] == [related]
     assert workspace["artifacts"]["targeting"]["value"]["geo"] == ["TP.HCM"]
@@ -1847,8 +1880,8 @@ async def test_later_audience_edit_keeps_operator_selection_and_replans_consumer
         "INT159", "INT117", "INT118",
     ]
     assert by_key["derive_targeting"]["status"] == "queued"
-    assert by_key["prepare_creatives"]["status"] == "pending"
-    assert updated["status"] == "queued"
+    assert by_key["prepare_creatives"]["status"] == "waiting_review"
+    assert updated["status"] == "waiting_review"
 
 
 @pytest.mark.asyncio

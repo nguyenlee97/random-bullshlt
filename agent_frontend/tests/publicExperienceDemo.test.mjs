@@ -202,7 +202,11 @@ test('Copilot creative walkthrough teaches assets and prompt composition without
   assert.match(scripts, /target: '\[data-testid="creative-prompt-spec"\]'/)
   assert.doesNotMatch(imageGenerator, /image-quota-counter|image-quota-consent|image-quota-checkbox|GPT Image|OpenAI Creative/)
   assert.doesNotMatch(scripts, /image-quota-counter|image-quota-consent|image-quota-checkbox|GPT Image|quota/)
-  assert.match(imageGenerator, /disabled=\{!selectedFormatId \|\| generating\}/)
+  assert.match(imageGenerator, /MAX_PARALLEL_GENERATIONS = 2/)
+  assert.match(imageGenerator, /activeGenerationCount >= MAX_PARALLEL_GENERATIONS/)
+  assert.match(imageGenerator, /AgentAPI\.listGeneratedImages\(\)/)
+  assert.match(imageGenerator, /AgentAPI\.finalizeGeneratedImage\(pendingCrop\.jobId/)
+  assert.doesNotMatch(imageGenerator, /if \(openaiCampaignFlow\) \{\s*\/\/ A generated image is a draft/)
 })
 
 test('Copilot creative walkthrough waits for analysis and handles manual review before Setup', () => {

@@ -662,6 +662,7 @@ async def commit_artifact_result(
     base_artifact_revision: int,
     actor: str,
     reason: str = "",
+    affected_exclusions: set[str] | None = None,
 ) -> dict:
     """Commit a task result iff every artifact input still matches its snapshot.
 
@@ -690,7 +691,10 @@ async def commit_artifact_result(
         )
         expected = raw["revision"]
         new_revision = expected + 1
-        affected = _impact(raw, artifact)
+        affected = [
+            name for name in _impact(raw, artifact)
+            if name not in (affected_exclusions or set())
+        ]
         event = _task_result_event(
             workspace_id, session_id, new_revision, artifact, actor, reason, task_id,
             input_revisions, base_artifact_revision, affected,
@@ -768,7 +772,10 @@ async def commit_artifact_result(
                 _public(raw), artifact, input_revisions, base_artifact_revision
             )
             new_revision = raw["revision"] + 1
-            affected = _impact(raw, artifact)
+            affected = [
+                name for name in _impact(raw, artifact)
+                if name not in (affected_exclusions or set())
+            ]
             event = _task_result_event(
                 workspace_id, session_id, new_revision, artifact, actor, reason, task_id,
                 input_revisions, base_artifact_revision, affected,

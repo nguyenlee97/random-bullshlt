@@ -1498,6 +1498,12 @@ class GenerateImageRequest(BaseModel):
     audience_context: dict = {}
 
 
+class FinalizeGeneratedImageRequest(BaseModel):
+    session_id: str
+    job_id: str
+    data_url: str
+
+
 class CreativeAssetRequest(BaseModel):
     session_id: str
     name: str
@@ -1613,6 +1619,50 @@ async def image_gen_status_route(request: Request, session_id: str):
     await _assert_session_access(request, session_id)
     actor = await _request_actor(request)
     return await get_quota_status(session_id, actor)
+
+
+@agent_router.get("/generated-images")
+async def generated_image_list_route(request: Request, session_id: str):
+    """Reload the owner-scoped generated image gallery for one conversation."""
+    await _assert_session_access(request, session_id)
+    actor = await _request_actor(request)
+    from image_quota import list_session_jobs
+    return {"jobs": await list_session_jobs(actor, session_id)}
+
+
+@agent_router.post("/generated-images/finalize")
+async def generated_image_finalize_route(
+    request: Request,
+    req: FinalizeGeneratedImageRequest,
+):
+    """Persist a user's crop/scale result without requiring a workspace commit."""
+    await _assert_session_access(request, req.session_id)
+    actor = await _request_actor(request)
+    marker = ";base64,"
+    if marker not in req.data_url:
+        raise HTTPException(status_code=422, detail="final image must be a base64 data URL")
+    header, image_b64 = req.data_url.split(marker, 1)
+    if header not in {"data:image/png", "data:image/jpeg", "data:image/webp"}:
+        raise HTTPException(status_code=422, detail="unsupported final image type")
+    from handlers.image_gen import store_generated_png
+    from image_quota import get_session_job, merge_job_result
+    try:
+        existing = await get_session_job(actor, req.session_id, req.job_id)
+        if existing.get("status") != "succeeded":
+            raise ValueError("generated image is not ready")
+        if (existing.get("result") or {}).get("final_url"):
+            return {"ok": True, "job": existing}
+        stored = await store_generated_png(image_b64, req.job_id, stage="final")
+        job = await merge_job_result(actor, req.session_id, req.job_id, {
+            "final_url": stored["url"],
+            "final_filename": stored.get("filename"),
+            "final_mime_type": "image/png",
+        })
+        return {"ok": True, "job": job}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @agent_router.post("/creative/assets", status_code=201)

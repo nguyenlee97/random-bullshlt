@@ -37,21 +37,30 @@ const TASK_LABELS = {
 }
 
 const TASK_ORDER = [
-  'normalize_brief', 'validate_brief', 'generate_strategy', 'retrieve_audience',
-  'derive_targeting', 'plan_placement_intent', 'plan_creative_formats',
+  'normalize_brief', 'validate_brief', 'generate_strategy', 'plan_placement_intent',
+  'plan_creative_formats',
   'prepare_creatives', 'analyze_creatives', 'rank_placements', 'assign_creatives',
+  'retrieve_audience', 'derive_targeting',
   'forecast', 'build_order_draft', 'run_order_guard', 'launch_approval',
   'create_order', 'verify_order', 'create_setup_report',
 ]
 
 const TASK_ORDER_INDEX = Object.fromEntries(TASK_ORDER.map((key, index) => [key, index]))
 
-const AUTOPILOT_STAGES = [
+const LEGACY_AUTOPILOT_STAGES = [
   { label: 'Brief & chiến lược', keys: ['normalize_brief', 'validate_brief', 'generate_strategy'] },
   { label: 'Audience & targeting', keys: ['retrieve_audience', 'derive_targeting'] },
   { label: 'Placement & creative', keys: ['plan_placement_intent', 'plan_creative_formats', 'prepare_creatives', 'analyze_creatives', 'rank_placements', 'assign_creatives'] },
   { label: 'Dự báo & an toàn', keys: ['forecast', 'build_order_draft', 'run_order_guard'] },
   { label: 'Launch & hoàn tất', keys: ['launch_approval', 'create_order', 'verify_order', 'create_setup_report'] },
+]
+
+const DEMO_V2_AUTOPILOT_STAGES = [
+  LEGACY_AUTOPILOT_STAGES[0],
+  LEGACY_AUTOPILOT_STAGES[2],
+  LEGACY_AUTOPILOT_STAGES[1],
+  LEGACY_AUTOPILOT_STAGES[3],
+  LEGACY_AUTOPILOT_STAGES[4],
 ]
 
 const taskStatusClass = status => {
@@ -513,7 +522,8 @@ export default function AutopilotPanel({
   }
 
   const orderedTasks = useMemo(() => [...(run?.tasks || [])].sort((left, right) => (
-    (TASK_ORDER_INDEX[left.key] ?? TASK_ORDER.length) - (TASK_ORDER_INDEX[right.key] ?? TASK_ORDER.length)
+    (Number.isInteger(left.plan_index) ? left.plan_index : (TASK_ORDER_INDEX[left.key] ?? TASK_ORDER.length))
+      - (Number.isInteger(right.plan_index) ? right.plan_index : (TASK_ORDER_INDEX[right.key] ?? TASK_ORDER.length))
   )), [run?.tasks])
   const taskByKey = useMemo(() => Object.fromEntries(
     orderedTasks.map(task => [task.key, task])
@@ -574,7 +584,10 @@ export default function AutopilotPanel({
     : strategyCanChange
       ? 'Bạn có thể chọn phương án khác tại điểm review này. Autopilot sẽ giữ run hiện tại và chỉ tính lại các bước phụ thuộc.'
       : 'Phương án chỉ có thể thay đổi khi Autopilot đang dừng tại một điểm review.'
-  const executionStages = AUTOPILOT_STAGES.map(stage => {
+  const stagePlan = run?.flow_version === 'demo_v2'
+    ? DEMO_V2_AUTOPILOT_STAGES
+    : LEGACY_AUTOPILOT_STAGES
+  const executionStages = stagePlan.map(stage => {
     const tasks = stage.keys.map(key => taskByKey[key]).filter(Boolean)
     const done = tasks.filter(task => ['succeeded', 'skipped'].includes(task.status)).length
     return { ...stage, tasks, done, status: stageStatus(tasks) }

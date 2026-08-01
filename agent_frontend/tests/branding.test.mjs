@@ -109,6 +109,7 @@ test('local Compose includes AdsPilot and truthful mock-site ad delivery', async
   const dockerfile = await source('agent_frontend/Dockerfile')
   const panel = await source('agent_frontend/src/components/AutopilotPanel.jsx')
   const znewsApi = await source('znews_replicate/api.js')
+  const znewsCategoryCss = await source('znews_replicate/category-style.css')
   const baomoiApi = await source('baomoi_replicate/api.js')
   const zingmp3Api = await source('zingmp3_replicate/api.js')
 
@@ -120,6 +121,8 @@ test('local Compose includes AdsPilot and truthful mock-site ad delivery', async
   assert.match(compose, /VITE_ADSPILOT_URL: http:\/\/localhost:5173/)
   assert.match(dockerfile, /ARG VITE_ADSPILOT_URL=/)
   assert.match(panel, /import\.meta\.env\.VITE_ADSPILOT_URL/)
+  assert.match(znewsCategoryCss, /\.np6-topic-masthead \{[\s\S]*?margin: 82px auto 0 !important;/)
+  assert.match(znewsCategoryCss, /\.np6-topic-masthead \{[\s\S]*?float: none !important;/)
   for (const api of [znewsApi, baomoiApi, zingmp3Api]) {
     assert.match(api, /ALLOW_FALLBACK_ADS/)
     assert.match(api, /reason: 'no_active_campaign'/)
@@ -184,7 +187,9 @@ test('Autopilot presents ordered stages, generated assets, and only unlocks stra
   const simulator = await source('agent_frontend/src/components/StrategySimulator.jsx')
 
   assert.match(panel, /const TASK_ORDER = \[/)
-  assert.match(panel, /const AUTOPILOT_STAGES = \[/)
+  assert.match(panel, /const LEGACY_AUTOPILOT_STAGES = \[/)
+  assert.match(panel, /const DEMO_V2_AUTOPILOT_STAGES = \[/)
+  assert.match(panel, /run\?\.flow_version === 'demo_v2'/)
   assert.match(panel, /Xem toàn bộ \{orderedTasks\.length\} bước theo thứ tự/)
   assert.match(panel, /Creative đã tạo/)
   assert.match(panel, /<img src=\{file\.url\}/)

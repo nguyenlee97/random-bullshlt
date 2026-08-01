@@ -179,38 +179,28 @@ AD_FORMATS: dict[str, dict] = {
         "label": "Side Slider Left (465×1200)",
         "width": 465, "height": 1200,
         "layoutDescription": (
-            "A tall vertical asset designed for a left-side slider ad. The actual ad content "
-            "is confined to a compact, vertical rectangular block. Within this visible "
-            "rectangular block, the layout is split: the top half features a brightly colored "
-            "background with a central product mockup and energetic splash effects, while the "
-            "bottom half is a solid dark contrasting panel containing a centered, brightly "
-            "colored rectangular call-to-action button."
+            "A tall, full-bleed vertical advertisement designed for a left-side slider. Fill "
+            "the complete canvas with the campaign visual, with a clear product or hero image, "
+            "strong brand hierarchy, and one concise call to action."
         ),
         "safeZoneConstraint": (
-            "1. CANVAS CONSTRAINTS & SAFE ZONE (CRITICAL): You are generating a 465x1200 "
-            "side-slider ad. Because this ad docks to the side of a screen, you MUST compress "
-            "all ad content (graphics, colors, buttons, products) tightly into a vertical "
-            "column positioned completely flush against the RIGHT side of the image. Leave the "
-            "left side as plain, blank background space."
+            "1. CANVAS CONSTRAINTS & SAFE ZONE (CRITICAL): Fill all 465x1200 pixels with "
+            "intentional artwork. Keep critical text, logos, products, and faces at least 28 "
+            "pixels from every edge. Do not reserve blank, grey, transparent, or docking space."
         ),
     },
     "zuma-Right": {
         "label": "Side Slider Right (465×1200)",
         "width": 465, "height": 1200,
         "layoutDescription": (
-            "A tall vertical asset designed for a right-side slider ad. The actual ad content "
-            "is confined to a compact, vertical rectangular block. Within this visible "
-            "rectangular block, the layout is split: the top half features a brightly colored "
-            "background with a central product mockup and energetic splash effects, while the "
-            "bottom half is a solid dark contrasting panel containing a centered, brightly "
-            "colored rectangular call-to-action button."
+            "A tall, full-bleed vertical advertisement designed for a right-side slider. Fill "
+            "the complete canvas with the campaign visual, with a clear product or hero image, "
+            "strong brand hierarchy, and one concise call to action."
         ),
         "safeZoneConstraint": (
-            "1. CANVAS CONSTRAINTS & SAFE ZONE (CRITICAL): You are generating a 465x1200 "
-            "side-slider ad. Because this ad docks to the side of a screen, you MUST compress "
-            "all ad content (graphics, colors, buttons, products) tightly into a vertical "
-            "column positioned completely flush against the LEFT side of the image. Leave the "
-            "right side as plain, blank background space."
+            "1. CANVAS CONSTRAINTS & SAFE ZONE (CRITICAL): Fill all 465x1200 pixels with "
+            "intentional artwork. Keep critical text, logos, products, and faces at least 28 "
+            "pixels from every edge. Do not reserve blank, grey, transparent, or docking space."
         ),
     },
     "smoney-top-desktop": {
@@ -582,6 +572,24 @@ async def _reference_files(assets: list[dict]) -> list[tuple[str, bytes, str]]:
     return files
 
 
+async def store_generated_png(image_b64: str, job_id: str, *, stage: str) -> dict:
+    """Persist a paid generated/cropped PNG behind a deterministic storage key."""
+    upload_url = f"{config.BACKEND_URL.rstrip('/')}/api/creative/upload-base64"
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(upload_url, json={
+            "base64": image_b64,
+            "filename": f"generated-{stage}-{job_id}.png",
+            "mimeType": "image/png",
+            "idempotencyKey": f"generated-image:{job_id}:{stage}",
+        })
+    if response.status_code not in {200, 201}:
+        raise RuntimeError(f"generated image storage failed ({response.status_code})")
+    stored = response.json()
+    if not stored.get("url"):
+        raise RuntimeError("generated image storage returned no URL")
+    return stored
+
+
 async def handle_generate_image(
     session_id: str, brief: dict, format_id: str, custom_prompt: str = "", *,
     actor: dict | None = None, assets: list[dict] | None = None,
@@ -602,7 +610,10 @@ async def handle_generate_image(
         brief, format_id, custom_prompt, assets=references, prompt_spec=prompt_spec,
     )
     reservation = await reserve(actor, job_id, session_id=session_id, metadata={
-        "format_id": format_id, "quality": selected_quality, **provenance,
+        "format_id": format_id, "quality": selected_quality,
+        "width": fmt["width"], "height": fmt["height"],
+        "asset_ids": [item.get("asset_id") for item in references if item.get("asset_id")],
+        **provenance,
     })
     if not reservation.get("ok"):
         await log_event(session_id, "image_gen_limit", {"format_id": format_id, "job_id": job_id})
@@ -615,6 +626,28 @@ async def handle_generate_image(
         }
     if reservation.get("duplicate"):
         current = await status(actor)
+        stored_result = reservation.get("result") or {}
+        if reservation.get("status") == "succeeded" and stored_result.get("raw_url"):
+            recovered_b64 = ""
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    recovered = await client.get(stored_result["raw_url"])
+                    recovered.raise_for_status()
+                    recovered_b64 = base64.b64encode(recovered.content).decode("ascii")
+            except Exception:
+                pass
+            return {
+                "ok": True,
+                "imageB64": recovered_b64,
+                "imageUrl": stored_result["raw_url"],
+                "rawAssetUrl": stored_result["raw_url"],
+                "formatId": reservation.get("metadata", {}).get("format_id") or format_id,
+                "width": fmt["width"], "height": fmt["height"],
+                "remaining": current["remaining"], "quota": current,
+                "jobId": job_id, "jobStatus": "succeeded",
+                **{key: value for key, value in reservation.get("metadata", {}).items()
+                   if key not in {"format_id", "quality"}},
+            }
         return {
             "ok": False,
             "error": "Yêu cầu này đã được xử lý hoặc đang chờ đối soát; hệ thống không tự động tính thêm lượt.",
@@ -683,9 +716,25 @@ async def handle_generate_image(
             await release(job_id, "OpenAI response contained invalid base64")
             return {"ok": False, "error": "Dữ liệu ảnh trả về không hợp lệ", "jobId": job_id}
 
+        try:
+            stored = await store_generated_png(image_b64, job_id, stage="raw")
+        except Exception as exc:
+            await mark_ambiguous(job_id, f"generated image storage failed: {type(exc).__name__}")
+            await log_event(session_id, "image_gen_storage_error", {
+                "job_id": job_id, "error": str(exc), "request_id": request_id,
+            })
+            return {
+                "ok": False,
+                "error": "Ảnh đã được tạo nhưng chưa thể lưu an toàn; lượt tạo đang được giữ để đối soát.",
+                "jobId": job_id, "jobStatus": "ambiguous",
+            }
+
         await succeed(job_id, {
             "request_id": request_id, "usage": data.get("usage"),
             "bytes": len(image_b64) * 3 // 4,
+            "raw_url": stored["url"],
+            "raw_filename": stored.get("filename"),
+            "width": fmt["width"], "height": fmt["height"],
         })
         quota = await status(actor)
         await log_event(session_id, "image_gen_success", {
@@ -697,7 +746,9 @@ async def handle_generate_image(
             "ok": True, "imageB64": image_b64, "formatId": format_id,
             "width": fmt["width"], "height": fmt["height"],
             "remaining": quota["remaining"], "quota": quota,
-            "jobId": job_id, "requestId": request_id, **provenance,
+            "jobId": job_id, "requestId": request_id,
+            "imageUrl": stored["url"], "rawAssetUrl": stored["url"],
+            **provenance,
         }
     except httpx.TimeoutException:
         await mark_ambiguous(job_id, "OpenAI request timed out after dispatch")

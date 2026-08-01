@@ -71,6 +71,10 @@ async def ensure_indexes() -> None:
     if jobs is None:
         return
     await jobs.create_index([("actor_key", 1), ("day", 1), ("created_at", -1)], name="image_jobs_actor_day")
+    await jobs.create_index(
+        [("session_id", 1), ("actor_key", 1), ("created_at", 1)],
+        name="image_jobs_session_gallery",
+    )
     await jobs.create_index([("status", 1), ("updated_at", 1)], name="image_jobs_reconcile")
     await ledgers.create_index([("day", 1), ("actor_key", 1)], unique=True, name="image_quota_actor_day")
 
@@ -189,6 +193,99 @@ async def _transition(job_id: str, status: str, *, release_charge: bool = False,
 
 async def succeed(job_id: str, result: dict | None = None) -> dict | None:
     return await _transition(job_id, "succeeded", result=result)
+
+
+def _owner_keys(actor: dict) -> list[str]:
+    primary, linked = actor_keys(actor)
+    return list(dict.fromkeys([primary, *linked]))
+
+
+def _public_job(job: dict) -> dict:
+    value = deepcopy(job)
+    value.pop("_id", None)
+    value.pop("actor_key", None)
+    value.pop("linked_actor_keys", None)
+    return value
+
+
+async def list_session_jobs(actor: dict, session_id: str, *, limit: int = 100) -> list[dict]:
+    """Return only this actor's durable generated-image drafts for a conversation."""
+    keys = _owner_keys(actor)
+    jobs, _ = await _collections()
+    if jobs is None:
+        values = [
+            _public_job(item) for item in _mem_jobs.values()
+            if item.get("session_id") == session_id and item.get("actor_key") in keys
+        ]
+        return sorted(values, key=lambda item: item.get("created_at") or _now())[:limit]
+    cursor = jobs.find({
+        "session_id": session_id,
+        "actor_key": {"$in": keys},
+    }).sort("created_at", 1).limit(max(1, min(limit, 200)))
+    return [_public_job(item) for item in await cursor.to_list(length=limit)]
+
+
+async def get_session_job(actor: dict, session_id: str, job_id: str) -> dict:
+    """Return one generated-image job after checking its conversation owner."""
+    keys = _owner_keys(actor)
+    jobs, _ = await _collections()
+    if jobs is None:
+        job = _mem_jobs.get(job_id)
+        if not job or job.get("session_id") != session_id or job.get("actor_key") not in keys:
+            raise KeyError("generated image job not found")
+        return _public_job(job)
+    job = await jobs.find_one({
+        "_id": job_id,
+        "session_id": session_id,
+        "actor_key": {"$in": keys},
+    })
+    if not job:
+        raise KeyError("generated image job not found")
+    return _public_job(job)
+
+
+async def merge_job_result(
+    actor: dict,
+    session_id: str,
+    job_id: str,
+    updates: dict,
+) -> dict:
+    """Owner-scoped update for crop/finalization metadata on a succeeded job."""
+    keys = _owner_keys(actor)
+    now = _now()
+    jobs, _ = await _collections()
+    if jobs is None:
+        async with _lock:
+            job = _mem_jobs.get(job_id)
+            if not job or job.get("session_id") != session_id or job.get("actor_key") not in keys:
+                raise KeyError("generated image job not found")
+            if job.get("status") != "succeeded":
+                raise ValueError("generated image is not ready")
+            result = deepcopy(job.get("result") or {})
+            result.update(deepcopy(updates))
+            job.update(result=result, updated_at=now)
+            return _public_job(job)
+    job = await jobs.find_one_and_update(
+        {
+            "_id": job_id,
+            "session_id": session_id,
+            "actor_key": {"$in": keys},
+            "status": "succeeded",
+        },
+        {"$set": {
+            **{f"result.{key}": deepcopy(value) for key, value in updates.items()},
+            "updated_at": now,
+        }},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not job:
+        existing = await jobs.find_one({
+            "_id": job_id, "session_id": session_id, "actor_key": {"$in": keys},
+        })
+        if existing:
+            raise ValueError("generated image is not ready")
+        raise KeyError("generated image job not found")
+    return _public_job(job)
 
 
 async def release(job_id: str, reason: str) -> dict | None:

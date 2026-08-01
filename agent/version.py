@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-07-31.7"
+BUILD_VERSION = "2026-08-02.1"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -293,4 +293,9 @@ BUILD_FEATURES = [
     "walkthrough-paced-creative-review",                   # creative analysis and assignment pause at explicit read checkpoints
     "responsive-header-attention-controls",                # confirmed reset plus safe animated Tour and mobile bottom helper
     "viewport-rooted-header-dialogs",                       # header dialogs portal to the viewport instead of the backdrop-filter containing block
+    "demo-v2-placement-creative-first",                     # new Autopilot runs place creative planning before audience and targeting
+    "durable-generated-image-gallery",                      # raw and cropped AI creatives survive refresh and navigation
+    "parallel-creative-generation-gallery",                 # two image jobs can run while explicit gallery selection remains user controlled
+    "full-bleed-znews-skin-generation",                      # side-skin creatives contain no synthetic grey docking strip
+    "centered-znews-category-masthead",                      # category mastheads remain centered across shared and dynamic layouts
 ]
