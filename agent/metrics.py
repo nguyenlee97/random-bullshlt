@@ -94,3 +94,55 @@ def setup_metrics(app) -> None:
         ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
     except ImportError:
         pass
+
+
+def _usage_tokens(response, *names: str) -> int:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return 0
+    for name in names:
+        value = usage.get(name) if isinstance(usage, dict) else getattr(usage, name, None)
+        if value is not None:
+            try:
+                return max(0, int(value))
+            except (TypeError, ValueError):
+                return 0
+    return 0
+
+
+def record_llm_call(
+    *,
+    model: str,
+    handler: str,
+    outcome: str,
+    provider: str,
+    response=None,
+    duration_seconds: float | None = None,
+) -> None:
+    """Record one provider call across legacy, Responses, and Zalo paths."""
+    LLM_CALLS.labels(
+        model=str(model or "unknown"),
+        handler=str(handler or "unknown"),
+        outcome=str(outcome or "unknown"),
+    ).inc()
+    LLM_PROVIDER_EVENTS.labels(
+        provider=str(provider or "unknown"),
+        outcome=str(outcome or "unknown"),
+    ).inc()
+    if response is not None:
+        LLM_TOKENS.labels(
+            model=str(model or "unknown"), direction="prompt",
+        ).inc(_usage_tokens(response, "input_tokens", "prompt_tokens"))
+        LLM_TOKENS.labels(
+            model=str(model or "unknown"), direction="completion",
+        ).inc(_usage_tokens(response, "output_tokens", "completion_tokens"))
+    if duration_seconds is not None:
+        SESSION_COST.observe(max(0.0, float(duration_seconds)))
+
+
+def record_tool_call(*, tool: str, outcome: str) -> None:
+    """Record one server-owned tool or Autopilot capability execution."""
+    TOOL_CALLS.labels(
+        tool=str(tool or "unknown"),
+        outcome=str(outcome or "unknown"),
+    ).inc()

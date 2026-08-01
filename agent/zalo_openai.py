@@ -9,13 +9,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Awaitable, Callable, Literal, TypeVar
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from config import config
+from metrics import record_llm_call, record_tool_call
+
+
+T = TypeVar("T")
 
 
 ZaloIntent = Literal[
@@ -116,6 +121,35 @@ def reset_zalo_openai_for_test() -> None:
 
 def _safety_identifier(thread_id: str) -> str:
     return "zalo_" + hashlib.sha256(thread_id.encode("utf-8")).hexdigest()[:32]
+
+
+async def _observed_response(
+    handler: str,
+    call: Callable[[], Awaitable[T]],
+) -> T:
+    started = time.perf_counter()
+    try:
+        response = await call()
+    except BaseException as exc:
+        import asyncio
+
+        record_llm_call(
+            model=config.ZALO_CHAT_MODEL,
+            handler=handler,
+            provider="openai_zalo",
+            outcome="cancelled" if isinstance(exc, asyncio.CancelledError) else "error",
+            duration_seconds=time.perf_counter() - started,
+        )
+        raise
+    record_llm_call(
+        model=config.ZALO_CHAT_MODEL,
+        handler=handler,
+        provider="openai_zalo",
+        outcome="ok",
+        response=response,
+        duration_seconds=time.perf_counter() - started,
+    )
+    return response
 
 
 def _bounded_history(history: list[dict]) -> list[dict]:
@@ -256,18 +290,21 @@ async def run_zalo_tool_turn(
     total_calls = 0
     client = _get_client()
     for _round in range(max(1, config.ZALO_CHAT_MAX_TOOL_ROUNDS)):
-        response = await client.responses.create(
-            model=config.ZALO_CHAT_MODEL,
-            instructions=_TOOL_AGENT_INSTRUCTIONS,
-            input=input_items,
-            tools=ZALO_TOOLS,
-            tool_choice="auto",
-            parallel_tool_calls=False,
-            max_tool_calls=max(1, config.ZALO_CHAT_MAX_TOOL_CALLS - total_calls),
-            reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
-            max_output_tokens=config.ZALO_CHAT_MAX_OUTPUT_TOKENS,
-            store=False,
-            safety_identifier=_safety_identifier(thread["thread_id"]),
+        response = await _observed_response(
+            "zalo.tool_round",
+            lambda: client.responses.create(
+                model=config.ZALO_CHAT_MODEL,
+                instructions=_TOOL_AGENT_INSTRUCTIONS,
+                input=input_items,
+                tools=ZALO_TOOLS,
+                tool_choice="auto",
+                parallel_tool_calls=False,
+                max_tool_calls=max(1, config.ZALO_CHAT_MAX_TOOL_CALLS - total_calls),
+                reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
+                max_output_tokens=config.ZALO_CHAT_MAX_OUTPUT_TOKENS,
+                store=False,
+                safety_identifier=_safety_identifier(thread["thread_id"]),
+            ),
         )
         outputs = list(getattr(response, "output", None) or [])
         calls = [item for item in outputs if _item_value(item, "type") == "function_call"]
@@ -307,6 +344,10 @@ async def run_zalo_tool_turn(
                         },
                     )
                     result = {"ok": False, "error": "tool_execution_failed"}
+            record_tool_call(
+                tool=name,
+                outcome="error" if isinstance(result, dict) and result.get("ok") is False else "ok",
+            )
             input_items.append({
                 "type": "function_call_output", "call_id": call_id,
                 "output": tool_output_json(result),
@@ -331,12 +372,15 @@ async def summarize_zalo_session(
         "messages": [{"role": item.get("role"), "content": str(item.get("content") or "")[:6000]}
                      for item in messages[-30:]],
     }
-    response = await _get_client().responses.parse(
-        model=config.ZALO_CHAT_MODEL, instructions=_SUMMARY_INSTRUCTIONS,
-        input=json.dumps(payload, ensure_ascii=False), text_format=ZaloSessionSummary,
-        reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
-        max_output_tokens=min(config.ZALO_CHAT_MAX_OUTPUT_TOKENS, 1200),
-        store=False, safety_identifier=_safety_identifier(thread_id),
+    response = await _observed_response(
+        "zalo.session_summary",
+        lambda: _get_client().responses.parse(
+            model=config.ZALO_CHAT_MODEL, instructions=_SUMMARY_INSTRUCTIONS,
+            input=json.dumps(payload, ensure_ascii=False), text_format=ZaloSessionSummary,
+            reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
+            max_output_tokens=min(config.ZALO_CHAT_MAX_OUTPUT_TOKENS, 1200),
+            store=False, safety_identifier=_safety_identifier(thread_id),
+        ),
     )
     if response.output_parsed is None:
         raise RuntimeError("OpenAI returned no Zalo session summary")
@@ -388,15 +432,18 @@ async def plan_zalo_turn(
             "pause_with_confirmation", "resume_with_confirmation",
         ],
     }
-    response = await _get_client().responses.parse(
-        model=config.ZALO_CHAT_MODEL,
-        instructions=_PLAN_INSTRUCTIONS,
-        input=json.dumps(context, ensure_ascii=False),
-        text_format=ZaloTurnPlan,
-        reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
-        max_output_tokens=config.ZALO_CHAT_MAX_OUTPUT_TOKENS,
-        store=False,
-        safety_identifier=_safety_identifier(thread["thread_id"]),
+    response = await _observed_response(
+        "zalo.turn_plan",
+        lambda: _get_client().responses.parse(
+            model=config.ZALO_CHAT_MODEL,
+            instructions=_PLAN_INSTRUCTIONS,
+            input=json.dumps(context, ensure_ascii=False),
+            text_format=ZaloTurnPlan,
+            reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
+            max_output_tokens=config.ZALO_CHAT_MAX_OUTPUT_TOKENS,
+            store=False,
+            safety_identifier=_safety_identifier(thread["thread_id"]),
+        ),
     )
     if response.output_parsed is None:
         raise RuntimeError("OpenAI returned no Zalo turn plan")
@@ -425,15 +472,18 @@ async def render_zalo_reply(
         "recent_messages": _bounded_history(history),
         "tool_result": str(tool_result)[:12000],
     }
-    response = await _get_client().responses.parse(
-        model=config.ZALO_CHAT_MODEL,
-        instructions=_RENDER_INSTRUCTIONS,
-        input=json.dumps(context, ensure_ascii=False),
-        text_format=ZaloRenderedReply,
-        reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
-        max_output_tokens=config.ZALO_CHAT_MAX_OUTPUT_TOKENS,
-        store=False,
-        safety_identifier=_safety_identifier(thread_id),
+    response = await _observed_response(
+        "zalo.render_reply",
+        lambda: _get_client().responses.parse(
+            model=config.ZALO_CHAT_MODEL,
+            instructions=_RENDER_INSTRUCTIONS,
+            input=json.dumps(context, ensure_ascii=False),
+            text_format=ZaloRenderedReply,
+            reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
+            max_output_tokens=config.ZALO_CHAT_MAX_OUTPUT_TOKENS,
+            store=False,
+            safety_identifier=_safety_identifier(thread_id),
+        ),
     )
     parsed = response.output_parsed
     if parsed is None or not parsed.text.strip():
@@ -456,15 +506,18 @@ async def extract_zalo_brief(
         "latest_message": message,
         "recent_messages": _bounded_history(history),
     }
-    response = await _get_client().responses.parse(
-        model=config.ZALO_CHAT_MODEL,
-        instructions=_BRIEF_INSTRUCTIONS,
-        input=json.dumps(context, ensure_ascii=False),
-        text_format=ZaloBriefDraft,
-        reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
-        max_output_tokens=config.ZALO_CHAT_MAX_OUTPUT_TOKENS,
-        store=False,
-        safety_identifier=_safety_identifier(thread_id),
+    response = await _observed_response(
+        "zalo.extract_brief",
+        lambda: _get_client().responses.parse(
+            model=config.ZALO_CHAT_MODEL,
+            instructions=_BRIEF_INSTRUCTIONS,
+            input=json.dumps(context, ensure_ascii=False),
+            text_format=ZaloBriefDraft,
+            reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
+            max_output_tokens=config.ZALO_CHAT_MAX_OUTPUT_TOKENS,
+            store=False,
+            safety_identifier=_safety_identifier(thread_id),
+        ),
     )
     if response.output_parsed is None:
         raise RuntimeError("OpenAI returned no Zalo brief")
@@ -515,15 +568,18 @@ async def classify_pending_brief_decision(
         },
         "recent_messages": _bounded_history(history)[-6:],
     }
-    response = await _get_client().responses.parse(
-        model=config.ZALO_CHAT_MODEL,
-        instructions=_PENDING_BRIEF_DECISION_INSTRUCTIONS,
-        input=json.dumps(context, ensure_ascii=False),
-        text_format=ZaloPendingBriefDecision,
-        reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
-        max_output_tokens=min(config.ZALO_CHAT_MAX_OUTPUT_TOKENS, 500),
-        store=False,
-        safety_identifier=_safety_identifier(thread_id),
+    response = await _observed_response(
+        "zalo.pending_brief_decision",
+        lambda: _get_client().responses.parse(
+            model=config.ZALO_CHAT_MODEL,
+            instructions=_PENDING_BRIEF_DECISION_INSTRUCTIONS,
+            input=json.dumps(context, ensure_ascii=False),
+            text_format=ZaloPendingBriefDecision,
+            reasoning={"effort": config.ZALO_CHAT_REASONING_EFFORT},
+            max_output_tokens=min(config.ZALO_CHAT_MAX_OUTPUT_TOKENS, 500),
+            store=False,
+            safety_identifier=_safety_identifier(thread_id),
+        ),
     )
     if response.output_parsed is None:
         raise RuntimeError("OpenAI returned no pending brief decision")

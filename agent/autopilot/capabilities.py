@@ -1334,6 +1334,7 @@ async def _build_order_draft(run: dict, workspace: dict) -> CapabilityResult:
 
 
 async def _run_order_guard(run: dict, workspace: dict) -> CapabilityResult:
+    from metrics import ORDERS_REJECTED
     from validation.order_guard import OrderValidationError, guard_order
     draft = _artifact(workspace, "order_draft", {})
     payload = draft.get("payload", {}) if isinstance(draft, dict) else {}
@@ -1347,6 +1348,9 @@ async def _run_order_guard(run: dict, workspace: dict) -> CapabilityResult:
             trusted_creative_verdicts=trusted_verdicts,
         )
     except OrderValidationError as exc:
+        ORDERS_REJECTED.labels(
+            reason=exc.reasons[0][:40] if exc.reasons else "unknown",
+        ).inc()
         return CapabilityResult(
             value={"passed": False, "reasons": exc.reasons,
                    "review_action": "retry"},
@@ -1384,8 +1388,9 @@ async def _launch_approval(run: dict, workspace: dict) -> CapabilityResult:
 
 
 async def _create_order(run: dict, workspace: dict) -> CapabilityResult:
+    from metrics import ORDERS_CREATED, ORDERS_REJECTED
     from tools.order_api import create_order
-    from validation.order_guard import guard_order
+    from validation.order_guard import OrderValidationError, guard_order
     from session import update_order_ids
     draft_item = workspace.get("artifacts", {}).get("order_draft", {})
     if draft_item.get("status") != "approved":
@@ -1403,14 +1408,22 @@ async def _create_order(run: dict, workspace: dict) -> CapabilityResult:
     trusted_verdicts = _trusted_skipped_creative_verdicts(workspace)
     payload = _hydrate_trusted_skip_analysis_ids(payload, trusted_verdicts)
     # Recheck live catalogs/conflicts immediately before the side effect.
-    await guard_order(
-        payload,
-        await get_or_create_session(run["session_id"]),
-        trusted_creative_verdicts=trusted_verdicts,
-    )
+    try:
+        await guard_order(
+            payload,
+            await get_or_create_session(run["session_id"]),
+            trusted_creative_verdicts=trusted_verdicts,
+        )
+    except OrderValidationError as exc:
+        ORDERS_REJECTED.labels(
+            reason=exc.reasons[0][:40] if exc.reasons else "unknown",
+        ).inc()
+        raise
     result = await create_order(payload)
     if result.get("error"):
+        ORDERS_REJECTED.labels(reason="order_api_rejected").inc()
         raise RuntimeError(f"order API rejected launch: {result}")
+    ORDERS_CREATED.inc()
     order_id = result.get("id") or result.get("_id")
     if order_id:
         session = await get_or_create_session(run["session_id"])

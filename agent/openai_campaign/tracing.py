@@ -18,6 +18,7 @@ import time
 from typing import Any, Awaitable, Callable, TypeVar
 
 from config import config
+from metrics import record_llm_call, record_tool_call
 from request_context import get_request_id
 from security import redact_langfuse
 from version import BUILD_VERSION
@@ -261,9 +262,33 @@ async def trace_responses_call(
     model_parameters: dict | None = None,
 ) -> T:
     """Run one Responses API call and capture its complete observable I/O."""
+    metrics_started = time.perf_counter()
+
+    async def measured_call() -> T:
+        try:
+            response = await call()
+        except BaseException as exc:
+            record_llm_call(
+                model=model,
+                handler=name,
+                provider="openai",
+                outcome="cancelled" if isinstance(exc, asyncio.CancelledError) else "error",
+                duration_seconds=time.perf_counter() - metrics_started,
+            )
+            raise
+        record_llm_call(
+            model=model,
+            handler=name,
+            provider="openai",
+            outcome="ok",
+            response=response,
+            duration_seconds=time.perf_counter() - metrics_started,
+        )
+        return response
+
     client = _get_langfuse()
     if client is None:
-        return await call()
+        return await measured_call()
 
     parent = _current_turn.get()
     attributes = None
@@ -296,10 +321,10 @@ async def trace_responses_call(
                 attributes.__exit__(None, None, None)
             except Exception:
                 pass
-        return await call()
+        return await measured_call()
 
     try:
-        response = await call()
+        response = await measured_call()
     except BaseException as exc:
         _safe_update(
             observation,
@@ -347,10 +372,22 @@ async def trace_tool_call(
     call: Callable[[], Awaitable[T]],
 ) -> T:
     """Record a server-owned tool execution as a sibling of model calls."""
+    async def measured_call() -> T:
+        try:
+            result = await call()
+        except BaseException as exc:
+            record_tool_call(
+                tool=name,
+                outcome="cancelled" if isinstance(exc, asyncio.CancelledError) else "error",
+            )
+            raise
+        record_tool_call(tool=name, outcome="ok")
+        return result
+
     client = _get_langfuse()
     parent = _current_turn.get()
     if client is None or parent is None:
-        return await call()
+        return await measured_call()
     observation = None
     started = time.perf_counter()
     try:
@@ -363,10 +400,10 @@ async def trace_tool_call(
         )
     except Exception as exc:
         print("[openai_campaign] Langfuse tool start failed:", str(exc)[:300])
-        return await call()
+        return await measured_call()
 
     try:
-        result = await call()
+        result = await measured_call()
     except BaseException as exc:
         _safe_update(
             observation,

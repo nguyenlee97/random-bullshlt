@@ -139,6 +139,83 @@ async def _async_response():
 
 
 @pytest.mark.asyncio
+async def test_responses_metrics_are_recorded_without_langfuse(monkeypatch):
+    import openai_campaign.tracing as tracing
+
+    recorded = []
+    monkeypatch.setattr(tracing, "_get_langfuse", lambda: None)
+    monkeypatch.setattr(
+        tracing, "record_llm_call", lambda **kwargs: recorded.append(kwargs),
+    )
+
+    result = await tracing.trace_responses_call(
+        name="openai.metric_contract",
+        session_id="metrics-no-langfuse",
+        model="gpt-5.4-mini",
+        request={"input": "hello"},
+        call=_async_response,
+    )
+
+    assert result.id == "resp_full_debug"
+    assert len(recorded) == 1
+    assert recorded[0]["model"] == "gpt-5.4-mini"
+    assert recorded[0]["handler"] == "openai.metric_contract"
+    assert recorded[0]["provider"] == "openai"
+    assert recorded[0]["outcome"] == "ok"
+    assert recorded[0]["response"] is result
+    assert recorded[0]["duration_seconds"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_response_error_metrics_preserve_provider_exception(monkeypatch):
+    import openai_campaign.tracing as tracing
+
+    recorded = []
+
+    async def provider_call():
+        raise TimeoutError("provider timed out")
+
+    monkeypatch.setattr(tracing, "_get_langfuse", lambda: None)
+    monkeypatch.setattr(
+        tracing, "record_llm_call", lambda **kwargs: recorded.append(kwargs),
+    )
+
+    with pytest.raises(TimeoutError, match="provider timed out"):
+        await tracing.trace_responses_call(
+            name="openai.metric_error",
+            session_id="metrics-error",
+            model="gpt-5.4-mini",
+            request={"input": "hello"},
+            call=provider_call,
+        )
+
+    assert len(recorded) == 1
+    assert recorded[0]["outcome"] == "error"
+    assert "response" not in recorded[0]
+
+
+@pytest.mark.asyncio
+async def test_tool_metrics_are_recorded_without_langfuse(monkeypatch):
+    import openai_campaign.tracing as tracing
+
+    recorded = []
+    monkeypatch.setattr(tracing, "_get_langfuse", lambda: None)
+    monkeypatch.setattr(
+        tracing, "record_tool_call", lambda **kwargs: recorded.append(kwargs),
+    )
+
+    result = await tracing.trace_tool_call(
+        session_id="tool-metrics",
+        name="search_zones",
+        arguments={"query": "food"},
+        call=_async_tool_result,
+    )
+
+    assert result == {"output": "zone-1"}
+    assert recorded == [{"tool": "search_zones", "outcome": "ok"}]
+
+
+@pytest.mark.asyncio
 async def test_langfuse_start_failure_does_not_duplicate_or_break_provider_call(
     monkeypatch,
 ):

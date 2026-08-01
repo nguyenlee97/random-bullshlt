@@ -23,6 +23,7 @@ from autopilot.service import (
     task_commit_id,
 )
 from config import config
+from metrics import record_tool_call
 from workspace.service import commit_artifact_result, get_task_context
 
 _worker_task: asyncio.Task | None = None
@@ -132,7 +133,18 @@ async def _process(task: dict) -> None:
         if task.get("artifact"):
             context = await get_task_context(run["session_id"], task["artifact"])
         commit_task_id = task_commit_id(task)
-        output = await execute(task, run)
+        try:
+            output = await execute(task, run)
+        except BaseException as exc:
+            record_tool_call(
+                tool=task.get("capability") or task.get("key") or "autopilot",
+                outcome="cancelled" if isinstance(exc, asyncio.CancelledError) else "error",
+            )
+            raise
+        record_tool_call(
+            tool=task.get("capability") or task.get("key") or "autopilot",
+            outcome="ok",
+        )
         if task.get("key") == "create_setup_report":
             report_status = await _wait_for_campaign_report(run)
             if isinstance(output.value, dict):

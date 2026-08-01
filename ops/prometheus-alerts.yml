@@ -4,9 +4,9 @@ groups:
       - alert: AgentAvailabilityBelowSLO
         expr: |
           (
-            sum(rate(http_requests_total{status=~"5.."}[15m]))
+            (sum(rate(http_requests_total{status=~"5.."}[15m])) or vector(0))
             /
-            clamp_min(sum(rate(http_requests_total[15m])), 0.001)
+            clamp_min((sum(rate(http_requests_total[15m])) or vector(0)), 0.001)
           ) > 0.005
         for: 10m
         labels:
@@ -28,16 +28,16 @@ groups:
           summary: Advertising Agent chat p95 exceeds 8 seconds
       - alert: AgentHardFallbackRateHigh
         expr: |
-          sum(rate(agent_fallback_level_total{level="3"}[15m]))
+          (sum(rate(agent_fallback_level_total{level="3"}[15m])) or vector(0))
           /
-          clamp_min(sum(rate(agent_tool_calls_total[15m])), 0.001) > 0.02
+          clamp_min((sum(rate(agent_tool_calls_total[15m])) or vector(0)), 0.001) > 0.02
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: Hardcoded fallback rate exceeds 2%
       - alert: AgentPrimaryModelUnavailable
-        expr: increase(agent_llm_provider_events_total{provider="primary",outcome=~"error|bypassed"}[10m]) > 2
+        expr: sum(increase(agent_llm_provider_events_total{provider=~"primary|openai|openai_zalo",outcome=~"error|bypassed"}[10m])) > 2
         for: 2m
         labels:
           severity: warning
