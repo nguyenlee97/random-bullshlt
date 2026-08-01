@@ -893,7 +893,6 @@ async def test_openai_creative_override_requires_reason_and_replans(monkeypatch)
     import creative_intel.service as creative_service
     import openai_campaign.autopilot as openai_autopilot
     import workspace.service as workspace_service
-    from openai_campaign.autopilot import CreativeReviewAction
 
     workspace = {
         "experience_mode": "autopilot",
@@ -938,12 +937,8 @@ async def test_openai_creative_override_requires_reason_and_replans(monkeypatch)
     monkeypatch.setattr(
         openai_autopilot,
         "classify_openai_creative_review_action",
-        AsyncMock(return_value=CreativeReviewAction(
-            intent="approve_override",
-            creative_numbers=[1],
-            reason="Đã kiểm tra chữ và thương hiệu",
-            explicit=True,
-            evidence="Chấp nhận creative 1",
+        AsyncMock(side_effect=AssertionError(
+            "the documented override command must not require the LLM classifier"
         )),
     )
 
@@ -957,7 +952,7 @@ async def test_openai_creative_override_requires_reason_and_replans(monkeypatch)
     approve.assert_awaited_once_with(
         "session-override",
         "ci-override",
-        "Đã kiểm tra chữ và thương hiệu",
+        "đã kiểm tra chữ và thương hiệu",
         actor="zalo_campaign_operator",
     )
     reconcile.assert_awaited_once_with("run-creative-override")

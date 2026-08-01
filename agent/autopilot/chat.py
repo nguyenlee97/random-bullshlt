@@ -122,6 +122,38 @@ def _is_creative_preview_request(message: str) -> bool:
     )
 
 
+def _explicit_creative_override(message: str) -> dict | None:
+    """Parse the documented manual-review command without an LLM round trip.
+
+    The model classifier remains useful for free-form requests, but this exact
+    command is part of the user-facing checkpoint contract and must be
+    deterministic in both the workspace and Zalo chat.
+    """
+    folded = _fold(message)
+    if not re.search(
+        r"\b(?:chap nhan|duyet|phe duyet|approve|accept)\s+creative\b",
+        folded,
+    ):
+        return None
+
+    creative_numbers = list(dict.fromkeys(
+        int(value) for value in re.findall(r"\d+", folded)
+    ))
+    reason_match = re.search(
+        r"(?:\bvì\b|\bvi\b|\bbecause\b)\s+(.+?)\s*$",
+        message,
+        flags=re.IGNORECASE,
+    )
+    reason = reason_match.group(1).strip() if reason_match else ""
+    if not creative_numbers or len(reason) < 5:
+        return None
+    return {
+        "creative_numbers": creative_numbers,
+        "reason": reason,
+        "evidence": message.strip(),
+    }
+
+
 def _creative_analysis_choice(message: str) -> str | None:
     """Parse the same explicit Analyze/Skip choice exposed by the workspace UI."""
     folded = _fold(message)
@@ -529,7 +561,16 @@ async def route_autopilot_chat(
                 "huy", "tu choi", "khong duyet",
             }
             action = None
-            if _fold(message) not in plain_decisions:
+            explicit_override = _explicit_creative_override(message)
+            if explicit_override:
+                from openai_campaign.autopilot import CreativeReviewAction
+
+                action = CreativeReviewAction(
+                    intent="approve_override",
+                    explicit=True,
+                    **explicit_override,
+                )
+            elif _fold(message) not in plain_decisions:
                 try:
                     from openai_campaign.autopilot import (
                         classify_openai_creative_review_action,
