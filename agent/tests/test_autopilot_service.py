@@ -151,6 +151,20 @@ async def test_run_persists_explicit_ai_creative_source():
 
 
 @pytest.mark.asyncio
+async def test_full_auto_run_delegates_creative_analysis_to_policy():
+    await _seed("start-full-auto-analysis")
+    run = await service.create_run(
+        "start-full-auto-analysis",
+        approval_policy="auto_build_draft",
+        creative_source="ai_generate",
+        idempotency_key="start-full-auto-analysis",
+    )
+    assert run["creative_analysis_mode"] == "analyze"
+    assert run["creative_analysis_actor"] == "autopilot_policy"
+    assert run["creative_analysis_decided_at"]
+
+
+@pytest.mark.asyncio
 async def test_run_rejects_unknown_creative_source():
     await _seed("start-invalid-creative")
     with pytest.raises(ValueError, match="creative_source"):
@@ -172,6 +186,39 @@ async def test_creative_analysis_requires_explicit_start_or_skip():
     assert result.force_review is True
     assert result.value["reason"] == "analysis_confirmation_required"
     assert result.value["review_action"] == "retry"
+
+
+@pytest.mark.asyncio
+async def test_full_auto_creative_analysis_starts_without_confirmation(monkeypatch):
+    import creative_intel.service as creative_service
+
+    doc = {
+        "analysis_id": "ci-auto",
+        "url": "https://example.test/creative.png",
+        "effective_status": "auto_approved",
+    }
+
+    async def completed_intel(_session_id):
+        return [doc]
+
+    async def synced_intel(_session_id, _files):
+        return [doc]
+
+    monkeypatch.setattr(creative_service, "get_intel", completed_intel)
+    monkeypatch.setattr(creative_service, "sync_generation_vlm_reviews", synced_intel)
+    result = await _analyze_creatives(
+        {
+            "run_id": "analysis-full-auto",
+            "session_id": "analysis-full-auto",
+            "approval_policy": "auto_build_draft",
+        },
+        {"artifacts": {"creative": {"value": {"files": [{
+            "name": "creative.png",
+            "url": doc["url"],
+        }]}}}},
+    )
+    assert result.force_review is False
+    assert result.value["files"] == [doc]
 
 
 @pytest.mark.asyncio
@@ -291,6 +338,41 @@ async def test_in_progress_creative_analysis_remains_waiting(monkeypatch):
     assert current["status"] == "waiting_review"
     assert task["status"] == "waiting_review"
     assert task["result"]["reason"] == "analysis_in_progress"
+
+
+@pytest.mark.asyncio
+async def test_in_progress_analysis_cannot_be_manually_approved(monkeypatch):
+    import creative_intel.service as creative_service
+
+    await _seed("analysis-no-manual-bypass")
+    run = await service.create_run(
+        "analysis-no-manual-bypass",
+        approval_policy="auto_build_draft",
+        creative_source="ai_generate",
+        idempotency_key="analysis-no-manual-bypass",
+    )
+    task_id = f"{run['run_id']}:analyze_creatives"
+    service._mem_tasks[task_id].update(
+        status="waiting_review",
+        result={
+            "reason": "analysis_in_progress",
+            "review_action": "retry",
+            "files": [{"analysis_id": "ci-running"}],
+        },
+    )
+    service._mem_runs[run["run_id"]]["status"] = "waiting_review"
+
+    async def running_intel(_session_id):
+        return [{"analysis_id": "ci-running", "effective_status": "analyzing"}]
+
+    monkeypatch.setattr(creative_service, "get_intel", running_intel)
+    with pytest.raises(service.RunConflict, match="continue automatically"):
+        await service.review_task(run["run_id"], task_id, approved=True)
+
+    current = await service.get_run(run["run_id"])
+    task = next(item for item in current["tasks"] if item["task_id"] == task_id)
+    assert current["status"] == "waiting_review"
+    assert task["status"] == "waiting_review"
 
 
 @pytest.mark.asyncio
@@ -436,15 +518,15 @@ def test_creative_intel_commit_is_internal_autopilot_work():
 
 
 @pytest.mark.asyncio
-async def test_auto_build_has_no_routine_approval_checkpoints():
-    assert not service._needs_review({"review": "launch"}, "auto_build_draft")
+async def test_auto_build_keeps_launch_as_the_only_routine_approval_checkpoint():
+    assert service._needs_review({"review": "launch"}, "auto_build_draft")
     assert not service._needs_review({"review": "critical"}, "auto_build_draft")
     assert not service._needs_review({"review": "stage"}, "auto_build_draft")
     assert service._needs_review({"review": "launch"}, "critical_only")
 
 
 @pytest.mark.asyncio
-async def test_launch_boundary_uses_fully_automatic_delegation():
+async def test_launch_boundary_always_requires_explicit_approval():
     workspace = {"artifacts": {"order_draft": {
         "revision": 7,
         "value": {"payload": {
@@ -457,10 +539,10 @@ async def test_launch_boundary_uses_fully_automatic_delegation():
         {"approval_policy": "auto_build_draft"},
         workspace,
     )
-    assert automatic.force_review is False
-    assert automatic.value["requires_explicit_approval"] is False
-    assert automatic.value["authorization"] == "fully_automatic_mode"
-    assert automatic.evidence[0]["auto_approvable"] is True
+    assert automatic.force_review is True
+    assert automatic.value["requires_explicit_approval"] is True
+    assert automatic.value["authorization"] == "explicit_launch_confirmation"
+    assert automatic.evidence[0]["auto_approvable"] is False
 
     semi_automatic = await _launch_approval(
         {"approval_policy": "critical_only"},
@@ -468,6 +550,8 @@ async def test_launch_boundary_uses_fully_automatic_delegation():
     )
     assert semi_automatic.force_review is True
     assert semi_automatic.value["requires_explicit_approval"] is True
+    assert semi_automatic.value["authorization"] == "explicit_launch_confirmation"
+    assert semi_automatic.evidence[0]["auto_approvable"] is False
 
 
 @pytest.mark.asyncio

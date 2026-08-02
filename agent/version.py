@@ -3,9 +3,11 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-08-02.5"
+BUILD_VERSION = "2026-08-03.1"
 
 BUILD_FEATURES = [
+    "autopilot-full-auto-creative-analysis", # full-auto starts VLM and resumes without operator refresh
+    "autopilot-explicit-launch-boundary",    # every policy requires human approval before order creation
     "np6-placement-catalog",
     "np6-audience-topic-taxonomy-v2",
     "np6-context-first-zone-ranking",

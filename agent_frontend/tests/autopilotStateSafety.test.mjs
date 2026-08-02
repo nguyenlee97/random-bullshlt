@@ -31,6 +31,19 @@ test('uploaded creative disables fully automatic policy with an accessible toolt
   assert.match(panel, /value === 'upload' && policy === 'auto_build_draft'/)
 })
 
+test('full auto communicates and preserves the explicit launch boundary', () => {
+  assert.match(panel, /Tự xây dựng bản nháp/)
+  assert.match(panel, /luôn dừng trước launch để bạn cho phép tạo order/)
+  assert.match(panel, /luôn chờ bạn duyệt trước khi launch và tạo order/)
+})
+
+test('in-progress creative analysis cannot be manually advanced from a stale UI', () => {
+  assert.match(panel, /const analysisInProgress = \(/)
+  assert.match(panel, /!analysisConfirmationRequired && !analysisInProgress && <button/)
+  assert.match(panel, /Agent sẽ tự tiếp tục khi mọi ảnh có kết quả/)
+  assert.doesNotMatch(panel, /Cập nhật kết quả phân tích/)
+})
+
 test('durable Autopilot milestones are injected once and hydrate report state', () => {
   assert.match(app, /autopilotMilestonesShownRef/)
   assert.match(app, /metadata\.campaign_id \|\| autopilotSummary\?\.reportCampaignId/)

@@ -562,6 +562,10 @@ export default function AutopilotPanel({
     waiting?.key === 'analyze_creatives'
     && waiting?.result?.reason === 'analysis_confirmation_required'
   )
+  const analysisInProgress = (
+    waiting?.key === 'analyze_creatives'
+    && waiting?.result?.reason === 'analysis_in_progress'
+  )
   const assignmentResult = taskByKey.assign_creatives?.result
     || taskByKey.assign_creatives?.pending_artifact?.value
     || workspaceSnapshot?.artifacts?.assignments?.value
@@ -906,7 +910,7 @@ export default function AutopilotPanel({
                   )
                   : policy === 'review_every_stage'
                     ? 'Kiểm soát tối đa: Agent trình kết quả và chờ bạn duyệt ở từng giai đoạn chính trước khi tiếp tục.'
-                    : 'Tự động hoàn toàn: Agent tự chọn audience liên quan, targeting, placement và creative để hoàn tất campaign; chỉ dừng khi thiếu dữ liệu hoặc có rủi ro cần con người xử lý.'}
+                    : 'Tự động hoàn toàn: Agent tự chọn audience liên quan, targeting, placement và creative để hoàn tất bản nháp; luôn dừng trước launch để bạn cho phép tạo order.'}
                 {' '}Creative có rủi ro sẽ luôn dừng để review.
               </p>
             </div>
@@ -945,7 +949,7 @@ export default function AutopilotPanel({
               ) : (
                 <p className="mt-1 text-xs text-slate-500">
                   {policy === 'auto_build_draft'
-                    ? 'Agent sẽ tự chạy đến khi hoàn tất; guard vẫn dừng run nếu phát hiện thiếu dữ liệu hoặc rủi ro.'
+                    ? 'Agent tự chạy qua các bước lập bản nháp, nhưng luôn chờ bạn duyệt trước khi launch và tạo order.'
                     : 'Agent sẽ dừng tại các checkpoint được mô tả ở chế độ duyệt phía trên.'}
                 </p>
               )}
@@ -1368,8 +1372,13 @@ export default function AutopilotPanel({
                     </button>
                   </>
                 )}
+                {analysisInProgress && (
+                  <p className="basis-full text-[11px] font-semibold text-amber-900">
+                    Creative Intelligence đang chạy. Agent sẽ tự tiếp tục khi mọi ảnh có kết quả; bạn không cần bấm cập nhật.
+                  </p>
+                )}
                 <button onClick={cancelRunWithConfirmation} disabled={loading} className="min-w-[calc(50%_-_0.1875rem)] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:min-w-0 sm:flex-none">Hủy run</button>
-                {!analysisConfirmationRequired && <button
+                {!analysisConfirmationRequired && !analysisInProgress && <button
                   data-demo="autopilot-review-approve"
                   data-autopilot-task={waiting.key}
                   onClick={() => review(waiting, true)}
@@ -1378,9 +1387,7 @@ export default function AutopilotPanel({
                 >
                   {retryAction
                     ? waiting.key === 'analyze_creatives'
-                      ? waiting.result?.reason === 'analysis_in_progress'
-                        ? 'Cập nhật kết quả phân tích'
-                        : waiting.result?.reason === 'creative_needs_review'
+                      ? waiting.result?.reason === 'creative_needs_review'
                           ? 'Đã xử lý, phân tích lại'
                           : 'Kiểm tra creative'
                       : 'Kiểm tra lại'

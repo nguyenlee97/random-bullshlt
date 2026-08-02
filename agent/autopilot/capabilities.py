@@ -868,6 +868,14 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
     )
     creative = _artifact(workspace, "creative", {})
     files = creative.get("files", []) if isinstance(creative, dict) else []
+    analysis_mode = run.get("creative_analysis_mode")
+    if (
+        analysis_mode not in {"analyze", "skip"}
+        and run.get("approval_policy") == "auto_build_draft"
+    ):
+        # Full-auto delegates the routine choice to run Creative Intelligence.
+        # Flagged verdicts still stop below for human review.
+        analysis_mode = "analyze"
     if not files:
         return CapabilityResult(
             value={
@@ -878,7 +886,7 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
             evidence=[{"type": "input_required", "artifact": "creative"}],
             force_review=True,
         )
-    if run.get("creative_analysis_mode") not in {"analyze", "skip"}:
+    if analysis_mode not in {"analyze", "skip"}:
         return CapabilityResult(
             value={
                 "ready": False,
@@ -897,7 +905,7 @@ async def _analyze_creatives(run: dict, workspace: dict) -> CapabilityResult:
             }],
             force_review=True,
         )
-    if run.get("creative_analysis_mode") == "skip":
+    if analysis_mode == "skip":
         skipped_docs = [{
             "analysis_id": f"skip:{run.get('run_id', run['session_id'])}:{index}",
             "name": file.get("name"),
@@ -1367,23 +1375,19 @@ async def _launch_approval(run: dict, workspace: dict) -> CapabilityResult:
     draft_item = workspace.get("artifacts", {}).get("order_draft", {})
     draft = draft_item.get("value") or {}
     payload = draft.get("payload", {}) if isinstance(draft, dict) else {}
-    fully_automatic = run.get("approval_policy") == "auto_build_draft"
     return CapabilityResult(
-        value={"ready": True, "requires_explicit_approval": not fully_automatic,
-               "authorization": (
-                   "fully_automatic_mode"
-                   if fully_automatic else "explicit_launch_confirmation"
-               ),
+        value={"ready": True, "requires_explicit_approval": True,
+               "authorization": "explicit_launch_confirmation",
                "order_draft_revision": int(draft_item.get("revision", 0)),
                "summary": {"brand": payload.get("brand"),
                            "budget": payload.get("budget"),
                            "placements": payload.get("placements", [])}},
         evidence=[{
             "type": "launch_boundary",
-            "auto_approvable": fully_automatic,
+            "auto_approvable": False,
             "approval_policy": run.get("approval_policy"),
         }],
-        force_review=not fully_automatic,
+        force_review=True,
     )
 
 

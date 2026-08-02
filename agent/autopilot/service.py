@@ -365,12 +365,24 @@ def _task_id(run_id: str, key: str) -> str:
 def _needs_review(task: dict, policy: str) -> bool:
     level = task.get("review_level", task.get("review", "none"))
     if level == "launch":
-        return policy != "auto_build_draft"
+        # Creating an order is an external side effect. Even the most
+        # autonomous drafting policy must stop for the operator here.
+        return True
     if level == "critical":
         return policy in {"review_every_stage", "critical_only"}
     if level == "stage":
         return policy == "review_every_stage"
     return False
+
+
+def _effective_creative_analysis_mode(run: dict) -> str | None:
+    """Resolve the durable analysis choice, including legacy full-auto runs."""
+    mode = run.get("creative_analysis_mode")
+    if mode in {"analyze", "skip"}:
+        return mode
+    if run.get("approval_policy") == "auto_build_draft":
+        return "analyze"
+    return None
 
 
 def _task_review_level(spec: dict, conversation_model: str = "") -> str:
@@ -513,6 +525,12 @@ async def create_run(
         "milestone_keys": [],
         "milestones": [],
     }
+    if approval_policy == "auto_build_draft":
+        run.update({
+            "creative_analysis_mode": "analyze",
+            "creative_analysis_actor": "autopilot_policy",
+            "creative_analysis_decided_at": now,
+        })
     task_docs = _new_tasks(run_id, model_lock["conversation_model"])
     if runs is not None:
         try:
@@ -1016,7 +1034,7 @@ async def resume_completed_creative_analysis(run_id: str) -> dict:
         not task
         or task.get("status") != "waiting_review"
         or result.get("reason") != "analysis_in_progress"
-        or run.get("creative_analysis_mode") != "analyze"
+        or _effective_creative_analysis_mode(run) != "analyze"
     ):
         return {"changed": False, "reason": "not_waiting_for_analysis", "run": run}
 
@@ -1294,6 +1312,20 @@ async def review_task(
         ):
             return await get_run(run_id)
         raise RunConflict("task is not waiting for review")
+    if (
+        approved
+        and task.get("key") == "analyze_creatives"
+        and (task.get("result") or {}).get("reason") == "analysis_in_progress"
+    ):
+        # A stale UI must never turn a still-running VLM job into a manual
+        # approval. If every job is terminal this safely performs the same
+        # automatic resume as the creative worker; otherwise it stays waiting.
+        resumed = await resume_completed_creative_analysis(run_id)
+        if resumed.get("changed"):
+            return resumed["run"]
+        raise RunConflict(
+            "Creative analysis is still running and will continue automatically"
+        )
     now = _now()
     retry_after_review = bool(
         approved and (task.get("result") or {}).get("review_action") == "retry"
