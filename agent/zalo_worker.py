@@ -91,7 +91,7 @@ async def enqueue_image(
 
 async def _enqueue_creative_media_once(
     *, thread: dict, workspace: dict, idempotency_key: str, run_id: str,
-) -> None:
+) -> int:
     """Prepare every creative for OA delivery and enqueue it once per milestone."""
     from openai_campaign.zalo_review import creative_media_parts
     from zalo_campaign_agent import _prepare_remote_review_media_parts
@@ -115,6 +115,7 @@ async def _enqueue_creative_media_once(
                 idempotency_key=part_key,
                 run_id=run_id,
             )
+    return len(prepared_parts)
 
 
 def _is_creative_creation_checkpoint(task: dict | None) -> bool:
@@ -125,7 +126,10 @@ def _is_creative_creation_checkpoint(task: dict | None) -> bool:
         or task.get("result")
         or {}
     )
-    return value.get("reason") == "analysis_confirmation_required"
+    return value.get("reason") in {
+        "analysis_confirmation_required",
+        "analysis_in_progress",
+    }
 
 
 async def _claim_event() -> dict | None:
@@ -364,10 +368,14 @@ async def _process_progress_once() -> bool:
             workspace_url += f"/?conversation={conversation_id}"
         review_markers = set(subscription.get("review_summary_markers") or [])
         new_review_markers: list[str] = []
+        creative_media_markers = set(
+            subscription.get("creative_media_markers") or []
+        )
+        new_creative_media_markers: list[str] = []
 
-        async def review_message(task: dict, event: dict) -> str | None:
+        async def current_workspace() -> dict:
             nonlocal workspace, workspace_loaded
-            if is_openai_run and not workspace_loaded:
+            if not workspace_loaded:
                 workspace_loaded = True
                 try:
                     from workspace.service import get_workspace
@@ -375,6 +383,11 @@ async def _process_progress_once() -> bool:
                     workspace = await get_workspace(run["session_id"])
                 except Exception:
                     workspace = {}
+            return workspace
+
+        async def review_message(task: dict, event: dict) -> str | None:
+            if is_openai_run:
+                await current_workspace()
             return _progress_message(
                 run,
                 event,
@@ -431,12 +444,16 @@ async def _process_progress_once() -> bool:
                     and event.get("type") == "task_waiting_review"
                     and _is_creative_creation_checkpoint(event_task)
                 ):
-                    await _enqueue_creative_media_once(
+                    media_marker = f"creative-media-v2:{event_task_id}"
+                    delivered_parts = await _enqueue_creative_media_once(
                         thread=thread,
                         workspace=workspace,
-                        idempotency_key=idempotency_key,
+                        idempotency_key=f"run-creative-media:{event_task_id}",
                         run_id=run["run_id"],
                     )
+                    if delivered_parts:
+                        creative_media_markers.add(media_marker)
+                        new_creative_media_markers.append(media_marker)
 
         # Existing subscriptions may already have delivered the old generic
         # waiting-review event. Emit the richer v2 summary once without replaying
@@ -461,14 +478,56 @@ async def _process_progress_once() -> bool:
                         run_id=run["run_id"],
                     )
                     if _is_creative_creation_checkpoint(waiting_task):
-                        await _enqueue_creative_media_once(
+                        media_marker = (
+                            f"creative-media-v2:{waiting_task.get('task_id')}"
+                        )
+                        delivered_parts = await _enqueue_creative_media_once(
                             thread=thread,
                             workspace=workspace,
-                            idempotency_key=f"run-review-summary:{marker}",
+                            idempotency_key=(
+                                "run-creative-media:"
+                                f"{waiting_task.get('task_id')}"
+                            ),
                             run_id=run["run_id"],
                         )
+                        if delivered_parts:
+                            creative_media_markers.add(media_marker)
+                            new_creative_media_markers.append(media_marker)
                 review_markers.add(marker)
                 new_review_markers.append(marker)
+
+        # Builds deployed before full-auto analysis was automatic recorded the
+        # review summary but did not enqueue its images. Recover that missed
+        # delivery while the subscription is still active. The stable outbound
+        # idempotency keys also make the event path and this recovery converge.
+        creative_task = next(
+            (
+                item for item in run.get("tasks", [])
+                if item.get("key") == "analyze_creatives"
+            ),
+            None,
+        )
+        if (
+            is_openai_run
+            and run.get("approval_policy") == "auto_build_draft"
+            and creative_task
+            and creative_task.get("status") in {"waiting_review", "succeeded"}
+        ):
+            media_marker = f"creative-media-v2:{creative_task.get('task_id')}"
+            if media_marker not in creative_media_markers:
+                await current_workspace()
+                delivered_parts = await _enqueue_creative_media_once(
+                    thread=thread,
+                    workspace=workspace,
+                    idempotency_key=(
+                        "run-creative-media:"
+                        f"{creative_task.get('task_id')}"
+                    ),
+                    run_id=run["run_id"],
+                )
+                if delivered_parts:
+                    creative_media_markers.add(media_marker)
+                    new_creative_media_markers.append(media_marker)
         terminal_key = f"terminal:{run.get('status')}"
         terminal_sent = set(subscription.get("terminal_markers") or [])
         terminal_markers = []
@@ -484,6 +543,8 @@ async def _process_progress_once() -> bool:
             update["delivered_event_ids"] = list(delivered.union(new_ids))[-300:]
         if new_review_markers:
             update["review_summary_markers"] = list(review_markers)[-100:]
+        if new_creative_media_markers:
+            update["creative_media_markers"] = list(creative_media_markers)[-100:]
         if terminal_markers:
             update["terminal_markers"] = list(terminal_sent.union(terminal_markers))
             update["status"] = "completed"
