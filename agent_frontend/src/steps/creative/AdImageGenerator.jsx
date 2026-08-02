@@ -9,19 +9,10 @@ import {
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
 import { AD_FORMATS, AD_FORMATS_MAP } from '@/data/adFormats'
+import { creativeImageCrossOrigin, creativeImageSource } from '@/lib/creativeImageUrl'
 import ImageCropModal from './ImageCropModal'
 
 const MAX_PARALLEL_GENERATIONS = 2
-
-function browserAssetUrl(url) {
-  if (!url) return ''
-  try {
-    const parsed = new URL(url, window.location.origin)
-    return parsed.pathname.startsWith('/uploads/') ? parsed.pathname : url
-  } catch {
-    return url
-  }
-}
 
 function galleryImage(job) {
   const result = job.result || {}
@@ -33,7 +24,7 @@ function galleryImage(job) {
     name: result.final_filename || `ai-${formatId}-${job.job_id}.png`,
     type: result.final_mime_type || 'image/png',
     size: result.bytes || 0,
-    dataUrl: browserAssetUrl(finalUrl),
+    dataUrl: creativeImageSource(finalUrl),
     url: finalUrl,
     width: result.width || AD_FORMATS_MAP[formatId]?.width,
     height: result.height || AD_FORMATS_MAP[formatId]?.height,
@@ -341,7 +332,7 @@ export default function AdImageGenerator({
     const formatId = next.metadata?.format_id || ''
     setPendingCrop({
       jobId: next.job_id,
-      b64: browserAssetUrl(next.result.raw_url),
+      src: creativeImageSource(next.result.raw_url),
       formatId,
       width: next.result.width || AD_FORMATS_MAP[formatId]?.width,
       height: next.result.height || AD_FORMATS_MAP[formatId]?.height,
@@ -432,7 +423,7 @@ export default function AdImageGenerator({
       {/* Crop modal — rendered when API returns raw image */}
       {pendingCrop && (
         <ImageCropModal
-          src={pendingCrop.b64}
+          src={pendingCrop.src}
           targetW={pendingFmt?.width  ?? pendingCrop.width}
           targetH={pendingFmt?.height ?? pendingCrop.height}
           label={pendingFmt?.label ?? pendingCrop.formatId}
@@ -650,7 +641,12 @@ export default function AdImageGenerator({
             const fmt = AD_FORMATS_MAP[formatId] || {}
             return (
               <div key={job.job_id} className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
-                <img src={browserAssetUrl(job.result.raw_url)} alt={fmt.label || 'Generated creative'} className="w-full h-24 object-cover" />
+                <img
+                  src={creativeImageSource(job.result.raw_url)}
+                  crossOrigin={creativeImageCrossOrigin(job.result.raw_url)}
+                  alt={fmt.label || 'Generated creative'}
+                  className="w-full h-24 object-cover"
+                />
                 <div className="p-2">
                   <p className="text-[10px] font-semibold truncate">{fmt.label || formatId}</p>
                   <Button size="sm" variant="outline" className="w-full h-7 mt-1 text-[10px]"
@@ -662,7 +658,7 @@ export default function AdImageGenerator({
                       })
                       setPendingCrop({
                         jobId: job.job_id,
-                        b64: browserAssetUrl(job.result.raw_url),
+                        src: creativeImageSource(job.result.raw_url),
                         formatId,
                         width: job.result.width || fmt.width,
                         height: job.result.height || fmt.height,

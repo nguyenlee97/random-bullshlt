@@ -2,13 +2,18 @@ import { useRef, useState, useEffect, useCallback } from 'react'
 import { X, Crop, Maximize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import {
+  assignCreativeImageSource,
+  creativeImageCrossOrigin,
+  creativeImageSource,
+} from '@/lib/creativeImageUrl'
 
 /**
  * ImageCropModal
  * Shows the raw AI-generated image and lets the user drag a locked-ratio crop box.
  *
  * Props:
- *   src        — raw base64 string (no data: prefix) from API
+ *   src        — absolute/root-relative URL, data URL, blob URL, or raw base64
  *   targetW    — target output width  (e.g. 2032)
  *   targetH    — target output height (e.g.  528)
  *   label      — format label for display
@@ -19,9 +24,7 @@ import { cn } from '@/lib/utils'
 export default function ImageCropModal({ src, targetW, targetH, label, onConfirm, onScale, onCancel }) {
   const containerRef = useRef(null)
   const imgRef       = useRef(null)
-  const imageSrc = /^(data:|https?:|blob:)/i.test(String(src || ''))
-    ? src
-    : `data:image/png;base64,${src}`
+  const imageSrc = creativeImageSource(src)
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 })
   const [display,    setDisplay]    = useState({ w: 0, h: 0, offsetX: 0, offsetY: 0 })
 
@@ -166,7 +169,7 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH)
       onConfirm(canvas.toDataURL('image/png'))
     }
-    img.src = imageSrc
+    assignCreativeImageSource(img, imageSrc)
   }, [box, imgNatural, display, targetW, targetH, imageSrc, onConfirm])
 
   // ── Handle scale-stretch ──────────────────────────────────────────────────────
@@ -180,7 +183,7 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
       ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, targetW, targetH)
       onScale(canvas.toDataURL('image/png'))
     }
-    img.src = imageSrc
+    assignCreativeImageSource(img, imageSrc)
   }, [imageSrc, targetW, targetH, onScale])
 
   const dataUrl = imageSrc
@@ -226,6 +229,7 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
             <img
               ref={imgRef}
               src={dataUrl}
+              crossOrigin={creativeImageCrossOrigin(dataUrl)}
               alt="Creative cần crop"
               onLoad={handleImgLoad}
               className="block select-none pointer-events-none"

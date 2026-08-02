@@ -32,7 +32,9 @@ test('creative editor can derive an exact planned format from an uploaded image'
   assert.match(crop, /hidden sm:inline.*\(có thể méo\)/)
   assert.match(crop, /onPointerDown/)
   assert.match(crop, /sm:flex-row/)
-  assert.match(crop, /\^\(data:\|https\?:\|blob:\)/)
+  assert.match(crop, /creativeImageSource\(src\)/)
+  assert.match(crop, /crossOrigin=\{creativeImageCrossOrigin\(dataUrl\)\}/)
+  assert.match(crop, /assignCreativeImageSource\(img, imageSrc\)/)
 })
 
 test('crop or scale persists and completes the Autopilot recovery transaction', () => {

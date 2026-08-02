@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-08-02.3"
+BUILD_VERSION = "2026-08-02.4"
 
 BUILD_FEATURES = [
     "np6-placement-catalog",
@@ -300,4 +300,5 @@ BUILD_FEATURES = [
     "centered-znews-category-masthead",                      # category mastheads remain centered across shared and dynamic layouts
     "deterministic-creative-manual-override",                # documented numbered approval works identically in Agent UI and Zalo
     "production-grafana-openai-observability",               # current OpenAI/Zalo/tool paths populate zero-safe Agent Ops panels
+    "production-creative-image-url-recovery",                # generated gallery and crop retain the CORS-enabled backend asset URL
 ]
