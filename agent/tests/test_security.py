@@ -61,6 +61,24 @@ def test_request_size_limit_rejects_content_length_before_handler():
     assert response.json()["error"] == "payload_too_large"
 
 
+def test_generated_image_finalize_uses_the_owned_image_upload_limit():
+    async def endpoint(request: Request):
+        return JSONResponse({"size": len(await request.body())})
+
+    app = RequestSizeLimitMiddleware(
+        Starlette(routes=[
+            Route("/payload", endpoint, methods=["POST"]),
+            Route("/api/agent/generated-images/finalize", endpoint, methods=["POST"]),
+        ]),
+        max_bytes=16,
+    )
+    with TestClient(app) as client:
+        assert client.post(
+            "/api/agent/generated-images/finalize", content=b"x" * 17,
+        ).status_code == 200
+        assert client.post("/payload", content=b"x" * 17).status_code == 413
+
+
 @pytest.mark.asyncio
 async def test_delete_session_data_cleans_in_memory_agent_artifacts_only():
     import session

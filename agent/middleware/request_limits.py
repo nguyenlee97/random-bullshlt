@@ -18,11 +18,14 @@ class RequestSizeLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Named creative assets carry base64 image data. Keep the normal Agent
-        # limit tight while allowing only this owned, validated upload route to
-        # carry a 10 MiB source image plus JSON/base64 overhead.
+        # Owned creative endpoints carry validated base64 image data. Keep the
+        # normal Agent limit tight while allowing only these scoped routes to
+        # carry a 10 MiB image plus JSON/base64 overhead.
         request_limit = self.max_bytes
-        if scope.get("path") == "/api/agent/creative/assets":
+        if scope.get("path") in {
+            "/api/agent/creative/assets",
+            "/api/agent/generated-images/finalize",
+        }:
             request_limit = max(request_limit, 15 * 1024 * 1024)
 
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
