@@ -217,20 +217,29 @@ async def _loop() -> None:
     while _stop_event and not _stop_event.is_set():
         try:
             await reconcile_active_runs()
+            task = await claim_next_task(worker_id)
+            if task is not None:
+                await _process(task)
+                continue
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
-            await alog("autopilot", "error", {
-                "handler": "autopilot_reconcile", "error": str(exc)[:500],
-            })
-        task = await claim_next_task(worker_id)
-        if task is None:
+            # A transient Mongo outage must not terminate the only durable
+            # Autopilot executor while the API and Zalo ingress stay online.
+            # Keep logging best-effort too: observability must not become a
+            # second reason for this supervisor loop to exit.
             try:
-                await asyncio.wait_for(
-                    _stop_event.wait(), timeout=config.AUTOPILOT_WORKER_POLL_SECONDS
-                )
-            except asyncio.TimeoutError:
+                await alog("autopilot", "error", {
+                    "handler": "autopilot_worker_loop", "error": str(exc)[:500],
+                })
+            except Exception:
                 pass
-            continue
-        await _process(task)
+        try:
+            await asyncio.wait_for(
+                _stop_event.wait(), timeout=config.AUTOPILOT_WORKER_POLL_SECONDS
+            )
+        except asyncio.TimeoutError:
+            pass
 
 
 async def start_worker() -> None:
