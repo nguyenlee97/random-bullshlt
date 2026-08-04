@@ -105,7 +105,7 @@ const technologies = [
   },
   {
     number: '02', layer: 'ENGINE', title: 'Hybrid Agent Orchestration', art: 'orchestration',
-    text: 'Copilot chạy trên LangGraph; Autopilot chạy theo state machine 18 task. Mỗi task có worker sở hữu, có lease, retry và cơ chế phục hồi.',
+    text: 'Copilot đồng hành cùng bạn; Autopilot tự động làm mọi tác vụ theo brief. Mỗi task có worker sở hữu, có lease, retry và cơ chế phục hồi.',
   },
   {
     number: '03', layer: 'ENGINE', title: 'Grounded Recommendation Intelligence', art: 'grounded',
