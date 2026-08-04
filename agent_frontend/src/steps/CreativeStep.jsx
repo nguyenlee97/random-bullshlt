@@ -13,6 +13,7 @@ import {
   selectRepairSourceFile,
 } from '@/lib/creativeCompatibility'
 import { creativeReviewState, TERMINAL_CREATIVE_STATUSES } from '@/lib/creativeIntel'
+import { useDemo } from '@/demo/DemoEngine'
 
 function fmtSize(bytes) {
   if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
@@ -314,6 +315,7 @@ export default function CreativeStep({
   onRepairSave,
   openaiCampaignFlow = false,
 }) {
+  const demo = useDemo()
   const fileInputRef = useRef(null)
   const [lightboxFile, setLightboxFile] = useState(null)
   const [dragging, setDragging] = useState(false)
@@ -797,6 +799,7 @@ export default function CreativeStep({
           segment={segment}
           onAddToCreative={handleAddAiImages}
           openaiCampaignFlow={openaiCampaignFlow}
+          autoPersistFinalizedImage={openaiCampaignFlow && demo?.phase === 'stage2'}
         />
       )}
 

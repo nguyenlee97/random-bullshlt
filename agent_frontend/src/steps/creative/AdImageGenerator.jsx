@@ -184,6 +184,7 @@ export default function AdImageGenerator({
   segment,
   onAddToCreative,
   openaiCampaignFlow = false,
+  autoPersistFinalizedImage = false,
 }) {
   const [selectedFormatId, setSelectedFormatId] = useState(null)
   const [error, setError]                       = useState('')
@@ -411,12 +412,22 @@ export default function AdImageGenerator({
         return next
       })
       setPendingCrop(null)
+      if (
+        autoPersistFinalizedImage
+        && updated.status === 'succeeded'
+        && updated.result?.final_url
+      ) {
+        // The interactive walkthrough treats the finalized image as campaign
+        // truth immediately. Persist it through the same parent callback as
+        // manual gallery selection before leaving the generator tab.
+        onAddToCreative([galleryImage(updated)])
+      }
     } catch (cropError) {
       setError(cropError.message || 'Không thể lưu ảnh đã crop.')
     } finally {
       setFinalizing(false)
     }
-  }, [pendingCrop, finalizing])
+  }, [pendingCrop, finalizing, autoPersistFinalizedImage, onAddToCreative])
 
   const handleCropConfirm = useCallback((croppedDataUrl) => {
     if (!pendingCrop) return

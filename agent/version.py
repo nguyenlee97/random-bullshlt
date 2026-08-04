@@ -3,9 +3,10 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-08-05.3"
+BUILD_VERSION = "2026-08-05.4"
 
 BUILD_FEATURES = [
+    "openai-finalized-creative-auto-persist",
     "walkthrough-stable-generated-creative-identity",
     "autopilot-replan-ready-dependent-resume",
     "hackathon-doc-links-and-diagram-zoom",

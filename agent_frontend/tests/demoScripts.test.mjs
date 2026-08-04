@@ -9,6 +9,10 @@ const creativeStep = readFileSync(
   'utf8',
 )
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+const imageGenerator = readFileSync(
+  new URL('../src/steps/creative/AdImageGenerator.jsx', import.meta.url),
+  'utf8',
+)
 
 const brief = {
   id: 'test',
@@ -44,4 +48,12 @@ test('generated creative identity is exposed and consumed through stable metadat
   assert.match(creativeStep, /data-ai-generated=\{file\.aiGenerated \? 'true' : 'false'\}/)
   assert.match(creativeStep, /data-format-id=\{file\.formatId \|\| ''\}/)
   assert.match(app, /f\.aiGenerated && f\.formatId === 'zuma-box'/)
+  assert.match(
+    creativeStep,
+    /autoPersistFinalizedImage=\{openaiCampaignFlow && demo\?\.phase === 'stage2'\}/,
+  )
+  assert.match(
+    imageGenerator,
+    /autoPersistFinalizedImage[\s\S]*onAddToCreative\(\[galleryImage\(updated\)\]\)/,
+  )
 })
