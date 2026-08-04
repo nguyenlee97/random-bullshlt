@@ -23,3 +23,16 @@ async def test_boot_intro_is_specific_to_autopilot_and_explains_minimum():
     assert "brief tối thiểu" in response.text
     assert "sản phẩm/dịch vụ" in response.text
     assert "gợi ý giúp tôi hoàn thiện brief" in response.text
+
+
+@pytest.mark.asyncio
+async def test_boot_readiness_message_does_not_expose_build_version():
+    from handlers.boot import handle_boot
+
+    response = await handle_boot("guided")
+
+    assert response.blocks == [{
+        "type": "info",
+        "text": "🔖 Agent sẵn sàng hoạt động.",
+    }]
+    assert "Agent v" not in response.blocks[0]["text"]

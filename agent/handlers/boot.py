@@ -1,6 +1,5 @@
 """Boot handler — step -1, mode-aware deterministic greeting."""
 from models import AgentResponse, ResponseMeta
-from version import BUILD_VERSION
 
 
 _BRIEF_GUIDE = (
@@ -58,7 +57,7 @@ async def handle_boot(experience_mode: str | None = None) -> AgentResponse:
         ),
         blocks=[{
             "type": "info",
-            "text": f"🔖 Agent v{BUILD_VERSION} — sẵn sàng hoạt động.",
+            "text": "🔖 Agent sẵn sàng hoạt động.",
         }],
         meta=ResponseMeta(tool="agent_boot", model="none", step=-1),
     )
