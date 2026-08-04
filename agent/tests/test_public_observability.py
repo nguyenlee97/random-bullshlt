@@ -149,6 +149,7 @@ def test_trace_explorer_keeps_the_smooth_interaction_contract():
         "new AbortController()",
         "function syncRoute(",
         "function restoreRoute(",
+        "root?.traceName||root?.name||named?.traceName",
         "function sampledOverview(",
         "log-expanded-grid",
         "Keyboard shortcuts",
