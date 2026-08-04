@@ -12,6 +12,7 @@
   .lightbox{position:fixed;inset:0;z-index:100;display:none;flex-direction:column;background:rgba(1,5,13,.97);padding:18px}.lightbox.open{display:flex}.lightbox-bar{display:flex;align-items:center;gap:8px;margin-bottom:12px}.lightbox-bar span{margin-right:auto;color:#a9bbcf;font-weight:800}.lightbox button{border:1px solid var(--line);border-radius:10px;background:#0e1e34;color:white;padding:8px 12px;font-weight:800;cursor:pointer}.lightbox-stage{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:16px;background:#07111f;display:flex;align-items:flex-start;justify-content:center;padding:24px}.lightbox-content{transform-origin:top center;transition:transform .15s ease}.lightbox-content svg{max-width:none!important;height:auto!important}
   @media(max-width:760px){.wrap{padding:0 14px 80px}.hero{padding:92px 16px 48px}.hero p{font-size:15px}.grid,.grid3{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.toc ol{columns:1}h2{font-size:23px}.top-actions a span{display:none}table{min-width:720px}.card{padding:16px}.zoom-hint{display:none}.mermaid{padding:12px}}
   @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.lightbox-content{transition:none}}
+  h2{scroll-margin-top:72px}
 </style>
 </head>
 <body>
@@ -19,251 +20,659 @@
 <header class="hero">
   <div class="kicker">Product · Business · Technical Architecture</div>
   <h1>Advertising Agent<br/><span>AI campaign operating system</span></h1>
-  <p>Một hệ thống AI quảng cáo end-to-end kết nối brief, strategy, audience, creative, media, launch, live view và reporting trong một canonical workspace — vận hành bằng Copilot trên web, Autopilot bền vững và Zalo OA.</p>
-  <div class="badges"><span class="badge">React · FastAPI · Node</span><span class="badge">LangGraph orchestration</span><span class="badge">MongoDB canonical workspace</span><span class="badge">Hybrid RAG · Qdrant</span><span class="badge">VLM Creative Intelligence</span><span class="badge">Zalo Login &amp; OA</span><span class="badge">Prometheus · Grafana · Langfuse</span></div>
-  <div class="meta">Current-state build 2026-07-27.3 · Capability đã chạy được tách rõ khỏi roadmap</div>
+  <p>Một agentic operating layer cho Ad Ops, biến business brief thành campaign grounded, có thể review, phê duyệt và vận hành trên hệ thống quảng cáo hiện hữu. Copilot và durable Autopilot dùng chung canonical workspace trên Web/Mobile và Zalo OA — đi từ strategy, audience, creative, media đến launch, live evidence, sáu báo cáo và feedback loop.</p>
+  <div class="badges"><span class="badge">React · FastAPI · Node</span><span class="badge">LangGraph · Durable Workers</span><span class="badge">MongoDB · Canonical Artifact Graph</span><span class="badge">Hybrid RAG · Qdrant</span><span class="badge">VLM Creative Intelligence</span><span class="badge">Human Approval · Side-effect Safety</span><span class="badge">Zalo OA · Cross-device Continuity</span><span class="badge">Prometheus · Grafana · Langfuse</span></div>
+  <div class="meta">Current-state build 31.7.2026 · Live capability được tách rõ khỏi Future roadmap</div>
 </header>
 <main class="wrap">
-  <nav class="toc"><b>Nội dung</b><ol><li><a href="#business">Bài toán &amp; hành trình business</a></li><li><a href="#modes">Copilot và Autopilot</a></li><li><a href="#architecture">Kiến trúc hệ thống</a></li><li><a href="#workspace">Canonical workspace</a></li><li><a href="#intelligence">Recommendation &amp; Creative Intelligence</a></li><li><a href="#durability">Durable execution</a></li><li><a href="#zalo">Zalo identity &amp; channel</a></li><li><a href="#reports">Live view &amp; sáu báo cáo</a></li><li><a href="#feedback-loop">Feedback loop &amp; continuous improvement</a></li><li><a href="#security">Security &amp; observability</a></li></ol></nav>
+  <nav class="toc"><b>Nội dung</b><ol><li><a href="#business">Bài toán &amp; hành trình business</a></li><li><a href="#modes">Copilot và Autopilot</a></li><li><a href="#architecture">Kiến trúc hệ thống</a></li><li><a href="#workspace">Canonical workspace</a></li><li><a href="#intelligence">Recommendation &amp; Creative Intelligence</a></li><li><a href="#durability">Durable execution</a></li><li><a href="#zalo">Zalo identity &amp; channel</a></li><li><a href="#reports">Live view &amp; sáu báo cáo</a></li><li><a href="#feedback-loop">Learn from mistakes &amp; continuous improvement</a></li><li><a href="#security">Security assurance &amp; live evidence</a></li><li><a href="#roadmap">Future technical roadmap</a></li></ol></nav>
 
-  <h2 id="business"><span class="n">01</span>Từ business brief đến campaign có thể vận hành</h2>
-  <p class="lead">Bài toán không phải “chat với AI để lấy một đoạn copy”. Đội quảng cáo phải chuyển một mục tiêu kinh doanh mơ hồ thành audience có căn cứ, creative đúng format, placement khả thi, order an toàn và báo cáo có thể giải thích — đồng thời giữ cho con người quyền sửa và quyết định launch.</p>
+  <h2 id="business"><span class="n">01</span>Từ business brief đến hành động trên hệ thống quảng cáo thật</h2>
+  <p class="lead">Advertising Agent không đơn thuần biến brief thành một proposal dựa trên kiến thức sẵn có của mô hình. Mỗi quyết định được grounded trên product truth và trạng thái thật — audience catalog, placement inventory, availability, creative analysis, ngân sách, thời gian và campaign workspace — rồi được kiểm tra bằng rule, guard và evidence trước khi trở thành hành động.</p>
+  <div class="callout success"><b>Không chỉ suggest — Agent có thể act:</b> đây là một agentic harness được bổ sung lên advertising platform hiện hữu. Nó kết nối với dữ liệu, API và operational workflow đang chạy để đọc trạng thái, lập kế hoạch, chuẩn bị campaign, xin phê duyệt, tạo và verify order, sau đó tiếp tục theo dõi evidence và reporting.</div>
   <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
 flowchart LR
-  B[Business goal] --> BR[Structured brief]
-  BR --> ST[Strategy & budget]
-  ST --> AU[Audience RAG]
-  AU --> CR[Creative Intelligence]
-  CR --> PL[Placement & assignments]
-  PL --> HG{Human launch gate}
-  HG --> OR[Create + verify order]
-  OR --> LIVE[Live-view evidence]
-  OR --> RP[Six reports + PDF]
-  RP --> WEB[Web workspace]
-  RP --> ZA[Zalo OA]
+  B[Business brief] --> O[Agentic Orchestrator]
+  O --> P[Planner]
+  P --> S[Specialist Workers]
+  S <--> T[Live Data & System Tools]
+  S --> V[Validators & Guards]
+  V --> H{Human Decision Boundary}
+  H --> A[Action on Existing Ad Platform]
+  A --> E[Verified Campaign · Evidence · Reports]
+  E --> O
   </div></div>
   <div class="grid3">
-    <div class="card"><h3>Plan</h3><p>Brief → strategy → audience → targeting → placement intent. Mỗi quyết định có source, revision và evidence.</p></div>
-    <div class="card"><h3>Build &amp; launch</h3><p>Upload hoặc AI-generate creative, phân tích VLM, map đúng zone, chạy order guard và chờ explicit approval.</p></div>
-    <div class="card"><h3>Observe &amp; continue</h3><p>Result, setup report, live screenshots, sáu report, full PDF và continuity giữa web/Zalo.</p></div>
+    <div class="card"><h3>Grounded Intelligence</h3><p>Recommendation không bắt đầu từ suy đoán của LLM. Agent truy xuất nguồn dữ liệu và product state có version, kiểm tra availability và giữ source, revision, evidence cho từng quyết định.</p></div>
+    <div class="card"><h3>Agentic Orchestration</h3><p>Đây không phải automation workflow tuyến tính. Orchestrator điều phối planner, specialist workers và validators theo một role-based multi-agent pattern: quan sát kết quả, chọn capability và điều chỉnh bước tiếp theo trong boundary cho phép.</p></div>
+    <div class="card"><h3>Operational Action</h3><p>Output không dừng ở proposal. Sau validation và human approval, Agent gọi API thật để cập nhật canonical workspace, tạo và verify order, rồi trả live-view evidence cùng sáu báo cáo trên web và Zalo OA.</p></div>
   </div>
 
-  <h2 id="modes"><span class="n">02</span>Hai chế độ, cùng một product truth</h2>
-  <div class="grid">
-    <div class="card"><h3><span class="status done">LIVE</span> Campaign Copilot</h3><p>Operator cùng AI đi qua <b>Brief → Audience → Creative Intelligence → Setup → Result → Report</b>. Chat hiểu workspace và tạo proposal; UI cho phép sửa phi tuyến. Creative phải có verdict hoàn tất và explicit review confirmation trước khi Setup mở.</p></div>
-    <div class="card"><h3><span class="status done">LIVE</span> Campaign Autopilot</h3><p>Operator duyệt brief, chọn nguồn creative và review policy. Durable worker thực thi capability graph, dừng tại input/review boundary, luôn dừng ở final launch approval, rồi trình bày Result, Setup report và Report module dùng chung.</p></div>
-  </div>
-  <div class="callout success"><b>Intelligence đi cùng safety:</b> Autopilot tự động hóa phần có thể kiểm chứng; warning, timeout, low-confidence VLM, thiếu input hoặc side effect quan trọng đều fail-closed về con người. Manual override được ghi thành quyết định, không phải đường tắt vô hình.</div>
+  <h2 id="modes"><span class="n">02</span>Campaign IDE cho Ad Ops — hai chế độ, cùng một product truth</h2>
+  <p class="lead">Developer có agentic IDE để biến intent thành software được kiểm chứng và deploy. Ad Ops cũng cần một môi trường tương tự để biến business intent thành campaign được grounded, review và vận hành. Advertising Agent hiểu toàn bộ campaign workspace, sử dụng công cụ chuyên ngành, tạo thay đổi có thể kiểm tra và chỉ launch sau khi con người phê duyệt.</p>
+  <div class="callout success"><b>Operating model, không phải chatbot analogy:</b> canonical campaign workspace đóng vai trò như codebase; campaign artifacts là những thay đổi có thể review; validators và guards là test suite; launch là deployment. Người dùng chọn mức độ tự chủ — không phải một data source, quality standard hay safety policy khác.</div>
 
-  <h2 id="architecture"><span class="n">03</span>Kiến trúc LLM + tool controller + service boundary</h2>
   <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
 flowchart TB
-  U[Web / Mobile] --> FE[React experience layer]
-  Z[Zalo OA] --> ZA[Signed webhook + durable Zalo worker]
-  FE --> AG[FastAPI Agent gateway]
-  ZA --> CTRL[Bounded tool controller]
-  CTRL --> AG
-  AG --> LG[LangGraph Copilot / Autopilot orchestration]
-  LG --> CAP[Typed capability registry]
-  CAP --> RAG[Hybrid audience & placement recommendation]
-  CAP --> VLM[VLM + image provider]
-  CAP --> BE[Node campaign backend]
-  AG --> DB[(MongoDB)]
-  BE --> DB
-  CAP --> OBS[Prometheus · Grafana · Langfuse]
-  BE --> SITES[ZNews · BaoMoi · ZingMP3 · S-Money · Đi Cùng Con · Zagoo]
+  I[Business Intent] --> C[Campaign Copilot<br/>Hands-on collaboration]
+  I --> A[Campaign Autopilot<br/>Delegate and supervise]
+  C --> W[Canonical Campaign Workspace<br/>The Ad Ops codebase]
+  A --> W
+  W <--> T[Domain Tools<br/>DMP · Placement · VLM · Forecast · Order API]
+  W --> D[Reviewable Campaign Artifacts<br/>Strategy · Creative · Assignment · Forecast]
+  D --> V[Validation Suite<br/>Schema · Availability · Creative Analysis · Order Guard]
+  V --> H{Human Deploy Approval}
+  H --> P[Existing Advertising Platform]
+  P --> E[Verified Order · Live Evidence · Reports]
+  E --> W
   </div></div>
-  <div class="table"><table><thead><tr><th>Layer</th><th>Trách nhiệm</th><th>Trust boundary</th></tr></thead><tbody>
-    <tr><td>Experience</td><td>Landing, identity, Copilot workspace, Autopilot timeline/review, report, responsive mobile</td><td>Không phải nguồn dữ liệu cuối cùng</td></tr>
-    <tr><td>LLM controller</td><td>Intent, function calling, artifact-grounded explanation, Zalo tool loop</td><td>Không tự truyền owner ID, session scope hoặc ghi arbitrary JSON</td></tr>
-    <tr><td>Capability layer</td><td>RAG, creative analysis/generation, placement, forecast, guard, order, report</td><td>Typed schema + server validation + ownership scope + idempotency</td></tr>
-    <tr><td>Persistence</td><td>Conversation, canonical workspace, proposal, run/task/event, leases, ownership registry</td><td>Server-side actor resolution và revision checks</td></tr>
+
+  <div class="table"><table><thead><tr><th>Agentic coding IDE</th><th>Campaign IDE cho Ad Ops</th><th>Ý nghĩa vận hành</th></tr></thead><tbody>
+    <tr><td>Codebase, project context và rules</td><td>Canonical workspace, brief, catalog, campaign history và policies</td><td>Agent hiểu project truth thay vì chỉ đọc prompt hiện tại</td></tr>
+    <tr><td>Search, editor và specialized tools</td><td>Hybrid RAG, creative workspace, DMP, placement, VLM, forecast và order APIs</td><td>AI có thể tìm, tạo và tác động lên domain artifacts thật</td></tr>
+    <tr><td>Diff review, compiler, test và CI</td><td>Proposal, revision, typed schema, creative analysis, availability check và order guard</td><td>Mọi thay đổi quan trọng đều có thể inspect và kiểm chứng trước launch</td></tr>
+    <tr><td>Deploy approval và production verification</td><td>Human launch gate, idempotent create order, verify order và live-view evidence</td><td>Agent đi từ intent đến operational outcome nhưng không tự vượt quyền phê duyệt</td></tr>
   </tbody></table></div>
 
-  <h2 id="workspace"><span class="n">04</span>Canonical campaign workspace và artifact graph</h2>
-  <p>Một campaign không phải một chuỗi chat. Nó là đồ thị artifact có revision: brief, strategy, audience, targeting, placement intent, creative format plan, creative verdict, assignments, forecast, order draft, guard, verified order và reports. Chat, web và Zalo cùng đọc một nguồn sự thật này.</p>
+  <div class="grid">
+    <div class="card"><h3><span class="status done">LIVE</span> Campaign Copilot — hands-on workspace</h3><p>Tương tự Editor experience trong một AI coding IDE, operator trực tiếp khám phá, chỉnh sửa và review campaign. Conversational graph hiểu workspace hiện tại, giải thích dữ liệu, gọi tool và tạo proposal; UI vẫn cho phép sửa phi tuyến trước khi commit thay đổi vào product state.</p></div>
+    <div class="card"><h3><span class="status done">LIVE</span> Campaign Autopilot — delegate and supervise</h3><p>Operator giao campaign objective và review policy thay vì điều khiển từng thao tác. Durable capability graph điều phối specialist workers, retry và resume theo dependency; Agent tạo reviewable artifacts, tự tiếp tục phần có thể kiểm chứng và dừng tại input, risk hoặc human approval boundary.</p></div>
+  </div>
+
+  <div class="grid3">
+    <div class="card"><h3>One campaign state</h3><p>Brief, recommendation, creative verdict, assignment và approval là versioned workspace artifacts — không bị giấu trong conversation history hoặc tách thành hai bản Copilot/Autopilot.</p></div>
+    <div class="card"><h3>One intelligence layer</h3><p>Hai chế độ cùng dựa trên domain sources, canonical artifacts và validation contracts. Một audience, placement hoặc measured value không thay đổi truth chỉ vì operator đổi mode.</p></div>
+    <div class="card"><h3>One safety contract</h3><p>Agent tự động hóa phần reversible và có thể kiểm chứng. Warning, low-confidence result và side effect quan trọng dừng tại review boundary; launch luôn yêu cầu explicit human approval.</p></div>
+  </div>
+  <p class="small"><b>Web và Zalo OA là interaction surfaces, không phải campaign state riêng.</b> Operator có thể khởi tạo hoặc tiếp tục run, nhận checkpoint, artifact, approval request và report trên một channel khác mà vẫn quay về cùng workspace revision và product truth.</p>
+
+  <h2 id="architecture"><span class="n">03</span>Kiến trúc tổng thể, service boundaries và operational infrastructure</h2>
+  <p class="lead">Hệ thống có hai entry point rõ ràng: Campaign IDE trên web/mobile và Zalo OA. Hai channel đi qua delivery, identity và durability contract riêng, sau đó hội tụ tại Agent Gateway để sử dụng cùng execution engines, domain capabilities, canonical state và advertising platform hiện hữu.</p>
   <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
 flowchart LR
-  B[Brief] --> S[Strategy]
-  S --> A[Audience] --> T[Targeting]
-  T --> PI[Placement intent] --> FP[Creative format plan]
-  FP --> C[Upload / AI generate] --> V[Creative verdict]
-  PI --> P[Final compatible placement]
-  V --> P --> AS[Assignments] --> F[Forecast]
-  F --> D[Order draft] --> G[Order guard] --> H{Launch approval}
-  H --> O[Verified order] --> R[Reports & live view]
+  WEB[1A · Web / Mobile<br/>Request · Review · Result]
+  ZALO[1B · Zalo OA<br/>Request · Checkpoint · Report]
+
+  WEB --> NGINX[Nginx<br/>TLS · Reverse Proxy]
+  NGINX --> REACT[React Campaign IDE]
+  REACT --> API[FastAPI Agent Gateway]
+
+  ZALO --> HOOK[Signed Webhook<br/>Immediate ACK]
+  HOOK --> ZIN[Durable Zalo Inbox]
+  ZIN --> ZWORKER[Zalo Worker<br/>Bounded Tool Controller]
+  ZWORKER --> API
+
+  API --> CP[Campaign Copilot<br/>Conversational Engine]
+  API --> AP[Campaign Autopilot<br/>Durable Runtime]
+
+  CP --> CAP[Typed Domain Capabilities]
+  AP --> TASKQ[Durable Task Queue]
+  TASKQ --> WORKERS[Lease-based Worker Pool]
+  WORKERS --> CAP
+
+  CP <--> WS[Canonical Campaign Workspace<br/>Revisions · Artifacts · Evidence]
+  AP <--> WS
+  CAP <--> WS
+
+  CAP --> RAG[Hybrid Audience & Placement RAG]
+  CAP --> CREATIVE[VLM · Image Generation<br/>Creative Intelligence]
+  CAP --> OPERATION[Forecast · Validation<br/>Order Guard · Reports]
+
+  RAG --> QDRANT[(Qdrant<br/>Vector Index)]
+  CREATIVE --> MEDIA[Creative & Report Storage]
+
+  CAP --> BACKEND[Node Campaign API]
+  BACKEND --> DMP[DMP & Audience Catalog]
+  BACKEND --> INVENTORY[Placement Inventory]
+  BACKEND --> ORDER[Orders & Analytics]
+  BACKEND --> SITES[Publisher & Live-view Sites]
+
+  WS --> MONGO[(MongoDB<br/>Workspace · Runs · Tasks · Events)]
+  TASKQ --> MONGO
+  ZIN --> MONGO
+
+  CACHE[Runtime TTL Caches<br/>Catalog · Targeting · Rerank]
+  CACHE -.-> API
+  CACHE -.-> CAP
+
+  API -.-> OBS[Prometheus · Grafana · Langfuse]
+  WORKERS -.-> OBS
+  CAP -.-> OBS
+  OBS --> QUALITY[Feedback & Versioned Evidence]
+  QUALITY --> EVAL[Regression Evaluation]
+  EVAL --> RELEASE[Human-Governed Release]
+  RELEASE -.-> API
+
+  classDef entry fill:#075985,stroke:#7dd3fc,color:#fff,stroke-width:3px;
+  classDef edge fill:#1e293b,stroke:#94a3b8,color:#fff;
+  classDef core fill:#172554,stroke:#60a5fa,color:#fff,stroke-width:2px;
+  classDef async fill:#3b0764,stroke:#c084fc,color:#fff;
+  classDef capability fill:#134e4a,stroke:#5eead4,color:#fff;
+  classDef platform fill:#3f3f46,stroke:#d4d4d8,color:#fff;
+  classDef store fill:#14532d,stroke:#86efac,color:#fff;
+  classDef quality fill:#713f12,stroke:#fcd34d,color:#fff;
+
+  class WEB,ZALO entry;
+  class NGINX,REACT,HOOK edge;
+  class API,CP,AP,WS core;
+  class ZIN,ZWORKER,TASKQ,WORKERS async;
+  class CAP,RAG,CREATIVE,OPERATION capability;
+  class BACKEND,DMP,INVENTORY,ORDER,SITES platform;
+  class MONGO,QDRANT,MEDIA,CACHE store;
+  class OBS,QUALITY,EVAL,RELEASE quality;
   </div></div>
-  <p>Dependency invalidation có chọn lọc: đổi budget làm strategy/forecast/order draft stale nhưng không xóa creative; đổi creative chỉ chạy lại analysis, compatibility và assignments. Kết quả worker chậm bị từ chối nếu input revision không còn khớp.</p>
-
-  <h2 id="intelligence"><span class="n">05</span>Recommendation Intelligence: placement, audience và creative</h2>
-  <p class="lead">Recommendation không còn chỉ dựa vào giá và availability. NP-6 bổ sung semantic retrieval và bounded reranking trên metadata do catalog quản lý, nhưng giữ hard constraint, model lock và side-effect contract ở lớp deterministic của server.</p>
-  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
-flowchart TB
-  B[Approved brief + audience context] --> N[Normalize multilingual intent]
-  N --> P1[Placement dense + BM25 topic retrieval]
-  N --> A1[Audience dense + BM25 retrieval]
-  P1 --> P2[Bounded semantic topic reranker]
-  P2 --> P3[Eligibility · availability · format · budget]
-  P3 --> P4[Context-first deterministic score]
-  P4 --> PE[Placement shortlist + match evidence]
-  A1 --> A2[RRF top 50 candidates]
-  A2 --> A3[Bounded semantic rerank top 30]
-  A3 --> A4[Explicit exclusion & contradiction guard]
-  A4 --> A5[Provider-owned selector · exactly 6]
-  A5 --> AE[Catalog ID validation · dedupe · evidence]
-  </div></div>
-
-  <h3>Hai pipeline dùng chung nguyên tắc, không dùng chung dữ liệu tùy tiện</h3>
-  <div class="table"><table><thead><tr><th>Stage</th><th>Ad placement recommendation</th><th>Audience recommendation</th></tr></thead><tbody>
-    <tr><td>Catalog</td><td>258 placement hoạt động: 35 legacy + 214 category + 9 property; mỗi zone có topic, keyword, DMP affinity, placement family, provenance và creative contract.</td><td>310 DMP segment có stable ID, category/subcategory, size range và fingerprint của index.</td></tr>
-    <tr><td>Dense retrieval</td><td><code>text-embedding-3-small</code>; index topic chạy in-process vì catalog chỉ có hàng trăm document.</td><td><code>paraphrase-multilingual-MiniLM-L12-v2</code>; vector 384 chiều lưu trong Qdrant.</td></tr>
-    <tr><td>Sparse retrieval</td><td>BM25-style score giữ exact vocabulary tiếng Việt/Anh từ metadata placement.</td><td>Qdrant sparse BM25 giữ brand, product, interest và taxonomy term chính xác.</td></tr>
-    <tr><td>Fusion</td><td>Dense + sparse rank được Reciprocal Rank Fusion theo từng query; topic được mở rộng trở lại các placement format hợp lệ.</td><td>Dense + sparse được RRF thành 50 candidate; query gốc luôn được giữ để không mất tín hiệu brief.</td></tr>
-    <tr><td>Rerank</td><td>Bounded semantic reranker xử lý tối đa 30 topic ID đã biết; không được thêm hoặc sửa ID.</td><td>Bounded semantic reranker chấm tối đa 30 candidate; server sort theo relevance score rồi nối lại tail theo retrieval order.</td></tr>
-    <tr><td>Deterministic boundary</td><td>Availability, booking conflict, device, creative ratio/format, budget và objective performance vẫn được kiểm tra ngoài LLM. Context match tạo tier ưu tiên; reach/quality chỉ reorder bên trong tier.</td><td>Explicit exclusion, B2B/B2C contradiction, ID grounding và duplicate removal chạy trước/sau selector. Selector lỗi thì giữ guarded retrieval order thay vì dump lại toàn catalog.</td></tr>
-    <tr><td>Engine boundary</td><td>Reranker là fixed relevance specialist, không thay conversational engine của campaign.</td><td>Copilot và Autopilot dùng cùng retrieval/rerank; execution route vẫn được khóa theo campaign engine đã cấu hình.</td></tr>
-    <tr><td>Evidence</td><td>Card trả topic, matched keyword/DMP affinity, dense/sparse rank, rerank rationale và ranking mode.</td><td>Artifact trả retrieval mode, candidate count, rerank status, guard rejection, execution route và stage latency.</td></tr>
+  <div class="table"><table><thead><tr><th>Layer</th><th>Trách nhiệm</th><th>Trust / failure boundary</th></tr></thead><tbody>
+    <tr><td>Experience &amp; channels</td><td>Campaign IDE, responsive mobile, Zalo OA, timeline, review và reports</td><td>Hiển thị và gửi intent; không phải canonical campaign truth</td></tr>
+    <tr><td>Edge, identity &amp; delivery</td><td>Nginx/TLS, session, CSRF, Zalo Login, signed webhook và immediate ACK</td><td>Actor, owner và session scope được server resolve; client không tự cấp quyền</td></tr>
+    <tr><td>Agent control plane</td><td>Intent routing, conversational control, Autopilot run control và bounded tool selection</td><td>Không ghi arbitrary JSON hoặc tự vượt capability allowlist</td></tr>
+    <tr><td>Durable async execution</td><td>Autopilot tasks, creative jobs, Zalo inbox/outbox, worker lease, heartbeat và retry</td><td>Worker crash được reclaim; duplicate delivery bị chặn bởi idempotency boundary</td></tr>
+    <tr><td>Domain capabilities</td><td>RAG, creative analysis/generation, placement, forecast, guard, order và report</td><td>Typed schema, live catalog check, ownership scope và side-effect contract</td></tr>
+    <tr><td>Canonical persistence</td><td>Workspace, artifact, proposal, run/task/event, ownership registry và audit evidence</td><td>Optimistic concurrency, input revision check và stale-result rejection</td></tr>
+    <tr><td>Existing ad platform</td><td>DMP, placement inventory, order, analytics và publisher live view</td><td>Operational system remains authoritative for inventory, order và measured delivery</td></tr>
+    <tr><td>Operations &amp; quality</td><td>Metrics, traces, feedback, regression evaluation và versioned release</td><td>Feedback tạo evidence; không trực tiếp tự sửa production behavior</td></tr>
   </tbody></table></div>
 
-  <div class="callout success"><b>Fail-open có giới hạn:</b> embedding, reranker hoặc provider lỗi không được tạo ID mới. Placement quay về deterministic contextual scorer; audience giữ candidate order đã được guard và catalog-grounding. Lỗi recommendation không được nới lỏng ownership, confirmation, image quota, audience-reach hay order-idempotency.</div>
-
-  <h3>Placement experiment · 43 brief · 23 topic class</h3>
-  <div class="table"><table><thead><tr><th>Setup</th><th>Top-1 đúng</th><th>Top-3 đúng</th><th>Semantic hard-case top-1</th><th>p95 latency</th></tr></thead><tbody>
-    <tr><td>Deterministic contextual baseline</td><td>76.7%</td><td>81.4%</td><td>10.0%</td><td>0.08s</td></tr>
-    <tr><td>Dense + BM25 retrieval</td><td>81.4%</td><td>86.1%</td><td>20.0%</td><td>1.18s</td></tr>
-    <tr><td><b>Dense + BM25 + bounded reranker</b></td><td><b>100%</b></td><td><b>100%</b></td><td><b>100%</b></td><td>12.6s</td></tr>
-  </tbody></table></div>
-
-  <h3>Audience experiment · 80 golden briefs · 310 segment</h3>
-  <div class="table"><table><thead><tr><th>Setup</th><th>Retrieval recall@50</th><th>Must-have recall@6</th><th>nDCG@6</th><th>Exclusion violation@6</th><th>p95 latency</th></tr></thead><tbody>
-    <tr><td>BM25-only baseline</td><td>38.8%</td><td>24.0%</td><td>18.4%</td><td>1</td><td>2.08s</td></tr>
-    <tr><td>Dense + BM25 retrieval</td><td>75.0%</td><td>47.9%</td><td>36.3%</td><td>1</td><td>2.10s</td></tr>
-    <tr><td><b>Dense + BM25 + bounded reranker</b></td><td><b>75.0%</b></td><td><b>75.8%</b></td><td><b>61.3%</b></td><td><b>0</b></td><td>7.50s</td></tr>
-  </tbody></table></div>
-
-  <div class="metrics"><div class="metric"><b>258</b><span>active placement có versioned audience context</span></div><div class="metric"><b>310</b><span>audience segment trong production Qdrant</span></div><div class="metric"><b>100%</b><span>placement top-1 trên 43-case NP-6 matrix</span></div><div class="metric"><b>75.8%</b><span>audience must-have recall@6 trên 80 brief</span></div></div>
-  <p class="small">Các số eval là bằng chứng regression của dataset/run ngày 2026-07-27, không phải SLA chất lượng cho mọi brief. Synthetic inventory metric chỉ phục vụ demo delivery; semantic relevance không thay đổi audience reach arithmetic.</p>
-
-  <h3>Creative Intelligence sau recommendation</h3>
-  <div class="grid">
-    <div class="card"><h3>Creative analysis</h3><p>Deterministic dimension/format checks kết hợp VLM semantic fit, brand safety và confidence. Verdict cùng analysis ID được lưu; Copilot và Autopilot đều có human review boundary.</p></div>
-    <div class="card"><h3>Bounded multi-format generation</h3><p>Placement intent tạo exact-format plan; worker deduplicate size, cap tối đa ba asset, tạo có giới hạn, normalize và persist theo revision trước final compatibility ranking.</p></div>
-  </div>
-
-  <h2 id="durability"><span class="n">06</span>Durable runs, workers, leases và side-effect safety</h2>
-  <div class="steps">
-    <div class="step"><b>Plan thành task bền vững</b><span>Mỗi capability task có input revision, status, attempt, evidence và trace; process restart không làm mất run.</span></div>
-    <div class="step"><b>Worker lease + heartbeat</b><span>Lease ngăn hai worker cùng sở hữu task; stale lease có thể reclaim. Bounded retry phân biệt lỗi có thể phục hồi với lỗi cần người dùng.</span></div>
-    <div class="step"><b>Idempotency tại side effect</b><span>Image generation, report generation và order creation dùng key/lease/verification để retry không nhân đôi kết quả.</span></div>
-    <div class="step"><b>Human review &amp; manual repair</b><span>Run pause ở artifact review, input gate hoặc launch gate. Edit commit vào canonical workspace rồi run tiếp từ đúng dependency.</span></div>
-  </div>
-  <div class="callout danger"><b>Launch invariant:</b> không mode, policy hoặc channel nào được tạo order khi chưa có explicit launch approval và order guard hợp lệ. Các product demo mới chỉ chạy fixture nội bộ và không gọi external campaign endpoint.</div>
-
-  <h2 id="zalo"><span class="n">07</span>Anonymous-first, account ownership và Zalo continuity</h2>
+  <h3>Từ channel request đến operational action</h3>
   <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
 sequenceDiagram
-  participant V as Anonymous visitor
-  participant W as Web Agent
-  participant I as Identity authority
-  participant Z as Zalo Login / OA
-  participant C as Canonical campaign
-  V->>W: Start without login
-  W->>C: Device-owned conversation
-  V->>I: Optional Zalo login
-  I-->>V: Opaque HttpOnly account session
-  V->>I: Explicit claim conversation
-  I->>C: Atomic ownership transfer
-  Z->>I: Signed OA link / actor resolution
-  Z->>C: Owned status · report · live · review
-  C-->>W: Cross-device resume
+  participant U as Web / Zalo User
+  participant E as Edge & Identity
+  participant A as Agent Gateway
+  participant W as Workspace Service
+  participant C as Domain Capability
+  participant P as Advertising Platform
+
+  U->>E: Authenticated request
+  E->>A: Server-resolved actor and session
+  A->>W: Read canonical campaign context
+  W-->>A: Current revision and artifacts
+  A->>C: Execute typed capability
+  C->>P: Read catalog or operational state
+  P-->>C: Verified platform data
+  C-->>A: Structured result and evidence
+  A->>W: Revision-checked artifact commit
+  W-->>U: Updated artifact or review checkpoint
   </div></div>
-  <div class="grid">
-    <div class="card"><h3>Anonymous usage</h3><p>Visitor dùng đầy đủ campaign flow ngay, history bền trên thiết bị. Login không bắt buộc và không tự claim dữ liệu.</p></div>
-    <div class="card"><h3>Zalo as primary identity</h3><p>Zalo Login dùng Social OAuth v4 PKCE. Local email/password vẫn tồn tại như testing fallback trên cùng user/session model.</p></div>
-    <div class="card"><h3>Explicit ownership</h3><p>Claim conversation là atomic server operation. Foreign account không thể resume; Ads order vẫn là business record ngay cả khi conversation bị xóa.</p></div>
-    <div class="card"><h3>Zalo OA tool agent</h3><p>Signed webhook → immediate ACK → durable worker → bounded tool loop. Tool chỉ đọc campaign thuộc actor: list, status, setup, progress, six reports, PDF/live view, workspace link và confirmed pause/resume.</p></div>
-  </div>
-  <div class="callout"><b>Một campaign, không có “Zalo database” riêng:</b> campaign khởi tạo trên Zalo chạy cùng Autopilot graph, dùng campaign ownership registry và canonical conversation. Web history tự sắp lại khi Zalo run tiến triển.</div>
 
-  <h2 id="reports"><span class="n">08</span>Launch, live screenshots và six-report workflow</h2>
-  <p>Verified order mở Result, Setup report và module phân tích dùng chung. Backend tạo sáu analysis view: <b>Daily Ops, Awareness, Consideration, Conversion, Retention, Executive</b>; mỗi view có KPI, chart, generated questions và cached report Q&amp;A. Full PDF chứa đủ sáu report, charts, KPI và Q&amp;A.</p>
-  <div class="table"><table><thead><tr><th>Surface</th><th>Current capability</th><th>Truth label</th></tr></thead><tbody>
-    <tr><td>Result</td><td>Verified order, placements, creative mapping, forecast, manager/test-site links</td><td>Canonical artifacts</td></tr>
-    <tr><td>Setup report</td><td>Brief, strategy, audience, targeting, placements, assignments, guard/order state</td><td>Canonical artifacts</td></tr>
-    <tr><td>Six analytical views</td><td>KPI, charts, questions, cached Q&amp;A, retry-safe generation</td><td>Synthetic showcase delivery data</td></tr>
-    <tr><td>Full PDF</td><td>Complete six-report export through opaque download URL</td><td>Only exposed when all views are ready</td></tr>
-    <tr><td>Zalo media</td><td>1080×1350 report JPEG, site/zone live screenshots, full PDF link</td><td>Owned campaign only</td></tr>
-  </tbody></table></div>
+  <h2 id="workspace"><span class="n">04</span>Canonical campaign runtime — Copilot, Autopilot và versioned artifact graph</h2>
+  <p class="lead">Một campaign không phải một chuỗi chat và Copilot/Autopilot không giữ hai bản state riêng. Cả hai là hai control loop trên cùng canonical workspace: mọi thay đổi quan trọng trở thành artifact có revision, status, dependency và evidence; conversation chỉ là interaction surface để đọc, giải thích, đề xuất hoặc phê duyệt thay đổi.</p>
 
-  <h2 id="feedback-loop"><span class="n">09</span>Feedback loop và continuous improvement</h2>
-  <p class="lead">Mỗi kết quả không chỉ là output cho người dùng; nó còn là một điểm đo có thể truy ngược về request, run, tool, guard policy, model và phiên bản Agent đã tạo ra nó. Feedback được giữ tách khỏi campaign state để hệ thống học từ tín hiệu chất lượng mà không tự ý sửa campaign đang chạy.</p>
-
-  <div class="grid3">
-    <div class="card"><h3><span class="status done">LIVE</span> Feedback tại điểm quyết định</h3><p>Kết quả Copilot và summary Autopilot hiển thị Có/Chưa. Phản hồi âm yêu cầu reason code hoặc comment, bao phủ recommendation sai, thiếu context, không làm theo yêu cầu, fact sai, unsafe, chậm, quá nhiều bước, giải thích khó hiểu, approval lỗi và tool/system error.</p></div>
-    <div class="card"><h3><span class="status done">LIVE</span> Correlation đầy đủ</h3><p>Mỗi feedback gắn với owned session, conversation hoặc run, request/task khi có, surface, workflow step và workspace revision. Version manifest khóa agent build, model/engine, quality schema và guard policy tại thời điểm run.</p></div>
-    <div class="card"><h3><span class="status done">LIVE</span> Durable &amp; privacy-aware</h3><p>MongoDB lưu interaction, quality event và feedback trong collection riêng. Owner được hash, free text được redact PII, payload bị giới hạn kích thước, TTL mặc định là 90 ngày cho trace/event và 180 ngày cho feedback.</p></div>
-    <div class="card"><h3><span class="status done">LIVE</span> Idempotent và ownership-scoped</h3><p><code>submission_id</code> chỉ tạo một bản ghi trong scope của owner. CSRF, request correlation và ownership check chặn feedback lên run của người khác; target ngoài scope trả privacy-safe not-found.</p></div>
-    <div class="card"><h3><span class="status done">LIVE</span> Không chặn response path</h3><p>Interaction/event được ghi best-effort ngoài critical path với timeout ngắn. Feedback yêu cầu durable store và thất bại rõ ràng thay vì giả vờ đã lưu; metric theo dõi write outcome, sentiment và reason.</p></div>
-    <div class="card"><h3><span class="status partial">FOUNDATION</span> Eval &amp; human labels</h3><p>Golden set hiện có 80 brief đã qua human review, gồm ambiguity, KPI conflict, catalog gap và adversarial input. Guardrail có offline/E2E attack suite; các tập này là regression baseline trước mọi thay đổi.</p></div>
-  </div>
-
-  <h3>Hai vòng cải thiện, một release gate</h3>
+  <h3>One workspace, two control loops</h3>
   <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
 flowchart LR
-  RUN[Copilot / Autopilot run<br/>LIVE] --> TRACE[Interaction + tool + guard trace<br/>LIVE]
-  RUN --> FB[Sentiment + reason + comment<br/>LIVE]
-  TRACE --> TRIAGE[Failure clustering & review queue<br/>NEXT]
-  FB --> TRIAGE
-  TRIAGE --> HITL[HITL adjudication<br/>NEXT]
-  HITL --> DATA[Versioned dataset candidates<br/>NEXT]
-  DATA --> SYS[Prompt · RAG · tool · policy fixes<br/>NEXT]
-  DATA --> TRAIN[SFT · DPO · RLHF / RLAIF<br/>OPTIONAL]
-  SYS --> GATE[Golden set + security + latency gates<br/>PARTIAL]
-  TRAIN --> GATE
-  GATE --> SHADOW[Shadow · canary · rollback<br/>NEXT]
-  SHADOW --> LATER[Improved later runs]
-  LATER --> RUN
+  O[Operator intent<br/>Policy · Review decision]
+  O --> C[Campaign Copilot<br/>Observe · Tool · Propose · Review]
+  O --> A[Campaign Autopilot<br/>Plan · Execute · Validate · Replan]
+  C <-->|Read · Propose · Commit| W[Canonical Campaign Workspace<br/>Revisions · Artifacts · Evidence]
+  A <-->|Execute · Checkpoint · Resume| W
+  W <--> T[Typed Domain Capabilities<br/>DMP · Placement · Creative · Forecast]
+  W --> H{Human checkpoint<br/>Explicit launch approval}
+  H --> L[Create order<br/>Verify · Report]
+
+  classDef mode fill:#172554,stroke:#60a5fa,color:#fff,stroke-width:2px;
+  classDef workspace fill:#14532d,stroke:#86efac,color:#fff,stroke-width:3px;
+  classDef gate fill:#713f12,stroke:#fcd34d,color:#fff;
+  class C,A mode;
+  class W workspace;
+  class H,L gate;
   </div></div>
 
-  <div class="table"><table><thead><tr><th>Signal</th><th>Dữ liệu hiện có</th><th>Cách biến thành cải thiện</th><th>Gate bắt buộc</th><th>Trạng thái</th></tr></thead><tbody>
-    <tr><td>User feedback</td><td>Sentiment, reason codes, redacted comment, request/run correlation, version manifest</td><td>Cluster failure theo step/tool/model; ưu tiên lỗi lặp lại; chuyển case đã review thành regression fixture</td><td>Không giảm task success, ownership safety hoặc approval correctness</td><td><span class="status partial">CAPTURE LIVE</span></td></tr>
-    <tr><td>Interaction trace</td><td>Latency, outcome, tool summary, fallback, proposal, guard decision, workspace revision trước/sau</td><td>Tách lỗi model khỏi lỗi retrieval, tool, policy, UI hoặc provider; sửa layer nhỏ nhất trước</td><td>Focused tests + end-to-end trajectory replay</td><td><span class="status done">LIVE</span></td></tr>
-    <tr><td>Guardrail findings</td><td>Rule, severity, decision, protected-state evidence và attack-suite result</td><td>Thêm adversarial case, chỉnh rule ở shadow mode, đo attack success và false-positive trước enforce</td><td>Không workspace mutation, không order/tool call khi bị block</td><td><span class="status done">LIVE</span></td></tr>
-    <tr><td>Human intervention</td><td>Approval checkpoint và canonical artifact history</td><td>Reviewer gắn root cause, severity, expected behavior và ideal action; reviewer thứ hai xử lý disagreement</td><td>Reviewer identity, label provenance và adjudication record</td><td><span class="status later">NEXT</span></td></tr>
-    <tr><td>Business outcome</td><td>Campaign/report artifacts có provenance; outcome-quality join chưa tự động</td><td>So sánh feedback với delivery outcome để tránh tối ưu “được thích” nhưng làm campaign kém hiệu quả</td><td>Truth label rõ measured/computed/estimate/synthetic</td><td><span class="status later">NEXT</span></td></tr>
-    <tr><td>Preference pair</td><td>Positive/negative feedback hiện là point label, chưa phải chosen-vs-rejected pair</td><td>Regenerate nhiều candidate trên cùng context, để human rank; dùng cho DPO hoặc reward model khi đủ chất lượng</td><td>Held-out eval, bias review, privacy/license review và rollback</td><td><span class="status later">OPTIONAL</span></td></tr>
+  <div class="table"><table><thead><tr><th>Runtime concern</th><th>Campaign Copilot</th><th>Campaign Autopilot</th></tr></thead><tbody>
+    <tr><td>Control model</td><td>Operator điều khiển từng thay đổi trong hands-on workspace</td><td>Operator giao objective và policy, sau đó supervise các checkpoint</td></tr>
+    <tr><td>Execution loop</td><td>Observe → understand → tool → explain/propose → review/commit</td><td>Plan dependency → execute capability → validate → continue/replan/review</td></tr>
+    <tr><td>Workspace mutation</td><td>Proposal hoặc UI action chỉ commit sau explicit operator intent</td><td>Structured task result commit tại revision-checked capability boundary</td></tr>
+    <tr><td>Adaptation</td><td>Đọc lại workspace sau mỗi message, edit hoặc proposal decision</td><td>Chỉ supersede và chạy lại task phụ thuộc vào artifact đã thay đổi</td></tr>
+    <tr><td>Continuity</td><td>Reload và tiếp tục từ canonical workspace hiện tại</td><td>Resume run/task state, đồng thời reconcile với workspace revision mới nhất</td></tr>
+    <tr><td>Human authority</td><td>Operator review trước thay đổi quan trọng</td><td>Stage/risk checkpoint và mandatory launch approval trước side effect</td></tr>
   </tbody></table></div>
 
-  <h3>Operating loop cho những run sau</h3>
-  <div class="steps">
-    <div class="step"><b>Collect — ghi evidence có version</b><span>Capture feedback cùng trajectory metadata, tool/guard outcome và workspace revision. Không dùng một nút “Có/Chưa” đơn lẻ làm ground truth.</span></div>
-    <div class="step"><b>Triage — tìm failure mode, không chỉ đếm dislike</b><span>Nhóm theo objective, step, tool, model, guard rule và reason. Sampling ưu tiên high-severity, repeated failure, disagreement và case có business impact.</span></div>
-    <div class="step"><b>HITL — con người adjudicate dữ liệu học</b><span>Reviewer xem context đã redact, artifact, tool trace và user expectation; gắn root cause, expected answer/action và mức tin cậy. Case bất đồng cần reviewer thứ hai trước khi vào dataset.</span></div>
-    <div class="step"><b>Improve — sửa system trước, train model khi cần</b><span>Ưu tiên prompt, retrieval, catalog, deterministic policy, tool contract và UX vì có thể kiểm chứng nhanh. SFT dùng ideal demonstrations; DPO dùng preference pairs; RLHF dùng reward model + RL khi có đủ scale. RLAIF chỉ tạo nhãn sơ bộ và vẫn cần human audit.</span></div>
-    <div class="step"><b>Evaluate — replay cả thành công lẫn thất bại</b><span>Chạy golden set, adversarial set, task/tool correctness, privacy, guard false-positive, latency và cost. Candidate phải thắng baseline trên slice mục tiêu mà không phá slice đang tốt.</span></div>
-    <div class="step"><b>Release — shadow, canary, observe, rollback</b><span>Replay trajectory đã de-identify trong shadow, canary theo tỷ lệ nhỏ, so sánh quality/safety/business metrics rồi mới mở rộng. Version manifest cho phép truy ngược và rollback chính xác.</span></div>
-  </div>
+  <h3>Autopilot execution trên shared versioned artifacts</h3>
+  <p><b>Autopilot</b> dùng dependency graph bên dưới như execution plan end-to-end: runtime tự xác định task đã sẵn sàng, commit artifact và replan downstream task khi input thay đổi. <b>Copilot</b> dùng cùng dependency model như consistency map — khi operator chỉnh Brief, Audience, Creative hoặc Setup, revision contract bảo vệ commit và đánh dấu đúng phần <b>“Cần xem lại”</b>, nhưng Copilot không tự chạy toàn bộ downstream graph.</p>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart LR
+  B[Brief<br/>user-owned input] --> S[Strategy<br/>reviewable artifact]
+  S --> PI[Placement intent] --> FP[Creative format plan]
+  FP --> C[Upload / AI generate<br/>user-owned creative]
+  C --> V[Creative verdict]
+  PI --> P[Compatible placements]
+  V --> P --> AS[Assignments]
+  AS --> A[Audience] --> T[Targeting]
+  T --> F[Forecast] --> D[Order draft]
+  D --> G[Order guard] --> H{Explicit launch approval}
+  H --> O[Verified order] --> R[Reports & live view]
 
-  <div class="grid">
-    <div class="card"><h3>System learning — đường mặc định</h3><p>Feedback thay đổi prompt, RAG, tool, guard policy, workflow hoặc UX thông qua pull request, eval và release gate. Cách này cải thiện Agent ngay cả khi base model là API bên ngoài và không cho phép cập nhật weight.</p></div>
-    <div class="card"><h3>Model learning — đường có điều kiện</h3><p>Chỉ dùng SFT/DPO/RLHF/RLAIF khi có model path cho phép fine-tune, dataset đủ lớn và được adjudicate, cùng held-out eval chứng minh lợi ích. Không có online weight update trực tiếp từ feedback của một user.</p></div>
-  </div>
+  classDef input fill:#075985,stroke:#7dd3fc,color:#fff;
+  classDef artifact fill:#172554,stroke:#60a5fa,color:#fff;
+  classDef gate fill:#713f12,stroke:#fcd34d,color:#fff;
+  classDef operation fill:#14532d,stroke:#86efac,color:#fff;
+  class B,C input;
+  class S,PI,FP,V,P,AS,A,T,F,D,G artifact;
+  class H gate;
+  class O,R operation;
+  </div></div>
+  <p class="small"><b>Dependency-aware, không phải reset toàn flow:</b> trong Autopilot, consumer bị ảnh hưởng được selective replan; trong Copilot, step tương ứng chuyển sang “Cần xem lại” và chờ operator quyết định. Artifact không liên quan, approved input và operational evidence vẫn được giữ nguyên.</p>
 
-  <p class="small">Phương pháp tham chiếu: <a href="https://arxiv.org/abs/2203.02155" target="_blank" rel="noreferrer">RLHF foundation</a> · <a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noreferrer">Direct Preference Optimization</a> · <a href="https://www.anthropic.com/research/constitutional-ai-harmlessness-from-ai-feedback" target="_blank" rel="noreferrer">Constitutional AI / RLAIF</a> · <a href="https://airc.nist.gov/airmf-resources/airmf/5-sec-core/" target="_blank" rel="noreferrer">NIST AI RMF: feedback, human oversight &amp; evaluation</a>.</p>
+  <h3>Campaign version control</h3>
+  <div class="table"><table><thead><tr><th>Mechanism</th><th>Technical contract</th><th>Operational value</th></tr></thead><tbody>
+    <tr><td>Workspace revision</td><td>Mỗi canonical mutation tạo một workspace revision mới</td><td>Copilot, Autopilot, web và Zalo cùng biết campaign state nào đang là current truth</td></tr>
+    <tr><td>Artifact revision &amp; status</td><td>Brief, strategy, creative, assignment, forecast và order draft có revision/status riêng</td><td>Review đúng thay đổi cần thiết thay vì chấp nhận một campaign blob không thể inspect</td></tr>
+    <tr><td>Proposal lifecycle</td><td>Pending proposal được accept, reject hoặc supersede bởi revision mới hơn</td><td>Lịch sử quyết định vẫn audit được nhưng proposal cũ không còn masquerade thành current state</td></tr>
+    <tr><td>Input-revision snapshot</td><td>Mỗi async task ghi lại revision của các dependency và output artifact khi bắt đầu</td><td>Biết chính xác AI result được tạo từ phiên bản brief/creative nào</td></tr>
+    <tr><td>Optimistic commit</td><td>Commit kiểm tra workspace, input và base artifact revision trước khi ghi</td><td>Copilot edit và worker result không âm thầm overwrite lẫn nhau</td></tr>
+    <tr><td>Stale-result rejection</td><td>Worker hoàn thành muộn bị từ chối nếu dependency revision không còn khớp</td><td>Campaign không quay ngược về recommendation hoặc analysis cũ</td></tr>
+    <tr><td>Selective replan</td><td>Chỉ supersede và tạo execution generation mới cho downstream task bị ảnh hưởng</td><td>Giữ phần campaign đã đúng, giảm recompute và không làm mất creative tốn chi phí</td></tr>
+    <tr><td>Side-effect pinning</td><td>Launch approval phải khớp order-draft revision; create order dùng idempotency key</td><td>Không launch draft chưa được duyệt và không tạo duplicate order khi retry</td></tr>
+  </tbody></table></div>
 
-  <div class="callout warn"><b>Đọc trước khi diễn giải sơ đồ:</b> Phần đang chạy gồm feedback UI/API, owner-scoped idempotent storage, redaction/retention, versioned interaction &amp; guard events, metrics, golden set và guardrail eval. Review queue, automated dataset-candidate pipeline, adjudication UI, outcome join, preference-pair generation, SFT/DPO/RLHF/RLAIF và closed-loop shadow/canary vẫn là các stage tiếp theo. Feedback hiện tại không tự sửa campaign, không tự đổi prompt và không cập nhật model weight.</div>
+  <div class="callout success"><b>Ví dụ khi người và Agent cùng làm việc:</b> operator sửa một creative trong lúc Autopilot đang chạy. Workspace chuyển sang revision mới; creative analysis, compatibility, assignment và các consumer phía sau được replan, trong khi strategy và audience không bị xóa. Nếu analysis cũ hoàn thành muộn, input revision không còn khớp nên kết quả bị từ chối thay vì overwrite thay đổi mới.</div>
+  <p class="small"><b>Hai mode, một product truth:</b> Copilot và Autopilot dùng chung canonical artifacts, revision contracts, validators và launch authority. Web và Zalo OA cũng đọc cùng campaign state; mode chỉ xác định control loop đang sở hữu active run.</p>
+  <p class="small"><b>Giới hạn hiện tại:</b> hệ thống chưa hỗ trợ chuyển một active run từ Autopilot sang Copilot hoặc ngược lại giữa chừng. Seamless mid-run handoff giữa hai mode sẽ được bổ sung trong giai đoạn tiếp theo.</p>
 
-  <h2 id="security"><span class="n">10</span>Security, failure recovery, observability và deploy</h2>
+  <h2 id="intelligence"><span class="n">05</span>Grounded Decision Intelligence — Placement, Creative và Audience</h2>
+  <p class="lead">Recommendation không phải một lần gọi LLM để tự nghĩ ra audience hoặc placement. Hệ thống tách bài toán thành ba specialist intelligence pipeline dùng chung versioned product truth: AI chỉ thu hẹp và giải thích candidate đã biết; deterministic services kiểm tra tính hợp lệ, còn operator giữ quyền review và launch.</p>
+
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart LR
+  B[Approved Brief + Strategy] --> P[Placement Intelligence<br/>Intent · Hybrid retrieval · Live eligibility]
+  P --> C[Creative Intelligence<br/>Format plan · Generate/Upload · VLM analysis]
+  C --> A[Audience Intelligence<br/>Hybrid retrieval · Bounded selection · Reach guard]
+  A --> E[Forecast + Decision Evidence<br/>Valid IDs · Revisions · Rationale]
+
+  classDef input fill:#075985,stroke:#7dd3fc,color:#fff;
+  classDef specialist fill:#172554,stroke:#60a5fa,color:#fff,stroke-width:2px;
+  classDef evidence fill:#14532d,stroke:#86efac,color:#fff;
+  class B input;
+  class P,C,A specialist;
+  class E evidence;
+  </div></div>
+
+  <h3>Ba specialist pipeline, một decision contract</h3>
+  <div class="table"><table><thead><tr><th>Contract</th><th>Placement Intelligence</th><th>Creative Intelligence</th><th>Audience Intelligence</th></tr></thead><tbody>
+    <tr><td>Versioned source</td><td>258 placement với topic, publisher, format, reach/CTR/CPM, lifecycle, provenance và creative contract</td><td>Creative files, format-plan revision, generation provenance và analysis history</td><td>310 DMP segment với stable ID, taxonomy, size range và Qdrant index fingerprint</td></tr>
+    <tr><td>Intelligent operation</td><td>Dense semantic + BM25 topic retrieval, RRF và bounded reranking trên candidate ID đã biết</td><td>Exact-format planning, bounded image generation và VLM semantic/brand-safety analysis</td><td>Dense + sparse retrieval, RRF top-50 và bounded reranking top-30 thành shortlist sáu segment</td></tr>
+    <tr><td>Deterministic boundary</td><td>Catalog lifecycle, availability, booking conflict, device, budget và creative compatibility</td><td>Dimension, ratio, MIME type, quota, current revision, blocking issue và manual-review policy</td><td>Catalog-ID validation, explicit exclusion, B2B/B2C contradiction, dedupe và server-owned reach</td></tr>
+    <tr><td>Evidence artifact</td><td>Matched topic/keyword, retrieval rank, rerank rationale, availability và ranking mode</td><td>Analysis ID, confidence, issues, effective verdict, override reason và VLM provenance</td><td>Retrieval mode, candidate count, guard rejection, execution route, stage latency và selected IDs</td></tr>
+  </tbody></table></div>
+
+  <div class="callout success"><b>AI proposes relevance; platform guarantees validity:</b> model chỉ được rank candidate trong bounded set và giải thích semantic fit. Server giữ catalog ID, lifecycle, availability, format, budget, exclusion, reach và side-effect contract; con người quyết định low-confidence override và launch.</div>
+  <div class="callout"><b>Fail-open có giới hạn:</b> embedding, reranker hoặc provider lỗi không được tạo ID mới. Placement quay về deterministic contextual scorer; audience giữ candidate order đã qua guard. Recommendation failure không được nới lỏng ownership, confirmation, creative quota, reach hoặc order idempotency.</div>
+
+  <h3>Measured architecture choice</h3>
+  <p class="small"><b>Evaluation contract:</b> offline benchmark trên catalog snapshot ngày 27/07/2026 gồm 80 human-labelled audience briefs và 43 placement cases. Đây là regression evidence để lựa chọn kiến trúc, không phải SLA cho mọi campaign; synthetic delivery metrics không thay đổi audience-reach arithmetic.</p>
+
+  <h3>Placement benchmark · 43 cases</h3>
+  <div class="table"><table><thead><tr><th>Strategy</th><th>Primary signal</th><th>Top-1</th><th>Top-3</th><th>MRR</th><th>p95 latency</th></tr></thead><tbody>
+    <tr><td>Collaborative filtering</td><td>User–campaign interaction matrix</td><td>62.8%</td><td>76.7%</td><td>0.681</td><td>0.168s</td></tr>
+    <tr><td>Association rule mining</td><td>Audience/placement co-selection</td><td>69.8%</td><td>74.4%</td><td>0.723</td><td>0.109s</td></tr>
+    <tr><td>Deterministic scoring</td><td>Metadata weights + rules</td><td>76.7%</td><td>81.4%</td><td>0.792</td><td>0.077s</td></tr>
+    <tr><td>Content-based filtering</td><td>Catalog feature similarity</td><td>79.1%</td><td>81.4%</td><td>0.802</td><td>0.221s</td></tr>
+    <tr><td>Knowledge graph</td><td>Taxonomy and affinity edges</td><td>74.4%</td><td>83.7%</td><td>0.788</td><td>0.372s</td></tr>
+    <tr><td>Hybrid retrieval</td><td>Dense semantic + BM25 + RRF</td><td>81.4%</td><td>86.1%</td><td>0.835</td><td>1.184s</td></tr>
+    <tr><td><b>Hybrid + bounded reranker</b></td><td>Hybrid shortlist + contextual reasoning</td><td><b>100%</b></td><td><b>100%</b></td><td><b>1.000</b></td><td>12.600s</td></tr>
+  </tbody></table></div>
+
+  <h3>Audience benchmark · 80 human-labelled briefs</h3>
+  <div class="table"><table><thead><tr><th>Strategy</th><th>Primary signal</th><th>Must Recall@6</th><th>Relevant Recall@6</th><th>MRR@6</th><th>NDCG@6</th><th>p95 latency</th><th>Excl.@6</th></tr></thead><tbody>
+    <tr><td>BM25 baseline</td><td>Exact catalog vocabulary</td><td>24.0%</td><td>17.2%</td><td>0.298</td><td>0.184</td><td>2.078s</td><td>1</td></tr>
+    <tr><td>Association rule mining</td><td>Segment co-selection patterns</td><td>30.4%</td><td>21.6%</td><td>0.418</td><td>0.256</td><td>1.742s</td><td>2</td></tr>
+    <tr><td>Knowledge graph</td><td>Taxonomy hierarchy + affinity edges</td><td>43.2%</td><td>30.6%</td><td>0.386</td><td>0.318</td><td>1.960s</td><td>1</td></tr>
+    <tr><td>Hybrid retrieval</td><td>Dense semantic + BM25</td><td>47.9%</td><td>34.0%</td><td>0.555</td><td>0.363</td><td>2.100s</td><td>1</td></tr>
+    <tr><td><b>Hybrid + bounded reranker</b></td><td>Hybrid shortlist + contextual reasoning</td><td><b>75.8%</b></td><td><b>51.5%</b></td><td><b>0.838</b></td><td><b>0.613</b></td><td>7.503s</td><td><b>0</b></td></tr>
+  </tbody></table></div>
+
+  <div class="metrics"><div class="metric"><b>43</b><span>placement cases có expected topic label</span></div><div class="metric"><b>80</b><span>human-labelled audience briefs</span></div><div class="metric"><b>+51.8pp</b><span>Must Recall@6 so với BM25 baseline</span></div><div class="metric"><b>0</b><span>exclusion violation ở bounded reranker</span></div></div>
+
+  <h3>Preview: cách xây dựng recommendation version tiếp theo</h3>
+  <p>Recommendation evidence và operator signal không tự sửa production ranking. Chúng đi qua một build path ngắn, có human ownership và regression gate, để tạo một candidate version có thể so sánh và rollback.</p>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart LR
+  S[Observed Signals<br/>Accept · Remove · Override · Feedback] --> H[Human Adjudication<br/>Correct label · Failure type]
+  H --> I[Smallest-Layer Improvement<br/>Catalog · Retrieval · Reranker · Guard]
+  I --> V[Candidate Version Manifest<br/>Data · Index · Prompt · Policy]
+  V --> E[Offline Replay vs Current<br/>Quality · Safety · Latency]
+  E --> G{Human Release Gate<br/>Approve · Reject · Rollback}
+  G --> N[Next Recommendation Version]
+
+  classDef evidence fill:#172554,stroke:#60a5fa,color:#fff;
+  classDef review fill:#713f12,stroke:#fcd34d,color:#fff;
+  classDef release fill:#14532d,stroke:#86efac,color:#fff;
+  class S,H,I,V,E evidence;
+  class G review;
+  class N release;
+  </div></div>
+  <div class="callout success"><b>Control principle:</b> feedback là evidence, không phải online weight mutation. Chỉ candidate version vượt quality, safety và latency gates sau human review mới được release.</div>
+
+  <h2 id="durability"><span class="n">06</span>Agent execution that survives failure</h2>
+  <p class="lead">Một campaign run không phải một HTTP request kéo dài. Nó là chuỗi task và artifact được lưu bền vững, có thể mất worker, retry hoặc đổi interaction surface mà không mất campaign state, quay lại từ đầu hay nhân đôi external action.</p>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart LR
+  A[Persisted Task<br/>Input Revision · Attempt · Evidence] --> B[Atomic Claim<br/>Lease + Heartbeat]
+  B --> C[Execute Capability<br/>Tool · Provider · Worker]
+  C --> D[Revision-safe Commit]
+  D --> E{Review / Approval Gate}
+  E --> F[Idempotent Side Effect<br/>Image · Report · Order]
+
+  B -. Worker crash .-> G[Lease Expires]
+  C -. Transient failure .-> H[Bounded Retry / Fallback]
+  D -. Stale revision .-> I[Reject Result + Replan]
+  G --> B
+  H --> C
+  I --> A
+
+  classDef state fill:#172554,stroke:#60a5fa,color:#fff;
+  classDef recovery fill:#713f12,stroke:#fcd34d,color:#fff;
+  classDef effect fill:#14532d,stroke:#86efac,color:#fff;
+  class A,B,C,D,E state;
+  class G,H,I recovery;
+  class F effect;
+  </div></div>
+
+  <div class="table"><table><thead><tr><th>Failure scenario</th><th>Protection hiện có</th><th>Recovery outcome</th></tr></thead><tbody>
+    <tr><td>Worker hoặc process restart giữa run</td><td>Run/task state lưu trong MongoDB; atomic claim, lease và heartbeat xác định worker ownership</td><td>Stale lease được reclaim và task tiếp tục từ committed state</td></tr>
+    <tr><td>Provider timeout, throttling hoặc lỗi tạm thời</td><td>Retryable error classification, bounded attempts và capability fallback</td><td>Phục hồi có giới hạn; lỗi terminal chuyển thành evidence hoặc checkpoint cần người xử lý</td></tr>
+    <tr><td>Webhook, delivery hoặc task bị nhận lại</td><td>Durable inbox/outbox và idempotency key tại business boundary</td><td>Hệ thống có thể retry delivery nhưng không tạo duplicate image, report hoặc order</td></tr>
+    <tr><td>AI result hoàn thành trên campaign state cũ</td><td>Input revision, workspace revision và task-result commit contract</td><td>Stale result bị từ chối; downstream dependency được invalidated và replan</td></tr>
+    <tr><td>User refresh, đổi thiết bị hoặc chuyển giữa Web và Zalo OA</td><td>Conversation, canonical workspace và active run được persist server-side; identity/channel mapping kiểm tra ownership</td><td>Owner đã xác thực resume đúng campaign state và pending review checkpoint trên interaction surface khác</td></tr>
+    <tr><td>Creative có warning hoặc hành động cần quyền cao</td><td>Artifact review, input gate, creative-risk gate và explicit launch approval</td><td>Agent pause để operator review hoặc repair, rồi tiếp tục từ đúng dependency</td></tr>
+  </tbody></table></div>
+
   <div class="grid3">
-    <div class="card"><h3>Identity &amp; CSRF</h3><p>Opaque hashed revocable HttpOnly sessions, centralized CSRF header/cookie contract, Argon2id local credentials và server-side actor resolution.</p></div>
-    <div class="card"><h3>Channel safety</h3><p>PKCE login, one-time TTL link attempts, signed webhook verification, dedupe, persisted rotating OA token và owner-free tool schema.</p></div>
-    <div class="card"><h3>Input &amp; tool policy</h3><p>Typed input rules chạy trước model/tool execution. Campaign status dùng session scope do server cấp; booking conflict chỉ trả availability và date window, không lộ campaign khác.</p></div>
-    <div class="card"><h3>Quality signals</h3><p>Interaction/event có version và feedback idempotent từ kết quả Copilot/Autopilot được lưu tách biệt khỏi workspace và execution state.</p></div>
-    <div class="card"><h3>Observability</h3><p>Structured request/LLM/tool/order logs; Prometheus metrics, Grafana dashboards, Langfuse traces và stable Autopilot run trace ID.</p></div>
-    <div class="card"><h3>Failure recovery</h3><p>Pause/resume/cancel/replan, retry policy, stale lease reclaim, revision conflict, idempotent order/report/image boundaries và rollback backups.</p></div>
-    <div class="card"><h3>Deployment</h3><p>Nginx serves frontend/proxies APIs; FastAPI Agent và Node backend chạy dưới PM2; MongoDB/Qdrant/workers cùng readiness contract.</p></div>
-    <div class="card"><h3>Release discipline</h3><p>Frontend production build, focused suites, browser matrix, tracked-secret scan, health/readiness, rollback snapshot rồi mới switch static assets.</p></div>
+    <div class="card"><h3>Recovery Point</h3><p>Task status, attempt, artifact, evidence và workspace revision đã commit không phụ thuộc vào memory của một worker. Provider result chưa commit có thể được thực thi lại qua cùng idempotency boundary.</p></div>
+    <div class="card"><h3>Recovery Time</h3><p>Khả năng phục hồi được giới hạn bởi lease expiry, worker pickup và retry window thay vì yêu cầu operator khởi động lại toàn bộ campaign.</p></div>
+    <div class="card"><h3>Cross-channel continuity</h3><p>Web, mobile và Zalo OA là interaction surfaces trên cùng persisted conversation và campaign truth. Resume cross-device chỉ xảy ra sau khi identity và ownership đã được xác thực.</p></div>
   </div>
+  <p class="small"><b>Anonymous boundary:</b> anonymous history bền trên thiết bị hiện tại nhưng không tự được claim sang account hoặc thiết bị khác. Explicit identity linking là điều kiện để cross-device resume mà không làm lộ campaign của người khác.</p>
+  <div class="callout danger"><b>Launch invariant:</b> không mode, policy hoặc channel nào được tạo order khi chưa có explicit launch approval khớp approved order-draft revision và order guard hợp lệ.</div>
+
+  <h2 id="zalo"><span class="n">07</span>Identity without friction — Anonymous-first, account ownership và Zalo continuity</h2>
+  <p class="lead">Người dùng có thể bắt đầu ngay mà không cần đăng nhập. Sau khi xác thực và chủ động liên kết quyền sở hữu, cùng conversation, campaign workspace và active run có thể tiếp tục an toàn trên Web, mobile hoặc Zalo OA — không âm thầm chuyển dữ liệu giữa account hoặc tạo một bản campaign riêng cho từng channel.</p>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart TB
+  WEB[Web / Mobile] --> ANON[Anonymous Start<br/>Device-scoped Conversation]
+  ANON --> LOGIN[Optional Verified Login<br/>Zalo Social OAuth PKCE]
+  LOGIN --> CLAIM[Explicit Atomic Claim]
+
+  ZALO[Zalo OA] --> SIGNED[Signed Webhook<br/>Server-side Actor Resolution]
+  CLAIM --> OWNER[Verified Account Ownership]
+  SIGNED --> OWNER
+
+  OWNER --> STATE[Canonical Conversation<br/>Workspace · Active Run · Checkpoint]
+  STATE --> RESUME[Resume on Web · Mobile · Zalo OA]
+
+  FOREIGN[Foreign / Unlinked Identity] --> DENY[Privacy-safe Deny<br/>No Campaign Disclosure]
+
+  classDef entry fill:#075985,stroke:#7dd3fc,color:#fff,stroke-width:2px;
+  classDef identity fill:#172554,stroke:#60a5fa,color:#fff;
+  classDef owned fill:#14532d,stroke:#86efac,color:#fff,stroke-width:2px;
+  classDef deny fill:#7f1d1d,stroke:#fca5a5,color:#fff;
+  class WEB,ZALO entry;
+  class ANON,LOGIN,CLAIM,SIGNED identity;
+  class OWNER,STATE,RESUME owned;
+  class FOREIGN,DENY deny;
+  </div></div>
+
+  <div class="table"><table><thead><tr><th>User situation</th><th>System behavior</th><th>Safety guarantee</th></tr></thead><tbody>
+    <tr><td>Bắt đầu trên Web hoặc mobile</td><td>Tạo device-scoped anonymous conversation và canonical workspace</td><td>Không có login wall; dữ liệu chưa tự gắn với account khác</td></tr>
+    <tr><td>Đăng nhập sau khi đã bắt đầu campaign</td><td>User chủ động claim conversation bằng verified identity</td><td>Ownership transfer là atomic server operation, không phải client-side field</td></tr>
+    <tr><td>Mở lại trên thiết bị khác</td><td>Load owned conversation, workspace revision, active run và pending checkpoint</td><td>Resume chỉ sau server-side account ownership check</td></tr>
+    <tr><td>Nhắn qua Zalo OA</td><td>Signed webhook và actor resolution tìm owned campaign trước khi gọi bounded tool</td><td>Tool chỉ đọc hoặc tác động lên campaign thuộc actor đã xác thực</td></tr>
+    <tr><td>Foreign hoặc unlinked account thử truy cập</td><td>Không trả campaign state và không xác nhận target có tồn tại</td><td>Privacy-safe denial, không lộ ownership hoặc operational data</td></tr>
+    <tr><td>Conversation bị xóa</td><td>Chat history được xử lý riêng với order và business record đã tạo</td><td>Không dùng thao tác xóa conversation để phá operational campaign record</td></tr>
+  </tbody></table></div>
+
+  <div class="grid3">
+    <div class="card"><h3>Authentication — Bạn là ai?</h3><p>Zalo Login dùng Social OAuth v4 PKCE để tạo opaque HttpOnly account session. Client không tự khai báo actor hoặc quyền truy cập campaign.</p></div>
+    <div class="card"><h3>Ownership — Campaign nào thuộc về bạn?</h3><p>Anonymous conversation ban đầu thuộc device identity. Chuyển sang account yêu cầu explicit claim; foreign account không thể resume hoặc đọc artifact.</p></div>
+    <div class="card"><h3>Continuity — Bạn tiếp tục ở đâu?</h3><p>Sau khi ownership được thiết lập, Web, mobile và Zalo OA cùng đọc canonical conversation, workspace revision, active run, reports và pending review/approval checkpoint.</p></div>
+  </div>
+  <div class="callout success"><b>One campaign, many interaction surfaces:</b> Web, mobile và Zalo OA không tạo những bản campaign riêng. Mọi channel đều quay về cùng canonical conversation, workspace revision và ownership policy; checkpoint hoặc tiến triển trên một channel trở thành trạng thái có thể tiếp tục trên channel còn lại.</div>
+
+  <h2 id="reports"><span class="n">08</span>From approved intent to observable outcome</h2>
+  <p class="lead">Agent không dừng ở recommendation hoặc một thông báo “đã tạo campaign”. Nó biến approved campaign state thành order có thể kiểm chứng, quay lại publisher surface để thu delivery evidence, rồi tổ chức dữ liệu thành sáu góc nhìn phân tích và một conversational Report Intelligence workspace trên Web, Zalo OA, image và PDF.</p>
+
+  <h3>Guarded launch — một transaction có authorization và verification</h3>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart LR
+  D[Versioned Order Draft] --> G[Deterministic Order Guard]
+  G --> H{Explicit Human Approval<br/>Pinned to Draft Revision}
+  H --> R[Recheck Live Catalog<br/>Availability · Conflict · Creative]
+  R --> C[Idempotent Create Order]
+  C --> V[Fetch & Verify Order]
+  V --> O[Result · Evidence · Reports]
+
+  classDef state fill:#172554,stroke:#60a5fa,color:#fff;
+  classDef gate fill:#713f12,stroke:#fcd34d,color:#fff;
+  classDef outcome fill:#14532d,stroke:#86efac,color:#fff;
+  class D,G,R,C,V state;
+  class H gate;
+  class O outcome;
+  </div></div>
+  <div class="table"><table><thead><tr><th>Launch boundary</th><th>Technical control</th><th>Operational guarantee</th></tr></thead><tbody>
+    <tr><td>Compile order draft</td><td>Build payload từ approved brief, audience, targeting, placement, creative và assignment revisions</td><td>Side effect bắt đầu từ canonical campaign state, không từ raw LLM text</td></tr>
+    <tr><td>Deterministic guard</td><td>Kiểm tra budget/brief consistency, dates, objective, DMP IDs, placement catalog, conflict, creative URL và server-side verdict</td><td>Invalid hoặc invented field không tới được Order API</td></tr>
+    <tr><td>Human authorization</td><td>Approval khóa vào chính xác order-draft revision và không auto-approvable</td><td>Edit sau approval làm revision cũ mất hiệu lực</td></tr>
+    <tr><td>Time-of-use recheck</td><td>Guard đọc lại live availability và booking conflict ngay trước create</td><td>Không dùng availability snapshot đã stale tại thời điểm launch</td></tr>
+    <tr><td>Create + verify</td><td>Stable idempotency key, unique backend index, retry cùng key và fetch order sau create</td><td>Retry không double-book; chỉ verified order mở post-launch outcome</td></tr>
+  </tbody></table></div>
+
+  <h3>Live screenshot là runtime delivery evidence</h3>
+  <div class="steps">
+    <div class="step"><b>Constrained capture target</b><span>Screenshot service chỉ nhận publisher URL trong allowlist và đúng selected placement IDs từ canonical order.</span></div>
+    <div class="step"><b>Render như một browser thật</b><span>Headless Chromium load live page, fallback giữa network-idle và DOM-ready, scroll để kích hoạt lazy ads rồi chờ async rendering.</span></div>
+    <div class="step"><b>Inspect placement contract</b><span>Zone resolver đọc DOM state, xử lý sticky và skin/background mounts, đồng thời phân biệt active, inactive, missing hoặc zero-sized placement.</span></div>
+    <div class="step"><b>Publish inspectable evidence</b><span>Pipeline tạo full-page annotated capture, crop riêng từng zone, dimensions, capture timestamp và opaque media delivery cho Web/Zalo.</span></div>
+  </div>
+  <div class="callout success"><b>Không chỉ nói campaign đã launch:</b> Agent quay lại publisher surface để chứng minh creative xuất hiện tại đúng placement. Missing hoặc inactive zone được báo như evidence state, không bị che bằng một screenshot thành công giả.</div>
+
+  <h3>Report Intelligence execution model</h3>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart LR
+  O[Report Orchestrator] --> E[Evidence Agent]
+  E --> A[Six Specialist Analysts]
+  A --> C[Critic Agent]
+  C --> S[Executive Synthesis]
+  S --> Q[Report Q&A]
+  Q --> P[Web · Zalo · Images · PDF]
+  P --> F[Feedback Agent]
+  F -. Versioned Evidence .-> O
+
+  classDef agent fill:#172554,stroke:#60a5fa,color:#fff;
+  classDef control fill:#713f12,stroke:#fcd34d,color:#fff;
+  classDef output fill:#14532d,stroke:#86efac,color:#fff;
+  class O,E,A,S,Q agent;
+  class C,F control;
+  class P output;
+  </div></div>
+  <div class="table"><table><thead><tr><th>Agent role</th><th>Responsibility</th><th>Boundary</th></tr></thead><tbody>
+    <tr><td>Evidence Agent</td><td>Chuẩn hóa campaign setup và analytics thành metric definitions, timeframe, findings, limitations và stable evidence IDs</td><td>Không cho analyst tự định nghĩa lại metric hoặc invent ground truth</td></tr>
+    <tr><td>Six Specialist Analysts</td><td>Phân tích song song sáu business perspectives trên cùng evidence contract</td><td>Mỗi finding và metric trong answer phải truy về canonical evidence</td></tr>
+    <tr><td>Critic Agent</td><td>Kiểm tra phép tính, budget consistency, cross-report contradiction, unsupported causal claim và missing limitation</td><td>Analysis không đạt bị trả lại trước publication</td></tr>
+    <tr><td>Executive Synthesis Agent</td><td>Kết hợp insight giữa sáu report, xếp priority theo objective, impact, confidence và risk</td><td>Recommendation là proposal cho operator, không tự sửa campaign</td></tr>
+    <tr><td>Report Q&amp;A Agent</td><td>Trả lời free-form follow-up bằng report context, recent conversation và approved evidence</td><td>Read-only; unknown metric/finding/question citation bị reject</td></tr>
+    <tr><td>Feedback Agent</td><td>Thu accept, reject, correction và reason để tạo versioned quality evidence</td><td>Feedback đi vào controlled improvement loop, không trực tiếp mutate production behavior</td></tr>
+  </tbody></table></div>
+
+  <h3>Six reports — sáu analytical perspectives, một evidence contract</h3>
+  <div class="table"><table><thead><tr><th>Specialist</th><th>Primary question</th><th>Decision support</th></tr></thead><tbody>
+    <tr><td>Daily Ops</td><td>Campaign đang pacing thế nào; zone nào có anomaly hoặc delivery risk?</td><td>Spend pacing, delivery trend, zone health và operational intervention</td></tr>
+    <tr><td>Awareness</td><td>Reach, impressions, frequency và viewability có phục vụ awareness objective không?</td><td>Scale, exposure quality và saturation risk</td></tr>
+    <tr><td>Consideration</td><td>CTR, click quality và placement engagement đang thay đổi thế nào?</td><td>Creative/placement engagement và traffic-quality signal</td></tr>
+    <tr><td>Conversion</td><td>Funnel, conversion rate, CPA và budget efficiency có vấn đề ở đâu?</td><td>Funnel leakage, cost efficiency và conversion priority</td></tr>
+    <tr><td>Retention</td><td>Có fatigue, saturation hoặc week-over-week decay không?</td><td>Performance persistence, audience decay và refresh signal</td></tr>
+    <tr><td>Executive</td><td>Campaign có đi đúng business objective và operator nên ưu tiên gì?</td><td>Cross-report synthesis, risk và ranked recommendation</td></tr>
+  </tbody></table></div>
+
+  <h3>FAQ trở thành Conversational Report Intelligence</h3>
+  <div class="grid3">
+    <div class="card"><h3>Question-aware evidence retrieval</h3><p>Pre-generated questions là analytical entry points; free-form question dùng semantic routing, current report, recent conversation và evidence từ cả sáu perspectives.</p></div>
+    <div class="card"><h3>Structured, citation-checked answer</h3><p>Answer gồm summary, metrics, insight, comparison, limitation và recommendation. Finding IDs, metric IDs và question IDs ngoài contract bị reject thay vì được model tự tạo.</p></div>
+    <div class="card"><h3>Continuous analytical conversation</h3><p>Operator có thể hỏi tiếp “tại sao?”, “zone nào gây ra điều này?” hoặc “nên ưu tiên gì?”. Safe suggestions chỉ mở những câu hỏi evidence hiện có thể trả lời.</p></div>
+  </div>
+
+  <div class="table"><table><thead><tr><th>Delivery surface</th><th>Artifact</th><th>Readiness / ownership contract</th></tr></thead><tbody>
+    <tr><td>Result &amp; Setup report</td><td>Verified order, placements, creative mapping, forecast, guard và canonical setup</td><td>Chỉ mở sau order verification</td></tr>
+    <tr><td>Web analytics</td><td>Interactive KPI, charts, six analyses, question chips và free-form Report Q&amp;A</td><td>Owned campaign; ready report types được load độc lập</td></tr>
+    <tr><td>Zalo OA</td><td>Ordered 1080×1350 report images, suggested questions, live captures và full-PDF link</td><td>Server-resolved owner; channel không tự chọn campaign</td></tr>
+    <tr><td>Full PDF</td><td>Six analytics chapters, KPI/charts, generated Q&amp;A, findings và recommendations</td><td>Readiness gate chỉ publish khi đủ sáu evidence-backed reports</td></tr>
+  </tbody></table></div>
+  <div class="callout warn"><b>Data truth boundary:</b> order, workspace, selected placements và live publisher captures là canonical/operational artifacts. Delivery analytics trong showcase hiện dùng synthetic campaign-shaped records đã được scale theo budget; evidence contract giữ metric definitions, provenance và limitations để analysis không biến dữ liệu demo thành causal hoặc guaranteed claim.</div>
+
+  <h2 id="feedback-loop"><span class="n">09</span>Learning without uncontrolled self-modification</h2>
+  <p class="lead">Một Agent không “học” chỉ vì nó lưu Like hoặc Dislike. Learning chỉ xảy ra khi một failure được tái dựng trên đúng campaign state và system version, con người xác nhận expected behavior, bản sửa vượt regression evaluation và được phát hành qua controlled release.</p>
+
+  <div class="callout success"><b>Mistake → reproducible evidence:</b> recommendation sai, report vượt budget, tool failure hoặc approval problem được liên kết với trajectory đã tạo ra nó — request, run/task, workspace revision, model, prompt, tool contract và guard policy — thay vì bị giữ như một comment rời rạc.</div>
+
+  <h3>Quality Improvement execution model</h3>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart LR
+  EXP[Campaign Experience] --> SIG[Versioned Signals<br/>MongoDB · Langfuse · Prometheus]
+  SIG --> TRI[Failure Triage]
+  TRI --> HITL[Human Adjudication]
+  HITL --> FIX[Regression Case + Candidate Change]
+  FIX --> EVAL[Quality · Safety · Latency Eval]
+  EVAL --> REL[Human Release Gate]
+  REL -. Versioned Release .-> EXP
+  </div></div>
+
+  <h3>Evidence đủ để replay đúng failure</h3>
+  <div class="table"><table><thead><tr><th>Evidence layer</th><th>Dữ liệu được lưu</th><th>Vai trò trong learning loop</th></tr></thead><tbody>
+    <tr><td>User feedback</td><td>Sentiment, reason codes, redacted comment, expected behavior và superseded feedback</td><td>Cho biết user thấy sai ở đâu mà không coi một nút dislike là ground truth hoàn chỉnh</td></tr>
+    <tr><td>Interaction trace</td><td>Outcome, latency, fallback, tool summary, guard decision và workspace revision trước/sau</td><td>Tách lỗi model khỏi retrieval, tool, provider, policy hoặc UI</td></tr>
+    <tr><td>Campaign context</td><td>Conversation, run/task, request, workflow step, surface và canonical artifact revision</td><td>Replay đúng trạng thái đã tạo ra output thay vì thử lại trên state mới</td></tr>
+    <tr><td>Version manifest</td><td>Build, Git SHA, engine/provider/model, prompt hash, tool contract, guard policy, RAG index, creative và approval policy</td><td>So sánh chính xác candidate với version đã gây failure</td></tr>
+    <tr><td>Outcome evidence</td><td>Review decision, tool/order result, report finding, operator correction và observed outcome</td><td>Phân biệt câu trả lời được thích với hành động thực sự đúng và an toàn</td></tr>
+  </tbody></table></div>
+
+  <h3>Evidence &amp; evaluation toolchain</h3>
+  <div class="table"><table><thead><tr><th>Technology</th><th>Vai trò thực tế</th></tr></thead><tbody>
+    <tr><td>MongoDB</td><td>Durable store cho <code>agent_interactions</code>, quality events, owner-scoped feedback, version manifests, TTL retention và idempotency.</td></tr>
+    <tr><td>Langfuse</td><td>Trace LLM/tool trajectory, model, latency, token usage và failure context để reconstruct đúng một run.</td></tr>
+    <tr><td>Prometheus</td><td>Aggregate counters và histograms cho feedback reasons, guard decisions, provider/tool failures, retry và latency.</td></tr>
+    <tr><td>Grafana</td><td>Visualize Prometheus trends, compare version behavior và hỗ trợ human review trước release.</td></tr>
+    <tr><td>Version manifest + Git SHA</td><td>Khóa build, model, prompt hash, tool contract, guard policy, RAG index và approval policy để reproduce và rollback.</td></tr>
+    <tr><td>Golden set + eval/test runner</td><td>Replay successful cases, adjudicated mistakes, safety attacks và latency/cost gates trước khi candidate được review.</td></tr>
+  </tbody></table></div>
+
+  <h3>Quality Improvement roles</h3>
+  <div class="table"><table><thead><tr><th>Role</th><th>Responsibility</th><th>Human / safety boundary</th></tr></thead><tbody>
+    <tr><td>Feedback Agent</td><td>Thu explicit feedback và implicit failure signals từ Copilot, Autopilot và Report Intelligence</td><td>Không tự diễn giải một feedback đơn lẻ thành production instruction</td></tr>
+    <tr><td>Failure Triage Agent</td><td>Cluster theo workflow, severity, recurrence, model, tool, guard, provider và business impact</td><td>Ưu tiên case; không tự kết luận expected behavior</td></tr>
+    <tr><td>Root Cause Analyst</td><td>Replay trajectory và xác định layer nhỏ nhất có khả năng gây lỗi</td><td>Giữ evidence lineage và confidence thay vì causal claim không kiểm chứng</td></tr>
+    <tr><td>Regression Builder</td><td>Đóng gói context đã redact, expected behavior và acceptance criteria thành versioned test fixture</td><td>Chỉ dùng case đã qua human adjudication</td></tr>
+    <tr><td>Evaluation Judge</td><td>So candidate với baseline trên task, safety, privacy, latency, cost và regression slices</td><td>Candidate không được thắng slice mục tiêu bằng cách phá slice đang tốt</td></tr>
+    <tr><td>Release Advisor</td><td>Tổng hợp comparison, risk, version manifest và rollback target</td><td>Con người giữ quyết định release cuối cùng</td></tr>
+  </tbody></table></div>
+
+  <h3>Một mistake lifecycle cụ thể — report spend vượt campaign budget</h3>
+  <div class="steps">
+    <div class="step"><b>1 · Capture the failure</b><span>User chọn “Chưa”, reason <code>incorrect_facts</code> và mô tả spend trong report vượt budget đã xác nhận.</span></div>
+    <div class="step"><b>2 · Reconstruct exact context</b><span>Feedback được join với report question/finding IDs, campaign revision, evidence contract, model và generator version.</span></div>
+    <div class="step"><b>3 · Human adjudication</b><span>Reviewer xác nhận invariant: tổng spend không được vượt campaign budget và relative delivery shape phải được bảo toàn.</span></div>
+    <div class="step"><b>4 · Build regression + candidate</b><span>Case trở thành budget-consistency fixture; candidate sửa layer nhỏ nhất như normalization, prompt hoặc validator.</span></div>
+    <div class="step"><b>5 · Replay before release</b><span>Candidate chạy lại case mới, golden set và safety/latency checks; kết quả được so trực tiếp với current version.</span></div>
+    <div class="step"><b>6 · Governed release</b><span>Human review manifest và comparison, phê duyệt exact version, giữ rollback target rồi mới đưa vào campaign experience.</span></div>
+  </div>
+
+  <h3>Improve the smallest effective layer</h3>
+  <div class="table"><table><thead><tr><th>Failure source</th><th>Smallest effective change</th><th>Why this is safer</th></tr></thead><tbody>
+    <tr><td>Missing hoặc stale product fact</td><td>Catalog/data correction và retrieval index</td><td>Không dùng prompt để che một source-of-truth problem</td></tr>
+    <tr><td>Wrong retrieval hoặc ranking</td><td>Query, hybrid retrieval, reranker hoặc deterministic guard</td><td>Đo được recall/ranking delta và rollback độc lập</td></tr>
+    <tr><td>Tool được gọi sai hoặc payload sai</td><td>Tool schema, controller policy hoặc typed validator</td><td>Boundary có thể test mà không phụ thuộc model behavior</td></tr>
+    <tr><td>Unsafe action hoặc invented metric</td><td>Evidence contract, authorization rule hoặc guardrail</td><td>Fail-closed tại protected state thay vì chỉ nhắc model cẩn thận hơn</td></tr>
+    <tr><td>Reasoning failure lặp lại</td><td>Prompt/eval trước; model change chỉ khi evidence chứng minh cần thiết</td><td>Giảm regression, latency và unnecessary model cost</td></tr>
+  </tbody></table></div>
+
+  <div class="grid3">
+    <div class="card"><h3>Quality gates</h3><p>Task success, tool correctness, recommendation relevance, report evidence consistency và previously successful cases.</p></div>
+    <div class="card"><h3>Safety gates</h3><p>Ownership, approval correctness, privacy, guard attack success, false-positive rate và forbidden side effects.</p></div>
+    <div class="card"><h3>Operational gates</h3><p>Latency, LLM-token cost, provider fallback, readiness, version comparison và exact rollback target.</p></div>
+  </div>
+  <div class="callout warn"><b>Control principle:</b> feedback là versioned evidence, không phải online instruction hoặc direct model-weight update. Capture continuously, adjudicate with humans, evaluate reproducibly và release only after controlled review.</div>
+
+  <h2 id="security"><span class="n">10</span>Security assurance, observability và live system evidence</h2>
+  <p class="lead">Các phần trước giải thích Agent hoạt động như thế nào. Phần này cho phép kiểm chứng hệ thống biết từ chối hành động không an toàn, phục hồi mà không lặp side effect và cung cấp đủ evidence để điều tra một run từ LLM/tool trajectory đến campaign order, analytics và publisher live view.</p>
+
+  <h3>Security và recovery invariants tại action boundary</h3>
+  <div class="table"><table><thead><tr><th>Invariant</th><th>Enforcement</th><th>Failure behavior</th></tr></thead><tbody>
+    <tr><td>Chỉ server xác định actor và campaign ownership</td><td>Opaque session, CSRF, PKCE, signed Zalo webhook và owner-free tool arguments</td><td>Forged, replayed hoặc cross-owner request bị từ chối trước domain action</td></tr>
+    <tr><td>Model không thể tự vượt protected-state boundary</td><td>Typed capability, ownership/revision check, explicit human launch approval và order guard</td><td>Stale, thiếu quyền hoặc unsafe side effect fail-closed thay vì được model tự xử lý</td></tr>
+    <tr><td>Retry không được nhân đôi operational action</td><td>Durable checkpoint, lease/heartbeat và stable idempotency key cho order, report, image và delivery</td><td>Worker có thể resume từ committed state; ambiguous response không tạo lại side effect</td></tr>
+    <tr><td>Observability không làm yếu privacy boundary</td><td>Recursive PII redaction, public trace projection và provider credentials chỉ tồn tại server-side</td><td>Judge view chỉ nhận read-only operational evidence đã redact; tracing failure không chặn campaign flow</td></tr>
+  </tbody></table></div>
+
+  <h3>Live evidence inspection path</h3>
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart LR
+  RUN[Agent / Autopilot Run] --> TRACE[Langfuse Trace Explorer]
+  RUN --> OPS[Grafana Agent Ops]
+  RUN --> ORDER[AdsPilot Campaign Order]
+  ORDER --> REPORT[Six-Report Analytics]
+  ORDER --> LIVE[Publisher Live View]
+  </div></div>
+  <p class="small"><b>Correlation spine:</b> request ID, stable run trace và campaign/order ID nối planning, LLM/tool execution, operational metrics, persisted order, report và rendered placement thành một evidence chain có thể kiểm tra.</p>
+
+  <div class="grid3">
+    <div class="card"><h3><span class="status done">LIVE</span> Langfuse Trace Explorer</h3><p><span class="status done">READ-ONLY</span> <span class="status done">REDACTED</span><br/>Inspect model/tool trajectory, latency, token usage, error context và output của từng run qua public projection; credentials không rời server. <a href="/observability.html" target="_blank" rel="noreferrer">Mở trace explorer →</a></p></div>
+    <div class="card"><h3><span class="status done">LIVE</span> Grafana Agent Ops</h3><p><span class="status partial">JUDGE LOGIN</span><br/>Inspect request latency, provider/tool outcomes, fallback level, guard decisions và SLO panels. Đăng nhập dành cho judge: <code>admin</code> / <code>Admin@123</code>. <a href="https://grafana.pawgrammers.io.vn/d/agent-ops/agent-ops" target="_blank" rel="noreferrer">Mở Agent Ops →</a></p></div>
+    <div class="card"><h3><span class="status done">LIVE</span> AdsPilot</h3><p><span class="status partial">OPERATOR SURFACE</span><br/>Verify campaign order, budget, selected placements, creative mapping và operational status trên advertising platform hiện hữu. <a href="https://adspilot.pawgrammers.io.vn/" target="_blank" rel="noreferrer">Mở AdsPilot →</a></p></div>
+    <div class="card"><h3><span class="status done">LIVE</span> Six-Report Analytics</h3><p><span class="status done">READ-ONLY</span><br/>Inspect Daily Ops, Awareness, Consideration, Conversion, Retention và Executive views của campaign đã launch. <a href="https://analytics.pawgrammers.io.vn/" target="_blank" rel="noreferrer">Mở Analytics →</a></p></div>
+    <div class="card"><h3><span class="status done">LIVE</span> Publisher evidence</h3><p>Verify creative được render trong placement thật trên <a href="https://znews-stg.pawgrammers.io.vn/" target="_blank" rel="noreferrer">ZNews</a>, <a href="https://baomoi-stg.pawgrammers.io.vn/" target="_blank" rel="noreferrer">Báo Mới</a>, <a href="https://zingmp3-stg.pawgrammers.io.vn/" target="_blank" rel="noreferrer">Zing MP3</a>, <a href="https://smoney-stg.pawgrammers.io.vn/" target="_blank" rel="noreferrer">S-Money</a>, <a href="https://dicungcon-stg.pawgrammers.io.vn/" target="_blank" rel="noreferrer">Đi Cùng Con</a> và <a href="https://zagoo-stg.pawgrammers.io.vn/" target="_blank" rel="noreferrer">Zagoo</a>.</p></div>
+    <div class="card"><h3>From architecture to evidence</h3><p>Judge có thể bắt đầu từ một Agent run, đối chiếu trace và metrics, tìm đúng campaign/order rồi kiểm tra report cùng live publisher output — không cần tin vào architecture diagram như một claim độc lập.</p></div>
+  </div>
+
+  <h2 id="roadmap"><span class="n">11</span>Future technical roadmap — từ Advertising Agent đến Enterprise Agent Platform</h2>
+  <div class="callout warn"><b>ROADMAP · OUTSIDE CURRENT TECHNICAL PITCH:</b> Parts 01–10 mô tả current-state system. Phần này trình bày hướng mở rộng từ những contracts đã được chứng minh — canonical artifacts, capability graph, human approval, durable execution, security boundary và versioned evidence — chứ không được tính là capability đang vận hành.</div>
+  <p class="lead">North star có hai trục bổ trợ nhau: mở rộng <b>theo chiều dọc</b> để Advertising Agent hiểu sâu hơn toàn bộ advertising lifecycle; đồng thời mở rộng <b>theo chiều ngang</b> để tách những runtime contracts đã được chứng minh thành một framework có thể phục vụ các workflow khác trong doanh nghiệp.</p>
+
+  <div class="diagram"><span class="zoom-hint">Chạm để phóng to</span><div class="mermaid">
+flowchart TB
+  CURRENT[Current Advertising Agent<br/>Campaign IDE · Durable Runtime · Evidence]
+  CURRENT --> V[Vertical Expansion<br/>Media · Creative · Measurement · Portfolio]
+  CURRENT --> H[Horizontal Expansion<br/>Workflow · Capability SDK · Policy · Workbench]
+  V --> F[Shared Production Foundation<br/>Artifacts · Identity · Durability · Evaluation]
+  H --> F
+  F --> SCALE[Multi-tenant Runtime<br/>Event Streaming · Model Gateway]
+  F --> GOVERN[Governance &amp; Operations<br/>Audit · Cost · SLO · Controlled Release]
+  </div></div>
+
+  <h3>Vertical expansion — deeper Advertising Intelligence</h3>
+  <div class="table"><table><thead><tr><th>Direction</th><th>Technical expansion</th><th>Operational outcome</th></tr></thead><tbody>
+    <tr><td>Media planning</td><td>Inventory forecasting, reach/frequency prediction, budget allocation và scenario simulation</td><td>Từ chọn placement sang xây dựng media plan có thể so sánh và tối ưu</td></tr>
+    <tr><td>In-flight optimization</td><td>Pacing monitor, anomaly detection, under-delivery prediction và guarded budget/placement proposals</td><td>Agent tiếp tục hỗ trợ sau launch thay vì kết thúc tại order creation</td></tr>
+    <tr><td>Creative lifecycle</td><td>Brand asset memory, multimodal retrieval, variant generation, fatigue detection và creative-performance learning</td><td>Creative Intelligence trở thành continuous lifecycle thay vì một pre-launch checkpoint</td></tr>
+    <tr><td>Measurement &amp; experimentation</td><td>Conversion-event ingestion, attribution, incrementality experiment và causal evidence contract</td><td>Recommendation được nối với business outcome thay vì chỉ dựa trên tương quan CTR</td></tr>
+    <tr><td>Portfolio intelligence</td><td>Cross-campaign knowledge graph, portfolio budget allocation và next-best-action ranking</td><td>Tối ưu trên tập campaign thay vì đánh giá từng campaign độc lập</td></tr>
+    <tr><td>Advertising ecosystem</td><td>DSP/ad-server, CRM/CDP, conversion API và external inventory connectors</td><td>Mở rộng từ một ad platform thành orchestration layer trên nhiều advertising systems</td></tr>
+  </tbody></table></div>
+  <div class="callout"><b>Side-effect boundary vẫn được giữ:</b> Optimization Agent có thể phát hiện, mô phỏng, xếp hạng và chuẩn bị action; budget movement, campaign mutation và launch vẫn đi qua policy, evidence và configurable human approval.</div>
+
+  <h3>Horizontal expansion — reusable Enterprise Agent Framework</h3>
+  <p>Mục tiêu không phải một “generic Agent” có quyền gọi mọi tool. Mỗi business domain được đóng gói thành một governed domain pack chạy trên cùng constrained runtime.</p>
+  <div class="table"><table><thead><tr><th>Reusable platform contract</th><th>Domain team định nghĩa</th><th>Runtime bảo đảm</th></tr></thead><tbody>
+    <tr><td>Workflow definition</td><td>Artifact types, dependency graph, readiness conditions và human checkpoints</td><td>Plan, resume, invalidation và review có semantics nhất quán</td></tr>
+    <tr><td>Capability SDK</td><td>Typed input/output, authorization scope, timeout, retry, idempotency và compensation</td><td>Agent không có arbitrary system access hoặc unbounded side effect</td></tr>
+    <tr><td>Policy engine</td><td>Ai được read, propose, approve và execute từng action</td><td>Identity, ownership và approval được enforce ngoài model</td></tr>
+    <tr><td>Connector framework</td><td>API, event, document, database và communication-channel adapters</td><td>Correlation, credential isolation, retry và audit dùng chung</td></tr>
+    <tr><td>Universal workbench</td><td>Domain artifact editor, proposal diff, timeline và review experience</td><td>Conversation không trở thành nơi duy nhất giữ business state</td></tr>
+    <tr><td>Evaluation &amp; evidence</td><td>Domain golden set, safety cases, expected outcomes và release thresholds</td><td>Mọi version có thể replay, compare, approve và rollback</td></tr>
+  </tbody></table></div>
+  <p class="small"><b>Second-domain proof:</b> affiliate/merchant operations, finance reconciliation, customer-support case resolution, procurement hoặc internal content operations phải tái sử dụng runtime này mà không fork orchestration, identity, durability, policy, observability hay evaluation layers.</p>
+
+  <h3>Shared foundation for a full-scale system</h3>
+  <div class="grid3">
+    <div class="card"><h3>Runtime &amp; tenancy</h3><p>Multi-tenant workspace, tenant-isolated data plane, workflow/artifact schema registry, event streaming, horizontal workers, autoscaling và disaster recovery.</p></div>
+    <div class="card"><h3>Intelligence &amp; data</h3><p>Model gateway với routing và cost budget, domain retrieval indexes, outcome/event pipeline, experiment registry và governed model/prompt versions.</p></div>
+    <div class="card"><h3>Governance &amp; operations</h3><p>RBAC/ABAC, organization approval policy, secrets/retention controls, OpenTelemetry correlation, MLflow/eval gates và business-outcome SLO.</p></div>
+  </div>
+
+  <h3>Capability-gated delivery sequence</h3>
+  <div class="steps">
+    <div class="step"><b>Deepen the advertising vertical</b><span>Add post-launch signals, anomaly detection, optimization proposals và measured outcome labels trên campaign contracts hiện tại.</span></div>
+    <div class="step"><b>Extract proven platform contracts</b><span>Chuẩn hóa workflow definition, capability SDK, policy engine, connector contract và universal artifact workbench.</span></div>
+    <div class="step"><b>Prove a second internal workflow</b><span>Reuse cùng runtime và evidence plane cho một domain khác; không chấp nhận core-runtime fork như bằng chứng horizontal scale.</span></div>
+    <div class="step"><b>Scale into an enterprise platform</b><span>Thêm multi-tenancy, organization governance, connector lifecycle, cost control, disaster recovery và domain-pack ecosystem.</span></div>
+  </div>
+  <div class="callout success"><b>Roadmap principle:</b> vertical depth tạo domain intelligence; horizontal extraction tạo platform leverage. Advertising tiếp tục là domain đầu tiên được chứng minh sâu, còn reusable runtime biến artifact, capability, policy, durability và evidence contracts thành hạ tầng cho những workflow khác trong doanh nghiệp.</div>
 
   <footer>Advertising Agent · Current-state technical document · Release 2026-07-27.3 · Updated 2026-07-27</footer>
 </main>
