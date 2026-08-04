@@ -398,7 +398,7 @@ def _fetch_overview(
             "p95Latency": max(
                 (float(row.get("p95_latency") or 0) for row in timeline),
                 default=0,
-            ),
+            ) / 1000,
         },
         "granularity": granularity,
     }
