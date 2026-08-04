@@ -144,8 +144,7 @@ test('landing v3 implements the handed-off structure, assets, and production nav
   assert.match(landing, /mode-visual-autopilot/)
   assert.match(landing, /<em>chuyển động\.<\/em>/)
   assert.doesNotMatch(landing, /310 segments/)
-  assert.match(landing, /VITE_ADSPILOT_URL \|\| 'https:\/\/adspilot\.pawgrammers\.io\.vn'/)
-  assert.match(landing, /VITE_ANALYTICS_URL \|\| 'https:\/\/analytics\.pawgrammers\.io\.vn'/)
+  assert.doesNotMatch(landing, /VITE_ADSPILOT_URL|VITE_ANALYTICS_URL/)
   assert.doesNotMatch(landing, /\{ label: 'Audience', href:/)
   assert.doesNotMatch(landing, /\{ label: 'Publisher', href:/)
   assert.doesNotMatch(landing, /TourCompleteModal|Tour hoàn tất|updateTourQuery/)
@@ -153,7 +152,8 @@ test('landing v3 implements the handed-off structure, assets, and production nav
   assert.match(landing, /<LandingModes onEnterAgent=\{enterMode\} onOpenDemo=\{onOpenDemo\} \/>/)
   assert.match(landing, /<LandingFinalCta onEnterAgent=\{onEnterAgent\} \/>/)
   assert.match(landing, /onEnterAgent\(mode\)/)
-  assert.match(landing, /data-ecosystem-index=\{index\}/)
+  assert.doesNotMatch(landing, /data-ecosystem-index=\{index\}/)
+  assert.equal((landing.match(/<span>Technical Doc<\/span>/g) || []).length, 2)
   assert.match(landing, /\/tech-docs\.html/)
   assert.match(landing, /landing-menu-toggle/)
   assert.match(landing, /aria-controls="landing-mobile-menu"/)
@@ -168,6 +168,16 @@ test('landing v3 implements the handed-off structure, assets, and production nav
   assert.match(app, /window\.history\.pushState\(\{\}, '', agentEntryUrl\(window\.location, demoMode\)\)/)
   assert.match(app, /<PublicLanding onEnterAgent=\{enterAgent\} onOpenDemo=\{enterAgentForDemo\} \/>/)
   assert.doesNotMatch(app, /ProductDemo/)
+})
+
+test('technical docs keep judge evidence on the current host and enlarge diagrams on open', () => {
+  for (const route of ['/adspilot/', '/analytics/', '/znews/', '/baomoi/', '/zingmp3/', '/smoney/', '/dicungcon/', '/zagoo/']) {
+    assert.match(docs, new RegExp(`href="${route}"`))
+  }
+  assert.doesNotMatch(docs, /https:\/\/(?:adspilot|analytics|znews-stg|baomoi-stg|zingmp3-stg|smoney-stg|dicungcon-stg|zagoo-stg)\.pawgrammers\.io\.vn/)
+  assert.match(docs, /sourceRect\.width\*1\.4/)
+  assert.match(docs, /content\.replaceChildren\(clone\)/)
+  assert.match(docs, /svg\.setAttribute\('width',width\)/)
 })
 
 test('agent homepage exposes unmistakable workspace CTAs and ordered guided tours', () => {

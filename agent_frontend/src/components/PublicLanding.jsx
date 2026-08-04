@@ -7,11 +7,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import mascotImageUrl from '../../public/brand/advertising-agent-mascot.png'
 
-const ecosystemLinks = [
-  { label: 'Ad Server', href: import.meta.env.VITE_ADSPILOT_URL || 'https://adspilot.pawgrammers.io.vn' },
-  { label: 'Analytics', href: import.meta.env.VITE_ANALYTICS_URL || 'https://analytics.pawgrammers.io.vn' },
-]
-
 const orbitNodes = [
   { label: 'Audience', meta: 'Intent matched', icon: Radar, className: 'campaign-node-a' },
   { label: 'Creative', meta: 'Quality reviewed', icon: Image, className: 'campaign-node-b' },
@@ -350,7 +345,7 @@ function TechArtwork({ type }) {
   )
 }
 
-export function LandingNav({ onEnterAgent, links = ecosystemLinks }) {
+export function LandingNav({ onEnterAgent }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const headerRef = useRef(null)
   const menuButtonRef = useRef(null)
@@ -401,8 +396,7 @@ export function LandingNav({ onEnterAgent, links = ecosystemLinks }) {
       </a>
       <nav aria-label="Điều hướng hệ sinh thái">
         <div className="landing-desktop-nav-links">
-          {links.map(({ label, href }, index) => <a key={label} href={href} data-ecosystem-index={index}><span>{label}</span></a>)}
-          <a href="/tech-docs.html"><FileText /> <span>Tài liệu</span></a>
+          <a href="/tech-docs.html"><FileText /> <span>Technical Doc</span></a>
         </div>
         <button
           ref={menuButtonRef}
@@ -422,10 +416,7 @@ export function LandingNav({ onEnterAgent, links = ecosystemLinks }) {
           aria-label="Điều hướng trên thiết bị di động"
           hidden={!mobileMenuOpen}
         >
-          {links.map(({ label, href }) => (
-            <a key={label} href={href} onClick={closeMobileMenu}><span>{label}</span><ArrowUpRight /></a>
-          ))}
-          <a href="/tech-docs.html" onClick={closeMobileMenu}><span>Tài liệu</span><FileText /></a>
+          <a href="/tech-docs.html" onClick={closeMobileMenu}><span>Technical Doc</span><FileText /></a>
         </div>
         <button type="button" className="landing-agent-cta" onClick={enterAgent}>Vào Agent <ArrowRight /></button>
       </nav>
