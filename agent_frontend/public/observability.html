@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Camp Ads · AI Observability</title>
+  <style>
+    :root{--bg:#09090b;--panel:#111113;--panel2:#18181b;--line:#27272a;--muted:#a1a1aa;--text:#f4f4f5;--violet:#8b5cf6;--cyan:#22d3ee;--green:#34d399;--amber:#fbbf24;--rose:#fb7185;--nav:224px;--detail:520px}
+    *{box-sizing:border-box}html,body{height:100%;margin:0}body{background:var(--bg);color:var(--text);font:13px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}button,input,select{font:inherit;color:inherit}.app{display:grid;grid-template-columns:var(--nav) minmax(0,1fr);height:100%}
+    .sidebar{border-right:1px solid var(--line);background:#0c0c0f;padding:17px 12px;display:flex;flex-direction:column}.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;padding:0 8px 20px}.mark{width:29px;height:29px;border-radius:8px;background:linear-gradient(135deg,var(--violet),#ec4899);display:grid;place-items:center;box-shadow:0 0 24px #8b5cf64d}.project{margin:0 4px 14px;padding:10px;border:1px solid var(--line);background:var(--panel);border-radius:8px}.project small{display:block;color:var(--muted);margin-bottom:3px}.nav-group{color:#71717a;text-transform:uppercase;font-size:10px;font-weight:700;letter-spacing:.1em;padding:12px 9px 6px}.nav-item{display:flex;align-items:center;gap:9px;color:#b8b8c0;text-decoration:none;padding:8px 10px;border-radius:7px;margin:1px 0}.nav-item.active{color:#fff;background:#27272a}.nav-item .icon{width:16px;text-align:center}.side-foot{margin-top:auto;color:#71717a;font-size:11px;padding:12px 9px}.side-foot a{color:#a78bfa;text-decoration:none}
+    .workspace{min-width:0;display:flex;flex-direction:column}.topbar{height:54px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 18px;background:#0d0d10}.crumb{display:flex;gap:8px;align-items:center}.crumb span{color:#71717a}.status{display:flex;align-items:center;gap:7px;color:#d4d4d8}.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px #34d399}.body{display:flex;min-height:0;flex:1}.main{min-width:0;flex:1;display:flex;flex-direction:column}.heading{padding:20px 20px 13px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.heading h1{font-size:21px;margin:0 0 4px}.heading p{margin:0;color:var(--muted)}.live-pill{border:1px solid #14532d;background:#052e1a;color:#86efac;border-radius:99px;padding:5px 10px;white-space:nowrap}
+    .toolbar{display:flex;align-items:center;gap:8px;padding:0 20px 14px;flex-wrap:wrap}.control{height:34px;border:1px solid var(--line);border-radius:7px;background:var(--panel);padding:0 10px;outline:none}.control:focus{border-color:#6d28d9}.search{min-width:220px;flex:1}.refresh{cursor:pointer}.refresh:hover{background:#27272a}.refresh.busy{opacity:.6;pointer-events:none}.stale{display:none;color:#fcd34d;background:#422006;border:1px solid #854d0e;border-radius:7px;padding:7px 10px}.stale.show{display:block}
+    .table-wrap{margin:0 20px;border:1px solid var(--line);border-radius:9px;overflow:auto;flex:1;background:#0d0d10}.trace-table{border-collapse:collapse;width:100%;min-width:820px}.trace-table th{position:sticky;top:0;background:#141417;z-index:1;text-align:left;color:#8d8d96;font-size:11px;font-weight:600;padding:9px 11px;border-bottom:1px solid var(--line)}.trace-table td{padding:10px 11px;border-bottom:1px solid #202024;vertical-align:top}.trace-row{cursor:pointer}.trace-row:hover,.trace-row.selected{background:#18181b}.trace-name{font-weight:600;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}.trace-id{font:10px ui-monospace,SFMono-Regular,Consolas,monospace;color:#71717a;margin-top:2px}.preview{color:#a1a1aa;max-width:330px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.badge{display:inline-flex;align-items:center;border-radius:5px;padding:2px 6px;font-size:10px;border:1px solid #3f3f46;background:#202024}.badge.violet{color:#c4b5fd;border-color:#4c1d95;background:#24143d}.badge.green{color:#86efac;border-color:#14532d;background:#082c1a}.numeric{font-variant-numeric:tabular-nums;white-space:nowrap}.empty{padding:48px 20px;text-align:center;color:var(--muted)}.pager{padding:12px 20px;display:flex;align-items:center;justify-content:space-between;color:var(--muted)}.pager button{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:5px 10px;cursor:pointer}.pager button:disabled{opacity:.35;cursor:default}
+    .detail{width:var(--detail);border-left:1px solid var(--line);background:#0d0d10;display:none;min-width:360px}.detail.open{display:flex;flex-direction:column}.detail-head{padding:15px 16px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.detail-head h2{font-size:15px;margin:0 0 4px;word-break:break-word}.detail-head .id{font:10px ui-monospace,monospace;color:#71717a}.close{border:0;background:transparent;color:#a1a1aa;font-size:20px;cursor:pointer}.tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);padding:0 16px}.tab{border:0;background:transparent;padding:10px 0;color:#8d8d96;cursor:pointer;border-bottom:2px solid transparent}.tab.active{color:#fff;border-color:var(--violet)}.detail-scroll{overflow:auto;padding:15px 16px 28px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}.stat{border:1px solid var(--line);background:#141417;border-radius:8px;padding:9px}.stat small{display:block;color:#71717a;font-size:10px;margin-bottom:3px}.stat strong{font-size:12px}.section{margin:14px 0}.section-title{font-size:11px;font-weight:700;color:#a1a1aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}.json-card{border:1px solid var(--line);background:#111114;border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word;font:11px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;color:#d4d4d8;max-height:320px;overflow:auto}.obs{position:relative;border:1px solid var(--line);background:#121215;border-radius:8px;padding:10px;margin:0 0 7px}.obs-title{display:flex;align-items:center;gap:7px}.type-dot{width:8px;height:8px;border-radius:2px;background:var(--cyan)}.type-dot.generation{background:var(--violet)}.type-dot.span{background:var(--cyan)}.type-dot.event{background:var(--amber)}.obs small{color:#71717a}.obs-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.obs-mini{padding:7px;border-radius:6px;background:#09090b;overflow:hidden}.obs-mini b{display:block;font-size:9px;color:#71717a;text-transform:uppercase}.obs-mini span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#b8b8c0;margin-top:2px}.loading{padding:30px;text-align:center;color:#a1a1aa}.spinner{display:inline-block;width:14px;height:14px;border:2px solid #3f3f46;border-top-color:#a78bfa;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:7px}@keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:1100px){:root{--nav:190px;--detail:440px}.preview-col{display:none}}
+    @media(max-width:760px){body{overflow:auto}.app{display:block}.sidebar{display:none}.workspace{height:100vh}.topbar{padding:0 12px}.heading{padding:15px 12px 10px}.toolbar{padding:0 12px 10px}.search{min-width:100%}.table-wrap{margin:0 12px}.pager{padding:10px 12px}.detail{position:fixed;inset:0;z-index:20;width:auto;min-width:0;border:0}.stats{grid-template-columns:repeat(2,1fr)}.heading p{font-size:12px}.trace-table{min-width:690px}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="mark">C</div>Camp Ads</div>
+    <div class="project"><small>Production project</small>Advertising Agent</div>
+    <div class="nav-group">Observability</div>
+    <a class="nav-item active" href="#"><span class="icon">⌁</span>Tracing</a>
+    <a class="nav-item" href="#"><span class="icon">◫</span>Sessions</a>
+    <a class="nav-item" href="#"><span class="icon">◉</span>Metrics</a>
+    <div class="nav-group">Platform</div>
+    <a class="nav-item" href="/agent"><span class="icon">◇</span>Agent workspace</a>
+    <a class="nav-item" href="/tech-docs.html"><span class="icon">⌘</span>Technical docs</a>
+    <div class="side-foot">Read-only judge view<br>Powered by <a href="https://langfuse.com" target="_blank" rel="noreferrer">Langfuse</a></div>
+  </aside>
+  <section class="workspace">
+    <header class="topbar">
+      <div class="crumb"><b>Observability</b><span>/</span><span>Tracing</span></div>
+      <div class="status"><i class="dot"></i><span id="cloudStatus">Langfuse Cloud connected</span></div>
+    </header>
+    <div class="body">
+      <main class="main">
+        <div class="heading">
+          <div><h1>Traces</h1><p>Production agent requests, model calls and tool execution.</p></div>
+          <div class="live-pill">● Live production data</div>
+        </div>
+        <div class="toolbar">
+          <input id="search" class="control search" type="search" placeholder="Search the current page…" aria-label="Search traces">
+          <select id="range" class="control" aria-label="Time range"><option value="24">Last 24 hours</option><option value="168">Last 7 days</option><option value="720">Last 30 days</option><option value="">All time</option></select>
+          <select id="environment" class="control" aria-label="Environment"><option value="">All environments</option><option value="production">production</option><option value="default">default (historical)</option></select>
+          <button id="refresh" class="control refresh" type="button">↻ Refresh</button>
+          <div id="stale" class="stale">Showing cached data while Langfuse reconnects.</div>
+        </div>
+        <div class="table-wrap">
+          <table class="trace-table">
+            <thead><tr><th>Timestamp</th><th>Name</th><th class="preview-col">Input / output</th><th>Environment</th><th>Latency</th><th>Cost</th></tr></thead>
+            <tbody id="rows"><tr><td colspan="6" class="loading"><i class="spinner"></i>Loading production traces…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pager"><span id="count">Loading…</span><div><button id="prev" type="button">Previous</button> <button id="next" type="button">Next</button></div></div>
+      </main>
+      <aside id="detail" class="detail" aria-label="Trace detail">
+        <div class="detail-head"><div><h2 id="detailName">Trace</h2><div id="detailId" class="id"></div></div><button id="close" class="close" type="button" aria-label="Close">×</button></div>
+        <div class="tabs"><button class="tab active" data-tab="preview" type="button">Preview</button><button class="tab" data-tab="json" type="button">JSON</button></div>
+        <div id="detailBody" class="detail-scroll"></div>
+      </aside>
+    </div>
+  </section>
+</div>
+<script>
+(() => {
+  'use strict';
+  const API = '/agent/api/public/observability';
+  const state = { page: 1, limit: 50, totalPages: 1, totalItems: 0, traces: [], selected: null, detail: null, tab: 'preview', loading: false };
+  const el = id => document.getElementById(id);
+  const rows = el('rows'), search = el('search'), range = el('range'), environment = el('environment');
+
+  function text(value, fallback = '—') {
+    if (value === null || value === undefined || value === '') return fallback;
+    if (typeof value === 'string') return value;
+    try { return JSON.stringify(value); } catch (_) { return String(value); }
+  }
+  function fmtTime(value) {
+    if (!value) return '—';
+    const d = new Date(value); if (Number.isNaN(d.getTime())) return text(value);
+    return d.toLocaleString('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  }
+  function fmtLatency(value) {
+    const n = Number(value); if (!Number.isFinite(n)) return '—';
+    return n < 1 ? `${Math.round(n * 1000)} ms` : `${n.toFixed(n < 10 ? 2 : 1)} s`;
+  }
+  function fmtCost(value) {
+    const n = Number(value); if (!Number.isFinite(n)) return '—';
+    return n === 0 ? '$0' : `$${n.toFixed(n < .01 ? 5 : 3)}`;
+  }
+  function compact(value, max = 150) {
+    const str = text(value, 'No payload').replace(/\s+/g, ' ');
+    return str.length > max ? str.slice(0, max) + '…' : str;
+  }
+  function node(tag, className, content) {
+    const n = document.createElement(tag); if (className) n.className = className;
+    if (content !== undefined) n.textContent = content; return n;
+  }
+  function td(content, className) { const n = node('td', className); n.append(content); return n; }
+
+  function renderRows() {
+    rows.replaceChildren();
+    const q = search.value.trim().toLowerCase();
+    const visible = state.traces.filter(t => !q || [t.name,t.id,t.sessionId,t.input,t.output].some(v => text(v,'').toLowerCase().includes(q)));
+    if (!visible.length) {
+      const tr = node('tr'); const cell = node('td','empty', q ? 'No traces match this page.' : 'No traces found for this filter.'); cell.colSpan = 6; tr.append(cell); rows.append(tr); return;
+    }
+    visible.forEach(trace => {
+      const tr = node('tr', 'trace-row' + (state.selected === trace.id ? ' selected' : ''));
+      tr.tabIndex = 0; tr.setAttribute('role','button');
+      const timeCell = node('div','numeric',fmtTime(trace.timestamp));
+      const nameWrap = node('div'); nameWrap.append(node('div','trace-name',text(trace.name)), node('div','trace-id',text(trace.id).slice(0,12)));
+      const preview = node('div','preview', `${compact(trace.input,75)} → ${compact(trace.output,75)}`);
+      const badge = node('span','badge ' + (trace.environment === 'production' ? 'green' : 'violet'), text(trace.environment));
+      tr.append(td(timeCell), td(nameWrap), td(preview,'preview-col'), td(badge), td(node('span','numeric',fmtLatency(trace.latency))), td(node('span','numeric',fmtCost(trace.totalCost))));
+      const open = () => selectTrace(trace.id); tr.addEventListener('click',open); tr.addEventListener('keydown',e => { if(e.key==='Enter') open(); }); rows.append(tr);
+    });
+  }
+
+  async function loadTraces({ keepPage = true } = {}) {
+    if (state.loading) return; if (!keepPage) state.page = 1;
+    state.loading = true; el('refresh').classList.add('busy');
+    if (!state.traces.length) rows.innerHTML = '<tr><td colspan="6" class="loading"><i class="spinner"></i>Loading production traces…</td></tr>';
+    const params = new URLSearchParams({ page: state.page, limit: state.limit });
+    if (environment.value) params.set('environment', environment.value);
+    if (range.value) params.set('from_timestamp', new Date(Date.now() - Number(range.value)*3600000).toISOString());
+    try {
+      const response = await fetch(`${API}/traces?${params}`, { headers: { Accept:'application/json' } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json(); state.traces = payload.data || []; state.totalPages = Number(payload.meta?.totalPages || 1); state.totalItems = Number(payload.meta?.totalItems || state.traces.length);
+      el('stale').classList.toggle('show', Boolean(payload.stale)); el('cloudStatus').textContent = payload.stale ? 'Cached · reconnecting' : 'Langfuse Cloud connected';
+      renderRows(); updatePager();
+    } catch (error) {
+      rows.replaceChildren(); const tr=node('tr'); const c=node('td','empty','Trace data is temporarily unavailable. Select Refresh to retry.'); c.colSpan=6; tr.append(c); rows.append(tr); el('cloudStatus').textContent='Connection interrupted';
+    } finally { state.loading=false; el('refresh').classList.remove('busy'); }
+  }
+  function updatePager() {
+    el('count').textContent = `${state.totalItems.toLocaleString()} traces · page ${state.page} of ${state.totalPages}`;
+    el('prev').disabled = state.page <= 1; el('next').disabled = state.page >= state.totalPages;
+  }
+  async function selectTrace(id) {
+    state.selected=id; state.detail=null; renderRows(); el('detail').classList.add('open'); el('detailName').textContent='Loading trace…'; el('detailId').textContent=id; el('detailBody').innerHTML='<div class="loading"><i class="spinner"></i>Loading observations…</div>';
+    history.replaceState(null,'',`#trace=${encodeURIComponent(id)}`);
+    try { const response=await fetch(`${API}/traces/${encodeURIComponent(id)}`); if(!response.ok) throw new Error(); state.detail=await response.json(); renderDetail(); }
+    catch (_) { el('detailBody').replaceChildren(node('div','empty','Trace detail is temporarily unavailable.')); }
+  }
+  function stat(label, value) { const n=node('div','stat'); n.append(node('small','',label),node('strong','numeric',value)); return n; }
+  function jsonCard(label, value) { const s=node('div','section'); s.append(node('div','section-title',label)); const pre=node('div','json-card'); pre.textContent=typeof value==='string' ? value : JSON.stringify(value ?? null,null,2); s.append(pre); return s; }
+  function observationCard(obs) {
+    const card=node('div','obs'); const title=node('div','obs-title'); title.append(node('i','type-dot '+String(obs.type||'span').toLowerCase()),node('b','',text(obs.name,'Unnamed observation')),node('span','badge',text(obs.type,'SPAN'))); card.append(title,node('small','',`${fmtTime(obs.startTime)} · ${fmtLatency(obs.latency)}`));
+    const grid=node('div','obs-grid'); [['Model',obs.model],['Cost',fmtCost(obs.totalCost)],['Input',compact(obs.input,90)],['Output',compact(obs.output,90)]].forEach(([k,v])=>{const m=node('div','obs-mini');m.append(node('b','',k),node('span','',text(v)));grid.append(m)}); card.append(grid); return card;
+  }
+  function renderDetail() {
+    const d=state.detail;if(!d)return;el('detailName').textContent=text(d.name);el('detailId').textContent=text(d.id);const body=el('detailBody');body.replaceChildren();
+    if(state.tab==='json'){const pre=node('div','json-card');pre.textContent=JSON.stringify(d,null,2);pre.style.maxHeight='none';body.append(pre);return;}
+    const stats=node('div','stats');stats.append(stat('Latency',fmtLatency(d.latency)),stat('Total cost',fmtCost(d.totalCost)),stat('Observations',String((d.observations||[]).length)),stat('Environment',text(d.environment)),stat('Version',text(d.version||d.release)),stat('Session',compact(d.sessionId,20)));body.append(stats,jsonCard('Trace input',d.input),jsonCard('Trace output',d.output));
+    if(d.metadata && Object.keys(d.metadata).length) body.append(jsonCard('Metadata',d.metadata));const section=node('div','section');section.append(node('div','section-title',`Observations (${(d.observations||[]).length})`));if(!(d.observations||[]).length)section.append(node('div','empty','No child observations were recorded.'));else d.observations.forEach(o=>section.append(observationCard(o)));body.append(section);if(d.stale)body.prepend(node('div','stale show','Showing cached trace detail.'));
+  }
+  function closeDetail(){state.selected=null;state.detail=null;el('detail').classList.remove('open');history.replaceState(null,'',location.pathname+location.search);renderRows()}
+  el('refresh').addEventListener('click',()=>loadTraces()); search.addEventListener('input',renderRows); range.addEventListener('change',()=>loadTraces({keepPage:false})); environment.addEventListener('change',()=>loadTraces({keepPage:false}));
+  el('prev').addEventListener('click',()=>{if(state.page>1){state.page--;loadTraces()}});el('next').addEventListener('click',()=>{if(state.page<state.totalPages){state.page++;loadTraces()}});el('close').addEventListener('click',closeDetail);
+  document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>{state.tab=tab.dataset.tab;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t===tab));renderDetail()}));
+  loadTraces().then(()=>{const match=location.hash.match(/^#trace=([a-fA-F0-9]{32})$/);if(match)selectTrace(match[1])});setInterval(()=>{if(!document.hidden)loadTraces()},30000);
+})();
+</script>
+</body>
+</html>

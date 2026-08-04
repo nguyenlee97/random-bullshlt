@@ -214,8 +214,10 @@ async def version():
 # Import router after app is created to avoid circular imports
 from router import agent_router  # noqa: E402
 from zalo_routes import zalo_router  # noqa: E402
+from public_observability import public_observability_router  # noqa: E402
 app.include_router(agent_router, prefix="/api/agent")
 app.include_router(zalo_router, prefix="/api/agent")
+app.include_router(public_observability_router, prefix="/api/public/observability")
 
 
 print(f"\n🚀 Advertising Agent v{BUILD_VERSION} starting on port {config.AGENT_PORT}")

@@ -16,6 +16,14 @@ from starlette.responses import JSONResponse
 from config import config
 
 EXEMPT_PATHS = {"/api/health", "/health", "/ready", "/api/version", "/metrics"}
+EXEMPT_PREFIXES = ("/api/public/observability",)
+
+
+def _is_exempt_path(path: str) -> bool:
+    return path in EXEMPT_PATHS or any(
+        path == prefix or path.startswith(prefix + "/")
+        for prefix in EXEMPT_PREFIXES
+    )
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
@@ -23,7 +31,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         key_required = bool(getattr(config, "AGENT_API_KEY", ""))
         if (
             key_required
-            and request.url.path not in EXEMPT_PATHS
+            and not _is_exempt_path(request.url.path)
             and request.method != "OPTIONS"
         ):
             provided = request.headers.get("X-API-Key", "")
