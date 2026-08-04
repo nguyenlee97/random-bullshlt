@@ -69,7 +69,7 @@
 (() => {
   'use strict';
   const API = '/agent/api/public/observability';
-  const state = { page: 1, limit: 50, totalPages: 1, totalItems: 0, traces: [], selected: null, detail: null, tab: 'preview', loading: false };
+  const state = { page: 1, limit: 25, totalPages: 1, totalItems: 0, traces: [], selected: null, detail: null, tab: 'preview', loading: false };
   const el = id => document.getElementById(id);
   const rows = el('rows'), search = el('search'), range = el('range'), environment = el('environment');
 

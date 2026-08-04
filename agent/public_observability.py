@@ -51,6 +51,10 @@ _DROP_METADATA_KEYS = {
     "resourceattributes.telemetry.sdk.name",
     "resourceattributes.telemetry.sdk.version",
     "scope.attributes.public_key",
+    "service.instance.id",
+    "telemetry.sdk.language",
+    "telemetry.sdk.name",
+    "telemetry.sdk.version",
 }
 _SENSITIVE_MARKERS = (
     "authorization",

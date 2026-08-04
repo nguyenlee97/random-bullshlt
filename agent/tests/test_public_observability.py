@@ -18,6 +18,10 @@ def test_safe_value_redacts_pii_credentials_and_internal_metadata():
         "authorization": "Bearer abcdefghijklmnopqrstuvwxyz",
         "scope.attributes.public_key": "pk-lf-should-not-leak",
         "resourceAttributes.service.instance.id": "internal-host-id",
+        "resourceAttributes": {
+            "service.instance.id": "nested-internal-host-id",
+            "service.name": "advertising-agent",
+        },
         "campaign": "Summer launch",
     })
 
@@ -25,6 +29,8 @@ def test_safe_value_redacts_pii_credentials_and_internal_metadata():
     assert safe["authorization"] == "[REDACTED]"
     assert "scope.attributes.public_key" not in safe
     assert "resourceAttributes.service.instance.id" not in safe
+    assert "service.instance.id" not in safe["resourceAttributes"]
+    assert safe["resourceAttributes"]["service.name"] == "advertising-agent"
     assert safe["campaign"] == "Summer launch"
 
 
