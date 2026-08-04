@@ -203,7 +203,7 @@ def _fetch_page(
     kwargs: dict[str, Any] = {
         "page": page,
         "limit": limit,
-        "fields": "core,basic,usage",
+        "fields": "core,basic,usage,io",
     }
     if environment:
         kwargs["environment"] = environment
@@ -235,10 +235,10 @@ def _fetch_page(
 def _fetch_detail(trace_id: str) -> dict[str, Any]:
     client = _get_client()
     if hasattr(getattr(client, "api", None), "trace"):
-        trace = client.api.trace.get(trace_id, fields="core,basic,usage")
+        trace = client.api.trace.get(trace_id, fields="core,basic,usage,io")
         observations_response = client.api.observations.get_many(
             trace_id=trace_id,
-            fields="core,basic,usage",
+            fields="core,basic,usage,io",
             limit=100,
         )
         observations_payload = _dump(observations_response) or {}

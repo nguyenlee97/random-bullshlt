@@ -44,7 +44,7 @@
         </div>
         <div class="toolbar">
           <input id="search" class="control search" type="search" placeholder="Search the current page…" aria-label="Search traces">
-          <select id="range" class="control" aria-label="Time range"><option value="24">Last 24 hours</option><option value="168">Last 7 days</option><option value="720">Last 30 days</option><option value="">All time</option></select>
+          <select id="range" class="control" aria-label="Time range"><option value="">All time</option><option value="24">Last 24 hours</option><option value="168">Last 7 days</option><option value="720">Last 30 days</option></select>
           <select id="environment" class="control" aria-label="Environment"><option value="">All environments</option><option value="production">production</option><option value="default">default (historical)</option></select>
           <button id="refresh" class="control refresh" type="button">↻ Refresh</button>
           <div id="stale" class="stale">Showing cached data while Langfuse reconnects.</div>
@@ -85,10 +85,12 @@
   }
   function fmtLatency(value) {
     const n = Number(value); if (!Number.isFinite(n)) return '—';
+    if (n < 0) return '—';
     return n < 1 ? `${Math.round(n * 1000)} ms` : `${n.toFixed(n < 10 ? 2 : 1)} s`;
   }
   function fmtCost(value) {
     const n = Number(value); if (!Number.isFinite(n)) return '—';
+    if (n < 0) return '—';
     return n === 0 ? '$0' : `$${n.toFixed(n < .01 ? 5 : 3)}`;
   }
   function compact(value, max = 150) {
