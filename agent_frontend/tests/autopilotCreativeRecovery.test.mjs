@@ -34,7 +34,16 @@ test('creative editor can derive an exact planned format from an uploaded image'
   assert.match(crop, /sm:flex-row/)
   assert.match(crop, /creativeImageSource\(src\)/)
   assert.match(crop, /crossOrigin=\{creativeImageCrossOrigin\(dataUrl\)\}/)
-  assert.match(crop, /assignCreativeImageSource\(img, imageSrc\)/)
+})
+
+test('crop interaction coalesces pointer updates and exports PNG asynchronously', () => {
+  assert.match(crop, /window\.requestAnimationFrame/)
+  assert.match(crop, /window\.cancelAnimationFrame/)
+  assert.match(crop, /canvas\.toBlob/)
+  assert.match(crop, /const img = imgRef\.current/)
+  assert.doesNotMatch(crop, /toDataURL\('image\/png'\)/)
+  assert.doesNotMatch(crop, /\[box, display, clampBox/)
+  assert.match(crop, /disabled=\{!box \|\| processing\}/)
 })
 
 test('crop or scale persists and completes the Autopilot recovery transaction', () => {

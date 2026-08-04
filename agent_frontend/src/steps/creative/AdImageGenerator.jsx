@@ -363,12 +363,12 @@ export default function AdImageGenerator({
 
   const handleCropConfirm = useCallback((croppedDataUrl) => {
     if (!pendingCrop) return
-    finishImage(croppedDataUrl)
+    return finishImage(croppedDataUrl)
   }, [pendingCrop, finishImage])
 
   const handleScale = useCallback((scaledDataUrl) => {
     if (!pendingCrop) return
-    finishImage(scaledDataUrl)
+    return finishImage(scaledDataUrl)
   }, [pendingCrop, finishImage])
 
   const handleCropCancel = useCallback(() => {

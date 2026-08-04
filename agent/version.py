@@ -3,9 +3,10 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-08-03.3"
+BUILD_VERSION = "2026-08-04.1"
 
 BUILD_FEATURES = [
+    "smooth-creative-crop-export", # frame-paced dragging and async PNG encoding
     "autopilot-worker-transient-outage-recovery", # executor survives temporary Mongo failures
     "zalo-full-auto-creative-media-recovery", # send every generated creative once across auto analysis/restarts
     "autopilot-full-auto-creative-analysis", # full-auto starts VLM and resumes without operator refresh
