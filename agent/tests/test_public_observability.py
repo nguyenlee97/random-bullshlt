@@ -137,6 +137,7 @@ def test_session_detail_aggregates_traces_cost_usage_and_metadata():
     assert result["totalUsage"] == 130
     assert result["models"] == ["gpt-test"]
     assert result["traces"][0]["name"] == "campaign-turn"
+    assert result["traces"][0]["rootObservationId"] == "root-a"
     assert result["traces"][0]["metadata"] == {"request_id": "req-1"}
     assert result["traces"][0]["modelParameters"]["reasoning"]["effort"] == "low"
 
@@ -211,6 +212,10 @@ def test_trace_explorer_keeps_the_smooth_interaction_contract():
         "function sampledOverview(",
         "function restoreWorkspaceRoute(",
         "function renderSessionDetail(",
+        "function normalizeDisplayValue(",
+        "function sessionTraceUrl(",
+        "root:'all'",
+        "trace.rootObservationId",
         "overscroll-behavior:contain",
         'id="sessionsNav"',
         "log-expanded-grid",
@@ -220,6 +225,7 @@ def test_trace_explorer_keeps_the_smooth_interaction_contract():
 
     # Public trace payloads are always rendered through DOM text nodes.
     assert ".innerHTML" not in source
+    assert "state.root='true'" not in source
     # The Cloud metrics query can block for over a minute; the public page uses
     # an explicitly labeled page sample instead of starting that request.
     assert "`${API}/overview?" not in source

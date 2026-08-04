@@ -288,6 +288,7 @@ def _session_detail(raw_session: Any, raw_observations: list[Any]) -> dict[str, 
         versions = sorted({str(item.get("version")) for item in items if item.get("version")})
         traces.append({
             "id": trace_id,
+            "rootObservationId": root.get("id"),
             "name": named.get("traceName") or root.get("name") or "Unnamed trace",
             "startTime": start.isoformat() if start else root.get("startTime"),
             "endTime": end.isoformat() if end else root.get("endTime"),
