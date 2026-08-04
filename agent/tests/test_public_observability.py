@@ -1,4 +1,7 @@
-from public_observability import _observation, _safe_value, _trace_summary
+import pytest
+from fastapi import HTTPException
+
+from public_observability import _observation, _public_response, _safe_value, _trace_summary
 from middleware.auth import _is_exempt_path
 
 
@@ -58,3 +61,18 @@ def test_observation_only_keeps_public_detail_fields():
     assert result["type"] == "GENERATION"
     assert result["input"] == "Call me at [REDACTED_PHONE]"
     assert "projectId" not in result
+
+
+def test_jsonp_fallback_validates_callback_and_escapes_script_content():
+    response = _public_response(
+        {"value": "</script><script>alert(1)</script>"},
+        "__campAdsObservability42",
+    )
+    body = response.body.decode("utf-8")
+
+    assert body.startswith("__campAdsObservability42(")
+    assert "</script>" not in body
+    assert "\\u003c/script>" in body
+
+    with pytest.raises(HTTPException):
+        _public_response({"ok": True}, "alert")

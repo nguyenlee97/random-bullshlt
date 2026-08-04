@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+import json
 import os
 import re
 import threading
 import time
 from typing import Any, Callable
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from ratelimit import limiter
 from security import REDACTED, redact_pii
@@ -23,6 +24,7 @@ from security import REDACTED, redact_pii
 public_observability_router = APIRouter(tags=["public-observability"])
 
 _TRACE_ID = re.compile(r"^[a-fA-F0-9]{32}$")
+_CALLBACK = re.compile(r"^__campAdsObservability[0-9]{1,8}$")
 _FRESH_SECONDS = 20.0
 _STALE_SECONDS = 300.0
 _MAX_STRING = 24_000
@@ -279,6 +281,22 @@ async def _cached(key: str, loader: Callable[[], Any]) -> tuple[Any, bool]:
     return value, False
 
 
+def _public_response(payload: dict[str, Any], callback: str | None):
+    """Return JSON, or a validated JSONP fallback for restricted demo browsers."""
+    if not callback:
+        return payload
+    if not _CALLBACK.fullmatch(callback):
+        raise HTTPException(status_code=400, detail="Invalid callback")
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    # Prevent a payload string from ending the script element early.
+    encoded = encoded.replace("<", "\\u003c")
+    return Response(
+        content=f"{callback}({encoded});",
+        media_type="application/javascript",
+        headers={"Cache-Control": "private, max-age=20"},
+    )
+
+
 @public_observability_router.get("/traces")
 @limiter.limit("30/minute")
 async def list_public_traces(
@@ -288,6 +306,7 @@ async def list_public_traces(
     environment: str | None = Query(None, max_length=64),
     from_timestamp: datetime | None = None,
     to_timestamp: datetime | None = None,
+    callback: str | None = Query(None, max_length=64),
 ):
     """List redacted trace summaries from the configured Langfuse project."""
     key = "page:" + repr((page, limit, environment, from_timestamp, to_timestamp))
@@ -301,12 +320,19 @@ async def list_public_traces(
             to_timestamp=to_timestamp,
         ),
     )
-    return {**value, "stale": stale, "refreshedAt": datetime.now().astimezone().isoformat()}
+    return _public_response(
+        {**value, "stale": stale, "refreshedAt": datetime.now().astimezone().isoformat()},
+        callback,
+    )
 
 
 @public_observability_router.get("/traces/{trace_id}")
 @limiter.limit("60/minute")
-async def get_public_trace(request: Request, trace_id: str):
+async def get_public_trace(
+    request: Request,
+    trace_id: str,
+    callback: str | None = Query(None, max_length=64),
+):
     """Return one redacted trace and its observations for the detail pane."""
     if not _TRACE_ID.fullmatch(trace_id):
         raise HTTPException(status_code=404, detail="Trace not found")
@@ -314,4 +340,7 @@ async def get_public_trace(request: Request, trace_id: str):
         f"detail:{trace_id}",
         lambda: _fetch_detail(trace_id),
     )
-    return {**value, "stale": stale, "refreshedAt": datetime.now().astimezone().isoformat()}
+    return _public_response(
+        {**value, "stale": stale, "refreshedAt": datetime.now().astimezone().isoformat()},
+        callback,
+    )

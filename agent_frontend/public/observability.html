@@ -101,6 +101,27 @@
   }
   function td(content, className) { const n = node('td', className); n.append(content); return n; }
 
+  let callbackSequence = 0;
+  function requestJson(url) {
+    if (typeof fetch === 'function') {
+      return fetch(url, { headers: { Accept:'application/json' } }).then(async response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      });
+    }
+    return new Promise((resolve, reject) => {
+      const callback = `__campAdsObservability${++callbackSequence}`;
+      const script = document.createElement('script');
+      const separator = url.includes('?') ? '&' : '?';
+      const cleanup = () => { delete window[callback]; script.remove(); };
+      const timer = setTimeout(() => { cleanup(); reject(new Error('Request timeout')); }, 20000);
+      window[callback] = payload => { clearTimeout(timer); cleanup(); resolve(payload); };
+      script.onerror = () => { clearTimeout(timer); cleanup(); reject(new Error('Request failed')); };
+      script.src = `${url}${separator}callback=${callback}`;
+      document.head.append(script);
+    });
+  }
+
   function renderRows() {
     rows.replaceChildren();
     const q = search.value.trim().toLowerCase();
@@ -128,9 +149,7 @@
     if (environment.value) params.set('environment', environment.value);
     if (range.value) params.set('from_timestamp', new Date(Date.now() - Number(range.value)*3600000).toISOString());
     try {
-      const response = await fetch(`${API}/traces?${params}`, { headers: { Accept:'application/json' } });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload = await response.json(); state.traces = payload.data || []; state.totalPages = Number(payload.meta?.totalPages || 1); state.totalItems = Number(payload.meta?.totalItems || state.traces.length);
+      const payload = await requestJson(`${API}/traces?${params}`); state.traces = payload.data || []; state.totalPages = Number(payload.meta?.totalPages || 1); state.totalItems = Number(payload.meta?.totalItems || state.traces.length);
       el('stale').classList.toggle('show', Boolean(payload.stale)); el('cloudStatus').textContent = payload.stale ? 'Cached · reconnecting' : 'Langfuse Cloud connected';
       renderRows(); updatePager();
     } catch (error) {
@@ -144,7 +163,7 @@
   async function selectTrace(id) {
     state.selected=id; state.detail=null; renderRows(); el('detail').classList.add('open'); el('detailName').textContent='Loading trace…'; el('detailId').textContent=id; el('detailBody').innerHTML='<div class="loading"><i class="spinner"></i>Loading observations…</div>';
     history.replaceState(null,'',`#trace=${encodeURIComponent(id)}`);
-    try { const response=await fetch(`${API}/traces/${encodeURIComponent(id)}`); if(!response.ok) throw new Error(); state.detail=await response.json(); renderDetail(); }
+    try { state.detail=await requestJson(`${API}/traces/${encodeURIComponent(id)}`); renderDetail(); }
     catch (_) { el('detailBody').replaceChildren(node('div','empty','Trace detail is temporarily unavailable.')); }
   }
   function stat(label, value) { const n=node('div','stat'); n.append(node('small','',label),node('strong','numeric',value)); return n; }
