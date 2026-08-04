@@ -1,7 +1,13 @@
 import pytest
 from fastapi import HTTPException
 
-from public_observability import _observation, _public_response, _safe_value, _trace_summary
+from public_observability import (
+    _filter_request,
+    _observation,
+    _public_response,
+    _safe_value,
+    _trace_summary,
+)
 from middleware.auth import _is_exempt_path
 
 
@@ -67,6 +73,46 @@ def test_observation_only_keeps_public_detail_fields():
     assert result["type"] == "GENERATION"
     assert result["input"] == "Call me at [REDACTED_PHONE]"
     assert "projectId" not in result
+
+
+def test_observation_filter_contract_supports_real_tracing_controls():
+    filters = _filter_request(
+        types="generation,tool",
+        environments="production,default",
+        level="error",
+        root_only=True,
+        min_latency=2,
+        cost_only=True,
+        search_field="name",
+        search_value="openai",
+    )
+
+    assert filters[0]["column"] == "type"
+    assert filters[0]["value"] == ["GENERATION", "TOOL"]
+    assert any(item["column"] == "isRootObservation" for item in filters)
+    assert any(item["column"] == "latency" for item in filters)
+    assert any(item["column"] == "totalCost" for item in filters)
+    assert filters[-1]["operator"] == "contains"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (("types", "UNKNOWN"), ("environments", "Not Valid!"), ("level", "FATAL")),
+)
+def test_observation_filter_contract_rejects_unknown_values(field, value):
+    kwargs = {
+        "types": None,
+        "environments": None,
+        "level": None,
+        "root_only": None,
+        "min_latency": None,
+        "cost_only": False,
+        "search_field": None,
+        "search_value": None,
+    }
+    kwargs[field] = value
+    with pytest.raises(HTTPException):
+        _filter_request(**kwargs)
 
 
 def test_jsonp_fallback_validates_callback_and_escapes_script_content():

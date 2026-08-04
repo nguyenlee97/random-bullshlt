@@ -7,7 +7,8 @@ redacted, and a stale cache keeps the demo useful during a Cloud API timeout.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import re
@@ -30,6 +31,15 @@ _STALE_SECONDS = 300.0
 _MAX_STRING = 24_000
 _MAX_LIST = 250
 _MAX_DEPTH = 12
+_OBSERVATION_FIELDS = (
+    "core,basic,time,io,metadata,model,usage,prompt,metrics,trace_context"
+)
+_OBSERVATION_TYPES = {
+    "AGENT", "CHAIN", "EMBEDDING", "EVALUATOR", "EVENT", "GENERATION",
+    "GUARDRAIL", "RETRIEVER", "SPAN", "TOOL",
+}
+_LEVELS = {"DEBUG", "DEFAULT", "WARNING", "ERROR"}
+_SEARCH_FIELDS = {"name", "input", "output", "traceName"}
 
 _client: Any | None = None
 _client_initialized = False
@@ -175,6 +185,10 @@ def _observation(raw: Any) -> dict[str, Any]:
         "endTime", "completionStartTime", "input", "output", "metadata",
         "model", "modelParameters", "usageDetails", "costDetails", "level",
         "statusMessage", "version", "environment", "latency", "totalCost",
+        "isRootObservation", "providedModelName", "totalUsage", "inputUsage",
+        "outputUsage", "timeToFirstToken", "traceName", "tags", "release",
+        "promptName", "promptVersion", "bookmarked", "public", "sessionId",
+        "userId", "createdAt", "updatedAt",
     )
     result = {key: _safe_value(item[key]) for key in allowed if key in item}
     # Older SDKs serialize these names in snake_case.
@@ -189,10 +203,205 @@ def _observation(raw: Any) -> dict[str, Any]:
         ("cost_details", "costDetails"),
         ("status_message", "statusMessage"),
         ("total_cost", "totalCost"),
+        ("is_root_observation", "isRootObservation"),
+        ("provided_model_name", "providedModelName"),
+        ("total_usage", "totalUsage"),
+        ("input_usage", "inputUsage"),
+        ("output_usage", "outputUsage"),
+        ("time_to_first_token", "timeToFirstToken"),
+        ("trace_name", "traceName"),
     ):
         if camel not in result and snake in item:
             result[camel] = _safe_value(item[snake])
     return result
+
+
+def _observation_filters(
+    *,
+    types: tuple[str, ...],
+    environments: tuple[str, ...],
+    level: str | None,
+    root_only: bool | None,
+    min_latency: float | None,
+    cost_only: bool,
+    search_field: str | None,
+    search_value: str | None,
+) -> list[dict[str, Any]]:
+    filters: list[dict[str, Any]] = []
+    if types:
+        filters.append({
+            "type": "stringOptions", "column": "type",
+            "operator": "any of", "value": list(types),
+        })
+    if environments:
+        filters.append({
+            "type": "stringOptions", "column": "environment",
+            "operator": "any of", "value": list(environments),
+        })
+    if level:
+        filters.append({
+            "type": "string", "column": "level", "operator": "=", "value": level,
+        })
+    if root_only is not None:
+        filters.append({
+            "type": "boolean", "column": "isRootObservation",
+            "operator": "=", "value": root_only,
+        })
+    if min_latency is not None:
+        filters.append({
+            "type": "number", "column": "latency",
+            "operator": ">", "value": min_latency,
+        })
+    if cost_only:
+        filters.append({
+            "type": "number", "column": "totalCost", "operator": ">", "value": 0,
+        })
+    if search_field and search_value:
+        filters.append({
+            "type": "string", "column": search_field,
+            "operator": "matches" if search_field in {"input", "output"} else "contains",
+            "value": search_value,
+        })
+    return filters
+
+
+def _fetch_observations(
+    *,
+    limit: int,
+    cursor: str | None,
+    from_timestamp: datetime | None,
+    to_timestamp: datetime | None,
+    filters: list[dict[str, Any]],
+) -> dict[str, Any]:
+    client = _get_client()
+    kwargs: dict[str, Any] = {
+        "limit": limit,
+        "fields": _OBSERVATION_FIELDS,
+    }
+    if cursor:
+        kwargs["cursor"] = cursor
+    if from_timestamp:
+        kwargs["from_start_time"] = from_timestamp
+    if to_timestamp:
+        kwargs["to_start_time"] = to_timestamp
+    if filters:
+        kwargs["filter"] = json.dumps(filters, separators=(",", ":"))
+    response = client.api.observations.get_many(**kwargs)
+    payload = _dump(response) or {}
+    meta = _dump(_pick(payload, "meta", default={})) or {}
+    return {
+        "data": [_observation(item) for item in (_pick(payload, "data", default=[]) or [])],
+        "meta": {"cursor": _pick(meta, "cursor")},
+    }
+
+
+def _metrics_query(
+    *,
+    filters: list[dict[str, Any]],
+    from_timestamp: datetime,
+    to_timestamp: datetime,
+    dimensions: list[dict[str, str]],
+    metrics: list[dict[str, str]],
+    time_dimension: dict[str, str] | None = None,
+    order_by: list[dict[str, str]] | None = None,
+    row_limit: int = 100,
+) -> list[dict[str, Any]]:
+    query: dict[str, Any] = {
+        "view": "observations",
+        "metrics": metrics,
+        "dimensions": dimensions,
+        "filters": filters,
+        "fromTimestamp": from_timestamp.isoformat(),
+        "toTimestamp": to_timestamp.isoformat(),
+        "config": {"row_limit": row_limit},
+    }
+    if time_dimension:
+        query["timeDimension"] = time_dimension
+    if order_by:
+        query["orderBy"] = order_by
+    response = _get_client().api.metrics.metrics(
+        query=json.dumps(query, separators=(",", ":")),
+    )
+    payload = _dump(response) or {}
+    return _safe_value(_pick(payload, "data", default=[]) or [])
+
+
+def _fetch_overview(
+    *,
+    from_timestamp: datetime | None,
+    to_timestamp: datetime | None,
+    filters: list[dict[str, Any]],
+) -> dict[str, Any]:
+    end = to_timestamp or datetime.now(timezone.utc)
+    start = from_timestamp or datetime(2020, 1, 1, tzinfo=timezone.utc)
+    granularity = "hour" if end - start <= timedelta(days=3) else "day"
+    count_metrics = [
+        {"measure": "count", "aggregation": "count"},
+        {"measure": "totalCost", "aggregation": "sum"},
+        {"measure": "latency", "aggregation": "p95"},
+    ]
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        timeline_future = pool.submit(
+            _metrics_query,
+            filters=filters, from_timestamp=start, to_timestamp=end,
+            dimensions=[], metrics=count_metrics,
+            time_dimension={"granularity": granularity},
+            order_by=[{"field": "time_dimension", "direction": "asc"}],
+            row_limit=1000,
+        )
+        type_future = pool.submit(
+            _metrics_query,
+            filters=filters, from_timestamp=start, to_timestamp=end,
+            dimensions=[{"field": "type"}],
+            metrics=[{"measure": "count", "aggregation": "count"}],
+            order_by=[{"field": "count_count", "direction": "desc"}],
+        )
+        environment_future = pool.submit(
+            _metrics_query,
+            filters=filters, from_timestamp=start, to_timestamp=end,
+            dimensions=[{"field": "environment"}],
+            metrics=[{"measure": "count", "aggregation": "count"}],
+            order_by=[{"field": "count_count", "direction": "desc"}],
+        )
+        name_future = pool.submit(
+            _metrics_query,
+            filters=filters, from_timestamp=start, to_timestamp=end,
+            dimensions=[{"field": "name"}],
+            metrics=[{"measure": "count", "aggregation": "count"}],
+            order_by=[{"field": "count_count", "direction": "desc"}],
+            row_limit=40,
+        )
+        trace_name_future = pool.submit(
+            _metrics_query,
+            filters=filters, from_timestamp=start, to_timestamp=end,
+            dimensions=[{"field": "traceName"}],
+            metrics=[{"measure": "count", "aggregation": "count"}],
+            order_by=[{"field": "count_count", "direction": "desc"}],
+            row_limit=40,
+        )
+        timeline = timeline_future.result()
+        types = type_future.result()
+        environments = environment_future.result()
+        names = name_future.result()
+        trace_names = trace_name_future.result()
+    return {
+        "timeline": timeline,
+        "facets": {
+            "types": types,
+            "environments": environments,
+            "names": names,
+            "traceNames": trace_names,
+        },
+        "summary": {
+            "count": sum(int(float(row.get("count_count") or 0)) for row in timeline),
+            "cost": sum(float(row.get("sum_totalCost") or 0) for row in timeline),
+            "p95Latency": max(
+                (float(row.get("p95_latency") or 0) for row in timeline),
+                default=0,
+            ),
+        },
+        "granularity": granularity,
+    }
 
 
 def _fetch_page(
@@ -242,15 +451,22 @@ def _fetch_detail(trace_id: str) -> dict[str, Any]:
         trace = client.api.trace.get(trace_id, fields="core,basic,usage,io")
         observations_response = client.api.observations.get_many(
             trace_id=trace_id,
-            fields="core,basic,usage,io",
-            limit=100,
+            fields=_OBSERVATION_FIELDS,
+            limit=1000,
         )
         observations_payload = _dump(observations_response) or {}
         observations = _pick(observations_payload, "data", default=[]) or []
+        try:
+            scores_response = client.api.scores.get_many(trace_id=trace_id, limit=100)
+            scores_payload = _dump(scores_response) or {}
+            scores = _pick(scores_payload, "data", default=[]) or []
+        except Exception:
+            scores = []
     else:  # Langfuse Python SDK v2 compatibility
         trace = client.fetch_trace(trace_id)
         trace_dump = _dump(trace) or {}
         observations = _pick(trace_dump, "observations", default=[]) or []
+        scores = _pick(trace_dump, "scores", default=[]) or []
 
     trace_dump = _dump(trace) or {}
     summary = _trace_summary(trace_dump)
@@ -258,7 +474,7 @@ def _fetch_detail(trace_id: str) -> dict[str, Any]:
         "input": _safe_value(_pick(trace_dump, "input")),
         "output": _safe_value(_pick(trace_dump, "output")),
         "metadata": _safe_value(_pick(trace_dump, "metadata", default={})),
-        "scores": _safe_value(_pick(trace_dump, "scores", default=[])),
+        "scores": _safe_value(scores or _pick(trace_dump, "scores", default=[])),
         "observations": [_observation(item) for item in observations],
     })
     return summary
@@ -298,6 +514,120 @@ def _public_response(payload: dict[str, Any], callback: str | None):
         content=f"{callback}({encoded});",
         media_type="application/javascript",
         headers={"Cache-Control": "private, max-age=20"},
+    )
+
+
+def _filter_request(
+    *,
+    types: str | None,
+    environments: str | None,
+    level: str | None,
+    root_only: bool | None,
+    min_latency: float | None,
+    cost_only: bool,
+    search_field: str | None,
+    search_value: str | None,
+) -> list[dict[str, Any]]:
+    parsed_types = tuple(
+        item.strip().upper() for item in (types or "").split(",") if item.strip()
+    )
+    if any(item not in _OBSERVATION_TYPES for item in parsed_types):
+        raise HTTPException(status_code=422, detail="Unknown observation type")
+    parsed_environments = tuple(
+        item.strip().lower() for item in (environments or "").split(",") if item.strip()
+    )
+    if any(not re.fullmatch(r"[a-z0-9_-]{1,40}", item) for item in parsed_environments):
+        raise HTTPException(status_code=422, detail="Invalid environment")
+    normalized_level = level.upper() if level else None
+    if normalized_level and normalized_level not in _LEVELS:
+        raise HTTPException(status_code=422, detail="Unknown log level")
+    if search_field and search_field not in _SEARCH_FIELDS:
+        raise HTTPException(status_code=422, detail="Unknown search field")
+    return _observation_filters(
+        types=parsed_types,
+        environments=parsed_environments,
+        level=normalized_level,
+        root_only=root_only,
+        min_latency=min_latency,
+        cost_only=cost_only,
+        search_field=search_field,
+        search_value=search_value,
+    )
+
+
+@public_observability_router.get("/observations")
+@limiter.limit("45/minute")
+async def list_public_observations(
+    request: Request,
+    limit: int = Query(50, ge=10, le=100),
+    cursor: str | None = Query(None, max_length=2048),
+    types: str | None = Query(None, max_length=200),
+    environments: str | None = Query(None, max_length=200),
+    level: str | None = Query(None, max_length=16),
+    root_only: bool | None = None,
+    min_latency: float | None = Query(None, ge=0, le=3600),
+    cost_only: bool = False,
+    search_field: str | None = Query(None, max_length=32),
+    search_value: str | None = Query(None, max_length=200),
+    from_timestamp: datetime | None = None,
+    to_timestamp: datetime | None = None,
+    callback: str | None = Query(None, max_length=64),
+):
+    """List redacted observations with the real Langfuse tracing filters."""
+    filters = _filter_request(
+        types=types, environments=environments, level=level,
+        root_only=root_only, min_latency=min_latency, cost_only=cost_only,
+        search_field=search_field, search_value=search_value,
+    )
+    key = "observations:" + repr((
+        limit, cursor, filters, from_timestamp, to_timestamp,
+    ))
+    value, stale = await _cached(
+        key,
+        lambda: _fetch_observations(
+            limit=limit, cursor=cursor, from_timestamp=from_timestamp,
+            to_timestamp=to_timestamp, filters=filters,
+        ),
+    )
+    return _public_response(
+        {**value, "stale": stale, "refreshedAt": datetime.now().astimezone().isoformat()},
+        callback,
+    )
+
+
+@public_observability_router.get("/overview")
+@limiter.limit("20/minute")
+async def public_observability_overview(
+    request: Request,
+    types: str | None = Query(None, max_length=200),
+    environments: str | None = Query(None, max_length=200),
+    level: str | None = Query(None, max_length=16),
+    root_only: bool | None = None,
+    min_latency: float | None = Query(None, ge=0, le=3600),
+    cost_only: bool = False,
+    search_field: str | None = Query(None, max_length=32),
+    search_value: str | None = Query(None, max_length=200),
+    from_timestamp: datetime | None = None,
+    to_timestamp: datetime | None = None,
+    callback: str | None = Query(None, max_length=64),
+):
+    """Return histogram, totals, and real facets for the tracing workspace."""
+    filters = _filter_request(
+        types=types, environments=environments, level=level,
+        root_only=root_only, min_latency=min_latency, cost_only=cost_only,
+        search_field=search_field, search_value=search_value,
+    )
+    key = "overview:" + repr((filters, from_timestamp, to_timestamp))
+    value, stale = await _cached(
+        key,
+        lambda: _fetch_overview(
+            from_timestamp=from_timestamp, to_timestamp=to_timestamp,
+            filters=filters,
+        ),
+    )
+    return _public_response(
+        {**value, "stale": stale, "refreshedAt": datetime.now().astimezone().isoformat()},
+        callback,
     )
 
 
