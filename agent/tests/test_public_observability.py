@@ -149,6 +149,7 @@ def test_trace_explorer_keeps_the_smooth_interaction_contract():
         "new AbortController()",
         "function syncRoute(",
         "function restoreRoute(",
+        "function sampledOverview(",
         "log-expanded-grid",
         "Keyboard shortcuts",
     ):
@@ -156,3 +157,6 @@ def test_trace_explorer_keeps_the_smooth_interaction_contract():
 
     # Public trace payloads are always rendered through DOM text nodes.
     assert ".innerHTML" not in source
+    # The Cloud metrics query can block for over a minute; the public page uses
+    # an explicitly labeled page sample instead of starting that request.
+    assert "`${API}/overview?" not in source

@@ -3,9 +3,10 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-08-04.13"
+BUILD_VERSION = "2026-08-04.14"
 
 BUILD_FEATURES = [
+    "langfuse-resilient-page-metrics", # instant honest page-sample facets while upstream metrics queries are paused
     "langfuse-smooth-trace-explorer", # persisted layout, deep links, expandable logs and stale-request cancellation
     "langfuse-semantic-log-colors", # syntax-highlighted payloads and observation-type visual hierarchy
     "langfuse-observation-workspace", # real observation filters, metrics, hierarchy, scores and export
