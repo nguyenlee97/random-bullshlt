@@ -7,6 +7,8 @@ from public_observability import (
     _observation,
     _public_response,
     _safe_value,
+    _session_detail,
+    _session_summary,
     _trace_summary,
 )
 from middleware.auth import _is_exempt_path
@@ -84,6 +86,61 @@ def test_observation_only_keeps_public_detail_fields():
     assert "projectId" not in result
 
 
+def test_session_summary_drops_project_identity():
+    result = _session_summary({
+        "id": "sess_demo",
+        "createdAt": "2026-08-04T00:00:00Z",
+        "environment": "production",
+        "projectId": "private-project",
+    })
+
+    assert result == {
+        "id": "sess_demo",
+        "createdAt": "2026-08-04T00:00:00Z",
+        "environment": "production",
+    }
+
+
+def test_session_detail_aggregates_traces_cost_usage_and_metadata():
+    result = _session_detail(
+        {"id": "sess_demo", "createdAt": "2026-08-04T00:00:00Z"},
+        [
+            {
+                "id": "root-a", "traceId": "a" * 32, "name": "agent.turn",
+                "traceName": "campaign-turn", "type": "AGENT",
+                "isRootObservation": True, "startTime": "2026-08-04T00:00:00Z",
+                "endTime": "2026-08-04T00:00:02Z", "totalCost": 0,
+                "input": {"message": "hello"}, "output": {"answer": "world"},
+                "metadata": {"request_id": "req-1"},
+            },
+            {
+                "id": "gen-a", "traceId": "a" * 32, "parentObservationId": "root-a",
+                "name": "openai.generate", "type": "GENERATION",
+                "startTime": "2026-08-04T00:00:00.5Z",
+                "endTime": "2026-08-04T00:00:01.5Z", "totalCost": 0.25,
+                "usageDetails": {"input": 100, "output": 20, "total": 120},
+                "providedModelName": "gpt-test", "version": "v2",
+                "modelParameters": {"reasoning": {"effort": "low"}},
+            },
+            {
+                "id": "root-b", "traceId": "b" * 32, "name": "tool.turn",
+                "type": "AGENT", "startTime": "2026-08-04T00:00:03Z",
+                "endTime": "2026-08-04T00:00:04Z", "totalCost": 0.05,
+                "totalUsage": 10,
+            },
+        ],
+    )
+
+    assert result["traceCount"] == 2
+    assert result["observationCount"] == 3
+    assert result["totalCost"] == pytest.approx(0.30)
+    assert result["totalUsage"] == 130
+    assert result["models"] == ["gpt-test"]
+    assert result["traces"][0]["name"] == "campaign-turn"
+    assert result["traces"][0]["metadata"] == {"request_id": "req-1"}
+    assert result["traces"][0]["modelParameters"]["reasoning"]["effort"] == "low"
+
+
 def test_observation_filter_contract_supports_real_tracing_controls():
     filters = _filter_request(
         types="generation,tool",
@@ -151,6 +208,10 @@ def test_trace_explorer_keeps_the_smooth_interaction_contract():
         "function restoreRoute(",
         "root?.traceName||root?.name||named?.traceName",
         "function sampledOverview(",
+        "function restoreWorkspaceRoute(",
+        "function renderSessionDetail(",
+        "overscroll-behavior:contain",
+        'id="sessionsNav"',
         "log-expanded-grid",
         "Keyboard shortcuts",
     ):

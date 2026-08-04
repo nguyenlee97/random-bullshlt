@@ -25,6 +25,7 @@ from security import REDACTED, redact_pii
 public_observability_router = APIRouter(tags=["public-observability"])
 
 _TRACE_ID = re.compile(r"^[a-fA-F0-9]{32}$")
+_SESSION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,199}$")
 _CALLBACK = re.compile(r"^__campAdsObservability[0-9]{1,8}$")
 _FRESH_SECONDS = 20.0
 _STALE_SECONDS = 300.0
@@ -214,6 +215,122 @@ def _observation(raw: Any) -> dict[str, Any]:
         if camel not in result and snake in item:
             result[camel] = _safe_value(item[snake])
     return result
+
+
+def _session_summary(raw: Any) -> dict[str, Any]:
+    item = _dump(raw) or {}
+    return {
+        "id": _safe_value(_pick(item, "id")),
+        "createdAt": _pick(item, "createdAt", "created_at"),
+        "environment": _pick(item, "environment", default="default"),
+    }
+
+
+def _timestamp(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _usage_total(value: Any) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if not isinstance(value, dict):
+        return 0.0
+    for key in ("total", "total_tokens", "totalTokens"):
+        if isinstance(value.get(key), (int, float)):
+            return float(value[key])
+    return sum(
+        float(value.get(key) or 0)
+        for key in ("input", "output", "input_tokens", "output_tokens")
+    )
+
+
+def _session_detail(raw_session: Any, raw_observations: list[Any]) -> dict[str, Any]:
+    session = _session_summary(raw_session)
+    observations = [_observation(item) for item in raw_observations]
+    by_trace: dict[str, list[dict[str, Any]]] = {}
+    for observation in observations:
+        trace_id = str(observation.get("traceId") or "")
+        if trace_id:
+            by_trace.setdefault(trace_id, []).append(observation)
+
+    traces: list[dict[str, Any]] = []
+    for trace_id, items in by_trace.items():
+        items.sort(key=lambda item: str(item.get("startTime") or ""))
+        root = next(
+            (item for item in items if item.get("isRootObservation") is True),
+            next((item for item in items if not item.get("parentObservationId")), items[0]),
+        )
+        named = next((item for item in items if item.get("traceName")), root)
+        generation = next(
+            (item for item in items if item.get("providedModelName") or item.get("model")),
+            {},
+        )
+        starts = [_timestamp(item.get("startTime")) for item in items]
+        ends = [_timestamp(item.get("endTime")) for item in items]
+        starts = [value for value in starts if value]
+        ends = [value for value in ends if value]
+        start = min(starts) if starts else None
+        end = max(ends) if ends else None
+        latency = max(0.0, (end - start).total_seconds()) if start and end else 0.0
+        models = sorted({
+            str(item.get("providedModelName") or item.get("model"))
+            for item in items if item.get("providedModelName") or item.get("model")
+        })
+        releases = sorted({str(item.get("release")) for item in items if item.get("release")})
+        versions = sorted({str(item.get("version")) for item in items if item.get("version")})
+        traces.append({
+            "id": trace_id,
+            "name": named.get("traceName") or root.get("name") or "Unnamed trace",
+            "startTime": start.isoformat() if start else root.get("startTime"),
+            "endTime": end.isoformat() if end else root.get("endTime"),
+            "latency": latency,
+            "totalCost": sum(float(item.get("totalCost") or 0) for item in items),
+            "totalUsage": sum(_usage_total(item.get("usageDetails") or item.get("totalUsage")) for item in items),
+            "observationCount": len(items),
+            "environment": root.get("environment") or session["environment"],
+            "userId": root.get("userId"),
+            "models": models,
+            "releases": releases,
+            "versions": versions,
+            "input": root.get("input"),
+            "output": root.get("output"),
+            "metadata": root.get("metadata"),
+            "modelParameters": generation.get("modelParameters"),
+        })
+    traces.sort(key=lambda item: str(item.get("startTime") or ""))
+
+    all_starts = [_timestamp(item.get("startTime")) for item in traces]
+    all_ends = [_timestamp(item.get("endTime")) for item in traces]
+    all_starts = [value for value in all_starts if value]
+    all_ends = [value for value in all_ends if value]
+    session_start = min(all_starts) if all_starts else _timestamp(session.get("createdAt"))
+    session_end = max(all_ends) if all_ends else session_start
+    models = sorted({model for trace in traces for model in trace["models"]})
+    releases = sorted({release for trace in traces for release in trace["releases"]})
+    versions = sorted({version for trace in traces for version in trace["versions"]})
+    return {
+        **session,
+        "startTime": session_start.isoformat() if session_start else session.get("createdAt"),
+        "endTime": session_end.isoformat() if session_end else session.get("createdAt"),
+        "latency": max(0.0, (session_end - session_start).total_seconds())
+        if session_start and session_end else 0.0,
+        "traceCount": len(traces),
+        "observationCount": len(observations),
+        "totalCost": sum(trace["totalCost"] for trace in traces),
+        "totalUsage": sum(trace["totalUsage"] for trace in traces),
+        "models": models,
+        "releases": releases,
+        "versions": versions,
+        "traces": traces,
+    }
 
 
 def _observation_filters(
@@ -445,6 +562,70 @@ def _fetch_page(
     }
 
 
+def _fetch_sessions(
+    *,
+    page: int,
+    limit: int,
+    environment: str | None,
+    from_timestamp: datetime | None,
+    to_timestamp: datetime | None,
+) -> dict[str, Any]:
+    client = _get_client()
+    if not hasattr(getattr(client, "api", None), "sessions"):
+        raise RuntimeError("Session reads require the current Langfuse SDK")
+    kwargs: dict[str, Any] = {"page": page, "limit": limit}
+    if environment:
+        kwargs["environment"] = environment
+    if from_timestamp:
+        kwargs["from_timestamp"] = from_timestamp
+    if to_timestamp:
+        kwargs["to_timestamp"] = to_timestamp
+    payload = _dump(client.api.sessions.list(**kwargs)) or {}
+    raw_data = _pick(payload, "data", default=[]) or []
+    meta = _dump(_pick(payload, "meta", default={})) or {}
+    return {
+        "data": [_session_summary(item) for item in raw_data],
+        "meta": {
+            "page": _pick(meta, "page", default=page),
+            "limit": _pick(meta, "limit", default=limit),
+            "totalItems": _pick(meta, "totalItems", "total_items", default=len(raw_data)),
+            "totalPages": _pick(meta, "totalPages", "total_pages", default=1),
+        },
+    }
+
+
+def _fetch_session_detail(session_id: str) -> dict[str, Any]:
+    client = _get_client()
+    if not hasattr(getattr(client, "api", None), "sessions"):
+        raise RuntimeError("Session reads require the current Langfuse SDK")
+    raw_session = _dump(client.api.sessions.get(session_id)) or {}
+    created = _timestamp(_pick(raw_session, "createdAt", "created_at"))
+    start = (created - timedelta(days=1)) if created else datetime(2020, 1, 1, tzinfo=timezone.utc)
+    end = datetime.now(timezone.utc) + timedelta(days=1)
+    filters = [{
+        "type": "string", "column": "sessionId", "operator": "=", "value": session_id,
+    }]
+    cursor: str | None = None
+    observations: list[Any] = []
+    for _page in range(5):
+        kwargs: dict[str, Any] = {
+            "limit": 1000,
+            "fields": _OBSERVATION_FIELDS,
+            "from_start_time": start,
+            "to_start_time": end,
+            "filter": json.dumps(filters, separators=(",", ":")),
+        }
+        if cursor:
+            kwargs["cursor"] = cursor
+        payload = _dump(client.api.observations.get_many(**kwargs)) or {}
+        observations.extend(_pick(payload, "data", default=[]) or [])
+        meta = _dump(_pick(payload, "meta", default={})) or {}
+        cursor = _pick(meta, "cursor")
+        if not cursor:
+            break
+    return _session_detail(raw_session, observations)
+
+
 def _fetch_detail(trace_id: str) -> dict[str, Any]:
     client = _get_client()
     if hasattr(getattr(client, "api", None), "trace"):
@@ -658,6 +839,55 @@ async def list_public_traces(
             from_timestamp=from_timestamp,
             to_timestamp=to_timestamp,
         ),
+    )
+    return _public_response(
+        {**value, "stale": stale, "refreshedAt": datetime.now().astimezone().isoformat()},
+        callback,
+    )
+
+
+@public_observability_router.get("/sessions")
+@limiter.limit("30/minute")
+async def list_public_sessions(
+    request: Request,
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=10, le=50),
+    environment: str | None = Query(None, max_length=64),
+    from_timestamp: datetime | None = None,
+    to_timestamp: datetime | None = None,
+    callback: str | None = Query(None, max_length=64),
+):
+    """List redacted Langfuse sessions for the public session explorer."""
+    key = "sessions:" + repr((page, limit, environment, from_timestamp, to_timestamp))
+    value, stale = await _cached(
+        key,
+        lambda: _fetch_sessions(
+            page=page,
+            limit=limit,
+            environment=environment,
+            from_timestamp=from_timestamp,
+            to_timestamp=to_timestamp,
+        ),
+    )
+    return _public_response(
+        {**value, "stale": stale, "refreshedAt": datetime.now().astimezone().isoformat()},
+        callback,
+    )
+
+
+@public_observability_router.get("/sessions/{session_id}")
+@limiter.limit("30/minute")
+async def get_public_session(
+    request: Request,
+    session_id: str,
+    callback: str | None = Query(None, max_length=64),
+):
+    """Aggregate one redacted session across all of its traces and observations."""
+    if not _SESSION_ID.fullmatch(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    value, stale = await _cached(
+        f"session-detail:{session_id}",
+        lambda: _fetch_session_detail(session_id),
     )
     return _public_response(
         {**value, "stale": stale, "refreshedAt": datetime.now().astimezone().isoformat()},
