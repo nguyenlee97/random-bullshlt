@@ -172,6 +172,10 @@ ssh root@<VPS> "cd /var/www/agent-api && pip install -r requirements.txt"   # sl
 scp backend/models/Campaign.js backend/routes/orders.js root@<VPS>:/var/www/backend/...   # match your backend layout
 # rebuild frontend (idempotency key in agentApi.js):
 cd agent_frontend; npm run build; scp -r dist/* root@<VPS>:/var/www/agent/
+# Mandatory after a manual Windows scp: OpenSSH can create copied directories
+# as 0700, which lets index.html load but makes every JS/CSS asset return 403
+# to nginx. Resolve and validate the active immutable release before normalizing.
+ssh root@<VPS> 'release=$(readlink -f /var/www/agent); case "$release" in /var/www/agent-releases/*) ;; *) echo "Unexpected release path: $release" >&2; exit 1;; esac; find "$release" -type d -exec chmod 0755 {} +; find "$release" -type f -exec chmod 0644 {} +'
 ssh root@<VPS> "pm2 restart agent-api backend-api"
 curl https://agent-api.pawgrammers.io.vn/api/version    # expect 2026-07-04.1
 ```
