@@ -1,18 +1,24 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
   Sparkles, Loader2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
-  X, PlusCircle, ImageIcon, ZoomIn, Wand2, Pencil,
+  X, PlusCircle, ImageIcon, ZoomIn, Wand2, Pencil, Clock3,
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
 import { AD_FORMATS, AD_FORMATS_MAP } from '@/data/adFormats'
 import { creativeImageCrossOrigin, creativeImageSource } from '@/lib/creativeImageUrl'
 import ImageCropModal from './ImageCropModal'
-
-const MAX_PARALLEL_GENERATIONS = 2
+import {
+  MAX_CONCURRENT_GENERATIONS,
+  MAX_PENDING_GENERATIONS,
+  canEnqueueGeneration,
+  countActiveGenerations,
+  countPendingGenerations,
+  nextQueuedGenerations,
+} from './generationQueue'
 
 function galleryImage(job) {
   const result = job.result || {}
@@ -196,6 +202,7 @@ export default function AdImageGenerator({
   const [assetUploading, setAssetUploading]      = useState(false)
   const [promptSpec, setPromptSpec]              = useState(null)
   const [composingPrompt, setComposingPrompt]    = useState(false)
+  const startedGenerationIds = useRef(new Set())
 
   // Pending crop: raw response waiting for user crop action
   // { b64, formatId, width, height }
@@ -215,9 +222,9 @@ export default function AdImageGenerator({
     refreshGeneratedJobs()
   }, [refreshGeneratedJobs])
 
-  const activeGenerationCount = generationJobs.filter(job =>
-    ['reserved', 'generating'].includes(job.status)
-  ).length
+  const activeGenerationCount = countActiveGenerations(generationJobs)
+  const pendingGenerationCount = countPendingGenerations(generationJobs)
+  const queuedGenerationCount = generationJobs.filter(job => job.status === 'queued').length
   const generating = activeGenerationCount > 0
 
   useEffect(() => {
@@ -226,44 +233,94 @@ export default function AdImageGenerator({
     return () => window.clearInterval(timer)
   }, [generationJobs, refreshGeneratedJobs])
 
-  const handleGenerate = useCallback(async () => {
-    if (!selectedFormatId || activeGenerationCount >= MAX_PARALLEL_GENERATIONS) return
+  const runGenerationJob = useCallback(async job => {
+    const request = job.request || {}
+    try {
+      const result = await AgentAPI.generateAdImage(
+        request.brief,
+        request.formatId,
+        request.customPrompt,
+        {
+          assetIds: request.assetIds,
+          promptSpec: request.promptSpec,
+          quality: request.quality,
+          campaignFlow: request.campaignFlow,
+          audienceContext: request.audienceContext,
+          idempotencyKey: job.job_id,
+        },
+      )
+
+      if (!result.ok) {
+        const unavailableToday = result.remaining === 0
+          || result.status === 'quota_exhausted'
+          || result.quota?.status === 'quota_exhausted'
+        setError(unavailableToday
+          ? 'Tạm thời chưa thể tạo thêm ảnh hôm nay. Vui lòng thử lại vào ngày mai.'
+          : (result.error || 'Tạo ảnh thất bại — hãy thử lại'))
+        setGenerationJobs(previous => previous.map(previousJob => {
+          if (previousJob.job_id === job.job_id) {
+            return { ...previousJob, status: result.jobStatus || 'failed' }
+          }
+          if (unavailableToday && previousJob.status === 'queued') {
+            return { ...previousJob, status: 'quota_exhausted' }
+          }
+          return previousJob
+        }))
+        await refreshGeneratedJobs()
+        return
+      }
+
+      await refreshGeneratedJobs()
+    } finally {
+      startedGenerationIds.current.delete(job.job_id)
+    }
+  }, [refreshGeneratedJobs])
+
+  useEffect(() => {
+    const jobsToStart = nextQueuedGenerations(generationJobs).filter(
+      job => !startedGenerationIds.current.has(job.job_id),
+    )
+    if (jobsToStart.length === 0) return
+
+    const startingIds = new Set(jobsToStart.map(job => job.job_id))
+    jobsToStart.forEach(job => startedGenerationIds.current.add(job.job_id))
+    setGenerationJobs(previous => previous.map(job =>
+      startingIds.has(job.job_id) && job.status === 'queued'
+        ? { ...job, status: 'generating' }
+        : job
+    ))
+    jobsToStart.forEach(job => { void runGenerationJob(job) })
+  }, [generationJobs, runGenerationJob])
+
+  const handleGenerate = useCallback(() => {
+    if (!selectedFormatId) return
     setError('')
 
     const jobId = `guided:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
     const formatId = selectedFormatId
-    setGenerationJobs(previous => [...previous, {
-      job_id: jobId,
-      status: 'generating',
-      localOnly: true,
-      created_at: new Date().toISOString(),
-      metadata: { format_id: formatId },
-      result: {},
-    }])
-
-    const result = await AgentAPI.generateAdImage(brief, formatId, customPrompt, {
-      assetIds: [...selectedAssetIds], promptSpec, quality: promptSpec?.quality || 'medium',
+    const request = {
+      brief,
+      formatId,
+      customPrompt,
+      assetIds: [...selectedAssetIds],
+      promptSpec,
+      quality: promptSpec?.quality || 'medium',
       campaignFlow: openaiCampaignFlow ? 'openai' : '',
       audienceContext: openaiCampaignFlow ? segment : {},
-      idempotencyKey: jobId,
-    })
-
-    if (!result.ok) {
-      const unavailableToday = result.remaining === 0
-        || result.status === 'quota_exhausted'
-        || result.quota?.status === 'quota_exhausted'
-      setError(unavailableToday
-        ? 'Tạm thời chưa thể tạo thêm ảnh hôm nay. Vui lòng thử lại vào ngày mai.'
-        : (result.error || 'Tạo ảnh thất bại — hãy thử lại'))
-      setGenerationJobs(previous => previous.map(job =>
-        job.job_id === jobId ? { ...job, status: result.jobStatus || 'failed' } : job
-      ))
-      await refreshGeneratedJobs()
-      return
     }
-
-    await refreshGeneratedJobs()
-  }, [selectedFormatId, activeGenerationCount, brief, customPrompt, selectedAssetIds, promptSpec, openaiCampaignFlow, segment, refreshGeneratedJobs])
+    setGenerationJobs(previous => {
+      if (!canEnqueueGeneration(previous)) return previous
+      return [...previous, {
+        job_id: jobId,
+        status: 'queued',
+        localOnly: true,
+        created_at: new Date().toISOString(),
+        metadata: { format_id: formatId },
+        request,
+        result: {},
+      }]
+    })
+  }, [selectedFormatId, brief, customPrompt, selectedAssetIds, promptSpec, openaiCampaignFlow, segment])
 
   const handleFormatSelect = useCallback((formatId) => {
     setSelectedFormatId(formatId)
@@ -607,14 +664,14 @@ export default function AdImageGenerator({
       {/* The server still enforces the per-actor daily generation limit. */}
       <Button
         onClick={handleGenerate}
-        disabled={!selectedFormatId || activeGenerationCount >= MAX_PARALLEL_GENERATIONS}
+        disabled={!selectedFormatId || pendingGenerationCount >= MAX_PENDING_GENERATIONS}
         className="w-full gap-2"
         id="btn-ai-generate"
       >
-        {activeGenerationCount >= MAX_PARALLEL_GENERATIONS ? (
+        {pendingGenerationCount >= MAX_PENDING_GENERATIONS ? (
           <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Đang tạo ảnh... (có thể mất 30-60 giây)
+            <Clock3 className="w-4 h-4" />
+            Hàng đợi đã đầy ({MAX_PENDING_GENERATIONS}/{MAX_PENDING_GENERATIONS})
           </>
         ) : (
           <>
@@ -623,9 +680,26 @@ export default function AdImageGenerator({
           </>
         )}
       </Button>
+      {pendingGenerationCount > 0 && (
+        <p className="text-center text-[10px] text-muted-foreground" data-testid="generated-image-queue-summary">
+          {activeGenerationCount}/{MAX_CONCURRENT_GENERATIONS} đang tạo
+          {' · '}{queuedGenerationCount} đang chờ
+          {' · '}{pendingGenerationCount}/{MAX_PENDING_GENERATIONS} yêu cầu
+        </p>
+      )}
 
-      {(generating || readyToCrop.length > 0) && (
+      {(pendingGenerationCount > 0 || readyToCrop.length > 0) && (
         <div className="grid grid-cols-2 gap-2" data-testid="generated-image-job-list">
+          {visibleJobs.filter(job => job.status === 'queued').map((job, index) => {
+            const fmt = AD_FORMATS_MAP[job.metadata?.format_id] || {}
+            return (
+              <div key={job.job_id} className="h-36 rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 p-3 text-center">
+                <Clock3 className="w-6 h-6 text-slate-500" />
+                <p className="text-[11px] font-semibold text-slate-700">Đang chờ · #{index + 1}</p>
+                <p className="text-[10px] text-slate-500">{fmt.label || 'AI creative'}</p>
+              </div>
+            )
+          })}
           {visibleJobs.filter(job => ['reserved', 'generating'].includes(job.status)).map(job => {
             const fmt = AD_FORMATS_MAP[job.metadata?.format_id] || {}
             return (
@@ -714,7 +788,7 @@ export default function AdImageGenerator({
         </Button>
       )}
 
-      {generatedImages.length === 0 && !generating && readyToCrop.length === 0 && (
+      {generatedImages.length === 0 && !generating && pendingGenerationCount === 0 && readyToCrop.length === 0 && (
         <div className="flex flex-col items-center gap-2 py-6 text-center text-muted-foreground">
           <Sparkles className="w-8 h-8 text-violet-300" />
           <p className="text-xs">Chọn định dạng và bấm <strong>Tạo ảnh AI</strong> để bắt đầu.</p>

@@ -3,9 +3,10 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-08-04.1"
+BUILD_VERSION = "2026-08-04.2"
 
 BUILD_FEATURES = [
+    "queued-parallel-creative-generation", # two active image jobs plus three visible queued requests
     "smooth-creative-crop-export", # frame-paced dragging and async PNG encoding
     "autopilot-worker-transient-outage-recovery", # executor survives temporary Mongo failures
     "zalo-full-auto-creative-media-recovery", # send every generated creative once across auto analysis/restarts
@@ -300,7 +301,7 @@ BUILD_FEATURES = [
     "viewport-rooted-header-dialogs",                       # header dialogs portal to the viewport instead of the backdrop-filter containing block
     "demo-v2-placement-creative-first",                     # new Autopilot runs place creative planning before audience and targeting
     "durable-generated-image-gallery",                      # raw and cropped AI creatives survive refresh and navigation
-    "parallel-creative-generation-gallery",                 # two image jobs can run while explicit gallery selection remains user controlled
+    "parallel-creative-generation-gallery",                 # image jobs run in parallel while explicit gallery selection remains user controlled
     "full-bleed-znews-skin-generation",                      # side-skin creatives contain no synthetic grey docking strip
     "centered-znews-category-masthead",                      # category mastheads remain centered across shared and dynamic layouts
     "deterministic-creative-manual-override",                # documented numbered approval works identically in Agent UI and Zalo
