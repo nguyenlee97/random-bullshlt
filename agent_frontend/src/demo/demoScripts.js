@@ -638,14 +638,14 @@ export function buildStage2Steps(
     ...(openaiCampaignFlow ? [
       {
         type: 'WAIT_FOR_SELECTOR',
-        target: '[data-demo="creative-file-card"][data-file-id^="ai-zuma-box"]',
+        target: '[data-demo="creative-file-card"][data-ai-generated="true"][data-format-id="zuma-box"]',
         timeout: 10000,
         title: '⏳ Đang lưu creative...',
         text: 'Ảnh đã tạo xong. Walkthrough đang chờ creative xuất hiện trong danh sách Upload...',
       },
       {
         type: 'HIGHLIGHT_EL',
-        target: '[data-demo="creative-file-card"][data-file-id^="ai-zuma-box"]',
+        target: '[data-demo="creative-file-card"][data-ai-generated="true"][data-format-id="zuma-box"]',
         position: 'top',
         title: '🖼️ Creative đã được lưu!',
         text: 'OpenAI flow tự động lưu ảnh vừa tạo vào creative pool để ảnh không bị mất khi chuyển tab. Walkthrough sẽ tiếp tục chuẩn bị các format còn lại.',

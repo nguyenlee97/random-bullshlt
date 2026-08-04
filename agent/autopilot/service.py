@@ -1007,6 +1007,12 @@ async def reconcile_workspace_changes(run_id: str) -> dict:
         "superseded_review_tasks": [task["key"] for task in superseded],
         "rechecked_input_tasks": [task["key"] for task in recheck],
     })
+    # A canonical operator edit can supersede a waiting producer without that
+    # producer going through review_task(). Queue any now-ready dependents here
+    # as well, including sequence-only tasks such as demo_v2 audience retrieval
+    # after creative assignment. Otherwise the run is left queued with no task
+    # available for the worker to claim.
+    await _queue_ready_dependents(run_id)
     return {"changed": True, "reason": "workspace_changed", "run": await get_run(run_id)}
 
 

@@ -1744,8 +1744,10 @@ export default function App() {
           let matched
           const openaiWalkthrough = currentConversationModel === 'openai_gpt_5_4_mini'
           if (formatId === null || (formatId === undefined && !openaiWalkthrough)) {
-            // Box: match the AI-generated file (name starts with "ai-zuma-box")
-            matched = files.find(f => /^ai-zuma-box/i.test(f.name))
+            // Box: use stable creative metadata. Keep the filename fallback for
+            // legacy GreenNode sessions created before formatId was persisted.
+            matched = files.find(f => f.aiGenerated && f.formatId === 'zuma-box')
+              || files.find(f => /^ai-zuma-box/i.test(f.name))
           } else if (formatId) {
             // Non-box: match by format filename
             matched = files.find(f => f.name === `${formatId}.png` || f.formatId === formatId)

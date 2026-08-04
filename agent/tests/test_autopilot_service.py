@@ -1857,6 +1857,36 @@ async def test_operator_audience_edit_supersedes_pending_review_and_resumes_run(
 
 
 @pytest.mark.asyncio
+async def test_assignment_edit_supersedes_review_and_queues_sequence_dependent():
+    await _seed("review-edit-assignments")
+    run = await service.create_run(
+        "review-edit-assignments", approval_policy="critical_only",
+        idempotency_key="review-edit-assignments",
+    )
+    _mark_tasks(run["run_id"], {
+        "normalize_brief": "succeeded", "validate_brief": "succeeded",
+        "generate_strategy": "succeeded", "plan_placement_intent": "succeeded",
+        "plan_creative_formats": "succeeded", "prepare_creatives": "succeeded",
+        "analyze_creatives": "succeeded", "rank_placements": "succeeded",
+        "assign_creatives": "waiting_review", "retrieve_audience": "pending",
+    })
+    workspace = await get_workspace("review-edit-assignments")
+    assignments = {"ZONE-1": "creative-1"}
+    await apply_mutation(
+        "review-edit-assignments", "assignments", assignments,
+        base_revision=workspace["revision"], actor="campaign_operator",
+        idempotency_key="manual-assignments",
+    )
+
+    result = await service.reconcile_workspace_changes(run["run_id"])
+    by_key = {task["key"]: task for task in result["run"]["tasks"]}
+    assert result["run"]["status"] == "queued"
+    assert by_key["assign_creatives"]["status"] == "succeeded"
+    assert by_key["assign_creatives"]["result"] == assignments
+    assert by_key["retrieve_audience"]["status"] == "queued"
+
+
+@pytest.mark.asyncio
 async def test_creative_upload_supersedes_missing_input_review_and_resumes_analysis():
     await _seed("review-edit-creative")
     run = await service.create_run(
