@@ -89,10 +89,11 @@ services:
       JUDGE_MODEL: ""
       RERANK_URL: ""
       RERANK_MODEL: ""
-      LANGFUSE_PUBLIC_KEY: ""
-      LANGFUSE_SECRET_KEY: ""
-      LANGFUSE_HOST: ""
-      LANGFUSE_BASE_URL: ""
+      # Credentials and endpoint come from the server-only agent.env file.
+      # Keeping the same Langfuse project as production gives one showcase
+      # dashboard while this label keeps the two runtimes filterable.
+      LANGFUSE_TRACING_ENVIRONMENT: hackathon
+      OTEL_SERVICE_NAME: advertising-agent-hackathon
       ZALO_LOGIN_ENABLED: ${ZALO_LOGIN_ENABLED:-false}
       ZALO_OA_ENABLED: ${ZALO_OA_ENABLED:-false}
       ZALO_AGENT_WORKER_ENABLED: ${ZALO_AGENT_WORKER_ENABLED:-false}

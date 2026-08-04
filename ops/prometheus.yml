@@ -10,6 +10,15 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets: ["agent:8080"]
+        labels:
+          environment: production
+  - job_name: advertising-agent-hackathon
+    scheme: https
+    metrics_path: /agent/metrics
+    static_configs:
+      - targets: ["zah-4.123c.vn:443"]
+        labels:
+          environment: hackathon
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
