@@ -1,5 +1,6 @@
 import pytest
 from fastapi import HTTPException
+from pathlib import Path
 
 from public_observability import (
     _filter_request,
@@ -9,6 +10,14 @@ from public_observability import (
     _trace_summary,
 )
 from middleware.auth import _is_exempt_path
+
+
+OBSERVABILITY_HTML = (
+    Path(__file__).resolve().parents[2]
+    / "agent_frontend"
+    / "public"
+    / "observability.html"
+)
 
 
 def test_public_observability_auth_exemption_is_narrow():
@@ -128,3 +137,22 @@ def test_jsonp_fallback_validates_callback_and_escapes_script_content():
 
     with pytest.raises(HTTPException):
         _public_response({"ok": True}, "alert")
+
+
+def test_trace_explorer_keeps_the_smooth_interaction_contract():
+    source = OBSERVABILITY_HTML.read_text(encoding="utf-8")
+
+    for contract in (
+        'id="densityToggle"',
+        'id="detailResize"',
+        "campAdsObservabilityPreferencesV2",
+        "new AbortController()",
+        "function syncRoute(",
+        "function restoreRoute(",
+        "log-expanded-grid",
+        "Keyboard shortcuts",
+    ):
+        assert contract in source
+
+    # Public trace payloads are always rendered through DOM text nodes.
+    assert ".innerHTML" not in source
