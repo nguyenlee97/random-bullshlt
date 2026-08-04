@@ -207,6 +207,7 @@ def test_trace_explorer_keeps_the_smooth_interaction_contract():
         "function syncRoute(",
         "function restoreRoute(",
         "root?.traceName||root?.name||named?.traceName",
+        "match||root||state.detail",
         "function sampledOverview(",
         "function restoreWorkspaceRoute(",
         "function renderSessionDetail(",
