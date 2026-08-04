@@ -486,16 +486,21 @@ async def _cached(key: str, loader: Callable[[], Any]) -> tuple[Any, bool]:
         cached = _cache.get(key)
     if cached and now - cached[0] <= _FRESH_SECONDS:
         return cached[1], False
-    try:
-        value = await asyncio.to_thread(loader)
-    except Exception as exc:
+    last_error: Exception | None = None
+    for _attempt in range(2):
+        try:
+            value = await asyncio.to_thread(loader)
+            break
+        except Exception as exc:
+            last_error = exc
+    else:
         if cached and now - cached[0] <= _STALE_SECONDS:
             return cached[1], True
         # Do not leak upstream URLs, credentials, or internal exception details.
         raise HTTPException(
             status_code=503,
             detail="Trace data is temporarily unavailable. Please retry shortly.",
-        ) from exc
+        ) from last_error
     with _cache_lock:
         _cache[key] = (time.monotonic(), value)
     return value, False
