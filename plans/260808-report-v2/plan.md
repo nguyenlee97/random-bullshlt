@@ -1,7 +1,7 @@
 ---
 title: Advertising Report v2 Implementation
 date: 2026-08-08
-status: in-progress
+status: completed
 priority: high
 effort: 6 iterations
 tags: [report, advertising-agent, simulation, evidence]
@@ -63,7 +63,7 @@ Upgrade the existing report workflow without changing audience, creative, placem
 3. [completed] Report Specialist and persistence compatibility.
 4. [completed] Agent payload and ReportStep presentation.
 5. [completed] Fixture harness, regression tests, and six optimization loops.
-6. [in-progress] Verify the GPT-5.4-mini path in an environment that supplies `OPENAI_API_KEY`.
+6. [completed] Verify real GPT-5.4-mini output against the Report v2 grounder and validator through the production Agent model boundary.
 
 ## Success Criteria
 
@@ -74,8 +74,9 @@ Upgrade the existing report workflow without changing audience, creative, placem
 ## Current Verification State
 
 - Requirement score improved across six kept iterations: `0 → 30 → 60 → 90 → 90 → 90 → 100`.
-- Backend: 66/66 tests pass.
+- Backend: 68/68 tests pass.
 - Agent report QA/media: 17/17 tests pass.
 - Frontend: production build and report-module integration test pass.
 - VoltRide fast preview completes with deterministic evidence and full answers/actions.
-- Local model verification is pending because `OPENAI_API_KEY` is not present; provenance correctly reports `deterministic_fallback` rather than claiming an OpenAI result.
+- Local no-key behavior correctly reports `deterministic_fallback`.
+- The production Agent boundary returned `model=gpt-5.4-mini`; its structured VoltRide output passed the branch's Report v2 grounder and evidence validator with overall `BAD`, all four objective question IDs, and contract-owned actions.
