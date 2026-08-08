@@ -47,13 +47,13 @@ function KPIScorecard({ records }) {
     a.spend += r.spend || 0
     a.conv += r.conversions || 0
     a.reach += r.reach || 0
-    a.viSum += r.vi || 0
+    a.viWeighted += (r.vi || 0) * (r.impressions || 0)
     a.n++
     return a
-  }, { imp: 0, clk: 0, spend: 0, conv: 0, reach: 0, viSum: 0, n: 0 })
+  }, { imp: 0, clk: 0, spend: 0, conv: 0, reach: 0, viWeighted: 0, n: 0 })
 
   const avgCTR = totals.imp > 0 ? (totals.clk / totals.imp * 100).toFixed(2) : '0'
-  const avgVI = totals.n > 0 ? (totals.viSum / totals.n).toFixed(1) : '0'
+  const avgVI = totals.imp > 0 ? (totals.viWeighted / totals.imp).toFixed(1) : '0'
   const avgCPM = totals.imp > 0 ? Math.round(totals.spend / totals.imp * 1000) : 0
 
   const kpis = [
@@ -61,7 +61,7 @@ function KPIScorecard({ records }) {
     { label: 'Clicks', value: fmtN(totals.clk), icon: MousePointerClick, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
     { label: 'CTR', value: avgCTR + '%', icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
     { label: 'Spend', value: fmtVND(totals.spend), icon: DollarSign, color: 'text-violet-600', bg: 'bg-violet-50 border-violet-200' },
-    { label: 'Reach', value: fmtN(totals.reach), icon: Users, color: 'text-pink-600', bg: 'bg-pink-50 border-pink-200' },
+    { label: 'Daily reach (sum)', value: fmtN(totals.reach), icon: Users, color: 'text-pink-600', bg: 'bg-pink-50 border-pink-200' },
     { label: 'Viewability', value: avgVI + '%', icon: Activity, color: 'text-cyan-600', bg: 'bg-cyan-50 border-cyan-200' },
   ]
 

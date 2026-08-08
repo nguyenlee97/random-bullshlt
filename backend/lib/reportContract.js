@@ -106,6 +106,7 @@ function aggregateOutcomes(records, measurementSpec) {
 }
 
 function actualForKpi(kpi, totals) {
+  if (kpi.metric === 'media_metric') return totals[kpi.metricId] ?? null;
   if (kpi.metric === 'event_count') return totals.outcomes[kpi.eventId] || 0;
   if (kpi.metric === 'cost_per_event') {
     const count = totals.outcomes[kpi.eventId] || 0;
@@ -165,7 +166,11 @@ function buildActions(kpiScorecard, measurementSpec, zones) {
     let proposedAction;
     let expectedMovement;
     let guardrail;
-    if (kpi.metric === 'event_rate') {
+    if (kpi.metric === 'media_metric') {
+      proposedAction = `Điều chỉnh phân bổ theo zone và thử nghiệm creative có kiểm soát để cải thiện ${kpi.label}.`;
+      expectedMovement = `Đưa ${kpi.label} từ ${kpi.actual ?? 'N/A'} về phía mục tiêu ${kpi.operator} ${kpi.target}.`;
+      guardrail = 'Theo dõi đồng thời delivery volume và KPI chính của objective; không tối ưu một metric đơn lẻ.';
+    } else if (kpi.metric === 'event_rate') {
       proposedAction = `Rà soát SLA follow-up và điểm rơi nhắc lịch cho ${eventLabel}; thử nghiệm theo cohort thay vì tăng media đồng loạt.`;
       expectedMovement = `Tăng ${kpi.label} từ ${kpi.actual ?? 'N/A'}% về phía mục tiêu ${kpi.target}%.`;
       guardrail = 'Không đánh đổi chất lượng lead; theo dõi tỷ lệ hủy và trùng lead theo cohort.';
@@ -281,6 +286,7 @@ function buildReportContractV2(campaign, records, measurementSpec) {
     actions,
     limitations: [
       'Scenario facts estimate a coherent campaign outcome for decision testing; they are not ad-server delivery logs.',
+      'Lagged outcomes are attributed to the originating campaign cohort date and evaluated within the KPI window.',
       'Observed association does not establish causality.',
       'Summed daily reach is not campaign unique reach across the full timeframe.',
       'Actions require operator review and a controlled measurement window before scaling.',
@@ -301,6 +307,7 @@ function validateAnalysisResult(result, expectedQuestions, contract) {
   }
   const byId = new Map((result.questions || []).map(item => [item.id, item]));
   const findingIds = new Set(contract.findings.map(item => item.id));
+  const metricDefinitions = contract.metricDefinitions || METRIC_DEFINITIONS;
   for (const expected of expectedQuestions) {
     const item = byId.get(expected.id);
     if (!item || !item.answer || !Array.isArray(item.answer.sections)) {
@@ -317,7 +324,7 @@ function validateAnalysisResult(result, expectedQuestions, contract) {
       }
       if (section.type === 'metrics') {
         for (const metric of section.items || []) {
-          if (!metric.metricId || !METRIC_DEFINITIONS[metric.metricId]) {
+          if (!metric.metricId || !metricDefinitions[metric.metricId]) {
             throw new Error(`report analysis invented metric: ${metric.metricId || metric.label || 'unknown'}`);
           }
         }

@@ -124,6 +124,69 @@ function questionsForReport(reportType, contract) {
   }));
 }
 
+function formatContractValue(value, unit) {
+  if (!Number.isFinite(Number(value))) return 'N/A';
+  if (unit === 'VND') return `${Math.round(Number(value)).toLocaleString('vi-VN')} VND`;
+  if (unit === 'percent') return `${Number(value).toFixed(2)}%`;
+  return Math.round(Number(value)).toLocaleString('vi-VN');
+}
+
+function buildEvidenceAnalysis(input, dataContract, reportType, questions) {
+  const status = dataContract.performanceStatus || { status: 'watch', summary: 'Chưa đủ KPI để kết luận.' };
+  const funnel = dataContract.businessFunnel || [];
+  const funnelText = funnel.length
+    ? funnel.map(item => `${item.label}: ${formatContractValue(item.value, 'count')}`).join(' → ')
+    : 'Chưa có business outcome funnel.';
+  const metricItems = (dataContract.kpiScorecard || []).slice(0, 4).map(kpi => ({
+    metricId: kpi.metric === 'event_count' ? kpi.eventId
+      : kpi.metric === 'media_metric' ? kpi.metricId : kpi.id,
+    label: kpi.label,
+    value: formatContractValue(kpi.actual, kpi.unit),
+    trend: 'stable',
+    delta: kpi.gap === null ? 'N/A' : formatContractValue(kpi.gap, kpi.unit),
+    timeframe: `${dataContract.timeframe?.start}..${dataContract.timeframe?.end}`,
+    source: dataContract.source,
+  }));
+  const actionItems = (dataContract.actions || []).slice(0, 3).map(action => ({
+    priority: action.priority,
+    text: `${action.proposedAction} Guardrail: ${action.guardrail} Đánh giá lại: ${action.nextReviewWindow}.`,
+    actionId: action.id,
+  }));
+  const findingIds = (dataContract.findings || []).map(item => item.id);
+  return {
+    overall: `${status.summary} ${funnelText}`,
+    questions: questions.map(question => ({
+      id: question.id,
+      findingIds: findingIds.filter(id => [
+        'campaign_totals', 'period_comparison', 'business_funnel', 'kpi_scorecard',
+        'performance_status', 'top_zone_ctr', 'lowest_zone_cpm',
+      ].includes(id)),
+      answer: {
+        sections: [
+          {
+            type: 'summary',
+            text: `${status.summary} Với ${input.brand}, dữ liệu cho thấy ${funnelText}`,
+          },
+          ...(metricItems.length ? [{ type: 'metrics', items: metricItems }] : []),
+          {
+            type: 'insight', level: status.status,
+            text: `Mức ${status.status.toUpperCase()} được tính trực tiếp từ KPI trong brief; đây không phải đánh giá tự do của mô hình.`,
+          },
+          ...(actionItems.length ? [{ type: 'recommendation', items: actionItems }] : []),
+          {
+            type: 'limitation',
+            text: 'Chỉ áp dụng action sau khi kiểm tra guardrail trong cửa sổ đánh giá đã nêu.',
+          },
+        ],
+      },
+    })),
+    analysisProvenance: {
+      provider: 'deterministic_fallback', model: 'none',
+      reason: 'model_unavailable_or_invalid', reportType,
+    },
+  };
+}
+
 // ─── OpenAI call helper ──────────────────────────────────────────────────────
 function buildOpenAIRequestBody(model, messages, temperature, maxCompletionTokens) {
   const body = {
@@ -328,25 +391,42 @@ RULES:
 - Each answer should have 2-4 sections
 - Include at least one recommendation per answer`;
 
-  const result = await callOpenAI([
-    { role: 'system', content: 'You are a Vietnamese digital advertising analyst. Output ONLY valid JSON. Be specific, data-driven, and professional.' },
-    { role: 'user', content: prompt },
-  ], { temperature: 0.6, max_completion_tokens: 8000 });
+  let result;
+  try {
+    result = await callOpenAI([
+      { role: 'system', content: 'You are a Vietnamese digital advertising analyst. Output ONLY valid JSON. Be specific, data-driven, and professional.' },
+      { role: 'user', content: prompt },
+    ], { temperature: 0.6, max_completion_tokens: 8000 });
 
-  const fixedStatus = dataContract.performanceStatus?.status || 'watch';
-  const fixedRecommendations = (dataContract.actions || []).map(action => ({
-    priority: action.priority,
-    text: `${action.proposedAction} Guardrail: ${action.guardrail} Đánh giá lại: ${action.nextReviewWindow}.`,
-    actionId: action.id,
-  }));
-  for (const item of result.questions || []) {
-    const sections = item.answer?.sections || [];
-    const insight = sections.find(section => section.type === 'insight');
-    if (insight) insight.level = fixedStatus;
-    const recommendation = sections.find(section => section.type === 'recommendation');
-    if (recommendation && fixedRecommendations.length) recommendation.items = fixedRecommendations.slice(0, 3);
+    const fixedStatus = dataContract.performanceStatus?.status || 'watch';
+    const fixedRecommendations = (dataContract.actions || []).map(action => ({
+      priority: action.priority,
+      text: `${action.proposedAction} Guardrail: ${action.guardrail} Đánh giá lại: ${action.nextReviewWindow}.`,
+      actionId: action.id,
+    }));
+    for (const item of result.questions || []) {
+      const sections = item.answer?.sections || [];
+      let insight = sections.find(section => section.type === 'insight');
+      if (!insight) {
+        insight = { type: 'insight', level: fixedStatus, text: dataContract.performanceStatus?.summary || '' };
+        sections.push(insight);
+      }
+      insight.level = fixedStatus;
+      let recommendation = sections.find(section => section.type === 'recommendation');
+      if (!recommendation && fixedRecommendations.length) {
+        recommendation = { type: 'recommendation', items: [] };
+        sections.push(recommendation);
+      }
+      if (recommendation && fixedRecommendations.length) recommendation.items = fixedRecommendations.slice(0, 3);
+    }
+    validateAnalysisResult(result, questions, dataContract);
+    result.analysisProvenance = { provider: 'openai', model: OPENAI_MODEL, reportType };
+  } catch (error) {
+    if (dataContract.contractVersion !== 'report-evidence-v2') throw error;
+    console.warn(`[reportGen] Report Specialist fallback for ${reportType}: ${error.message}`);
+    result = buildEvidenceAnalysis(input, dataContract, reportType, questions);
+    validateAnalysisResult(result, questions, dataContract);
   }
-  validateAnalysisResult(result, questions, dataContract);
   return { ...result, dataContract };
 }
 
@@ -438,9 +518,11 @@ async function generateReports(campaign) {
             performanceStatus: result.dataContract.performanceStatus,
             actions: result.dataContract.actions,
             provenance: {
-              provider: 'openai', model: OPENAI_MODEL,
+              provider: result.analysisProvenance?.provider || 'openai',
+              model: result.analysisProvenance?.model || OPENAI_MODEL,
               schema: 'report-evidence-v2', source: 'scenario_simulation',
               inputHash: input.inputHash,
+              fallbackReason: result.analysisProvenance?.reason || null,
             },
             generatedAt: new Date(),
             error: '',
@@ -480,5 +562,5 @@ async function getReportStatus(campaignId) {
 module.exports = {
   generateReports, getReportStatus, REPORT_TYPES, QUESTIONS_MAP,
   buildOpenAIRequestBody, generateAnalysis, normalizeGeneratedRecordsToBudget,
-  generateRecords, questionsForReport,
+  generateRecords, questionsForReport, buildEvidenceAnalysis,
 };

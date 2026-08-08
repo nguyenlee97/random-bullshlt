@@ -6,7 +6,7 @@ const fixture = require('./fixtures/voltride-report-v2.json');
 const { normalizeReportInput, buildMeasurementSpec } = require('../lib/reportMeasurement');
 const { simulateReportFacts, validateReportFacts } = require('../lib/reportSyntheticData');
 const { buildReportContract } = require('../lib/reportContract');
-const { questionsForReport } = require('../services/reportGenerator');
+const { questionsForReport, buildEvidenceAnalysis } = require('../services/reportGenerator');
 
 function buildVoltRide() {
   const input = normalizeReportInput(fixture);
@@ -62,6 +62,20 @@ test('conversion questions name the campaign business outcomes instead of generi
   assert.doesNotMatch(text, /Conversion funnel analysis/);
 });
 
+test('evidence fallback returns complete answers and actions instead of question placeholders', () => {
+  const { input, contract } = buildVoltRide();
+  const questions = questionsForReport('conversion', contract);
+  const analysis = buildEvidenceAnalysis(input, contract, 'conversion', questions);
+  assert.equal(analysis.questions.length, questions.length);
+  assert.equal(analysis.analysisProvenance.provider, 'deterministic_fallback');
+  for (const item of analysis.questions) {
+    const sections = item.answer.sections;
+    assert.ok(sections.some(section => section.type === 'summary' && section.text.length > 30));
+    assert.ok(sections.some(section => section.type === 'insight'));
+    assert.ok(sections.some(section => section.type === 'recommendation' && section.items.length));
+  }
+});
+
 test('deposit is not injected into an unrelated purchase campaign', () => {
   const input = normalizeReportInput({
     ...fixture,
@@ -75,6 +89,37 @@ test('deposit is not injected into an unrelated purchase campaign', () => {
   assert.ok(!ids.includes('deposit'));
 });
 
+test('Awareness evaluates Viewability and CPM from the brief', () => {
+  const input = normalizeReportInput({
+    ...fixture, campaignId: 'AWARENESS-V2', objective: 'awareness',
+    kpi: 'Viewability tối thiểu 75%. CPM không vượt quá 55.000 VND.',
+    notes: 'Tăng nhận diện bằng video hoàn tất.',
+  });
+  const measurement = buildMeasurementSpec(input);
+  assert.deepEqual(measurement.kpis.map(item => item.metricId), ['viewability', 'cpm']);
+  const contract = buildReportContract(input, simulateReportFacts(input, measurement), measurement);
+  assert.equal(contract.kpiScorecard.length, 2);
+  assert.ok(contract.kpiScorecard.every(item => Number.isFinite(item.actual)));
+});
+
+test('Consideration evaluates CTR while Retention evaluates its outcome transition', () => {
+  const consideration = normalizeReportInput({
+    ...fixture, campaignId: 'CONSIDERATION-V2', objective: 'consideration',
+    kpi: 'CTR tối thiểu 0,8%. Tối thiểu 5.000 clicks.', notes: 'Tăng product view.',
+  });
+  const considerationSpec = buildMeasurementSpec(consideration);
+  assert.deepEqual(considerationSpec.kpis.map(item => item.metricId), ['ctr', 'clicks']);
+
+  const retention = normalizeReportInput({
+    ...fixture, campaignId: 'RETENTION-V2', objective: 'retention',
+    kpi: 'Tỷ lệ retained 30 ngày tối thiểu 50%.', notes: 'Re-engagement người dùng cũ.',
+  });
+  const retentionSpec = buildMeasurementSpec(retention);
+  assert.equal(retentionSpec.kpis[0].numeratorEvent, 'retained_30d');
+  assert.equal(retentionSpec.kpis[0].denominatorEvent, 're_engagement');
+  assert.equal(retentionSpec.kpis[0].target, 50);
+});
+
 test('legacy report callers retain a 14-day default and evidence v1 compatibility', () => {
   const input = normalizeReportInput({
     campaignId: 'LEGACY', brand: 'Legacy', objective: 'awareness', budget: 10_000_000,
@@ -86,4 +131,29 @@ test('legacy report callers retain a 14-day default and evidence v1 compatibilit
     impressions: 1000, clicks: 10, spend: 40_000, conversions: 1, reach: 700, vi: 80,
   }]);
   assert.equal(legacy.contractVersion, 'report-evidence-v1');
+});
+
+test('legacy missing budget keeps the prior backend default and impossible dates fail closed', () => {
+  const legacy = normalizeReportInput({
+    campaignId: 'LEGACY-DEFAULT', startDate: '2026-08-01', zones: ['z1'],
+  });
+  assert.equal(legacy.budget, 100_000_000);
+  assert.throws(() => normalizeReportInput({
+    campaignId: 'BAD-DATE', startDate: '2026-02-30', zones: ['z1'],
+  }), /invalid report date/);
+});
+
+test('caller-supplied measurement specs fail closed when outcome references are malformed', () => {
+  const input = normalizeReportInput({
+    ...fixture,
+    campaignId: 'INVALID-MEASUREMENT',
+    measurementSpec: {
+      version: 'measurement-spec-v2',
+      optimizationEvent: 'missing',
+      primaryOutcome: 'purchase',
+      outcomeGraph: { events: [{ id: 'purchase' }], transitions: [] },
+      kpis: [],
+    },
+  });
+  assert.throws(() => buildMeasurementSpec(input), /invalid measurement spec/);
 });

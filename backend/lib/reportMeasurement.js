@@ -53,7 +53,8 @@ function stableStringify(value) {
 function dateOnly(value, fallback) {
   const text = String(value || fallback || '').slice(0, 10);
   const parsed = new Date(`${text}T00:00:00.000Z`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(parsed.getTime())) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(parsed.getTime())
+      || parsed.toISOString().slice(0, 10) !== text) {
     throw new Error(`invalid report date: ${value || fallback || 'empty'}`);
   }
   return text;
@@ -100,7 +101,10 @@ function normalizeReportInput(raw = {}) {
   const objective = OBJECTIVES.has(String(raw.objective || brief.objective).toLowerCase())
     ? String(raw.objective || brief.objective).toLowerCase()
     : 'awareness';
-  const budget = Math.max(0, Math.round(Number(raw.budget ?? brief.budget) || 0));
+  const budgetValue = raw.budget ?? brief.budget;
+  const budget = budgetValue === undefined || budgetValue === null || budgetValue === ''
+    ? 100_000_000
+    : Math.max(0, Math.round(Number(budgetValue) || 0));
   const normalized = {
     contractVersion: 'report-input-v2',
     campaignId: String(raw.campaignId || brief.campaignId || 'campaign').trim(),
@@ -211,6 +215,17 @@ function numericTokens(clause) {
   return matches.map(parseNumber).filter(Number.isFinite);
 }
 
+function mediaMetricForClause(clause) {
+  const text = fold(clause);
+  if (/\bviewability\b/.test(text) || text.includes('ty le hien thi')) return { id: 'viewability', label: 'Viewability', unit: 'percent' };
+  if (/\bcpm\b/.test(text)) return { id: 'cpm', label: 'CPM', unit: 'VND' };
+  if (/\bctr\b/.test(text)) return { id: 'ctr', label: 'CTR', unit: 'percent' };
+  if (/\bimpressions?\b/.test(text) || text.includes('luot hien thi')) return { id: 'impressions', label: 'Impressions', unit: 'count' };
+  if (/\bclicks?\b/.test(text) || text.includes('luot nhap')) return { id: 'clicks', label: 'Clicks', unit: 'count' };
+  if (/\breach\b/.test(text) || text.includes('tiep can')) return { id: 'summed_daily_reach', label: 'Daily reach (sum)', unit: 'count' };
+  return null;
+}
+
 function buildKpis(input, ids) {
   const raw = `${input.kpi || ''}\n${input.notes || ''}`;
   const clauses = raw.split(/\n|(?<=[!?])\s+|(?<=\.)\s+(?=[A-ZÀ-Ỹ])/u).map(item => item.trim()).filter(Boolean);
@@ -225,10 +240,20 @@ function buildKpis(input, ids) {
     const isTarget = includesAny(text, ['toi thieu', 'it nhat', 'khong vuot qua', 'khong qua', 'toi da', 'muc tieu', 'target', 'minimum', 'maximum']);
     if (!isCost && !isRate && !isTarget) continue;
     const operator = includesAny(text, ['khong vuot qua', 'khong qua', 'toi da', 'maximum', 'max ']) ? '<=' : '>=';
-    const target = numbers[0];
+    const percentMatch = String(clause).match(/(\d[\d.,]*)\s*%/);
+    const target = isRate && percentMatch ? parseNumber(percentMatch[1]) : numbers[0];
     const windowMatch = text.match(/(?:trong vong|within)\s*(\d+)\s*ngay/);
     const windowDays = windowMatch ? Number(windowMatch[1]) : null;
-    if (isRate) {
+    const mediaMetric = mediaMetricForClause(clause);
+    if (mediaMetric) {
+      results.push({
+        id: `target_${mediaMetric.id}`,
+        label: mediaMetric.label,
+        metric: 'media_metric', metricId: mediaMetric.id,
+        operator, target, unit: mediaMetric.unit, windowDays,
+        source: 'brief', sourceText: clause,
+      });
+    } else if (isRate) {
       const numeratorEvent = eventId;
       const eventIndex = ids.indexOf(numeratorEvent);
       const denominatorEvent = ids[Math.max(0, eventIndex - 1)] || ids[0];
@@ -264,10 +289,28 @@ function buildKpis(input, ids) {
   return [...deduped.values()];
 }
 
+function assertMeasurementSpec(spec) {
+  if (!spec || spec.version !== 'measurement-spec-v2') return;
+  const events = spec.outcomeGraph?.events;
+  if (!Array.isArray(events) || !events.length || !events.every(item => item && typeof item.id === 'string')) {
+    throw new Error('invalid measurement spec: outcomeGraph.events must contain event ids');
+  }
+  const eventIds = new Set(events.map(item => item.id));
+  if (!eventIds.has(spec.optimizationEvent) || !eventIds.has(spec.primaryOutcome)) {
+    throw new Error('invalid measurement spec: optimizationEvent and primaryOutcome must reference outcome events');
+  }
+  if (!Array.isArray(spec.kpis)) {
+    throw new Error('invalid measurement spec: kpis must be an array');
+  }
+}
+
 function buildMeasurementSpec(inputValue) {
   const input = inputValue?.contractVersion === 'report-input-v2'
     ? inputValue : normalizeReportInput(inputValue);
-  if (input.measurementSpec?.version === 'measurement-spec-v2') return input.measurementSpec;
+  if (input.measurementSpec?.version === 'measurement-spec-v2') {
+    assertMeasurementSpec(input.measurementSpec);
+    return input.measurementSpec;
+  }
   const eventIds = inferOutcomeEventIds(input);
   const events = eventIds.map(event);
   const transitions = events.slice(1).map((item, index) => ({
@@ -293,6 +336,7 @@ function buildMeasurementSpec(inputValue) {
       source: 'brief_and_objective_rules',
       deterministic: true,
       inputHash: input.inputHash,
+      outcomeTimeBasis: 'cohort_origin_date',
     },
   };
 }
