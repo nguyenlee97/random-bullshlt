@@ -6,7 +6,9 @@ const fixture = require('./fixtures/voltride-report-v2.json');
 const { normalizeReportInput, buildMeasurementSpec } = require('../lib/reportMeasurement');
 const { simulateReportFacts, validateReportFacts } = require('../lib/reportSyntheticData');
 const { buildReportContract } = require('../lib/reportContract');
-const { questionsForReport, buildEvidenceAnalysis } = require('../services/reportGenerator');
+const {
+  questionsForReport, buildEvidenceAnalysis, groundAnalysisResult,
+} = require('../services/reportGenerator');
 
 function buildVoltRide() {
   const input = normalizeReportInput(fixture);
@@ -74,6 +76,58 @@ test('evidence fallback returns complete answers and actions instead of question
     assert.ok(sections.some(section => section.type === 'insight'));
     assert.ok(sections.some(section => section.type === 'recommendation' && section.items.length));
   }
+});
+
+test('model prose cannot soften a deterministic BAD status or replace contract actions', () => {
+  const { contract } = buildVoltRide();
+  assert.equal(contract.performanceStatus.status, 'bad');
+  const modelResult = {
+    overall: 'Kết luận: Watch vì chi phí chỉ lệch nhẹ.',
+    questions: [{
+      id: 'cv_q1', findingIds: ['kpi_scorecard'],
+      answer: { sections: [
+        { type: 'summary', text: 'Model explanation remains available.' },
+        { type: 'insight', level: 'watch', text: 'Campaign chỉ cần theo dõi.' },
+        { type: 'recommendation', items: [{ priority: 'low', text: 'Tiếp tục như cũ.' }] },
+      ] },
+    }],
+  };
+  const grounded = groundAnalysisResult(modelResult, contract);
+  assert.match(grounded.overall, /BAD/);
+  assert.doesNotMatch(grounded.overall, /Watch/i);
+  const insight = grounded.questions[0].answer.sections.find(item => item.type === 'insight');
+  assert.equal(insight.level, 'bad');
+  assert.match(insight.text, /2 KPI chưa đạt/);
+  const recommendation = grounded.questions[0].answer.sections.find(item => item.type === 'recommendation');
+  assert.equal(recommendation.items[0].actionId, contract.actions[0].id);
+  assert.match(recommendation.items[0].text, /Guardrail:/);
+});
+
+test('near-schema model output with object sections is normalized before grounding', () => {
+  const { contract } = buildVoltRide();
+  const grounded = groundAnalysisResult({
+    overall: 'Watch',
+    questions: {
+      cv_q1: {
+        findingIds: ['kpi_scorecard'],
+        answer: {
+          sections: {
+            summary: 'Phễu cần tối ưu.',
+            metrics: [{ metricId: 'deposit', label: 'Đặt cọc', value: '408' }],
+            insight: { level: 'watch', text: 'Theo dõi thêm.' },
+            recommendation: ['Tiếp tục như cũ.'],
+          },
+        },
+      },
+    },
+  }, contract);
+  assert.ok(Array.isArray(grounded.questions));
+  assert.ok(Array.isArray(grounded.questions[0].answer.sections));
+  assert.equal(grounded.questions[0].answer.sections.find(item => item.type === 'insight').level, 'bad');
+  assert.equal(
+    grounded.questions[0].answer.sections.find(item => item.type === 'recommendation').items[0].actionId,
+    contract.actions[0].id,
+  );
 });
 
 test('deposit is not injected into an unrelated purchase campaign', () => {

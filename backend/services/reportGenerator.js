@@ -187,6 +187,70 @@ function buildEvidenceAnalysis(input, dataContract, reportType, questions) {
   };
 }
 
+function normalizeModelSections(value) {
+  if (Array.isArray(value)) return value.filter(item => item && typeof item === 'object');
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([type, content]) => {
+    if (content && typeof content === 'object' && !Array.isArray(content)) {
+      return [{ type: content.type || type, ...content }];
+    }
+    if (type === 'metrics' && Array.isArray(content)) return [{ type, items: content }];
+    if (type === 'recommendation' && Array.isArray(content)) {
+      return [{
+        type,
+        items: content.map(item => (typeof item === 'string'
+          ? { priority: 'medium', text: item } : item)).filter(Boolean),
+      }];
+    }
+    if (typeof content === 'string') return [{ type, text: content }];
+    return [];
+  });
+}
+
+function groundAnalysisResult(result, dataContract) {
+  const status = dataContract.performanceStatus || {
+    status: 'watch', summary: 'Chưa đủ KPI để kết luận.',
+  };
+  const fixedStatus = status.status;
+  const fixedRecommendations = (dataContract.actions || []).map(action => ({
+    priority: action.priority,
+    text: `${action.proposedAction} Guardrail: ${action.guardrail} Đánh giá lại: ${action.nextReviewWindow}.`,
+    actionId: action.id,
+  }));
+
+  // Status and recommended actions are mechanical evidence outputs. The model
+  // may explain them, but it cannot soften BAD into WATCH or replace actions.
+  result.overall = `Trạng thái tổng thể: ${fixedStatus.toUpperCase()}. ${status.summary}`;
+  if (!Array.isArray(result.questions) && result.questions && typeof result.questions === 'object') {
+    result.questions = Object.entries(result.questions).map(([id, item]) => ({
+      id, ...(item && typeof item === 'object' ? item : {}),
+    }));
+  }
+  if (!Array.isArray(result.questions)) result.questions = [];
+  for (const item of result.questions) {
+    if (!item.answer || typeof item.answer !== 'object') item.answer = {};
+    const sections = normalizeModelSections(item.answer.sections);
+    item.answer.sections = sections;
+    let insight = sections.find(section => section.type === 'insight');
+    if (!insight) {
+      insight = { type: 'insight' };
+      sections.push(insight);
+    }
+    insight.level = fixedStatus;
+    insight.text = `${status.summary} Trạng thái ${fixedStatus.toUpperCase()} được tính trực tiếp từ KPI trong brief.`;
+
+    let recommendation = sections.find(section => section.type === 'recommendation');
+    if (!recommendation && fixedRecommendations.length) {
+      recommendation = { type: 'recommendation', items: [] };
+      sections.push(recommendation);
+    }
+    if (recommendation && fixedRecommendations.length) {
+      recommendation.items = fixedRecommendations.slice(0, 3);
+    }
+  }
+  return result;
+}
+
 // ─── OpenAI call helper ──────────────────────────────────────────────────────
 function buildOpenAIRequestBody(model, messages, temperature, maxCompletionTokens) {
   const body = {
@@ -398,27 +462,7 @@ RULES:
       { role: 'user', content: prompt },
     ], { temperature: 0.6, max_completion_tokens: 8000 });
 
-    const fixedStatus = dataContract.performanceStatus?.status || 'watch';
-    const fixedRecommendations = (dataContract.actions || []).map(action => ({
-      priority: action.priority,
-      text: `${action.proposedAction} Guardrail: ${action.guardrail} Đánh giá lại: ${action.nextReviewWindow}.`,
-      actionId: action.id,
-    }));
-    for (const item of result.questions || []) {
-      const sections = item.answer?.sections || [];
-      let insight = sections.find(section => section.type === 'insight');
-      if (!insight) {
-        insight = { type: 'insight', level: fixedStatus, text: dataContract.performanceStatus?.summary || '' };
-        sections.push(insight);
-      }
-      insight.level = fixedStatus;
-      let recommendation = sections.find(section => section.type === 'recommendation');
-      if (!recommendation && fixedRecommendations.length) {
-        recommendation = { type: 'recommendation', items: [] };
-        sections.push(recommendation);
-      }
-      if (recommendation && fixedRecommendations.length) recommendation.items = fixedRecommendations.slice(0, 3);
-    }
+    groundAnalysisResult(result, dataContract);
     validateAnalysisResult(result, questions, dataContract);
     result.analysisProvenance = { provider: 'openai', model: OPENAI_MODEL, reportType };
   } catch (error) {
@@ -562,5 +606,5 @@ async function getReportStatus(campaignId) {
 module.exports = {
   generateReports, getReportStatus, REPORT_TYPES, QUESTIONS_MAP,
   buildOpenAIRequestBody, generateAnalysis, normalizeGeneratedRecordsToBudget,
-  generateRecords, questionsForReport, buildEvidenceAnalysis,
+  generateRecords, questionsForReport, buildEvidenceAnalysis, groundAnalysisResult,
 };
