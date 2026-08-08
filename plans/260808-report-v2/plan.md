@@ -1,11 +1,16 @@
-# Advertising Report v2 Implementation
-
 ---
+title: Advertising Report v2 Implementation
 date: 2026-08-08
 status: in-progress
+priority: high
+effort: 6 iterations
+tags: [report, advertising-agent, simulation, evidence]
+created: 2026-08-08
 branch: feat/report-outcome-simulator
 base: origin/revamp/next-hackathon@a8c97db
 ---
+
+# Advertising Report v2 Implementation
 
 ## Overview
 
@@ -53,11 +58,12 @@ Upgrade the existing report workflow without changing audience, creative, placem
 
 ## Phases
 
-1. [in-progress] Contract and deterministic simulator.
-2. [pending] Evidence v2, KPI evaluation, and actions.
-3. [pending] Report Specialist and persistence compatibility.
-4. [pending] Agent payload and ReportStep presentation.
-5. [pending] Fixture harness, regression tests, and six optimization loops.
+1. [completed] Contract and deterministic simulator.
+2. [completed] Evidence v2, KPI evaluation, and actions.
+3. [completed] Report Specialist and persistence compatibility.
+4. [completed] Agent payload and ReportStep presentation.
+5. [completed] Fixture harness, regression tests, and six optimization loops.
+6. [in-progress] Verify the GPT-5.4-mini path in an environment that supplies `OPENAI_API_KEY`.
 
 ## Success Criteria
 
@@ -65,3 +71,11 @@ Upgrade the existing report workflow without changing audience, creative, placem
 - VoltRide fixture reaches a reproducible evidence contract with business funnel, KPI statuses, and actionable recommendations.
 - Targeted and affected regression suites pass with no new build errors.
 
+## Current Verification State
+
+- Requirement score improved across six kept iterations: `0 → 30 → 60 → 90 → 90 → 90 → 100`.
+- Backend: 66/66 tests pass.
+- Agent report QA/media: 17/17 tests pass.
+- Frontend: production build and report-module integration test pass.
+- VoltRide fast preview completes with deterministic evidence and full answers/actions.
+- Local model verification is pending because `OPENAI_API_KEY` is not present; provenance correctly reports `deterministic_fallback` rather than claiming an OpenAI result.
