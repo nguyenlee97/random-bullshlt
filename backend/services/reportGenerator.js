@@ -207,6 +207,71 @@ function normalizeModelSections(value) {
   });
 }
 
+function canonicalMetricItem(item, question, dataContract) {
+  const metricId = item?.metricId;
+  const definition = dataContract.metricDefinitions?.[metricId];
+  if (!metricId || !definition) return null;
+  const kpis = dataContract.kpiScorecard || [];
+  const kpi = kpis.find(candidate => (
+    candidate.id === metricId || candidate.metricId === metricId
+    || candidate.eventId === metricId || candidate.numeratorEvent === metricId
+  ));
+  const funnel = (dataContract.businessFunnel || []).find(candidate => candidate.eventId === metricId);
+  const findingIds = new Set(question.findingIds || []);
+  const zoneFinding = findingIds.has('top_zone_ctr')
+    ? dataContract.findings?.find(candidate => candidate.id === 'top_zone_ctr') : null;
+  const outcomeZoneFinding = findingIds.has('outcome_zone_efficiency')
+    ? dataContract.findings?.find(candidate => candidate.id === 'outcome_zone_efficiency') : null;
+  const outcomeZones = outcomeZoneFinding?.metrics?.zones || [];
+  const formulaEventId = String(definition.formula || '').match(/outcomes\.([a-z0-9_]+)/i)?.[1];
+  let referencedZone = outcomeZones.find(zone => (
+    item.scopeId === zone.zoneId || String(item.label || '').includes(zone.zoneId)
+  ));
+  if (!referencedZone && /zone/i.test(String(item.label || ''))) {
+    if (outcomeZones.some(zone => Number.isFinite(Number(zone.outcomes?.[metricId])))) {
+      referencedZone = [...outcomeZones].sort((a, b) => (
+        Number(b.outcomes?.[metricId] || 0) - Number(a.outcomes?.[metricId] || 0)
+      ))[0];
+    } else if (formulaEventId) {
+      referencedZone = [...outcomeZones].filter(zone => (
+        Number.isFinite(Number(zone.costPerOutcome?.[formulaEventId]))
+      )).sort((a, b) => (
+        Number(a.costPerOutcome[formulaEventId]) - Number(b.costPerOutcome[formulaEventId])
+      ))[0];
+    }
+  }
+  const totals = dataContract.findings?.find(candidate => candidate.id === 'campaign_totals')?.metrics || {};
+  let actual = kpi?.actual;
+  if (funnel) actual = funnel.value;
+  if (referencedZone && Number.isFinite(Number(referencedZone.outcomes?.[metricId]))) {
+    actual = referencedZone.outcomes[metricId];
+  } else if (referencedZone) {
+    if (formulaEventId && Number.isFinite(Number(referencedZone.costPerOutcome?.[formulaEventId]))) {
+      actual = referencedZone.costPerOutcome[formulaEventId];
+    }
+  } else if (zoneFinding?.metrics && Number.isFinite(Number(zoneFinding.metrics[metricId]))) {
+    actual = zoneFinding.metrics[metricId];
+  } else if (!Number.isFinite(Number(actual)) && Number.isFinite(Number(totals[metricId]))) {
+    actual = totals[metricId];
+  }
+  if (!Number.isFinite(Number(actual))) return null;
+  const groundedGap = referencedZone && kpi
+    ? Number(actual) - Number(kpi.target)
+    : kpi?.gap;
+  const delta = kpi && Number.isFinite(Number(groundedGap))
+    ? `${formatContractValue(groundedGap, kpi.unit)} so với mục tiêu`
+    : 'N/A';
+  return {
+    metricId,
+    label: referencedZone ? `${definition.label} · ${referencedZone.zoneId}` : definition.label,
+    value: formatContractValue(actual, definition.unit),
+    trend: 'stable',
+    delta,
+    timeframe: `${dataContract.timeframe?.start}..${dataContract.timeframe?.end}`,
+    source: dataContract.source,
+  };
+}
+
 function groundAnalysisResult(result, dataContract) {
   const status = dataContract.performanceStatus || {
     status: 'watch', summary: 'Chưa đủ KPI để kết luận.',
@@ -231,6 +296,12 @@ function groundAnalysisResult(result, dataContract) {
     if (!item.answer || typeof item.answer !== 'object') item.answer = {};
     const sections = normalizeModelSections(item.answer.sections);
     item.answer.sections = sections;
+    for (const section of sections.filter(candidate => candidate.type === 'metrics')) {
+      section.items = (Array.isArray(section.items) ? section.items : [])
+        .map(metric => canonicalMetricItem(metric, item, dataContract))
+        .filter(Boolean)
+        .slice(0, 4);
+    }
     let insight = sections.find(section => section.type === 'insight');
     if (!insight) {
       insight = { type: 'insight' };

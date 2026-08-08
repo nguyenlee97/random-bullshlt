@@ -163,6 +163,14 @@ function buildActions(kpiScorecard, measurementSpec, zones) {
   for (const kpi of kpiScorecard.filter(item => item.status !== 'good')) {
     const eventId = kpi.eventId || kpi.numeratorEvent;
     const eventLabel = eventById.get(eventId)?.label || eventId || kpi.label;
+    const bestEventZone = eventId
+      ? zones.filter(item => Number(item.outcomes?.[eventId]) > 0)
+        .sort((a, b) => (
+          a.spend / a.outcomes[eventId] - b.spend / b.outcomes[eventId]
+          || b.outcomes[eventId] - a.outcomes[eventId]
+        ))[0]
+      : null;
+    const decisionZone = bestEventZone || topZone;
     let proposedAction;
     let expectedMovement;
     let guardrail;
@@ -175,13 +183,13 @@ function buildActions(kpiScorecard, measurementSpec, zones) {
       expectedMovement = `Tăng ${kpi.label} từ ${kpi.actual ?? 'N/A'}% về phía mục tiêu ${kpi.target}%.`;
       guardrail = 'Không đánh đổi chất lượng lead; theo dõi tỷ lệ hủy và trùng lead theo cohort.';
     } else if (kpi.metric === 'cost_per_event') {
-      proposedAction = `Giữ ngân sách ở nhóm/zone tạo ${eventLabel} hiệu quả và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout.`;
+      proposedAction = `Giữ ngân sách ở ${decisionZone?.zoneId || 'nhóm/zone'} khi cost/${eventLabel} tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout.`;
       expectedMovement = `Đưa ${kpi.label} từ ${kpi.actual ?? 'N/A'} VND về không quá ${kpi.target} VND.`;
       guardrail = 'Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá.';
     } else {
-      proposedAction = `Ưu tiên thử nghiệm creative–audience tại ${topZone?.zoneId || 'zone đang dẫn đầu'} và xử lý điểm rơi funnel trước khi scale.`;
+      proposedAction = `Ưu tiên thử nghiệm creative–audience tại ${decisionZone?.zoneId || 'zone đang dẫn đầu cost/outcome'} và xử lý điểm rơi funnel trước khi scale.`;
       expectedMovement = `Thu hẹp khoảng cách ${Math.abs(Number(kpi.gap) || 0)} cho ${kpi.label}.`;
-      guardrail = 'Chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi.';
+      guardrail = 'Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi.';
     }
     actions.push({
       id: `action_${kpi.id}`,
@@ -189,7 +197,10 @@ function buildActions(kpiScorecard, measurementSpec, zones) {
       status: kpi.status,
       objective: measurementSpec.objective,
       problem: `${kpi.label}: thực tế ${kpi.actual ?? 'N/A'} ${kpi.unit}, mục tiêu ${kpi.operator} ${kpi.target} ${kpi.unit}.`,
-      evidenceIds: ['kpi_scorecard', 'business_funnel', ...(topZone ? ['top_zone_ctr'] : [])],
+      evidenceIds: [
+        'kpi_scorecard', 'business_funnel',
+        ...(bestEventZone ? ['outcome_zone_efficiency'] : topZone ? ['top_zone_ctr'] : []),
+      ],
       affectedScope: eventId || 'campaign',
       proposedAction,
       expectedMovement,
@@ -267,6 +278,18 @@ function buildReportContractV2(campaign, records, measurementSpec) {
     finding('business_funnel', 'campaign', { events: funnel }, 'Ordered business outcomes defined by the approved measurement specification.'),
     finding('kpi_scorecard', 'campaign', { kpis: kpiScorecard }, 'Mechanical comparison of observed values with brief targets.'),
     finding('performance_status', 'campaign', performanceStatus, 'Worst material KPI state determines report attention level.'),
+    finding('outcome_zone_efficiency', 'campaign', {
+      zones: zones.map(item => ({
+        zoneId: item.zoneId,
+        spend: item.spend,
+        outcomes: item.outcomes,
+        costPerOutcome: Object.fromEntries(
+          Object.entries(item.outcomes || {}).map(([eventId, value]) => [
+            eventId, value > 0 ? round(item.spend / value, 0) : null,
+          ])
+        ),
+      })),
+    }, 'Zone comparison uses business outcome volume and cost, not CTR alone.'),
   ];
   if (bestCtr) findings.push(finding('top_zone_ctr', bestCtr.zoneId, bestCtr, 'Highest observed CTR among zones with delivery.', 'medium'));
   if (bestCpm) findings.push(finding('lowest_zone_cpm', bestCpm.zoneId, bestCpm, 'Lowest observed CPM among zones with delivery.', 'medium'));

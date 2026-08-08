@@ -128,6 +128,54 @@ test('near-schema model output with object sections is normalized before groundi
     grounded.questions[0].answer.sections.find(item => item.type === 'recommendation').items[0].actionId,
     contract.actions[0].id,
   );
+  const metric = grounded.questions[0].answer.sections.find(item => item.type === 'metrics').items[0];
+  assert.equal(metric.value, '408');
+  assert.equal(metric.label, 'Đặt cọc');
+});
+
+test('business outcome actions choose cost-per-outcome evidence instead of CTR alone', () => {
+  const input = normalizeReportInput({
+    campaignId: 'OUTCOME-ZONE', brand: 'Outcome', objective: 'conversion',
+    budget: 10_000_000, startDate: '2026-08-01', endDate: '2026-08-01',
+    zones: [{ id: 'high_ctr' }, { id: 'efficient_outcome' }],
+  });
+  const measurement = {
+    version: 'measurement-spec-v2', objective: 'conversion',
+    optimizationEvent: 'lead', primaryOutcome: 'lead',
+    outcomeGraph: { events: [{ id: 'lead', label: 'Lead', baseRate: 0.03 }], transitions: [] },
+    kpis: [{
+      id: 'count_lead', label: 'Lead', metric: 'event_count', eventId: 'lead',
+      operator: '>=', target: 100, unit: 'count', source: 'brief',
+    }],
+    assumptions: {},
+  };
+  const rows = [
+    { campaignId: input.campaignId, placementId: 'high_ctr', date: input.startDate,
+      impressions: 1000, clicks: 100, spend: 1_000_000, conversions: 10, reach: 700, vi: 80,
+      outcomes: { lead: 10 } },
+    { campaignId: input.campaignId, placementId: 'efficient_outcome', date: input.startDate,
+      impressions: 1000, clicks: 20, spend: 500_000, conversions: 20, reach: 700, vi: 80,
+      outcomes: { lead: 20 } },
+  ];
+  const contract = buildReportContract(input, rows, measurement);
+  assert.match(contract.actions[0].proposedAction, /efficient_outcome/);
+  assert.ok(contract.actions[0].evidenceIds.includes('outcome_zone_efficiency'));
+  assert.ok(contract.findings.some(item => item.id === 'outcome_zone_efficiency'));
+
+  const grounded = groundAnalysisResult({
+    overall: 'Bad',
+    questions: [{
+      id: 'cv_q3', findingIds: ['outcome_zone_efficiency'],
+      answer: { sections: [{
+        type: 'metrics', items: [
+          { metricId: 'lead', label: 'Lead tại zone', value: '999999' },
+        ],
+      }] },
+    }],
+  }, contract);
+  const metric = grounded.questions[0].answer.sections[0].items[0];
+  assert.equal(metric.label, 'Lead · efficient_outcome');
+  assert.equal(metric.value, '20');
 });
 
 test('deposit is not injected into an unrelated purchase campaign', () => {
