@@ -186,9 +186,9 @@ function eventForClause(clause, ids) {
   const rules = [
     ['qualified_test_ride', ['dang ky lai thu du dieu kien', 'du dieu kien']],
     ['attended_test_ride', ['khach den lai thu', 'den lai thu', 'attend']],
-    ['test_ride_registration', ['dang ky lai thu', 'lai thu']],
     ['deposit', ['dat coc', 'deposit']],
     ['purchase', ['mua xe', 'don hang', 'purchase', 'purchased']],
+    ['test_ride_registration', ['dang ky lai thu', 'lai thu']],
     ['qualified_lead', ['qualified lead', 'lead du dieu kien']],
     ['sales_accepted_lead', ['sales accepted']],
     ['lead', ['lead', 'dang ky form']],
@@ -207,7 +207,7 @@ function eventForClause(clause, ids) {
 }
 
 function numericTokens(clause) {
-  const matches = String(clause).match(/\d[\d.,]*(?:\s*(?:triệu|trieu|million|nghìn|nghin|ngàn|ngan|thousand|k))?/gi) || [];
+  const matches = String(clause).match(/\d[\d.,]*(?:(?:\s*(?:triệu|trieu|million|nghìn|nghin|ngàn|ngan|thousand)\b)|(?:\s*[kK](?=\s|$|[.,])))?/gi) || [];
   return matches.map(parseNumber).filter(Number.isFinite);
 }
 

@@ -966,10 +966,10 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
           rel="noreferrer"
           download={`report-${campaignId}.pdf`}
           className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-brand-700"
-          aria-label="Tải PDF báo cáo đầy đủ"
+          aria-label="Tải PDF đầy đủ gồm 6 báo cáo tương thích"
         >
           <FileText className="h-3.5 w-3.5" />
-          Tải PDF báo cáo đầy đủ
+          Tải PDF đầy đủ (6 báo cáo)
           <Download className="h-3.5 w-3.5" />
         </a>
       </div>
