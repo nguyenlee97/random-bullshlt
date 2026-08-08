@@ -15,8 +15,12 @@ const analyticsSchema = new mongoose.Schema(
     cpm:         { type: Number, default: 0 },   // VND per 1000
     reach:       { type: Number, default: 0 },   // unique users (estimated)
     conversions: { type: Number, default: 0 },
+    outcomes:    { type: mongoose.Schema.Types.Mixed, default: {} },
     // Viewability
     vi:          { type: Number, default: 0 },   // viewable impression %
+    scenario:    { type: mongoose.Schema.Types.Mixed, default: null },
+    source:      { type: String, default: '' },
+    inputHash:   { type: String, default: '', index: true },
   },
   {
     collection: 'analytics_records',
@@ -27,5 +31,6 @@ const analyticsSchema = new mongoose.Schema(
 // Compound index for efficient date-range queries
 analyticsSchema.index({ campaignId: 1, date: 1 });
 analyticsSchema.index({ placementId: 1, date: 1 });
+analyticsSchema.index({ campaignId: 1, inputHash: 1 });
 
 module.exports = mongoose.model('AnalyticsRecord', analyticsSchema);

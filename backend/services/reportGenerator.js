@@ -433,6 +433,10 @@ async function generateReports(campaign) {
             overall: result.overall || '',
             questions,
             dataContract: result.dataContract,
+            inputHash: input.inputHash,
+            schemaVersion: result.dataContract.contractVersion,
+            performanceStatus: result.dataContract.performanceStatus,
+            actions: result.dataContract.actions,
             provenance: {
               provider: 'openai', model: OPENAI_MODEL,
               schema: 'report-evidence-v2', source: 'scenario_simulation',
