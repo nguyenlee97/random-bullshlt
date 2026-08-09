@@ -169,13 +169,21 @@ async def handle_report_entry(
             {'id': 'znews_article_mrec',    'channel': 'Znews',   'format': 'mrec',          'cpm': 25000},
         ]
 
-    # Trigger report generation via Node.js backend
+    # Trigger report generation via Node.js backend. Report v2 receives the
+    # complete measurement context while legacy callers remain supported.
+    strategy = artifact_value("strategy")
+    forecast = artifact_value("forecast")
+    targeting = artifact_value("targeting") or segment.get("targeting", {})
+    creative = artifact_value("creative")
     generate_payload = {
         "campaignId": campaign_id,
         "brand": brand,
         "objective": objective,
         "budget": budget * 1_000_000,  # Convert from M VND to VND
         "startDate": start_date,
+        "endDate": brief.get("endDate"),
+        "kpi": brief.get("kpi", ""),
+        "notes": brief.get("notes", ""),
         "zones": zones,
         "audience": [
             {
@@ -184,6 +192,21 @@ async def handle_report_entry(
             }
             for a in segment.get("attrs", [])[:5]
         ],
+        "geo": targeting.get("geo", []) if isinstance(targeting, dict) else [],
+        "strategy": strategy,
+        "forecast": forecast,
+        "targeting": targeting,
+        "creative": {
+            "files": [
+                {
+                    "id": item.get("id") or item.get("_id"),
+                    "name": item.get("name"),
+                    "formatId": item.get("formatId"),
+                    "intendedFormat": item.get("intendedFormat"),
+                }
+                for item in creative.get("files", [])[:20]
+            ]
+        } if isinstance(creative, dict) else None,
     }
 
     try:

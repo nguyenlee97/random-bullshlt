@@ -1,0 +1,3638 @@
+{
+  "generatedAt": "2026-08-08T10:01:21.939Z",
+  "methodology": {
+    "facts": "Report v2 deterministic scenario facts",
+    "analysis": "Production Agent GPT-5.4-mini, grounded and validated locally",
+    "statusOwner": "Evidence contract",
+    "actionOwner": "Evidence contract"
+  },
+  "reports": [
+    {
+      "input": {
+        "campaignId": "VOLTRIDE-REPORT-V2",
+        "brand": "VoltRide",
+        "objective": "conversion",
+        "budget": 450000000,
+        "startDate": "2026-08-20",
+        "endDate": "2026-09-23",
+        "durationDays": 35,
+        "geo": [
+          "TP.HCM",
+          "Hà Nội",
+          "Đà Nẵng"
+        ],
+        "briefAssumptions": []
+      },
+      "measurementSpec": {
+        "version": "measurement-spec-v2",
+        "objective": "conversion",
+        "optimizationEvent": "test_ride_registration",
+        "primaryOutcome": "purchase",
+        "outcomeGraph": {
+          "events": [
+            {
+              "id": "test_ride_registration",
+              "label": "Đăng ký lái thử",
+              "stage": "lead",
+              "baseRate": 0.032
+            },
+            {
+              "id": "qualified_test_ride",
+              "label": "Đăng ký lái thử đủ điều kiện",
+              "stage": "qualified_lead",
+              "baseRate": 0.86
+            },
+            {
+              "id": "attended_test_ride",
+              "label": "Khách đến lái thử",
+              "stage": "offline_action",
+              "baseRate": 0.68
+            },
+            {
+              "id": "deposit",
+              "label": "Đặt cọc",
+              "stage": "deposit",
+              "baseRate": 0.23
+            },
+            {
+              "id": "purchase",
+              "label": "Purchase",
+              "stage": "purchase",
+              "baseRate": 0.7
+            }
+          ],
+          "transitions": [
+            {
+              "from": "test_ride_registration",
+              "to": "qualified_test_ride",
+              "expectedRate": 0.86
+            },
+            {
+              "from": "qualified_test_ride",
+              "to": "attended_test_ride",
+              "expectedRate": 0.68
+            },
+            {
+              "from": "attended_test_ride",
+              "to": "deposit",
+              "expectedRate": 0.23
+            },
+            {
+              "from": "deposit",
+              "to": "purchase",
+              "expectedRate": 0.7
+            }
+          ]
+        },
+        "kpis": [
+          {
+            "id": "count_qualified_test_ride",
+            "label": "Đăng ký lái thử đủ điều kiện",
+            "metric": "event_count",
+            "eventId": "qualified_test_ride",
+            "operator": ">=",
+            "target": 3000,
+            "unit": "count",
+            "windowDays": null,
+            "source": "brief",
+            "sourceText": "Tối thiểu 3.000 lượt đăng ký lái thử đủ điều kiện."
+          },
+          {
+            "id": "cost_per_qualified_test_ride",
+            "label": "Chi phí / Đăng ký lái thử đủ điều kiện",
+            "metric": "cost_per_event",
+            "eventId": "qualified_test_ride",
+            "operator": "<=",
+            "target": 150000,
+            "unit": "VND",
+            "windowDays": null,
+            "source": "brief",
+            "sourceText": "CPL đăng ký lái thử không vượt quá 150.000 VND."
+          },
+          {
+            "id": "rate_attended_test_ride",
+            "label": "Tỷ lệ Khách đến lái thử",
+            "metric": "event_rate",
+            "numeratorEvent": "attended_test_ride",
+            "denominatorEvent": "qualified_test_ride",
+            "operator": ">=",
+            "target": 70,
+            "unit": "percent",
+            "windowDays": null,
+            "source": "brief",
+            "sourceText": "Tỷ lệ khách đến lái thử đạt tối thiểu 70%."
+          },
+          {
+            "id": "count_deposit",
+            "label": "Đặt cọc",
+            "metric": "event_count",
+            "eventId": "deposit",
+            "operator": ">=",
+            "target": 525,
+            "unit": "count",
+            "windowDays": 14,
+            "source": "brief",
+            "sourceText": "Tối thiểu 525 khách đặt cọc trong vòng 14 ngày sau khi lái thử."
+          },
+          {
+            "id": "cost_per_deposit",
+            "label": "Chi phí / Đặt cọc",
+            "metric": "cost_per_event",
+            "eventId": "deposit",
+            "operator": "<=",
+            "target": 900000,
+            "unit": "VND",
+            "windowDays": null,
+            "source": "brief",
+            "sourceText": "Chi phí trên mỗi lượt đặt cọc không vượt quá 900.000 VND."
+          }
+        ],
+        "dimensions": [
+          "date",
+          "placementId",
+          "channel",
+          "format"
+        ],
+        "attribution": {
+          "clickWindowDays": 7,
+          "viewWindowDays": 1,
+          "maxOutcomeLagDays": 14
+        },
+        "assumptions": {
+          "source": "brief_and_objective_rules",
+          "deterministic": true,
+          "inputHash": "205d8b341c1bb803a800f5f84fbee38905b9d8b9b2b6a6361cc96f3dac09cdc6",
+          "outcomeTimeBasis": "cohort_origin_date"
+        }
+      },
+      "contract": {
+        "contractVersion": "report-evidence-v2",
+        "source": "scenario_simulation",
+        "campaignId": "VOLTRIDE-REPORT-V2",
+        "inputHash": "205d8b341c1bb803a800f5f84fbee38905b9d8b9b2b6a6361cc96f3dac09cdc6",
+        "objective": "conversion",
+        "timeframe": {
+          "start": "2026-08-20",
+          "end": "2026-09-23"
+        },
+        "measurementSpec": {
+          "version": "measurement-spec-v2",
+          "objective": "conversion",
+          "optimizationEvent": "test_ride_registration",
+          "primaryOutcome": "purchase",
+          "outcomeGraph": {
+            "events": [
+              {
+                "id": "test_ride_registration",
+                "label": "Đăng ký lái thử",
+                "stage": "lead",
+                "baseRate": 0.032
+              },
+              {
+                "id": "qualified_test_ride",
+                "label": "Đăng ký lái thử đủ điều kiện",
+                "stage": "qualified_lead",
+                "baseRate": 0.86
+              },
+              {
+                "id": "attended_test_ride",
+                "label": "Khách đến lái thử",
+                "stage": "offline_action",
+                "baseRate": 0.68
+              },
+              {
+                "id": "deposit",
+                "label": "Đặt cọc",
+                "stage": "deposit",
+                "baseRate": 0.23
+              },
+              {
+                "id": "purchase",
+                "label": "Purchase",
+                "stage": "purchase",
+                "baseRate": 0.7
+              }
+            ],
+            "transitions": [
+              {
+                "from": "test_ride_registration",
+                "to": "qualified_test_ride",
+                "expectedRate": 0.86
+              },
+              {
+                "from": "qualified_test_ride",
+                "to": "attended_test_ride",
+                "expectedRate": 0.68
+              },
+              {
+                "from": "attended_test_ride",
+                "to": "deposit",
+                "expectedRate": 0.23
+              },
+              {
+                "from": "deposit",
+                "to": "purchase",
+                "expectedRate": 0.7
+              }
+            ]
+          },
+          "kpis": [
+            {
+              "id": "count_qualified_test_ride",
+              "label": "Đăng ký lái thử đủ điều kiện",
+              "metric": "event_count",
+              "eventId": "qualified_test_ride",
+              "operator": ">=",
+              "target": 3000,
+              "unit": "count",
+              "windowDays": null,
+              "source": "brief",
+              "sourceText": "Tối thiểu 3.000 lượt đăng ký lái thử đủ điều kiện."
+            },
+            {
+              "id": "cost_per_qualified_test_ride",
+              "label": "Chi phí / Đăng ký lái thử đủ điều kiện",
+              "metric": "cost_per_event",
+              "eventId": "qualified_test_ride",
+              "operator": "<=",
+              "target": 150000,
+              "unit": "VND",
+              "windowDays": null,
+              "source": "brief",
+              "sourceText": "CPL đăng ký lái thử không vượt quá 150.000 VND."
+            },
+            {
+              "id": "rate_attended_test_ride",
+              "label": "Tỷ lệ Khách đến lái thử",
+              "metric": "event_rate",
+              "numeratorEvent": "attended_test_ride",
+              "denominatorEvent": "qualified_test_ride",
+              "operator": ">=",
+              "target": 70,
+              "unit": "percent",
+              "windowDays": null,
+              "source": "brief",
+              "sourceText": "Tỷ lệ khách đến lái thử đạt tối thiểu 70%."
+            },
+            {
+              "id": "count_deposit",
+              "label": "Đặt cọc",
+              "metric": "event_count",
+              "eventId": "deposit",
+              "operator": ">=",
+              "target": 525,
+              "unit": "count",
+              "windowDays": 14,
+              "source": "brief",
+              "sourceText": "Tối thiểu 525 khách đặt cọc trong vòng 14 ngày sau khi lái thử."
+            },
+            {
+              "id": "cost_per_deposit",
+              "label": "Chi phí / Đặt cọc",
+              "metric": "cost_per_event",
+              "eventId": "deposit",
+              "operator": "<=",
+              "target": 900000,
+              "unit": "VND",
+              "windowDays": null,
+              "source": "brief",
+              "sourceText": "Chi phí trên mỗi lượt đặt cọc không vượt quá 900.000 VND."
+            }
+          ],
+          "dimensions": [
+            "date",
+            "placementId",
+            "channel",
+            "format"
+          ],
+          "attribution": {
+            "clickWindowDays": 7,
+            "viewWindowDays": 1,
+            "maxOutcomeLagDays": 14
+          },
+          "assumptions": {
+            "source": "brief_and_objective_rules",
+            "deterministic": true,
+            "inputHash": "205d8b341c1bb803a800f5f84fbee38905b9d8b9b2b6a6361cc96f3dac09cdc6",
+            "outcomeTimeBasis": "cohort_origin_date"
+          }
+        },
+        "metricDefinitions": {
+          "impressions": {
+            "label": "Impressions",
+            "unit": "count",
+            "formula": "sum(impressions)"
+          },
+          "clicks": {
+            "label": "Clicks",
+            "unit": "count",
+            "formula": "sum(clicks)"
+          },
+          "spend": {
+            "label": "Spend",
+            "unit": "VND",
+            "formula": "sum(spend)"
+          },
+          "conversions": {
+            "label": "Conversions",
+            "unit": "count",
+            "formula": "sum(conversions)"
+          },
+          "ctr": {
+            "label": "CTR",
+            "unit": "percent",
+            "formula": "clicks / impressions * 100"
+          },
+          "cpm": {
+            "label": "CPM",
+            "unit": "VND",
+            "formula": "spend / impressions * 1000"
+          },
+          "cpa": {
+            "label": "CPA",
+            "unit": "VND",
+            "formula": "spend / conversions"
+          },
+          "click_conversion_rate": {
+            "label": "Click conversion rate",
+            "unit": "percent",
+            "formula": "conversions / clicks * 100"
+          },
+          "viewability": {
+            "label": "Viewability",
+            "unit": "percent",
+            "formula": "impression-weighted mean(vi)"
+          },
+          "summed_daily_reach": {
+            "label": "Summed daily reach estimate",
+            "unit": "count",
+            "formula": "sum(daily reach)",
+            "limitation": "Not deduplicated across dates; never present as campaign unique reach."
+          },
+          "test_ride_registration": {
+            "label": "Đăng ký lái thử",
+            "unit": "count",
+            "formula": "sum(outcomes.test_ride_registration)"
+          },
+          "qualified_test_ride": {
+            "label": "Đăng ký lái thử đủ điều kiện",
+            "unit": "count",
+            "formula": "sum(outcomes.qualified_test_ride)"
+          },
+          "attended_test_ride": {
+            "label": "Khách đến lái thử",
+            "unit": "count",
+            "formula": "sum(outcomes.attended_test_ride)"
+          },
+          "deposit": {
+            "label": "Đặt cọc",
+            "unit": "count",
+            "formula": "sum(outcomes.deposit)"
+          },
+          "purchase": {
+            "label": "Purchase",
+            "unit": "count",
+            "formula": "sum(outcomes.purchase)"
+          },
+          "cost_per_qualified_test_ride": {
+            "label": "Chi phí / Đăng ký lái thử đủ điều kiện",
+            "unit": "VND",
+            "formula": "spend / outcomes.qualified_test_ride"
+          },
+          "rate_attended_test_ride": {
+            "label": "Tỷ lệ Khách đến lái thử",
+            "unit": "percent",
+            "formula": "outcomes.attended_test_ride / outcomes.qualified_test_ride * 100"
+          },
+          "cost_per_deposit": {
+            "label": "Chi phí / Đặt cọc",
+            "unit": "VND",
+            "formula": "spend / outcomes.deposit"
+          }
+        },
+        "findings": [
+          {
+            "id": "campaign_totals",
+            "scope": "campaign",
+            "metrics": {
+              "impressions": 7138070,
+              "clicks": 88932,
+              "spend": 382500000,
+              "conversions": 2853,
+              "ctr": 1.246,
+              "cpm": 53585.913,
+              "cpa": 134069,
+              "click_conversion_rate": 3.208,
+              "viewability": 78.343,
+              "summed_daily_reach": 5311061,
+              "outcomes": {
+                "test_ride_registration": 2853,
+                "qualified_test_ride": 2475,
+                "attended_test_ride": 1708,
+                "deposit": 408,
+                "purchase": 289
+              }
+            },
+            "interpretation": "Computed campaign totals for the complete report timeframe.",
+            "confidence": "high"
+          },
+          {
+            "id": "period_comparison",
+            "scope": "campaign",
+            "metrics": {
+              "first_period": {
+                "impressions": 3603874,
+                "clicks": 46339,
+                "spend": 192546219,
+                "conversions": 1483,
+                "ctr": 1.286,
+                "cpm": 53427.567,
+                "cpa": 129836,
+                "click_conversion_rate": 3.2,
+                "viewability": 78.648,
+                "summed_daily_reach": 2681452,
+                "outcomes": {
+                  "test_ride_registration": 1483,
+                  "qualified_test_ride": 1308,
+                  "attended_test_ride": 913,
+                  "deposit": 222,
+                  "purchase": 159
+                }
+              },
+              "second_period": {
+                "impressions": 3534196,
+                "clicks": 42593,
+                "spend": 189953781,
+                "conversions": 1370,
+                "ctr": 1.205,
+                "cpm": 53747.382,
+                "cpa": 138652,
+                "click_conversion_rate": 3.216,
+                "viewability": 78.033,
+                "summed_daily_reach": 2629609,
+                "outcomes": {
+                  "test_ride_registration": 1370,
+                  "qualified_test_ride": 1167,
+                  "attended_test_ride": 795,
+                  "deposit": 186,
+                  "purchase": 130
+                }
+              }
+            },
+            "interpretation": "First-half and second-half comparison; no causal claim.",
+            "confidence": "high"
+          },
+          {
+            "id": "business_funnel",
+            "scope": "campaign",
+            "metrics": {
+              "events": [
+                {
+                  "eventId": "test_ride_registration",
+                  "label": "Đăng ký lái thử",
+                  "value": 2853
+                },
+                {
+                  "eventId": "qualified_test_ride",
+                  "label": "Đăng ký lái thử đủ điều kiện",
+                  "value": 2475
+                },
+                {
+                  "eventId": "attended_test_ride",
+                  "label": "Khách đến lái thử",
+                  "value": 1708
+                },
+                {
+                  "eventId": "deposit",
+                  "label": "Đặt cọc",
+                  "value": 408
+                },
+                {
+                  "eventId": "purchase",
+                  "label": "Purchase",
+                  "value": 289
+                }
+              ]
+            },
+            "interpretation": "Ordered business outcomes defined by the approved measurement specification.",
+            "confidence": "high"
+          },
+          {
+            "id": "kpi_scorecard",
+            "scope": "campaign",
+            "metrics": {
+              "kpis": [
+                {
+                  "id": "count_qualified_test_ride",
+                  "label": "Đăng ký lái thử đủ điều kiện",
+                  "metric": "event_count",
+                  "eventId": "qualified_test_ride",
+                  "operator": ">=",
+                  "target": 3000,
+                  "unit": "count",
+                  "windowDays": null,
+                  "source": "brief",
+                  "sourceText": "Tối thiểu 3.000 lượt đăng ký lái thử đủ điều kiện.",
+                  "actual": 2475,
+                  "status": "bad",
+                  "attainment": 82.5,
+                  "gap": -525,
+                  "evidenceId": "kpi_scorecard"
+                },
+                {
+                  "id": "cost_per_qualified_test_ride",
+                  "label": "Chi phí / Đăng ký lái thử đủ điều kiện",
+                  "metric": "cost_per_event",
+                  "eventId": "qualified_test_ride",
+                  "operator": "<=",
+                  "target": 150000,
+                  "unit": "VND",
+                  "windowDays": null,
+                  "source": "brief",
+                  "sourceText": "CPL đăng ký lái thử không vượt quá 150.000 VND.",
+                  "actual": 154545,
+                  "status": "watch",
+                  "attainment": 97.1,
+                  "gap": 4545,
+                  "evidenceId": "kpi_scorecard"
+                },
+                {
+                  "id": "rate_attended_test_ride",
+                  "label": "Tỷ lệ Khách đến lái thử",
+                  "metric": "event_rate",
+                  "numeratorEvent": "attended_test_ride",
+                  "denominatorEvent": "qualified_test_ride",
+                  "operator": ">=",
+                  "target": 70,
+                  "unit": "percent",
+                  "windowDays": null,
+                  "source": "brief",
+                  "sourceText": "Tỷ lệ khách đến lái thử đạt tối thiểu 70%.",
+                  "actual": 69.01,
+                  "status": "watch",
+                  "attainment": 98.6,
+                  "gap": -0.99,
+                  "evidenceId": "kpi_scorecard"
+                },
+                {
+                  "id": "count_deposit",
+                  "label": "Đặt cọc",
+                  "metric": "event_count",
+                  "eventId": "deposit",
+                  "operator": ">=",
+                  "target": 525,
+                  "unit": "count",
+                  "windowDays": 14,
+                  "source": "brief",
+                  "sourceText": "Tối thiểu 525 khách đặt cọc trong vòng 14 ngày sau khi lái thử.",
+                  "actual": 408,
+                  "status": "bad",
+                  "attainment": 77.7,
+                  "gap": -117,
+                  "evidenceId": "kpi_scorecard"
+                },
+                {
+                  "id": "cost_per_deposit",
+                  "label": "Chi phí / Đặt cọc",
+                  "metric": "cost_per_event",
+                  "eventId": "deposit",
+                  "operator": "<=",
+                  "target": 900000,
+                  "unit": "VND",
+                  "windowDays": null,
+                  "source": "brief",
+                  "sourceText": "Chi phí trên mỗi lượt đặt cọc không vượt quá 900.000 VND.",
+                  "actual": 937500,
+                  "status": "watch",
+                  "attainment": 96,
+                  "gap": 37500,
+                  "evidenceId": "kpi_scorecard"
+                }
+              ]
+            },
+            "interpretation": "Mechanical comparison of observed values with brief targets.",
+            "confidence": "high"
+          },
+          {
+            "id": "performance_status",
+            "scope": "campaign",
+            "metrics": {
+              "status": "bad",
+              "counts": {
+                "good": 0,
+                "watch": 3,
+                "bad": 2
+              },
+              "summary": "0 KPI đạt, 3 KPI cần theo dõi, 2 KPI chưa đạt.",
+              "evaluatedKpis": 5
+            },
+            "interpretation": "Worst material KPI state determines report attention level.",
+            "confidence": "high"
+          },
+          {
+            "id": "outcome_zone_efficiency",
+            "scope": "campaign",
+            "metrics": {
+              "zones": [
+                {
+                  "zoneId": "zalo_news_native",
+                  "spend": 143916933,
+                  "outcomes": {
+                    "test_ride_registration": 1247,
+                    "qualified_test_ride": 1093,
+                    "attended_test_ride": 764,
+                    "deposit": 182,
+                    "purchase": 131
+                  },
+                  "costPerOutcome": {
+                    "test_ride_registration": 115411,
+                    "qualified_test_ride": 131671,
+                    "attended_test_ride": 188373,
+                    "deposit": 790752,
+                    "purchase": 1098603
+                  }
+                },
+                {
+                  "zoneId": "zalo_inbox_banner",
+                  "spend": 131871385,
+                  "outcomes": {
+                    "test_ride_registration": 907,
+                    "qualified_test_ride": 770,
+                    "attended_test_ride": 523,
+                    "deposit": 120,
+                    "purchase": 85
+                  },
+                  "costPerOutcome": {
+                    "test_ride_registration": 145393,
+                    "qualified_test_ride": 171262,
+                    "attended_test_ride": 252144,
+                    "deposit": 1098928,
+                    "purchase": 1551428
+                  }
+                },
+                {
+                  "zoneId": "zalo_video_feed",
+                  "spend": 106711682,
+                  "outcomes": {
+                    "test_ride_registration": 699,
+                    "qualified_test_ride": 612,
+                    "attended_test_ride": 421,
+                    "deposit": 106,
+                    "purchase": 73
+                  },
+                  "costPerOutcome": {
+                    "test_ride_registration": 152663,
+                    "qualified_test_ride": 174365,
+                    "attended_test_ride": 253472,
+                    "deposit": 1006714,
+                    "purchase": 1461804
+                  }
+                }
+              ]
+            },
+            "interpretation": "Zone comparison uses business outcome volume and cost, not CTR alone.",
+            "confidence": "high"
+          },
+          {
+            "id": "top_zone_ctr",
+            "scope": "zalo_news_native",
+            "metrics": {
+              "zoneId": "zalo_news_native",
+              "impressions": 2990919,
+              "clicks": 38887,
+              "spend": 143916933,
+              "conversions": 1247,
+              "ctr": 1.3,
+              "cpm": 48117.964,
+              "cpa": 115411,
+              "click_conversion_rate": 3.207,
+              "viewability": 82.096,
+              "summed_daily_reach": 2225384,
+              "outcomes": {
+                "test_ride_registration": 1247,
+                "qualified_test_ride": 1093,
+                "attended_test_ride": 764,
+                "deposit": 182,
+                "purchase": 131
+              }
+            },
+            "interpretation": "Highest observed CTR among zones with delivery.",
+            "confidence": "medium"
+          },
+          {
+            "id": "lowest_zone_cpm",
+            "scope": "zalo_news_native",
+            "metrics": {
+              "zoneId": "zalo_news_native",
+              "impressions": 2990919,
+              "clicks": 38887,
+              "spend": 143916933,
+              "conversions": 1247,
+              "ctr": 1.3,
+              "cpm": 48117.964,
+              "cpa": 115411,
+              "click_conversion_rate": 3.207,
+              "viewability": 82.096,
+              "summed_daily_reach": 2225384,
+              "outcomes": {
+                "test_ride_registration": 1247,
+                "qualified_test_ride": 1093,
+                "attended_test_ride": 764,
+                "deposit": 182,
+                "purchase": 131
+              }
+            },
+            "interpretation": "Lowest observed CPM among zones with delivery.",
+            "confidence": "medium"
+          }
+        ],
+        "kpiScorecard": [
+          {
+            "id": "count_qualified_test_ride",
+            "label": "Đăng ký lái thử đủ điều kiện",
+            "metric": "event_count",
+            "eventId": "qualified_test_ride",
+            "operator": ">=",
+            "target": 3000,
+            "unit": "count",
+            "windowDays": null,
+            "source": "brief",
+            "sourceText": "Tối thiểu 3.000 lượt đăng ký lái thử đủ điều kiện.",
+            "actual": 2475,
+            "status": "bad",
+            "attainment": 82.5,
+            "gap": -525,
+            "evidenceId": "kpi_scorecard"
+          },
+          {
+            "id": "cost_per_qualified_test_ride",
+            "label": "Chi phí / Đăng ký lái thử đủ điều kiện",
+            "metric": "cost_per_event",
+            "eventId": "qualified_test_ride",
+            "operator": "<=",
+            "target": 150000,
+            "unit": "VND",
+            "windowDays": null,
+            "source": "brief",
+            "sourceText": "CPL đăng ký lái thử không vượt quá 150.000 VND.",
+            "actual": 154545,
+            "status": "watch",
+            "attainment": 97.1,
+            "gap": 4545,
+            "evidenceId": "kpi_scorecard"
+          },
+          {
+            "id": "rate_attended_test_ride",
+            "label": "Tỷ lệ Khách đến lái thử",
+            "metric": "event_rate",
+            "numeratorEvent": "attended_test_ride",
+            "denominatorEvent": "qualified_test_ride",
+            "operator": ">=",
+            "target": 70,
+            "unit": "percent",
+            "windowDays": null,
+            "source": "brief",
+            "sourceText": "Tỷ lệ khách đến lái thử đạt tối thiểu 70%.",
+            "actual": 69.01,
+            "status": "watch",
+            "attainment": 98.6,
+            "gap": -0.99,
+            "evidenceId": "kpi_scorecard"
+          },
+          {
+            "id": "count_deposit",
+            "label": "Đặt cọc",
+            "metric": "event_count",
+            "eventId": "deposit",
+            "operator": ">=",
+            "target": 525,
+            "unit": "count",
+            "windowDays": 14,
+            "source": "brief",
+            "sourceText": "Tối thiểu 525 khách đặt cọc trong vòng 14 ngày sau khi lái thử.",
+            "actual": 408,
+            "status": "bad",
+            "attainment": 77.7,
+            "gap": -117,
+            "evidenceId": "kpi_scorecard"
+          },
+          {
+            "id": "cost_per_deposit",
+            "label": "Chi phí / Đặt cọc",
+            "metric": "cost_per_event",
+            "eventId": "deposit",
+            "operator": "<=",
+            "target": 900000,
+            "unit": "VND",
+            "windowDays": null,
+            "source": "brief",
+            "sourceText": "Chi phí trên mỗi lượt đặt cọc không vượt quá 900.000 VND.",
+            "actual": 937500,
+            "status": "watch",
+            "attainment": 96,
+            "gap": 37500,
+            "evidenceId": "kpi_scorecard"
+          }
+        ],
+        "performanceStatus": {
+          "status": "bad",
+          "counts": {
+            "good": 0,
+            "watch": 3,
+            "bad": 2
+          },
+          "summary": "0 KPI đạt, 3 KPI cần theo dõi, 2 KPI chưa đạt.",
+          "evaluatedKpis": 5
+        },
+        "businessFunnel": [
+          {
+            "eventId": "test_ride_registration",
+            "label": "Đăng ký lái thử",
+            "value": 2853
+          },
+          {
+            "eventId": "qualified_test_ride",
+            "label": "Đăng ký lái thử đủ điều kiện",
+            "value": 2475
+          },
+          {
+            "eventId": "attended_test_ride",
+            "label": "Khách đến lái thử",
+            "value": 1708
+          },
+          {
+            "eventId": "deposit",
+            "label": "Đặt cọc",
+            "value": 408
+          },
+          {
+            "eventId": "purchase",
+            "label": "Purchase",
+            "value": 289
+          }
+        ],
+        "actions": [
+          {
+            "id": "action_count_qualified_test_ride",
+            "priority": "high",
+            "status": "bad",
+            "objective": "conversion",
+            "problem": "Đăng ký lái thử đủ điều kiện: thực tế 2475 count, mục tiêu >= 3000 count.",
+            "evidenceIds": [
+              "kpi_scorecard",
+              "business_funnel",
+              "outcome_zone_efficiency"
+            ],
+            "affectedScope": "qualified_test_ride",
+            "proposedAction": "Ưu tiên thử nghiệm creative–audience tại zalo_news_native và xử lý điểm rơi funnel trước khi scale.",
+            "expectedMovement": "Thu hẹp khoảng cách 525 cho Đăng ký lái thử đủ điều kiện.",
+            "guardrail": "Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi.",
+            "confidence": "high",
+            "nextReviewWindow": "3–7 ngày sau thay đổi"
+          },
+          {
+            "id": "action_cost_per_qualified_test_ride",
+            "priority": "medium",
+            "status": "watch",
+            "objective": "conversion",
+            "problem": "Chi phí / Đăng ký lái thử đủ điều kiện: thực tế 154545 VND, mục tiêu <= 150000 VND.",
+            "evidenceIds": [
+              "kpi_scorecard",
+              "business_funnel",
+              "outcome_zone_efficiency"
+            ],
+            "affectedScope": "qualified_test_ride",
+            "proposedAction": "Giữ ngân sách ở zalo_news_native khi cost/Đăng ký lái thử đủ điều kiện tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout.",
+            "expectedMovement": "Đưa Chi phí / Đăng ký lái thử đủ điều kiện từ 154545 VND về không quá 150000 VND.",
+            "guardrail": "Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá.",
+            "confidence": "high",
+            "nextReviewWindow": "3–7 ngày sau thay đổi"
+          },
+          {
+            "id": "action_rate_attended_test_ride",
+            "priority": "medium",
+            "status": "watch",
+            "objective": "conversion",
+            "problem": "Tỷ lệ Khách đến lái thử: thực tế 69.01 percent, mục tiêu >= 70 percent.",
+            "evidenceIds": [
+              "kpi_scorecard",
+              "business_funnel",
+              "outcome_zone_efficiency"
+            ],
+            "affectedScope": "attended_test_ride",
+            "proposedAction": "Rà soát SLA follow-up và điểm rơi nhắc lịch cho Khách đến lái thử; thử nghiệm theo cohort thay vì tăng media đồng loạt.",
+            "expectedMovement": "Tăng Tỷ lệ Khách đến lái thử từ 69.01% về phía mục tiêu 70%.",
+            "guardrail": "Không đánh đổi chất lượng lead; theo dõi tỷ lệ hủy và trùng lead theo cohort.",
+            "confidence": "high",
+            "nextReviewWindow": "3–7 ngày sau thay đổi"
+          },
+          {
+            "id": "action_count_deposit",
+            "priority": "high",
+            "status": "bad",
+            "objective": "conversion",
+            "problem": "Đặt cọc: thực tế 408 count, mục tiêu >= 525 count.",
+            "evidenceIds": [
+              "kpi_scorecard",
+              "business_funnel",
+              "outcome_zone_efficiency"
+            ],
+            "affectedScope": "deposit",
+            "proposedAction": "Ưu tiên thử nghiệm creative–audience tại zalo_news_native và xử lý điểm rơi funnel trước khi scale.",
+            "expectedMovement": "Thu hẹp khoảng cách 117 cho Đặt cọc.",
+            "guardrail": "Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi.",
+            "confidence": "high",
+            "nextReviewWindow": "14 ngày"
+          },
+          {
+            "id": "action_cost_per_deposit",
+            "priority": "medium",
+            "status": "watch",
+            "objective": "conversion",
+            "problem": "Chi phí / Đặt cọc: thực tế 937500 VND, mục tiêu <= 900000 VND.",
+            "evidenceIds": [
+              "kpi_scorecard",
+              "business_funnel",
+              "outcome_zone_efficiency"
+            ],
+            "affectedScope": "deposit",
+            "proposedAction": "Giữ ngân sách ở zalo_news_native khi cost/Đặt cọc tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout.",
+            "expectedMovement": "Đưa Chi phí / Đặt cọc từ 937500 VND về không quá 900000 VND.",
+            "guardrail": "Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá.",
+            "confidence": "high",
+            "nextReviewWindow": "3–7 ngày sau thay đổi"
+          }
+        ],
+        "limitations": [
+          "Scenario facts estimate a coherent campaign outcome for decision testing; they are not ad-server delivery logs.",
+          "Lagged outcomes are attributed to the originating campaign cohort date and evaluated within the KPI window.",
+          "Observed association does not establish causality.",
+          "Summed daily reach is not campaign unique reach across the full timeframe.",
+          "Actions require operator review and a controlled measurement window before scaling."
+        ]
+      },
+      "daily": [
+        {
+          "id": "2026-08-20",
+          "impressions": 189299,
+          "clicks": 2180,
+          "spend": 9783718,
+          "conversions": 70,
+          "reach": 140847,
+          "viWeighted": 14456840.7,
+          "outcomes": {
+            "test_ride_registration": 70,
+            "qualified_test_ride": 58,
+            "attended_test_ride": 37,
+            "deposit": 8,
+            "purchase": 5
+          },
+          "ctr": 1.1516172827114777,
+          "cpm": 51683.93916502465,
+          "viewability": 76.37040185103989
+        },
+        {
+          "id": "2026-08-21",
+          "impressions": 180863,
+          "clicks": 2081,
+          "spend": 9545428,
+          "conversions": 66,
+          "reach": 134570,
+          "viWeighted": 13795885.099999998,
+          "outcomes": {
+            "test_ride_registration": 66,
+            "qualified_test_ride": 54,
+            "attended_test_ride": 35,
+            "deposit": 7,
+            "purchase": 4
+          },
+          "ctr": 1.1505946489884609,
+          "cpm": 52777.11859252584,
+          "viewability": 76.27809502219911
+        },
+        {
+          "id": "2026-08-22",
+          "impressions": 143716,
+          "clicks": 1653,
+          "spend": 7709647,
+          "conversions": 53,
+          "reach": 106932,
+          "viWeighted": 10969984,
+          "outcomes": {
+            "test_ride_registration": 53,
+            "qualified_test_ride": 44,
+            "attended_test_ride": 28,
+            "deposit": 7,
+            "purchase": 4
+          },
+          "ctr": 1.1501850872554202,
+          "cpm": 53645.01516880515,
+          "viewability": 76.33098611149768
+        },
+        {
+          "id": "2026-08-23",
+          "impressions": 134209,
+          "clicks": 1544,
+          "spend": 7326972,
+          "conversions": 50,
+          "reach": 99858,
+          "viWeighted": 10246232.5,
+          "outcomes": {
+            "test_ride_registration": 50,
+            "qualified_test_ride": 41,
+            "attended_test_ride": 27,
+            "deposit": 7,
+            "purchase": 4
+          },
+          "ctr": 1.1504444560349902,
+          "cpm": 54593.74557593008,
+          "viewability": 76.34534569216669
+        },
+        {
+          "id": "2026-08-24",
+          "impressions": 176328,
+          "clicks": 2032,
+          "spend": 9792834,
+          "conversions": 65,
+          "reach": 131196,
+          "viWeighted": 13473348.399999999,
+          "outcomes": {
+            "test_ride_registration": 65,
+            "qualified_test_ride": 53,
+            "attended_test_ride": 34,
+            "deposit": 8,
+            "purchase": 5
+          },
+          "ctr": 1.1523978040923735,
+          "cpm": 55537.600381107935,
+          "viewability": 76.41071412367859
+        },
+        {
+          "id": "2026-08-25",
+          "impressions": 238284,
+          "clicks": 3157,
+          "spend": 12314292,
+          "conversions": 101,
+          "reach": 177294,
+          "viWeighted": 18898548.4,
+          "outcomes": {
+            "test_ride_registration": 101,
+            "qualified_test_ride": 91,
+            "attended_test_ride": 65,
+            "deposit": 16,
+            "purchase": 12
+          },
+          "ctr": 1.3248896275033153,
+          "cpm": 51679.055245001764,
+          "viewability": 79.31102549898439
+        },
+        {
+          "id": "2026-08-26",
+          "impressions": 232197,
+          "clicks": 3079,
+          "spend": 12257101,
+          "conversions": 98,
+          "reach": 172766,
+          "viWeighted": 18408325.099999998,
+          "outcomes": {
+            "test_ride_registration": 98,
+            "qualified_test_ride": 88,
+            "attended_test_ride": 62,
+            "deposit": 15,
+            "purchase": 11
+          },
+          "ctr": 1.326029190730285,
+          "cpm": 52787.50802120613,
+          "viewability": 79.27891014957126
+        },
+        {
+          "id": "2026-08-27",
+          "impressions": 231372,
+          "clicks": 3067,
+          "spend": 12400437,
+          "conversions": 98,
+          "reach": 172152,
+          "viWeighted": 18359413.6,
+          "outcomes": {
+            "test_ride_registration": 98,
+            "qualified_test_ride": 88,
+            "attended_test_ride": 63,
+            "deposit": 15,
+            "purchase": 11
+          },
+          "ctr": 1.325570942032744,
+          "cpm": 53595.23624293346,
+          "viewability": 79.3501962208046
+        },
+        {
+          "id": "2026-08-28",
+          "impressions": 224946,
+          "clicks": 2985,
+          "spend": 12272510,
+          "conversions": 95,
+          "reach": 167370,
+          "viWeighted": 17858259,
+          "outcomes": {
+            "test_ride_registration": 95,
+            "qualified_test_ride": 85,
+            "attended_test_ride": 60,
+            "deposit": 15,
+            "purchase": 11
+          },
+          "ctr": 1.326985143101011,
+          "cpm": 54557.582708738984,
+          "viewability": 79.38909338241177
+        },
+        {
+          "id": "2026-08-29",
+          "impressions": 170812,
+          "clicks": 2262,
+          "spend": 9494683,
+          "conversions": 73,
+          "reach": 127093,
+          "viWeighted": 13543607.200000001,
+          "outcomes": {
+            "test_ride_registration": 73,
+            "qualified_test_ride": 65,
+            "attended_test_ride": 46,
+            "deposit": 12,
+            "purchase": 9
+          },
+          "ctr": 1.3242629323466735,
+          "cpm": 55585.5736130951,
+          "viewability": 79.28955342715969
+        },
+        {
+          "id": "2026-08-30",
+          "impressions": 179891,
+          "clicks": 2385,
+          "spend": 9296082,
+          "conversions": 76,
+          "reach": 133847,
+          "viWeighted": 14270031.299999999,
+          "outcomes": {
+            "test_ride_registration": 76,
+            "qualified_test_ride": 68,
+            "attended_test_ride": 48,
+            "deposit": 12,
+            "purchase": 9
+          },
+          "ctr": 1.3258028472797416,
+          "cpm": 51676.19280564342,
+          "viewability": 79.3259879593754
+        },
+        {
+          "id": "2026-08-31",
+          "impressions": 230318,
+          "clicks": 3052,
+          "spend": 12121600,
+          "conversions": 98,
+          "reach": 171367,
+          "viWeighted": 18269707,
+          "outcomes": {
+            "test_ride_registration": 98,
+            "qualified_test_ride": 88,
+            "attended_test_ride": 63,
+            "deposit": 16,
+            "purchase": 12
+          },
+          "ctr": 1.3251243932302295,
+          "cpm": 52629.84221815056,
+          "viewability": 79.32383487178596
+        },
+        {
+          "id": "2026-09-01",
+          "impressions": 235290,
+          "clicks": 3120,
+          "spend": 12622132,
+          "conversions": 101,
+          "reach": 175067,
+          "viWeighted": 18667013,
+          "outcomes": {
+            "test_ride_registration": 101,
+            "qualified_test_ride": 91,
+            "attended_test_ride": 65,
+            "deposit": 16,
+            "purchase": 12
+          },
+          "ctr": 1.3260232054060945,
+          "cpm": 53644.99978749628,
+          "viewability": 79.33619363338859
+        },
+        {
+          "id": "2026-09-02",
+          "impressions": 224478,
+          "clicks": 2977,
+          "spend": 12280947,
+          "conversions": 95,
+          "reach": 167022,
+          "viWeighted": 17801222.2,
+          "outcomes": {
+            "test_ride_registration": 95,
+            "qualified_test_ride": 85,
+            "attended_test_ride": 61,
+            "deposit": 15,
+            "purchase": 11
+          },
+          "ctr": 1.326187866962464,
+          "cpm": 54708.911340977735,
+          "viewability": 79.30052031824944
+        },
+        {
+          "id": "2026-09-03",
+          "impressions": 217077,
+          "clicks": 2878,
+          "spend": 12058967,
+          "conversions": 92,
+          "reach": 161515,
+          "viWeighted": 17225830.7,
+          "outcomes": {
+            "test_ride_registration": 92,
+            "qualified_test_ride": 83,
+            "attended_test_ride": 59,
+            "deposit": 14,
+            "purchase": 10
+          },
+          "ctr": 1.3257968370670317,
+          "cpm": 55551.564652174115,
+          "viewability": 79.35355058343353
+        },
+        {
+          "id": "2026-09-04",
+          "impressions": 240962,
+          "clicks": 3199,
+          "spend": 12452415,
+          "conversions": 102,
+          "reach": 179288,
+          "viWeighted": 19131483.4,
+          "outcomes": {
+            "test_ride_registration": 102,
+            "qualified_test_ride": 92,
+            "attended_test_ride": 65,
+            "deposit": 15,
+            "purchase": 11
+          },
+          "ctr": 1.327595222483213,
+          "cpm": 51677.92016998531,
+          "viewability": 79.39626746125944
+        },
+        {
+          "id": "2026-09-05",
+          "impressions": 179422,
+          "clicks": 2376,
+          "spend": 9466125,
+          "conversions": 76,
+          "reach": 133499,
+          "viWeighted": 14222912.599999998,
+          "outcomes": {
+            "test_ride_registration": 76,
+            "qualified_test_ride": 68,
+            "attended_test_ride": 48,
+            "deposit": 12,
+            "purchase": 9
+          },
+          "ctr": 1.324252321342979,
+          "cpm": 52758.998339111145,
+          "viewability": 79.27072822730767
+        },
+        {
+          "id": "2026-09-06",
+          "impressions": 174410,
+          "clicks": 2312,
+          "spend": 9350329,
+          "conversions": 74,
+          "reach": 129769,
+          "viWeighted": 13837568.2,
+          "outcomes": {
+            "test_ride_registration": 74,
+            "qualified_test_ride": 66,
+            "attended_test_ride": 47,
+            "deposit": 12,
+            "purchase": 9
+          },
+          "ctr": 1.3256120635284674,
+          "cpm": 53611.19775242246,
+          "viewability": 79.33930508571756
+        },
+        {
+          "id": "2026-09-07",
+          "impressions": 230094,
+          "clicks": 3049,
+          "spend": 12555657,
+          "conversions": 98,
+          "reach": 171200,
+          "viWeighted": 18252772.2,
+          "outcomes": {
+            "test_ride_registration": 98,
+            "qualified_test_ride": 88,
+            "attended_test_ride": 63,
+            "deposit": 16,
+            "purchase": 12
+          },
+          "ctr": 1.3251106069693255,
+          "cpm": 54567.51153876242,
+          "viewability": 79.32745834311194
+        },
+        {
+          "id": "2026-09-08",
+          "impressions": 226208,
+          "clicks": 2998,
+          "spend": 12588120,
+          "conversions": 96,
+          "reach": 168310,
+          "viWeighted": 17935759.599999998,
+          "outcomes": {
+            "test_ride_registration": 96,
+            "qualified_test_ride": 86,
+            "attended_test_ride": 62,
+            "deposit": 15,
+            "purchase": 11
+          },
+          "ctr": 1.32532890083463,
+          "cpm": 55648.42976375725,
+          "viewability": 79.28879438392983
+        },
+        {
+          "id": "2026-09-09",
+          "impressions": 242161,
+          "clicks": 3214,
+          "spend": 12509718,
+          "conversions": 103,
+          "reach": 180179,
+          "viWeighted": 19225801.5,
+          "outcomes": {
+            "test_ride_registration": 103,
+            "qualified_test_ride": 93,
+            "attended_test_ride": 66,
+            "deposit": 16,
+            "purchase": 12
+          },
+          "ctr": 1.3272161908812732,
+          "cpm": 51658.6816209051,
+          "viewability": 79.39264167227589
+        },
+        {
+          "id": "2026-09-10",
+          "impressions": 236752,
+          "clicks": 3138,
+          "spend": 12453416,
+          "conversions": 101,
+          "reach": 176154,
+          "viWeighted": 18783401.2,
+          "outcomes": {
+            "test_ride_registration": 101,
+            "qualified_test_ride": 91,
+            "attended_test_ride": 65,
+            "deposit": 16,
+            "purchase": 12
+          },
+          "ctr": 1.3254375887004122,
+          "cpm": 52601.10157464351,
+          "viewability": 79.33787761032642
+        },
+        {
+          "id": "2026-09-11",
+          "impressions": 230006,
+          "clicks": 3048,
+          "spend": 12362234,
+          "conversions": 98,
+          "reach": 171135,
+          "viWeighted": 18233149.4,
+          "outcomes": {
+            "test_ride_registration": 98,
+            "qualified_test_ride": 88,
+            "attended_test_ride": 62,
+            "deposit": 15,
+            "purchase": 11
+          },
+          "ctr": 1.3251828213177048,
+          "cpm": 53747.44137109467,
+          "viewability": 79.27249463057485
+        },
+        {
+          "id": "2026-09-12",
+          "impressions": 172216,
+          "clicks": 2285,
+          "spend": 9388319,
+          "conversions": 74,
+          "reach": 128137,
+          "viWeighted": 13672168,
+          "outcomes": {
+            "test_ride_registration": 74,
+            "qualified_test_ride": 66,
+            "attended_test_ride": 47,
+            "deposit": 11,
+            "purchase": 8
+          },
+          "ctr": 1.326822130347935,
+          "cpm": 54514.78956659079,
+          "viewability": 79.38965020671715
+        },
+        {
+          "id": "2026-09-13",
+          "impressions": 174718,
+          "clicks": 2316,
+          "spend": 9688641,
+          "conversions": 74,
+          "reach": 129998,
+          "viWeighted": 13864469,
+          "outcomes": {
+            "test_ride_registration": 74,
+            "qualified_test_ride": 66,
+            "attended_test_ride": 48,
+            "deposit": 12,
+            "purchase": 9
+          },
+          "ctr": 1.325564624137181,
+          "cpm": 55453.02144026374,
+          "viewability": 79.3534094941563
+        },
+        {
+          "id": "2026-09-14",
+          "impressions": 238124,
+          "clicks": 3157,
+          "spend": 12321681,
+          "conversions": 101,
+          "reach": 177176,
+          "viWeighted": 18891031.6,
+          "outcomes": {
+            "test_ride_registration": 101,
+            "qualified_test_ride": 91,
+            "attended_test_ride": 65,
+            "deposit": 16,
+            "purchase": 12
+          },
+          "ctr": 1.325779845794628,
+          "cpm": 51744.80942702122,
+          "viewability": 79.33274932388169
+        },
+        {
+          "id": "2026-09-15",
+          "impressions": 231580,
+          "clicks": 3072,
+          "spend": 12177653,
+          "conversions": 99,
+          "reach": 172306,
+          "viWeighted": 18385684.799999997,
+          "outcomes": {
+            "test_ride_registration": 99,
+            "qualified_test_ride": 89,
+            "attended_test_ride": 64,
+            "deposit": 15,
+            "purchase": 11
+          },
+          "ctr": 1.3265394248207962,
+          "cpm": 52585.08074963296,
+          "viewability": 79.39236894377751
+        },
+        {
+          "id": "2026-09-16",
+          "impressions": 206940,
+          "clicks": 2175,
+          "spend": 11081831,
+          "conversions": 70,
+          "reach": 153973,
+          "viWeighted": 15804574.4,
+          "outcomes": {
+            "test_ride_registration": 70,
+            "qualified_test_ride": 54,
+            "attended_test_ride": 33,
+            "deposit": 7,
+            "purchase": 4
+          },
+          "ctr": 1.0510292838503914,
+          "cpm": 53550.93746979801,
+          "viewability": 76.37273799168841
+        },
+        {
+          "id": "2026-09-17",
+          "impressions": 201951,
+          "clicks": 2125,
+          "spend": 11006022,
+          "conversions": 69,
+          "reach": 150261,
+          "viWeighted": 15434849.100000001,
+          "outcomes": {
+            "test_ride_registration": 69,
+            "qualified_test_ride": 53,
+            "attended_test_ride": 33,
+            "deposit": 7,
+            "purchase": 4
+          },
+          "ctr": 1.0522354432510856,
+          "cpm": 54498.47735341742,
+          "viewability": 76.42868369059822
+        },
+        {
+          "id": "2026-09-18",
+          "impressions": 200854,
+          "clicks": 2112,
+          "spend": 11161188,
+          "conversions": 68,
+          "reach": 149445,
+          "viWeighted": 15339418.599999998,
+          "outcomes": {
+            "test_ride_registration": 68,
+            "qualified_test_ride": 53,
+            "attended_test_ride": 33,
+            "deposit": 7,
+            "purchase": 4
+          },
+          "ctr": 1.0515100520776286,
+          "cpm": 55568.66181405399,
+          "viewability": 76.37098887749309
+        },
+        {
+          "id": "2026-09-19",
+          "impressions": 164061,
+          "clicks": 1724,
+          "spend": 8490734,
+          "conversions": 55,
+          "reach": 122070,
+          "viWeighted": 12521136.899999999,
+          "outcomes": {
+            "test_ride_registration": 55,
+            "qualified_test_ride": 43,
+            "attended_test_ride": 27,
+            "deposit": 6,
+            "purchase": 4
+          },
+          "ctr": 1.0508286551953236,
+          "cpm": 51753.518508359695,
+          "viewability": 76.32000841150547
+        },
+        {
+          "id": "2026-09-20",
+          "impressions": 164357,
+          "clicks": 1726,
+          "spend": 8657058,
+          "conversions": 56,
+          "reach": 122290,
+          "viWeighted": 12544211.299999999,
+          "outcomes": {
+            "test_ride_registration": 56,
+            "qualified_test_ride": 44,
+            "attended_test_ride": 27,
+            "deposit": 6,
+            "purchase": 4
+          },
+          "ctr": 1.0501530205589054,
+          "cpm": 52672.28046265142,
+          "viewability": 76.32295125854085
+        },
+        {
+          "id": "2026-09-21",
+          "impressions": 209123,
+          "clicks": 2196,
+          "spend": 11201806,
+          "conversions": 71,
+          "reach": 155598,
+          "viWeighted": 15965188.7,
+          "outcomes": {
+            "test_ride_registration": 71,
+            "qualified_test_ride": 55,
+            "attended_test_ride": 34,
+            "deposit": 7,
+            "purchase": 4
+          },
+          "ctr": 1.0500997020892011,
+          "cpm": 53565.63362231797,
+          "viewability": 76.34353323163879
+        },
+        {
+          "id": "2026-09-22",
+          "impressions": 202802,
+          "clicks": 2133,
+          "spend": 11072529,
+          "conversions": 68,
+          "reach": 150894,
+          "viWeighted": 15490740.6,
+          "outcomes": {
+            "test_ride_registration": 68,
+            "qualified_test_ride": 53,
+            "attended_test_ride": 33,
+            "deposit": 7,
+            "purchase": 4
+          },
+          "ctr": 1.0517647754953108,
+          "cpm": 54597.73079160955,
+          "viewability": 76.38356919557006
+        },
+        {
+          "id": "2026-09-23",
+          "impressions": 202249,
+          "clicks": 2125,
+          "spend": 11237174,
+          "conversions": 69,
+          "reach": 150483,
+          "viWeighted": 15440777.7,
+          "outcomes": {
+            "test_ride_registration": 69,
+            "qualified_test_ride": 54,
+            "attended_test_ride": 33,
+            "deposit": 7,
+            "purchase": 4
+          },
+          "ctr": 1.050685046650416,
+          "cpm": 55561.0855925122,
+          "viewability": 76.34538464961507
+        }
+      ],
+      "zones": [
+        {
+          "id": "zalo_inbox_banner",
+          "impressions": 2423885,
+          "clicks": 28270,
+          "spend": 131871385,
+          "conversions": 907,
+          "reach": 1803484,
+          "viWeighted": 182541963.49999994,
+          "outcomes": {
+            "test_ride_registration": 907,
+            "qualified_test_ride": 770,
+            "attended_test_ride": 523,
+            "deposit": 120,
+            "purchase": 85
+          },
+          "ctr": 1.166309457750677,
+          "cpm": 54404.96764491715,
+          "viewability": 75.30966341224932
+        },
+        {
+          "id": "zalo_news_native",
+          "impressions": 2990919,
+          "clicks": 38887,
+          "spend": 143916933,
+          "conversions": 1247,
+          "reach": 2225384,
+          "viWeighted": 245542374.90000004,
+          "outcomes": {
+            "test_ride_registration": 1247,
+            "qualified_test_ride": 1093,
+            "attended_test_ride": 764,
+            "deposit": 182,
+            "purchase": 131
+          },
+          "ctr": 1.300168944729028,
+          "cpm": 48117.96407726187,
+          "viewability": 82.09596277933305
+        },
+        {
+          "id": "zalo_video_feed",
+          "impressions": 1723266,
+          "clicks": 21775,
+          "spend": 106711682,
+          "conversions": 699,
+          "reach": 1282193,
+          "viWeighted": 131137008.6,
+          "outcomes": {
+            "test_ride_registration": 699,
+            "qualified_test_ride": 612,
+            "attended_test_ride": 421,
+            "deposit": 106,
+            "purchase": 73
+          },
+          "ctr": 1.2635890222403274,
+          "cpm": 61924.09181171101,
+          "viewability": 76.0979492428911
+        }
+      ],
+      "recordCount": 105,
+      "model": {
+        "rawAnalysis": {
+          "overall": "Kết quả campaign VoltRide đang ở trạng thái bad: funnel từ đăng ký lái thử đến Purchase còn rơi mạnh ở các bước giữa và cuối, trong khi chi phí ở một số KPI vẫn vượt hoặc sát ngưỡng.",
+          "questions": [
+            {
+              "id": "cv_q1",
+              "findingIds": [
+                "business_funnel"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Funnel đi từ 2.853 đăng ký lái thử xuống 2.475 đủ điều kiện, 1.708 khách đến lái thử, 408 đặt cọc và còn 289 Purchase. So với brief, cả KPI số lượng đủ điều kiện và đặt cọc đều chưa đạt."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "qualified_test_ride",
+                        "label": "Đăng ký lái thử đủ điều kiện",
+                        "value": "2475",
+                        "trend": "down",
+                        "delta": "-525 so với mục tiêu 3000",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "purchase",
+                        "label": "Purchase",
+                        "value": "289",
+                        "trend": "down",
+                        "delta": "giảm dần qua các bước funnel",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q2",
+              "findingIds": [
+                "kpi_scorecard"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Phần chi phí và tỷ lệ chuyển bước đến Purchase chưa ở trạng thái Good. Chi phí/đăng ký lái thử đủ điều kiện và chi phí/đặt cọc đều cao hơn ngưỡng; tỷ lệ khách đến lái thử chỉ sát mục tiêu, nên toàn bộ cụm này đang ở Watch/Bad."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "cost_per_qualified_test_ride",
+                        "label": "Chi phí / Đăng ký lái thử đủ điều kiện",
+                        "value": "154545 VND",
+                        "trend": "up",
+                        "delta": "+4545 VND so với ngưỡng 150000 VND",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "rate_attended_test_ride",
+                        "label": "Tỷ lệ Khách đến lái thử",
+                        "value": "69.01%",
+                        "trend": "down",
+                        "delta": "-0.99 điểm % so với mục tiêu 70%",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q3",
+              "findingIds": [
+                "outcome_zone_efficiency"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "zalo_news_native tạo nhiều business outcome nhất và có cost-per-outcome thấp nhất trong 3 zone, nên hiệu quả hơn ở cả đăng ký lái thử đủ điều kiện lẫn Purchase. zalo_inbox_banner kém hơn rõ ở cost-per-outcome cuối phễu."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "purchase",
+                        "label": "Purchase - zalo_news_native",
+                        "value": "131",
+                        "trend": "stable",
+                        "delta": "cao nhất trong 3 zone",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "cost_per_deposit",
+                        "label": "Chi phí / Đặt cọc - zalo_news_native",
+                        "value": "790752 VND",
+                        "trend": "down",
+                        "delta": "thấp nhất trong 3 zone",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q4",
+              "findingIds": [
+                "business_funnel"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Ưu tiên thử nghiệm creative–audience tại zalo_news_native và xử lý điểm rơi funnel trước khi scale; song song giữ ngân sách ở nhóm có cost/outcome dẫn đầu và rà soát follow-up cho bước lái thử."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "count_deposit",
+                        "label": "Đặt cọc",
+                        "value": "408",
+                        "trend": "down",
+                        "delta": "-117 so với mục tiêu 525",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "cost_per_deposit",
+                        "label": "Chi phí / Đặt cọc",
+                        "value": "937500 VND",
+                        "trend": "up",
+                        "delta": "+37500 VND so với ngưỡng 900000 VND",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "productAnalysis": {
+          "overall": "Trạng thái tổng thể: BAD. 0 KPI đạt, 3 KPI cần theo dõi, 2 KPI chưa đạt.",
+          "questions": [
+            {
+              "id": "cv_q1",
+              "findingIds": [
+                "business_funnel"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Funnel đi từ 2.853 đăng ký lái thử xuống 2.475 đủ điều kiện, 1.708 khách đến lái thử, 408 đặt cọc và còn 289 Purchase. So với brief, cả KPI số lượng đủ điều kiện và đặt cọc đều chưa đạt."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "qualified_test_ride",
+                        "label": "Đăng ký lái thử đủ điều kiện",
+                        "value": "2.475",
+                        "trend": "stable",
+                        "delta": "-525 so với mục tiêu",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "purchase",
+                        "label": "Purchase",
+                        "value": "289",
+                        "trend": "stable",
+                        "delta": "N/A",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "insight",
+                    "level": "bad",
+                    "text": "0 KPI đạt, 3 KPI cần theo dõi, 2 KPI chưa đạt. Trạng thái BAD được tính trực tiếp từ KPI trong brief."
+                  },
+                  {
+                    "type": "recommendation",
+                    "items": [
+                      {
+                        "priority": "high",
+                        "text": "Ưu tiên thử nghiệm creative–audience tại zalo_news_native và xử lý điểm rơi funnel trước khi scale. Guardrail: Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_count_qualified_test_ride"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Giữ ngân sách ở zalo_news_native khi cost/Đăng ký lái thử đủ điều kiện tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout. Guardrail: Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_cost_per_qualified_test_ride"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Rà soát SLA follow-up và điểm rơi nhắc lịch cho Khách đến lái thử; thử nghiệm theo cohort thay vì tăng media đồng loạt. Guardrail: Không đánh đổi chất lượng lead; theo dõi tỷ lệ hủy và trùng lead theo cohort. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_rate_attended_test_ride"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q2",
+              "findingIds": [
+                "kpi_scorecard"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Phần chi phí và tỷ lệ chuyển bước đến Purchase chưa ở trạng thái Good. Chi phí/đăng ký lái thử đủ điều kiện và chi phí/đặt cọc đều cao hơn ngưỡng; tỷ lệ khách đến lái thử chỉ sát mục tiêu, nên toàn bộ cụm này đang ở Watch/Bad."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "cost_per_qualified_test_ride",
+                        "label": "Chi phí / Đăng ký lái thử đủ điều kiện",
+                        "value": "154.545 VND",
+                        "trend": "stable",
+                        "delta": "4.545 VND so với mục tiêu",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "rate_attended_test_ride",
+                        "label": "Tỷ lệ Khách đến lái thử",
+                        "value": "69.01%",
+                        "trend": "stable",
+                        "delta": "-0.99% so với mục tiêu",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "insight",
+                    "level": "bad",
+                    "text": "0 KPI đạt, 3 KPI cần theo dõi, 2 KPI chưa đạt. Trạng thái BAD được tính trực tiếp từ KPI trong brief."
+                  },
+                  {
+                    "type": "recommendation",
+                    "items": [
+                      {
+                        "priority": "high",
+                        "text": "Ưu tiên thử nghiệm creative–audience tại zalo_news_native và xử lý điểm rơi funnel trước khi scale. Guardrail: Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_count_qualified_test_ride"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Giữ ngân sách ở zalo_news_native khi cost/Đăng ký lái thử đủ điều kiện tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout. Guardrail: Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_cost_per_qualified_test_ride"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Rà soát SLA follow-up và điểm rơi nhắc lịch cho Khách đến lái thử; thử nghiệm theo cohort thay vì tăng media đồng loạt. Guardrail: Không đánh đổi chất lượng lead; theo dõi tỷ lệ hủy và trùng lead theo cohort. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_rate_attended_test_ride"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q3",
+              "findingIds": [
+                "outcome_zone_efficiency"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "zalo_news_native tạo nhiều business outcome nhất và có cost-per-outcome thấp nhất trong 3 zone, nên hiệu quả hơn ở cả đăng ký lái thử đủ điều kiện lẫn Purchase. zalo_inbox_banner kém hơn rõ ở cost-per-outcome cuối phễu."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "purchase",
+                        "label": "Purchase · zalo_news_native",
+                        "value": "131",
+                        "trend": "stable",
+                        "delta": "N/A",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "cost_per_deposit",
+                        "label": "Chi phí / Đặt cọc · zalo_news_native",
+                        "value": "790.752 VND",
+                        "trend": "stable",
+                        "delta": "-109.248 VND so với mục tiêu",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "insight",
+                    "level": "bad",
+                    "text": "0 KPI đạt, 3 KPI cần theo dõi, 2 KPI chưa đạt. Trạng thái BAD được tính trực tiếp từ KPI trong brief."
+                  },
+                  {
+                    "type": "recommendation",
+                    "items": [
+                      {
+                        "priority": "high",
+                        "text": "Ưu tiên thử nghiệm creative–audience tại zalo_news_native và xử lý điểm rơi funnel trước khi scale. Guardrail: Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_count_qualified_test_ride"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Giữ ngân sách ở zalo_news_native khi cost/Đăng ký lái thử đủ điều kiện tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout. Guardrail: Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_cost_per_qualified_test_ride"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Rà soát SLA follow-up và điểm rơi nhắc lịch cho Khách đến lái thử; thử nghiệm theo cohort thay vì tăng media đồng loạt. Guardrail: Không đánh đổi chất lượng lead; theo dõi tỷ lệ hủy và trùng lead theo cohort. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_rate_attended_test_ride"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q4",
+              "findingIds": [
+                "business_funnel"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Ưu tiên thử nghiệm creative–audience tại zalo_news_native và xử lý điểm rơi funnel trước khi scale; song song giữ ngân sách ở nhóm có cost/outcome dẫn đầu và rà soát follow-up cho bước lái thử."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "cost_per_deposit",
+                        "label": "Chi phí / Đặt cọc",
+                        "value": "937.500 VND",
+                        "trend": "stable",
+                        "delta": "37.500 VND so với mục tiêu",
+                        "timeframe": "2026-08-20..2026-09-23",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "insight",
+                    "level": "bad",
+                    "text": "0 KPI đạt, 3 KPI cần theo dõi, 2 KPI chưa đạt. Trạng thái BAD được tính trực tiếp từ KPI trong brief."
+                  },
+                  {
+                    "type": "recommendation",
+                    "items": [
+                      {
+                        "priority": "high",
+                        "text": "Ưu tiên thử nghiệm creative–audience tại zalo_news_native và xử lý điểm rơi funnel trước khi scale. Guardrail: Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_count_qualified_test_ride"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Giữ ngân sách ở zalo_news_native khi cost/Đăng ký lái thử đủ điều kiện tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout. Guardrail: Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_cost_per_qualified_test_ride"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Rà soát SLA follow-up và điểm rơi nhắc lịch cho Khách đến lái thử; thử nghiệm theo cohort thay vì tăng media đồng loạt. Guardrail: Không đánh đổi chất lượng lead; theo dõi tỷ lệ hủy và trùng lead theo cohort. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_rate_attended_test_ride"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "provenance": {
+          "provider": "production_agent",
+          "model": "gpt-5.4-mini",
+          "tool": "search_ad_knowledge",
+          "conversationModel": "openai_gpt_5_4_mini",
+          "validated": true,
+          "attempt": 1,
+          "generatedAt": "2026-08-08T10:01:05.708Z"
+        }
+      }
+    },
+    {
+      "input": {
+        "campaignId": "MOCAN-DAIRY-REPORT-V2",
+        "brand": "MộcAn Dairy",
+        "objective": "conversion",
+        "budget": 250000000,
+        "startDate": "2026-08-10",
+        "endDate": "2026-08-30",
+        "durationDays": 21,
+        "geo": [
+          "TP.HCM",
+          "Hà Nội",
+          "Đà Nẵng"
+        ],
+        "briefAssumptions": [
+          "Brief chỉ nêu thời lượng 3 tuần; report dùng 10/08/2026–30/08/2026 để kiểm thử.",
+          "KPI ~5.000 lead/đơn được diễn giải thành tổng lead hoặc đăng ký subscription đầu phễu.",
+          "ROAS không được tính khi thiếu giá trị gói và recognized revenue."
+        ]
+      },
+      "measurementSpec": {
+        "version": "measurement-spec-v2",
+        "objective": "conversion",
+        "optimizationEvent": "lead_or_subscription",
+        "primaryOutcome": "subscribed",
+        "outcomeGraph": {
+          "events": [
+            {
+              "id": "lead_or_subscription",
+              "label": "Lead hoặc đăng ký subscription",
+              "stage": "conversion_intent",
+              "baseRate": 0.041
+            },
+            {
+              "id": "qualified_lead",
+              "label": "Lead chất lượng",
+              "stage": "qualified_lead",
+              "baseRate": 0.72
+            },
+            {
+              "id": "subscribed",
+              "label": "Đăng ký gói giao sữa",
+              "stage": "subscription",
+              "baseRate": 0.26
+            }
+          ],
+          "transitions": [
+            {
+              "from": "lead_or_subscription",
+              "to": "qualified_lead",
+              "expectedRate": 0.72
+            },
+            {
+              "from": "qualified_lead",
+              "to": "subscribed",
+              "expectedRate": 0.26
+            }
+          ]
+        },
+        "kpis": [
+          {
+            "id": "count_lead_or_subscription",
+            "label": "Lead hoặc đăng ký subscription",
+            "metric": "event_count",
+            "eventId": "lead_or_subscription",
+            "operator": ">=",
+            "target": 5000,
+            "unit": "count",
+            "source": "brief",
+            "sourceText": "~5.000 lead/đơn"
+          },
+          {
+            "id": "target_click_conversion_rate",
+            "label": "CVR click → lead/subscription",
+            "metric": "media_metric",
+            "metricId": "click_conversion_rate",
+            "operator": ">=",
+            "target": 4,
+            "unit": "percent",
+            "source": "brief",
+            "sourceText": "CVR > 4%"
+          },
+          {
+            "id": "cost_per_lead_or_subscription",
+            "label": "CPL lead/subscription",
+            "metric": "cost_per_event",
+            "eventId": "lead_or_subscription",
+            "operator": "<=",
+            "target": 85000,
+            "unit": "VND",
+            "source": "brief",
+            "sourceText": "CPL dưới 85k"
+          }
+        ],
+        "dimensions": [
+          "date",
+          "placementId",
+          "channel",
+          "format"
+        ],
+        "attribution": {
+          "clickWindowDays": 7,
+          "viewWindowDays": 1,
+          "maxOutcomeLagDays": 30
+        },
+        "assumptions": {
+          "source": "brief_and_objective_rules",
+          "deterministic": true,
+          "outcomeTimeBasis": "cohort_origin_date",
+          "ambiguousVolumeKpi": "~5.000 lead/đơn được đo như tổng lead hoặc đăng ký subscription đầu phễu."
+        },
+        "measurementGaps": [
+          {
+            "id": "target_roas",
+            "label": "ROAS",
+            "operator": ">",
+            "target": 2,
+            "status": "not_evaluable",
+            "missingInputs": [
+              "recognized_revenue",
+              "subscription_plan_value",
+              "refund_or_cancellation_value"
+            ],
+            "reason": "Brief chưa cung cấp giá trị gói hoặc revenue được ghi nhận nên không tạo ROAS giả."
+          }
+        ]
+      },
+      "contract": {
+        "contractVersion": "report-evidence-v2",
+        "source": "scenario_simulation",
+        "campaignId": "MOCAN-DAIRY-REPORT-V2",
+        "inputHash": "5ed3ea4622663f50ab9cac60996741cf3039da227f71e4fa017a275e2b712041",
+        "objective": "conversion",
+        "timeframe": {
+          "start": "2026-08-10",
+          "end": "2026-08-30"
+        },
+        "measurementSpec": {
+          "version": "measurement-spec-v2",
+          "objective": "conversion",
+          "optimizationEvent": "lead_or_subscription",
+          "primaryOutcome": "subscribed",
+          "outcomeGraph": {
+            "events": [
+              {
+                "id": "lead_or_subscription",
+                "label": "Lead hoặc đăng ký subscription",
+                "stage": "conversion_intent",
+                "baseRate": 0.041
+              },
+              {
+                "id": "qualified_lead",
+                "label": "Lead chất lượng",
+                "stage": "qualified_lead",
+                "baseRate": 0.72
+              },
+              {
+                "id": "subscribed",
+                "label": "Đăng ký gói giao sữa",
+                "stage": "subscription",
+                "baseRate": 0.26
+              }
+            ],
+            "transitions": [
+              {
+                "from": "lead_or_subscription",
+                "to": "qualified_lead",
+                "expectedRate": 0.72
+              },
+              {
+                "from": "qualified_lead",
+                "to": "subscribed",
+                "expectedRate": 0.26
+              }
+            ]
+          },
+          "kpis": [
+            {
+              "id": "count_lead_or_subscription",
+              "label": "Lead hoặc đăng ký subscription",
+              "metric": "event_count",
+              "eventId": "lead_or_subscription",
+              "operator": ">=",
+              "target": 5000,
+              "unit": "count",
+              "source": "brief",
+              "sourceText": "~5.000 lead/đơn"
+            },
+            {
+              "id": "target_click_conversion_rate",
+              "label": "CVR click → lead/subscription",
+              "metric": "media_metric",
+              "metricId": "click_conversion_rate",
+              "operator": ">=",
+              "target": 4,
+              "unit": "percent",
+              "source": "brief",
+              "sourceText": "CVR > 4%"
+            },
+            {
+              "id": "cost_per_lead_or_subscription",
+              "label": "CPL lead/subscription",
+              "metric": "cost_per_event",
+              "eventId": "lead_or_subscription",
+              "operator": "<=",
+              "target": 85000,
+              "unit": "VND",
+              "source": "brief",
+              "sourceText": "CPL dưới 85k"
+            }
+          ],
+          "dimensions": [
+            "date",
+            "placementId",
+            "channel",
+            "format"
+          ],
+          "attribution": {
+            "clickWindowDays": 7,
+            "viewWindowDays": 1,
+            "maxOutcomeLagDays": 30
+          },
+          "assumptions": {
+            "source": "brief_and_objective_rules",
+            "deterministic": true,
+            "outcomeTimeBasis": "cohort_origin_date",
+            "ambiguousVolumeKpi": "~5.000 lead/đơn được đo như tổng lead hoặc đăng ký subscription đầu phễu."
+          },
+          "measurementGaps": [
+            {
+              "id": "target_roas",
+              "label": "ROAS",
+              "operator": ">",
+              "target": 2,
+              "status": "not_evaluable",
+              "missingInputs": [
+                "recognized_revenue",
+                "subscription_plan_value",
+                "refund_or_cancellation_value"
+              ],
+              "reason": "Brief chưa cung cấp giá trị gói hoặc revenue được ghi nhận nên không tạo ROAS giả."
+            }
+          ]
+        },
+        "metricDefinitions": {
+          "impressions": {
+            "label": "Impressions",
+            "unit": "count",
+            "formula": "sum(impressions)"
+          },
+          "clicks": {
+            "label": "Clicks",
+            "unit": "count",
+            "formula": "sum(clicks)"
+          },
+          "spend": {
+            "label": "Spend",
+            "unit": "VND",
+            "formula": "sum(spend)"
+          },
+          "conversions": {
+            "label": "Conversions",
+            "unit": "count",
+            "formula": "sum(conversions)"
+          },
+          "ctr": {
+            "label": "CTR",
+            "unit": "percent",
+            "formula": "clicks / impressions * 100"
+          },
+          "cpm": {
+            "label": "CPM",
+            "unit": "VND",
+            "formula": "spend / impressions * 1000"
+          },
+          "cpa": {
+            "label": "CPA",
+            "unit": "VND",
+            "formula": "spend / conversions"
+          },
+          "click_conversion_rate": {
+            "label": "Click conversion rate",
+            "unit": "percent",
+            "formula": "conversions / clicks * 100"
+          },
+          "viewability": {
+            "label": "Viewability",
+            "unit": "percent",
+            "formula": "impression-weighted mean(vi)"
+          },
+          "summed_daily_reach": {
+            "label": "Summed daily reach estimate",
+            "unit": "count",
+            "formula": "sum(daily reach)",
+            "limitation": "Not deduplicated across dates; never present as campaign unique reach."
+          },
+          "lead_or_subscription": {
+            "label": "Lead hoặc đăng ký subscription",
+            "unit": "count",
+            "formula": "sum(outcomes.lead_or_subscription)"
+          },
+          "qualified_lead": {
+            "label": "Lead chất lượng",
+            "unit": "count",
+            "formula": "sum(outcomes.qualified_lead)"
+          },
+          "subscribed": {
+            "label": "Đăng ký gói giao sữa",
+            "unit": "count",
+            "formula": "sum(outcomes.subscribed)"
+          },
+          "cost_per_lead_or_subscription": {
+            "label": "CPL lead/subscription",
+            "unit": "VND",
+            "formula": "spend / outcomes.lead_or_subscription"
+          }
+        },
+        "findings": [
+          {
+            "id": "campaign_totals",
+            "scope": "campaign",
+            "metrics": {
+              "impressions": 4249771,
+              "clicks": 53260,
+              "spend": 212500000,
+              "conversions": 2182,
+              "ctr": 1.253,
+              "cpm": 50002.694,
+              "cpa": 97388,
+              "click_conversion_rate": 4.097,
+              "viewability": 78.84,
+              "summed_daily_reach": 2976031,
+              "outcomes": {
+                "lead_or_subscription": 2182,
+                "qualified_lead": 1584,
+                "subscribed": 416
+              }
+            },
+            "interpretation": "Computed campaign totals for the complete report timeframe.",
+            "confidence": "high"
+          },
+          {
+            "id": "period_comparison",
+            "scope": "campaign",
+            "metrics": {
+              "first_period": {
+                "impressions": 2266909,
+                "clicks": 29346,
+                "spend": 113316923,
+                "conversions": 1200,
+                "ctr": 1.295,
+                "cpm": 49987.416,
+                "cpa": 94431,
+                "click_conversion_rate": 4.089,
+                "viewability": 79.165,
+                "summed_daily_reach": 1587472,
+                "outcomes": {
+                  "lead_or_subscription": 1200,
+                  "qualified_lead": 886,
+                  "subscribed": 237
+                }
+              },
+              "second_period": {
+                "impressions": 1982862,
+                "clicks": 23914,
+                "spend": 99183077,
+                "conversions": 982,
+                "ctr": 1.206,
+                "cpm": 50020.161,
+                "cpa": 101001,
+                "click_conversion_rate": 4.106,
+                "viewability": 78.468,
+                "summed_daily_reach": 1388559,
+                "outcomes": {
+                  "lead_or_subscription": 982,
+                  "qualified_lead": 698,
+                  "subscribed": 179
+                }
+              }
+            },
+            "interpretation": "First-half and second-half comparison; no causal claim.",
+            "confidence": "high"
+          },
+          {
+            "id": "business_funnel",
+            "scope": "campaign",
+            "metrics": {
+              "events": [
+                {
+                  "eventId": "lead_or_subscription",
+                  "label": "Lead hoặc đăng ký subscription",
+                  "value": 2182
+                },
+                {
+                  "eventId": "qualified_lead",
+                  "label": "Lead chất lượng",
+                  "value": 1584
+                },
+                {
+                  "eventId": "subscribed",
+                  "label": "Đăng ký gói giao sữa",
+                  "value": 416
+                }
+              ]
+            },
+            "interpretation": "Ordered business outcomes defined by the approved measurement specification.",
+            "confidence": "high"
+          },
+          {
+            "id": "kpi_scorecard",
+            "scope": "campaign",
+            "metrics": {
+              "kpis": [
+                {
+                  "id": "count_lead_or_subscription",
+                  "label": "Lead hoặc đăng ký subscription",
+                  "metric": "event_count",
+                  "eventId": "lead_or_subscription",
+                  "operator": ">=",
+                  "target": 5000,
+                  "unit": "count",
+                  "source": "brief",
+                  "sourceText": "~5.000 lead/đơn",
+                  "actual": 2182,
+                  "status": "bad",
+                  "attainment": 43.6,
+                  "gap": -2818,
+                  "evidenceId": "kpi_scorecard"
+                },
+                {
+                  "id": "target_click_conversion_rate",
+                  "label": "CVR click → lead/subscription",
+                  "metric": "media_metric",
+                  "metricId": "click_conversion_rate",
+                  "operator": ">=",
+                  "target": 4,
+                  "unit": "percent",
+                  "source": "brief",
+                  "sourceText": "CVR > 4%",
+                  "actual": 4.097,
+                  "status": "good",
+                  "attainment": 102.4,
+                  "gap": 0.1,
+                  "evidenceId": "kpi_scorecard"
+                },
+                {
+                  "id": "cost_per_lead_or_subscription",
+                  "label": "CPL lead/subscription",
+                  "metric": "cost_per_event",
+                  "eventId": "lead_or_subscription",
+                  "operator": "<=",
+                  "target": 85000,
+                  "unit": "VND",
+                  "source": "brief",
+                  "sourceText": "CPL dưới 85k",
+                  "actual": 97388,
+                  "status": "watch",
+                  "attainment": 87.3,
+                  "gap": 12388,
+                  "evidenceId": "kpi_scorecard"
+                }
+              ]
+            },
+            "interpretation": "Mechanical comparison of observed values with brief targets.",
+            "confidence": "high"
+          },
+          {
+            "id": "performance_status",
+            "scope": "campaign",
+            "metrics": {
+              "status": "bad",
+              "counts": {
+                "good": 1,
+                "watch": 1,
+                "bad": 1
+              },
+              "summary": "1 KPI đạt, 1 KPI cần theo dõi, 1 KPI chưa đạt.",
+              "evaluatedKpis": 3
+            },
+            "interpretation": "Worst material KPI state determines report attention level.",
+            "confidence": "high"
+          },
+          {
+            "id": "outcome_zone_efficiency",
+            "scope": "campaign",
+            "metrics": {
+              "zones": [
+                {
+                  "zoneId": "zalo_lead_form_native",
+                  "spend": 74113401,
+                  "outcomes": {
+                    "lead_or_subscription": 721,
+                    "qualified_lead": 514,
+                    "subscribed": 131
+                  },
+                  "costPerOutcome": {
+                    "lead_or_subscription": 102793,
+                    "qualified_lead": 144189,
+                    "subscribed": 565751
+                  }
+                },
+                {
+                  "zoneId": "baomoi_dynamic_product_mobile",
+                  "spend": 60209302,
+                  "outcomes": {
+                    "lead_or_subscription": 590,
+                    "qualified_lead": 437,
+                    "subscribed": 119
+                  },
+                  "costPerOutcome": {
+                    "lead_or_subscription": 102050,
+                    "qualified_lead": 137779,
+                    "subscribed": 505961
+                  }
+                },
+                {
+                  "zoneId": "zalo_retargeting_mobile",
+                  "spend": 78177297,
+                  "outcomes": {
+                    "lead_or_subscription": 871,
+                    "qualified_lead": 633,
+                    "subscribed": 166
+                  },
+                  "costPerOutcome": {
+                    "lead_or_subscription": 89756,
+                    "qualified_lead": 123503,
+                    "subscribed": 470948
+                  }
+                }
+              ]
+            },
+            "interpretation": "Zone comparison uses business outcome volume and cost, not CTR alone.",
+            "confidence": "high"
+          },
+          {
+            "id": "top_zone_ctr",
+            "scope": "baomoi_dynamic_product_mobile",
+            "metrics": {
+              "zoneId": "baomoi_dynamic_product_mobile",
+              "impressions": 1047104,
+              "clicks": 14361,
+              "spend": 60209302,
+              "conversions": 590,
+              "ctr": 1.371,
+              "cpm": 57500.785,
+              "cpa": 102050,
+              "click_conversion_rate": 4.108,
+              "viewability": 81.159,
+              "summed_daily_reach": 733265,
+              "outcomes": {
+                "lead_or_subscription": 590,
+                "qualified_lead": 437,
+                "subscribed": 119
+              }
+            },
+            "interpretation": "Highest observed CTR among zones with delivery.",
+            "confidence": "medium"
+          },
+          {
+            "id": "lowest_zone_cpm",
+            "scope": "zalo_retargeting_mobile",
+            "metrics": {
+              "zoneId": "zalo_retargeting_mobile",
+              "impressions": 1705194,
+              "clicks": 21302,
+              "spend": 78177297,
+              "conversions": 871,
+              "ctr": 1.249,
+              "cpm": 45846.571,
+              "cpa": 89756,
+              "click_conversion_rate": 4.089,
+              "viewability": 77.662,
+              "summed_daily_reach": 1194114,
+              "outcomes": {
+                "lead_or_subscription": 871,
+                "qualified_lead": 633,
+                "subscribed": 166
+              }
+            },
+            "interpretation": "Lowest observed CPM among zones with delivery.",
+            "confidence": "medium"
+          }
+        ],
+        "kpiScorecard": [
+          {
+            "id": "count_lead_or_subscription",
+            "label": "Lead hoặc đăng ký subscription",
+            "metric": "event_count",
+            "eventId": "lead_or_subscription",
+            "operator": ">=",
+            "target": 5000,
+            "unit": "count",
+            "source": "brief",
+            "sourceText": "~5.000 lead/đơn",
+            "actual": 2182,
+            "status": "bad",
+            "attainment": 43.6,
+            "gap": -2818,
+            "evidenceId": "kpi_scorecard"
+          },
+          {
+            "id": "target_click_conversion_rate",
+            "label": "CVR click → lead/subscription",
+            "metric": "media_metric",
+            "metricId": "click_conversion_rate",
+            "operator": ">=",
+            "target": 4,
+            "unit": "percent",
+            "source": "brief",
+            "sourceText": "CVR > 4%",
+            "actual": 4.097,
+            "status": "good",
+            "attainment": 102.4,
+            "gap": 0.1,
+            "evidenceId": "kpi_scorecard"
+          },
+          {
+            "id": "cost_per_lead_or_subscription",
+            "label": "CPL lead/subscription",
+            "metric": "cost_per_event",
+            "eventId": "lead_or_subscription",
+            "operator": "<=",
+            "target": 85000,
+            "unit": "VND",
+            "source": "brief",
+            "sourceText": "CPL dưới 85k",
+            "actual": 97388,
+            "status": "watch",
+            "attainment": 87.3,
+            "gap": 12388,
+            "evidenceId": "kpi_scorecard"
+          }
+        ],
+        "performanceStatus": {
+          "status": "bad",
+          "counts": {
+            "good": 1,
+            "watch": 1,
+            "bad": 1
+          },
+          "summary": "1 KPI đạt, 1 KPI cần theo dõi, 1 KPI chưa đạt.",
+          "evaluatedKpis": 3
+        },
+        "businessFunnel": [
+          {
+            "eventId": "lead_or_subscription",
+            "label": "Lead hoặc đăng ký subscription",
+            "value": 2182
+          },
+          {
+            "eventId": "qualified_lead",
+            "label": "Lead chất lượng",
+            "value": 1584
+          },
+          {
+            "eventId": "subscribed",
+            "label": "Đăng ký gói giao sữa",
+            "value": 416
+          }
+        ],
+        "actions": [
+          {
+            "id": "action_count_lead_or_subscription",
+            "priority": "high",
+            "status": "bad",
+            "objective": "conversion",
+            "problem": "Lead hoặc đăng ký subscription: thực tế 2182 count, mục tiêu >= 5000 count.",
+            "evidenceIds": [
+              "kpi_scorecard",
+              "business_funnel",
+              "outcome_zone_efficiency"
+            ],
+            "affectedScope": "lead_or_subscription",
+            "proposedAction": "Ưu tiên thử nghiệm creative–audience tại zalo_retargeting_mobile và xử lý điểm rơi funnel trước khi scale.",
+            "expectedMovement": "Thu hẹp khoảng cách 2818 cho Lead hoặc đăng ký subscription.",
+            "guardrail": "Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi.",
+            "confidence": "high",
+            "nextReviewWindow": "3–7 ngày sau thay đổi"
+          },
+          {
+            "id": "action_cost_per_lead_or_subscription",
+            "priority": "medium",
+            "status": "watch",
+            "objective": "conversion",
+            "problem": "CPL lead/subscription: thực tế 97388 VND, mục tiêu <= 85000 VND.",
+            "evidenceIds": [
+              "kpi_scorecard",
+              "business_funnel",
+              "outcome_zone_efficiency"
+            ],
+            "affectedScope": "lead_or_subscription",
+            "proposedAction": "Giữ ngân sách ở zalo_retargeting_mobile khi cost/Lead hoặc đăng ký subscription tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout.",
+            "expectedMovement": "Đưa CPL lead/subscription từ 97388 VND về không quá 85000 VND.",
+            "guardrail": "Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá.",
+            "confidence": "high",
+            "nextReviewWindow": "3–7 ngày sau thay đổi"
+          }
+        ],
+        "limitations": [
+          "Scenario facts estimate a coherent campaign outcome for decision testing; they are not ad-server delivery logs.",
+          "Lagged outcomes are attributed to the originating campaign cohort date and evaluated within the KPI window.",
+          "Observed association does not establish causality.",
+          "Summed daily reach is not campaign unique reach across the full timeframe.",
+          "Actions require operator review and a controlled measurement window before scaling."
+        ]
+      },
+      "daily": [
+        {
+          "id": "2026-08-10",
+          "impressions": 183350,
+          "clicks": 2129,
+          "spend": 8860608,
+          "conversions": 87,
+          "reach": 128396,
+          "viWeighted": 14098910.5,
+          "outcomes": {
+            "lead_or_subscription": 87,
+            "qualified_lead": 60,
+            "subscribed": 15
+          },
+          "ctr": 1.1611671666212162,
+          "cpm": 48326.195800381785,
+          "viewability": 76.89615762203437
+        },
+        {
+          "id": "2026-08-11",
+          "impressions": 180020,
+          "clicks": 2089,
+          "spend": 8838800,
+          "conversions": 86,
+          "reach": 126065,
+          "viWeighted": 13835732.4,
+          "outcomes": {
+            "lead_or_subscription": 86,
+            "qualified_lead": 59,
+            "subscribed": 15
+          },
+          "ctr": 1.160426619264526,
+          "cpm": 49098.989001222086,
+          "viewability": 76.85664037329185
+        },
+        {
+          "id": "2026-08-12",
+          "impressions": 177354,
+          "clicks": 2057,
+          "spend": 8893419,
+          "conversions": 84,
+          "reach": 124198,
+          "viWeighted": 13638042.899999999,
+          "outcomes": {
+            "lead_or_subscription": 84,
+            "qualified_lead": 58,
+            "subscribed": 15
+          },
+          "ctr": 1.1598272381790093,
+          "cpm": 50145.01505463649,
+          "viewability": 76.89729524002841
+        },
+        {
+          "id": "2026-08-13",
+          "impressions": 224515,
+          "clicks": 3001,
+          "spend": 11466881,
+          "conversions": 123,
+          "reach": 157223,
+          "viWeighted": 17939767.8,
+          "outcomes": {
+            "lead_or_subscription": 123,
+            "qualified_lead": 92,
+            "subscribed": 25
+          },
+          "ctr": 1.3366590205554194,
+          "cpm": 51074.00841814578,
+          "viewability": 79.90454000846269
+        },
+        {
+          "id": "2026-08-14",
+          "impressions": 227691,
+          "clicks": 3041,
+          "spend": 11801797,
+          "conversions": 124,
+          "reach": 159447,
+          "viWeighted": 18184266.8,
+          "outcomes": {
+            "lead_or_subscription": 124,
+            "qualified_lead": 93,
+            "subscribed": 25
+          },
+          "ctr": 1.3355819948965924,
+          "cpm": 51832.51424079125,
+          "viewability": 79.86379259610612
+        },
+        {
+          "id": "2026-08-15",
+          "impressions": 185305,
+          "clicks": 2476,
+          "spend": 8932477,
+          "conversions": 101,
+          "reach": 129765,
+          "viWeighted": 14797987.7,
+          "outcomes": {
+            "lead_or_subscription": 101,
+            "qualified_lead": 76,
+            "subscribed": 20
+          },
+          "ctr": 1.3361754944550874,
+          "cpm": 48204.187690564206,
+          "viewability": 79.85746579962763
+        },
+        {
+          "id": "2026-08-16",
+          "impressions": 183699,
+          "clicks": 2456,
+          "spend": 9040891,
+          "conversions": 100,
+          "reach": 128641,
+          "viWeighted": 14675804.2,
+          "outcomes": {
+            "lead_or_subscription": 100,
+            "qualified_lead": 75,
+            "subscribed": 20
+          },
+          "ctr": 1.3369697167649253,
+          "cpm": 49215.7877832759,
+          "viewability": 79.89049586551913
+        },
+        {
+          "id": "2026-08-17",
+          "impressions": 231384,
+          "clicks": 3094,
+          "spend": 11608102,
+          "conversions": 127,
+          "reach": 162034,
+          "viWeighted": 18488924.200000003,
+          "outcomes": {
+            "lead_or_subscription": 127,
+            "qualified_lead": 96,
+            "subscribed": 26
+          },
+          "ctr": 1.3371711094976317,
+          "cpm": 50168.12744182831,
+          "viewability": 79.90580247553851
+        },
+        {
+          "id": "2026-08-18",
+          "impressions": 221058,
+          "clicks": 2955,
+          "spend": 11265980,
+          "conversions": 121,
+          "reach": 154803,
+          "viWeighted": 17656944,
+          "outcomes": {
+            "lead_or_subscription": 121,
+            "qualified_lead": 91,
+            "subscribed": 25
+          },
+          "ctr": 1.3367532502782076,
+          "cpm": 50963.90992409232,
+          "viewability": 79.87471161414652
+        },
+        {
+          "id": "2026-08-19",
+          "impressions": 216052,
+          "clicks": 2887,
+          "spend": 11207515,
+          "conversions": 118,
+          "reach": 151297,
+          "viWeighted": 17257317,
+          "outcomes": {
+            "lead_or_subscription": 118,
+            "qualified_lead": 89,
+            "subscribed": 25
+          },
+          "ctr": 1.336252383685409,
+          "cpm": 51874.15529594727,
+          "viewability": 79.87575676226093
+        },
+        {
+          "id": "2026-08-20",
+          "impressions": 236481,
+          "clicks": 3161,
+          "spend": 11400453,
+          "conversions": 129,
+          "reach": 165603,
+          "viWeighted": 18885346.700000003,
+          "outcomes": {
+            "lead_or_subscription": 129,
+            "qualified_lead": 97,
+            "subscribed": 26
+          },
+          "ctr": 1.3366824396040276,
+          "cpm": 48208.74827153132,
+          "viewability": 79.85989022373892
+        },
+        {
+          "id": "2026-08-21",
+          "impressions": 229884,
+          "clicks": 3072,
+          "spend": 11307421,
+          "conversions": 126,
+          "reach": 160983,
+          "viWeighted": 18363544.6,
+          "outcomes": {
+            "lead_or_subscription": 126,
+            "qualified_lead": 95,
+            "subscribed": 25
+          },
+          "ctr": 1.3363261471002765,
+          "cpm": 49187.50761253502,
+          "viewability": 79.88178646621775
+        },
+        {
+          "id": "2026-08-22",
+          "impressions": 174608,
+          "clicks": 2334,
+          "spend": 8744585,
+          "conversions": 95,
+          "reach": 122274,
+          "viWeighted": 13947689.2,
+          "outcomes": {
+            "lead_or_subscription": 95,
+            "qualified_lead": 72,
+            "subscribed": 20
+          },
+          "ctr": 1.3367085127829195,
+          "cpm": 50081.23911848255,
+          "viewability": 79.88001237056721
+        },
+        {
+          "id": "2026-08-23",
+          "impressions": 177012,
+          "clicks": 2368,
+          "spend": 9027064,
+          "conversions": 97,
+          "reach": 123958,
+          "viWeighted": 14140632.3,
+          "outcomes": {
+            "lead_or_subscription": 97,
+            "qualified_lead": 73,
+            "subscribed": 20
+          },
+          "ctr": 1.337762411587915,
+          "cpm": 50996.9041646894,
+          "viewability": 79.8851620229137
+        },
+        {
+          "id": "2026-08-24",
+          "impressions": 225215,
+          "clicks": 3007,
+          "spend": 11676402,
+          "conversions": 124,
+          "reach": 157714,
+          "viWeighted": 17987147,
+          "outcomes": {
+            "lead_or_subscription": 124,
+            "qualified_lead": 93,
+            "subscribed": 25
+          },
+          "ctr": 1.3351686166551961,
+          "cpm": 51845.578669271585,
+          "viewability": 79.86655862176143
+        },
+        {
+          "id": "2026-08-25",
+          "impressions": 244028,
+          "clicks": 3261,
+          "spend": 11780410,
+          "conversions": 134,
+          "reach": 170888,
+          "viWeighted": 19492750,
+          "outcomes": {
+            "lead_or_subscription": 134,
+            "qualified_lead": 102,
+            "subscribed": 28
+          },
+          "ctr": 1.3363220614027898,
+          "cpm": 48274.82911797007,
+          "viewability": 79.8791532119265
+        },
+        {
+          "id": "2026-08-26",
+          "impressions": 211426,
+          "clicks": 2238,
+          "spend": 10382552,
+          "conversions": 92,
+          "reach": 148057,
+          "viWeighted": 16249493.8,
+          "outcomes": {
+            "lead_or_subscription": 92,
+            "qualified_lead": 60,
+            "subscribed": 15
+          },
+          "ctr": 1.058526387483091,
+          "cpm": 49107.26211535005,
+          "viewability": 76.85664866194318
+        },
+        {
+          "id": "2026-08-27",
+          "impressions": 206383,
+          "clicks": 2186,
+          "spend": 10337585,
+          "conversions": 90,
+          "reach": 144526,
+          "viWeighted": 15867132.7,
+          "outcomes": {
+            "lead_or_subscription": 90,
+            "qualified_lead": 58,
+            "subscribed": 13
+          },
+          "ctr": 1.05919576709322,
+          "cpm": 50089.32421759544,
+          "viewability": 76.88197525959018
+        },
+        {
+          "id": "2026-08-28",
+          "impressions": 200905,
+          "clicks": 2125,
+          "spend": 10230276,
+          "conversions": 88,
+          "reach": 140690,
+          "viWeighted": 15441326.399999999,
+          "outcomes": {
+            "lead_or_subscription": 88,
+            "qualified_lead": 57,
+            "subscribed": 13
+          },
+          "ctr": 1.0577138448520444,
+          "cpm": 50920.96264403574,
+          "viewability": 76.85884572310295
+        },
+        {
+          "id": "2026-08-29",
+          "impressions": 149653,
+          "clicks": 1586,
+          "spend": 7779933,
+          "conversions": 65,
+          "reach": 104799,
+          "viWeighted": 11509598.8,
+          "outcomes": {
+            "lead_or_subscription": 65,
+            "qualified_lead": 42,
+            "subscribed": 10
+          },
+          "ctr": 1.059784969228816,
+          "cpm": 51986.48206183638,
+          "viewability": 76.9085738341363
+        },
+        {
+          "id": "2026-08-30",
+          "impressions": 163748,
+          "clicks": 1737,
+          "spend": 7916849,
+          "conversions": 71,
+          "reach": 114670,
+          "viWeighted": 12592691.4,
+          "outcomes": {
+            "lead_or_subscription": 71,
+            "qualified_lead": 46,
+            "subscribed": 10
+          },
+          "ctr": 1.0607763148252192,
+          "cpm": 48347.75997264089,
+          "viewability": 76.90287148545326
+        }
+      ],
+      "zones": [
+        {
+          "id": "baomoi_dynamic_product_mobile",
+          "impressions": 1047104,
+          "clicks": 14361,
+          "spend": 60209302,
+          "conversions": 590,
+          "reach": 733265,
+          "viWeighted": 84982381.8,
+          "outcomes": {
+            "lead_or_subscription": 590,
+            "qualified_lead": 437,
+            "subscribed": 119
+          },
+          "ctr": 1.3714970050730395,
+          "cpm": 57500.78502230915,
+          "viewability": 81.15944719913207
+        },
+        {
+          "id": "zalo_lead_form_native",
+          "impressions": 1497473,
+          "clicks": 17597,
+          "spend": 74113401,
+          "conversions": 721,
+          "reach": 1048652,
+          "viWeighted": 117639333.8,
+          "outcomes": {
+            "lead_or_subscription": 721,
+            "qualified_lead": 514,
+            "subscribed": 131
+          },
+          "ctr": 1.17511300704587,
+          "cpm": 49492.31204836414,
+          "viewability": 78.558567533438
+        },
+        {
+          "id": "zalo_retargeting_mobile",
+          "impressions": 1705194,
+          "clicks": 21302,
+          "spend": 78177297,
+          "conversions": 871,
+          "reach": 1194114,
+          "viWeighted": 132429334.8,
+          "outcomes": {
+            "lead_or_subscription": 871,
+            "qualified_lead": 633,
+            "subscribed": 166
+          },
+          "ctr": 1.249242021728906,
+          "cpm": 45846.57053684214,
+          "viewability": 77.66232745365043
+        }
+      ],
+      "recordCount": 63,
+      "model": {
+        "rawAnalysis": {
+          "overall": "Kết quả conversion đang ở mức chưa đạt tổng thể: CVR click→lead/subscription đạt nhưng số lượng lead/subscription và CPL đều chưa chạm KPI, trong khi ROAS không thể đánh giá vì thiếu input doanh thu.",
+          "questions": [
+            {
+              "id": "cv_q1",
+              "findingIds": [
+                "business_funnel",
+                "kpi_scorecard",
+                "performance_status"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Phễu đi từ 2.182 lead/đăng ký subscription xuống 1.584 lead chất lượng và còn 416 đăng ký gói giao sữa. So với brief ~5.000 lead/đơn, KPI đầu phễu vẫn thấp hơn mục tiêu nên trạng thái tổng quan là bad."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "lead_or_subscription",
+                        "label": "Lead hoặc đăng ký subscription",
+                        "value": "2182",
+                        "trend": "down",
+                        "delta": "-2818 so với mục tiêu 5000",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "subscribed",
+                        "label": "Đăng ký gói giao sữa",
+                        "value": "416",
+                        "trend": "down",
+                        "delta": "thấp hơn tầng lead/qualification",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q2",
+              "findingIds": [
+                "kpi_scorecard",
+                "performance_status"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Tỷ lệ chuyển bước click→lead/subscription đang Good với 4.097%, nhưng chi phí mỗi lead/subscription là 97.388 VND nên chỉ ở Watch. Vì 1 KPI đạt, 1 KPI cần theo dõi, 1 KPI chưa đạt nên tổng trạng thái vẫn bad."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "click_conversion_rate",
+                        "label": "CVR click → lead/subscription",
+                        "value": "4.097%",
+                        "trend": "stable",
+                        "delta": "+0.097 điểm so với target 4%",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "cost_per_lead_or_subscription",
+                        "label": "CPL lead/subscription",
+                        "value": "97388 VND",
+                        "trend": "up",
+                        "delta": "+12388 VND so với target 85000",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q3",
+              "findingIds": [
+                "outcome_zone_efficiency"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "zalo_retargeting_mobile tạo nhiều outcome nhất và có cost-per-outcome tốt nhất trong 3 zone, nên là zone hiệu quả nhất ở tầng business outcome. Tuy vậy, chi phí subscribed vẫn còn cao nên đây là điểm mạnh tương đối, không phải kết quả đạt KPI tuyệt đối."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "subscribed",
+                        "label": "Đăng ký gói giao sữa tại zone",
+                        "value": "166",
+                        "trend": "up",
+                        "delta": "cao nhất trong 3 zone",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "cost_per_lead_or_subscription",
+                        "label": "CPL lead/subscription tại zone",
+                        "value": "89756 VND",
+                        "trend": "down",
+                        "delta": "thấp nhất trong 3 zone",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q4",
+              "findingIds": [
+                "kpi_scorecard",
+                "business_funnel",
+                "outcome_zone_efficiency"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Ưu tiên thử nghiệm creative–audience tại zalo_retargeting_mobile và xử lý điểm rơi funnel trước khi scale. Đồng thời giữ volume không làm giảm mạnh KPI count để tránh xấu thêm cost-per-outcome."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "lead_or_subscription",
+                        "label": "Khoảng cách cần thu hẹp",
+                        "value": "2818",
+                        "trend": "down",
+                        "delta": "so với mục tiêu 5000",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "cost_per_lead_or_subscription",
+                        "label": "CPL hiện tại",
+                        "value": "97388 VND",
+                        "trend": "up",
+                        "delta": "cao hơn target 85000 VND",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "productAnalysis": {
+          "overall": "Trạng thái tổng thể: BAD. 1 KPI đạt, 1 KPI cần theo dõi, 1 KPI chưa đạt.",
+          "questions": [
+            {
+              "id": "cv_q1",
+              "findingIds": [
+                "business_funnel",
+                "kpi_scorecard",
+                "performance_status"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Phễu đi từ 2.182 lead/đăng ký subscription xuống 1.584 lead chất lượng và còn 416 đăng ký gói giao sữa. So với brief ~5.000 lead/đơn, KPI đầu phễu vẫn thấp hơn mục tiêu nên trạng thái tổng quan là bad."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "lead_or_subscription",
+                        "label": "Lead hoặc đăng ký subscription",
+                        "value": "2.182",
+                        "trend": "stable",
+                        "delta": "-2.818 so với mục tiêu",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "subscribed",
+                        "label": "Đăng ký gói giao sữa",
+                        "value": "416",
+                        "trend": "stable",
+                        "delta": "N/A",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "insight",
+                    "level": "bad",
+                    "text": "1 KPI đạt, 1 KPI cần theo dõi, 1 KPI chưa đạt. Trạng thái BAD được tính trực tiếp từ KPI trong brief."
+                  },
+                  {
+                    "type": "recommendation",
+                    "items": [
+                      {
+                        "priority": "high",
+                        "text": "Ưu tiên thử nghiệm creative–audience tại zalo_retargeting_mobile và xử lý điểm rơi funnel trước khi scale. Guardrail: Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_count_lead_or_subscription"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Giữ ngân sách ở zalo_retargeting_mobile khi cost/Lead hoặc đăng ký subscription tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout. Guardrail: Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_cost_per_lead_or_subscription"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q2",
+              "findingIds": [
+                "kpi_scorecard",
+                "performance_status"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Tỷ lệ chuyển bước click→lead/subscription đang Good với 4.097%, nhưng chi phí mỗi lead/subscription là 97.388 VND nên chỉ ở Watch. Vì 1 KPI đạt, 1 KPI cần theo dõi, 1 KPI chưa đạt nên tổng trạng thái vẫn bad."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "click_conversion_rate",
+                        "label": "Click conversion rate",
+                        "value": "4.10%",
+                        "trend": "stable",
+                        "delta": "0.10% so với mục tiêu",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "cost_per_lead_or_subscription",
+                        "label": "CPL lead/subscription",
+                        "value": "97.388 VND",
+                        "trend": "stable",
+                        "delta": "12.388 VND so với mục tiêu",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "insight",
+                    "level": "bad",
+                    "text": "1 KPI đạt, 1 KPI cần theo dõi, 1 KPI chưa đạt. Trạng thái BAD được tính trực tiếp từ KPI trong brief."
+                  },
+                  {
+                    "type": "recommendation",
+                    "items": [
+                      {
+                        "priority": "high",
+                        "text": "Ưu tiên thử nghiệm creative–audience tại zalo_retargeting_mobile và xử lý điểm rơi funnel trước khi scale. Guardrail: Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_count_lead_or_subscription"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Giữ ngân sách ở zalo_retargeting_mobile khi cost/Lead hoặc đăng ký subscription tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout. Guardrail: Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_cost_per_lead_or_subscription"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q3",
+              "findingIds": [
+                "outcome_zone_efficiency"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "zalo_retargeting_mobile tạo nhiều outcome nhất và có cost-per-outcome tốt nhất trong 3 zone, nên là zone hiệu quả nhất ở tầng business outcome. Tuy vậy, chi phí subscribed vẫn còn cao nên đây là điểm mạnh tương đối, không phải kết quả đạt KPI tuyệt đối."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "subscribed",
+                        "label": "Đăng ký gói giao sữa · zalo_retargeting_mobile",
+                        "value": "166",
+                        "trend": "stable",
+                        "delta": "N/A",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "cost_per_lead_or_subscription",
+                        "label": "CPL lead/subscription · zalo_retargeting_mobile",
+                        "value": "89.756 VND",
+                        "trend": "stable",
+                        "delta": "4.756 VND so với mục tiêu",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "insight",
+                    "level": "bad",
+                    "text": "1 KPI đạt, 1 KPI cần theo dõi, 1 KPI chưa đạt. Trạng thái BAD được tính trực tiếp từ KPI trong brief."
+                  },
+                  {
+                    "type": "recommendation",
+                    "items": [
+                      {
+                        "priority": "high",
+                        "text": "Ưu tiên thử nghiệm creative–audience tại zalo_retargeting_mobile và xử lý điểm rơi funnel trước khi scale. Guardrail: Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_count_lead_or_subscription"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Giữ ngân sách ở zalo_retargeting_mobile khi cost/Lead hoặc đăng ký subscription tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout. Guardrail: Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_cost_per_lead_or_subscription"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "cv_q4",
+              "findingIds": [
+                "kpi_scorecard",
+                "business_funnel",
+                "outcome_zone_efficiency"
+              ],
+              "answer": {
+                "sections": [
+                  {
+                    "type": "summary",
+                    "text": "Ưu tiên thử nghiệm creative–audience tại zalo_retargeting_mobile và xử lý điểm rơi funnel trước khi scale. Đồng thời giữ volume không làm giảm mạnh KPI count để tránh xấu thêm cost-per-outcome."
+                  },
+                  {
+                    "type": "metrics",
+                    "items": [
+                      {
+                        "metricId": "lead_or_subscription",
+                        "label": "Lead hoặc đăng ký subscription",
+                        "value": "2.182",
+                        "trend": "stable",
+                        "delta": "-2.818 so với mục tiêu",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      },
+                      {
+                        "metricId": "cost_per_lead_or_subscription",
+                        "label": "CPL lead/subscription",
+                        "value": "97.388 VND",
+                        "trend": "stable",
+                        "delta": "12.388 VND so với mục tiêu",
+                        "timeframe": "2026-08-10..2026-08-30",
+                        "source": "scenario_simulation"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "insight",
+                    "level": "bad",
+                    "text": "1 KPI đạt, 1 KPI cần theo dõi, 1 KPI chưa đạt. Trạng thái BAD được tính trực tiếp từ KPI trong brief."
+                  },
+                  {
+                    "type": "recommendation",
+                    "items": [
+                      {
+                        "priority": "high",
+                        "text": "Ưu tiên thử nghiệm creative–audience tại zalo_retargeting_mobile và xử lý điểm rơi funnel trước khi scale. Guardrail: Không chọn zone chỉ vì CTR; chỉ scale khi cost-per-event và chất lượng bước kế tiếp không xấu đi. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_count_lead_or_subscription"
+                      },
+                      {
+                        "priority": "medium",
+                        "text": "Giữ ngân sách ở zalo_retargeting_mobile khi cost/Lead hoặc đăng ký subscription tiếp tục dẫn đầu và giảm từng bước 10–15% ở nhóm có chi phí cao; xác nhận bằng holdout. Guardrail: Không giảm volume của KPI count liên quan quá 10% trong cửa sổ đánh giá. Đánh giá lại: 3–7 ngày sau thay đổi.",
+                        "actionId": "action_cost_per_lead_or_subscription"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "provenance": {
+          "provider": "production_agent",
+          "model": "gpt-5.4-mini",
+          "tool": "search_ad_knowledge",
+          "conversationModel": "openai_gpt_5_4_mini",
+          "validated": true,
+          "attempt": 1,
+          "generatedAt": "2026-08-08T10:01:21.428Z"
+        }
+      }
+    }
+  ]
+}

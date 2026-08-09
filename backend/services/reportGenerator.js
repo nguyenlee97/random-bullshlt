@@ -11,6 +11,8 @@
 const AnalyticsRecord = require('../models/AnalyticsRecord');
 const ReportAnalysis = require('../models/ReportAnalysis');
 const { buildReportContract, validateAnalysisResult } = require('../lib/reportContract');
+const { normalizeReportInput, buildMeasurementSpec } = require('../lib/reportMeasurement');
+const { simulateReportFacts } = require('../lib/reportSyntheticData');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 // Report generation is a fixed specialist. It is independent of the campaign
@@ -74,6 +76,251 @@ const QUESTIONS_MAP = {
     { id: 'ex_q6', question: 'Tổng hợp & đề xuất chiến lược', category: 'optimization' },
   ],
 };
+
+function questionsForReport(reportType, contract) {
+  if (contract?.contractVersion !== 'report-evidence-v2') return QUESTIONS_MAP[reportType] || [];
+  const events = contract.businessFunnel || [];
+  const first = events[0]?.label || 'conversion đầu phễu';
+  const last = events.at(-1)?.label || 'outcome chính';
+  const objective = contract.objective;
+  const overview = [
+    { id: 'op_q1', question: 'Sức khỏe chiến dịch so với KPI trong brief đang ở mức Good, Watch hay Bad?', category: 'performance' },
+    { id: 'op_q2', question: 'Thay đổi giữa hai nửa kỳ báo cáo nào cần chú ý nhất?', category: 'trend' },
+    { id: 'op_q3', question: 'Zone nào nên giữ, thử nghiệm thêm hoặc giảm phân bổ?', category: 'comparison' },
+    { id: 'op_q4', question: 'Các action ưu tiên, guardrail và thời điểm đánh giá lại là gì?', category: 'optimization' },
+  ];
+  if (reportType === 'daily_ops' || reportType === 'executive') return overview;
+  if (reportType !== objective) return QUESTIONS_MAP[reportType] || [];
+  const prefix = { awareness: 'aw', consideration: 'co', conversion: 'cv', retention: 'rt' }[reportType] || 'obj';
+  const objectiveQuestions = {
+    awareness: [
+      `Quy mô phân phối, viewability và ${last} có đạt mục tiêu Awareness không?`,
+      'Zone nào cân bằng tốt nhất giữa impressions, CPM và chất lượng hiển thị?',
+      'Xu hướng nào đang tạo rủi ro fatigue hoặc giảm chất lượng nhận diện?',
+      'Action Awareness nào nên ưu tiên và cần guardrail gì?',
+    ],
+    consideration: [
+      `Luồng ${first} đến ${last} đang tạo tín hiệu cân nhắc như thế nào?`,
+      'Zone nào tạo engagement hiệu quả theo CTR và cost-per-event?',
+      'Tín hiệu nào cho thấy creative hoặc audience cần thử nghiệm lại?',
+      'Action Consideration nào có evidence mạnh nhất và đo lại khi nào?',
+    ],
+    conversion: [
+      `Funnel từ ${first} đến ${last} đang ở đâu so với KPI trong brief?`,
+      `Chi phí và tỷ lệ chuyển bước đến ${last} đang Good, Watch hay Bad?`,
+      `Zone nào tạo ${first} hiệu quả nhưng mất nhiều nhất ở bước business outcome?`,
+      `Action nào nên ưu tiên để tăng ${last} mà không làm xấu cost-per-outcome?`,
+    ],
+    retention: [
+      `Tín hiệu delivery lặp lại và ${last} có đạt KPI Retention không?`,
+      `Zone nào duy trì ${first} và ${last} ổn định nhất?`,
+      'Xu hướng nào cho thấy saturation, fatigue hoặc suy giảm re-engagement?',
+      'Nên thử creative, audience hay frequency theo guardrail nào?',
+    ],
+  }[reportType] || [];
+  return objectiveQuestions.map((question, index) => ({
+    id: `${prefix}_q${index + 1}`, question,
+    category: index === 3 ? 'optimization' : index === 2 ? 'trend' : 'performance',
+  }));
+}
+
+function formatContractValue(value, unit) {
+  if (!Number.isFinite(Number(value))) return 'N/A';
+  if (unit === 'VND') return `${Math.round(Number(value)).toLocaleString('vi-VN')} VND`;
+  if (unit === 'percent') return `${Number(value).toFixed(2)}%`;
+  return Math.round(Number(value)).toLocaleString('vi-VN');
+}
+
+function buildEvidenceAnalysis(input, dataContract, reportType, questions) {
+  const status = dataContract.performanceStatus || { status: 'watch', summary: 'Chưa đủ KPI để kết luận.' };
+  const funnel = dataContract.businessFunnel || [];
+  const funnelText = funnel.length
+    ? funnel.map(item => `${item.label}: ${formatContractValue(item.value, 'count')}`).join(' → ')
+    : 'Chưa có business outcome funnel.';
+  const metricItems = (dataContract.kpiScorecard || []).slice(0, 4).map(kpi => ({
+    metricId: kpi.metric === 'event_count' ? kpi.eventId
+      : kpi.metric === 'media_metric' ? kpi.metricId : kpi.id,
+    label: kpi.label,
+    value: formatContractValue(kpi.actual, kpi.unit),
+    trend: 'stable',
+    delta: kpi.gap === null ? 'N/A' : formatContractValue(kpi.gap, kpi.unit),
+    timeframe: `${dataContract.timeframe?.start}..${dataContract.timeframe?.end}`,
+    source: dataContract.source,
+  }));
+  const actionItems = (dataContract.actions || []).slice(0, 3).map(action => ({
+    priority: action.priority,
+    text: `${action.proposedAction} Guardrail: ${action.guardrail} Đánh giá lại: ${action.nextReviewWindow}.`,
+    actionId: action.id,
+  }));
+  const findingIds = (dataContract.findings || []).map(item => item.id);
+  return {
+    overall: `${status.summary} ${funnelText}`,
+    questions: questions.map(question => ({
+      id: question.id,
+      findingIds: findingIds.filter(id => [
+        'campaign_totals', 'period_comparison', 'business_funnel', 'kpi_scorecard',
+        'performance_status', 'top_zone_ctr', 'lowest_zone_cpm',
+      ].includes(id)),
+      answer: {
+        sections: [
+          {
+            type: 'summary',
+            text: `${status.summary} Với ${input.brand}, dữ liệu cho thấy ${funnelText}`,
+          },
+          ...(metricItems.length ? [{ type: 'metrics', items: metricItems }] : []),
+          {
+            type: 'insight', level: status.status,
+            text: `Mức ${status.status.toUpperCase()} được tính trực tiếp từ KPI trong brief; đây không phải đánh giá tự do của mô hình.`,
+          },
+          ...(actionItems.length ? [{ type: 'recommendation', items: actionItems }] : []),
+          {
+            type: 'limitation',
+            text: 'Chỉ áp dụng action sau khi kiểm tra guardrail trong cửa sổ đánh giá đã nêu.',
+          },
+        ],
+      },
+    })),
+    analysisProvenance: {
+      provider: 'deterministic_fallback', model: 'none',
+      reason: 'model_unavailable_or_invalid', reportType,
+    },
+  };
+}
+
+function normalizeModelSections(value) {
+  if (Array.isArray(value)) return value.filter(item => item && typeof item === 'object');
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([type, content]) => {
+    if (content && typeof content === 'object' && !Array.isArray(content)) {
+      return [{ type: content.type || type, ...content }];
+    }
+    if (type === 'metrics' && Array.isArray(content)) return [{ type, items: content }];
+    if (type === 'recommendation' && Array.isArray(content)) {
+      return [{
+        type,
+        items: content.map(item => (typeof item === 'string'
+          ? { priority: 'medium', text: item } : item)).filter(Boolean),
+      }];
+    }
+    if (typeof content === 'string') return [{ type, text: content }];
+    return [];
+  });
+}
+
+function canonicalMetricItem(item, question, dataContract) {
+  const metricId = item?.metricId;
+  const definition = dataContract.metricDefinitions?.[metricId];
+  if (!metricId || !definition) return null;
+  const kpis = dataContract.kpiScorecard || [];
+  const kpi = kpis.find(candidate => (
+    candidate.id === metricId || candidate.metricId === metricId
+    || candidate.eventId === metricId || candidate.numeratorEvent === metricId
+  ));
+  const funnel = (dataContract.businessFunnel || []).find(candidate => candidate.eventId === metricId);
+  const findingIds = new Set(question.findingIds || []);
+  const zoneFinding = findingIds.has('top_zone_ctr')
+    ? dataContract.findings?.find(candidate => candidate.id === 'top_zone_ctr') : null;
+  const outcomeZoneFinding = findingIds.has('outcome_zone_efficiency')
+    ? dataContract.findings?.find(candidate => candidate.id === 'outcome_zone_efficiency') : null;
+  const outcomeZones = outcomeZoneFinding?.metrics?.zones || [];
+  const formulaEventId = String(definition.formula || '').match(/outcomes\.([a-z0-9_]+)/i)?.[1];
+  let referencedZone = outcomeZones.find(zone => (
+    item.scopeId === zone.zoneId || String(item.label || '').includes(zone.zoneId)
+  ));
+  if (!referencedZone && /zone/i.test(String(item.label || ''))) {
+    if (outcomeZones.some(zone => Number.isFinite(Number(zone.outcomes?.[metricId])))) {
+      referencedZone = [...outcomeZones].sort((a, b) => (
+        Number(b.outcomes?.[metricId] || 0) - Number(a.outcomes?.[metricId] || 0)
+      ))[0];
+    } else if (formulaEventId) {
+      referencedZone = [...outcomeZones].filter(zone => (
+        Number.isFinite(Number(zone.costPerOutcome?.[formulaEventId]))
+      )).sort((a, b) => (
+        Number(a.costPerOutcome[formulaEventId]) - Number(b.costPerOutcome[formulaEventId])
+      ))[0];
+    }
+  }
+  const totals = dataContract.findings?.find(candidate => candidate.id === 'campaign_totals')?.metrics || {};
+  let actual = kpi?.actual;
+  if (funnel) actual = funnel.value;
+  if (referencedZone && Number.isFinite(Number(referencedZone.outcomes?.[metricId]))) {
+    actual = referencedZone.outcomes[metricId];
+  } else if (referencedZone) {
+    if (formulaEventId && Number.isFinite(Number(referencedZone.costPerOutcome?.[formulaEventId]))) {
+      actual = referencedZone.costPerOutcome[formulaEventId];
+    }
+  } else if (zoneFinding?.metrics && Number.isFinite(Number(zoneFinding.metrics[metricId]))) {
+    actual = zoneFinding.metrics[metricId];
+  } else if (!Number.isFinite(Number(actual)) && Number.isFinite(Number(totals[metricId]))) {
+    actual = totals[metricId];
+  }
+  if (!Number.isFinite(Number(actual))) return null;
+  const groundedGap = referencedZone && kpi
+    ? Number(actual) - Number(kpi.target)
+    : kpi?.gap;
+  const delta = kpi && Number.isFinite(Number(groundedGap))
+    ? `${formatContractValue(groundedGap, kpi.unit)} so với mục tiêu`
+    : 'N/A';
+  return {
+    metricId,
+    label: referencedZone ? `${definition.label} · ${referencedZone.zoneId}` : definition.label,
+    value: formatContractValue(actual, definition.unit),
+    trend: 'stable',
+    delta,
+    timeframe: `${dataContract.timeframe?.start}..${dataContract.timeframe?.end}`,
+    source: dataContract.source,
+  };
+}
+
+function groundAnalysisResult(result, dataContract) {
+  const status = dataContract.performanceStatus || {
+    status: 'watch', summary: 'Chưa đủ KPI để kết luận.',
+  };
+  const fixedStatus = status.status;
+  const fixedRecommendations = (dataContract.actions || []).map(action => ({
+    priority: action.priority,
+    text: `${action.proposedAction} Guardrail: ${action.guardrail} Đánh giá lại: ${action.nextReviewWindow}.`,
+    actionId: action.id,
+  }));
+
+  // Status and recommended actions are mechanical evidence outputs. The model
+  // may explain them, but it cannot soften BAD into WATCH or replace actions.
+  result.overall = `Trạng thái tổng thể: ${fixedStatus.toUpperCase()}. ${status.summary}`;
+  if (!Array.isArray(result.questions) && result.questions && typeof result.questions === 'object') {
+    result.questions = Object.entries(result.questions).map(([id, item]) => ({
+      id, ...(item && typeof item === 'object' ? item : {}),
+    }));
+  }
+  if (!Array.isArray(result.questions)) result.questions = [];
+  for (const item of result.questions) {
+    if (!item.answer || typeof item.answer !== 'object') item.answer = {};
+    const sections = normalizeModelSections(item.answer.sections);
+    item.answer.sections = sections;
+    for (const section of sections.filter(candidate => candidate.type === 'metrics')) {
+      section.items = (Array.isArray(section.items) ? section.items : [])
+        .map(metric => canonicalMetricItem(metric, item, dataContract))
+        .filter(Boolean)
+        .slice(0, 4);
+    }
+    let insight = sections.find(section => section.type === 'insight');
+    if (!insight) {
+      insight = { type: 'insight' };
+      sections.push(insight);
+    }
+    insight.level = fixedStatus;
+    insight.text = `${status.summary} Trạng thái ${fixedStatus.toUpperCase()} được tính trực tiếp từ KPI trong brief.`;
+
+    let recommendation = sections.find(section => section.type === 'recommendation');
+    if (!recommendation && fixedRecommendations.length) {
+      recommendation = { type: 'recommendation', items: [] };
+      sections.push(recommendation);
+    }
+    if (recommendation && fixedRecommendations.length) {
+      recommendation.items = fixedRecommendations.slice(0, 3);
+    }
+  }
+  return result;
+}
 
 // ─── OpenAI call helper ──────────────────────────────────────────────────────
 function buildOpenAIRequestBody(model, messages, temperature, maxCompletionTokens) {
@@ -186,57 +433,19 @@ function normalizeGeneratedRecordsToBudget(records, budget) {
 
 // ─── Generate synthetic analytics records ────────────────────────────────────
 async function generateRecords(campaign) {
-  const { campaignId, brand, objective, budget, startDate, zones } = campaign;
-
-  // Calculate date range: 14 days from startDate
-  const start = new Date(startDate);
-  const dates = [];
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().slice(0, 10));
-  }
-
-  const zoneList = zones.map(z => `${z.id} (channel: ${z.channel}, format: ${z.format}, baseCPM: ${z.cpm})`).join('\n');
-
-  const prompt = `Generate realistic synthetic ad campaign performance data.
-
-CAMPAIGN:
-- Brand: ${brand}
-- Objective: ${objective}
-- Budget: ${budget} VND total (${Math.round(budget / 1000000)}M VND)
-- Duration: 14 days from ${dates[0]} to ${dates[13]}
-- Zones:\n${zoneList}
-
-RULES:
-1. Generate exactly ${zones.length * 14} records (14 days × ${zones.length} zones)
-2. Each record must have these exact fields: campaignId, placementId, date, channel, format, impressions, clicks, spend, ctr, cpm, reach, conversions, vi
-3. campaignId is always "${campaignId}"
-4. ctr = clicks/impressions*100 (rounded to 3 decimals)
-5. cpm ≈ spend/impressions*1000
-6. reach should be 65-85% of impressions
-7. vi (viewability) should be 50-95% depending on format (banner higher, skin lower)
-8. Total spend across all records should be approximately ${Math.round(budget * 0.85)} VND (85% of budget)
-9. For ${objective} campaigns: ${objective === 'awareness' ? 'prioritize high impressions, high vi (70-95%), moderate ctr (0.3-0.8%)' : objective === 'conversion' ? 'moderate impressions, higher ctr (0.6-1.5%), more conversions (2-5% of clicks)' : objective === 'consideration' ? 'balanced impressions, good ctr (0.5-1.2%), moderate conversions' : 'moderate everything with emphasis on reach and frequency'}
-10. Include realistic patterns: weekdays slightly higher than weekends, gradual ramp-up in first 3 days, possible mid-campaign dip around day 7-8
-11. Vary metrics between zones — some zones should perform better than others
-12. conversions: for awareness campaigns use 0.3-1% of clicks, for conversion campaigns use 2-5% of clicks
-
-OUTPUT FORMAT: Return JSON with key "records" containing the array.
-{ "records": [ { "campaignId": "...", "placementId": "...", "date": "YYYY-MM-DD", "channel": "...", "format": "...", "impressions": N, "clicks": N, "spend": N, "ctr": N, "cpm": N, "reach": N, "conversions": N, "vi": N }, ... ] }`;
-
-  const result = await callOpenAI([
-    { role: 'system', content: 'You are a data generator. Output ONLY valid JSON. Generate realistic advertising performance data.' },
-    { role: 'user', content: prompt },
-  ], { temperature: 0.8, max_completion_tokens: 16000 });
-
-  return normalizeGeneratedRecordsToBudget(result.records || [], budget);
+  const input = campaign.contractVersion === 'report-input-v2'
+    ? campaign : normalizeReportInput(campaign);
+  const measurementSpec = buildMeasurementSpec(input);
+  return simulateReportFacts(input, measurementSpec);
 }
 
 // ─── Generate analysis for one report type ───────────────────────────────────
 async function generateAnalysis(campaign, records, reportType) {
-  const questions = QUESTIONS_MAP[reportType] || [];
-  const dataContract = buildReportContract(campaign, records);
+  const input = campaign.contractVersion === 'report-input-v2'
+    ? campaign : normalizeReportInput(campaign);
+  const measurementSpec = buildMeasurementSpec(input);
+  const dataContract = buildReportContract(input, records, measurementSpec);
+  const questions = questionsForReport(reportType, dataContract);
   const questionList = questions.map(q => `- ${q.id}: "${q.question}" (${q.category})`).join('\n');
 
   // Summarize records for context
@@ -265,8 +474,8 @@ async function generateAnalysis(campaign, records, reportType) {
 
   const prompt = `You are an expert digital advertising analyst. Analyze this campaign data and answer predefined questions.
 
-CAMPAIGN: ${campaign.brand} | Objective: ${campaign.objective} | Budget: ${Math.round(campaign.budget / 1000000)}M VND
-PERIOD: 14 days | Zones: ${Object.keys(zoneMap).length}
+CAMPAIGN: ${input.brand} | Objective: ${input.objective} | Budget: ${Math.round(input.budget / 1000000)}M VND
+PERIOD: ${input.startDate} to ${input.endDate} (${input.durationDays} days) | Zones: ${Object.keys(zoneMap).length}
 
 TOTALS: ${totalImp.toLocaleString()} impressions | ${totalClk.toLocaleString()} clicks | CTR ${avgCTR}% | Spend ${Math.round(totalSpend / 1000000)}M VND | ${totalConv} conversions | Avg VI ${avgVI}%
 
@@ -294,7 +503,7 @@ For each question, provide a structured analysis. Output JSON:
           { "type": "metrics", "items": [
             { "metricId": "ctr", "label": "Metric Name", "value": "formatted value", "trend": "up|down|stable", "delta": "+X%", "timeframe": "YYYY-MM-DD..YYYY-MM-DD", "source": "synthetic_showcase" }
           ]},
-          { "type": "insight", "level": "good|warning|bad", "text": "Key insight in Vietnamese" },
+          { "type": "insight", "level": "good|watch|bad", "text": "Explain the fixed performance status from evidence in Vietnamese" },
           { "type": "recommendation", "items": [
             { "priority": "high|medium|low", "text": "Action recommendation in Vietnamese" }
           ]}
@@ -309,25 +518,38 @@ RULES:
 - Use specific numbers from the data
 - Use only metric IDs and finding IDs present in AUTHORITATIVE EVIDENCE CONTRACT
 - Never present summed_daily_reach as unique campaign reach
-- State the synthetic showcase limitation in the overall summary and relevant answers
+- The KPI status and actions in the contract are fixed facts: explain them, never override or replace them
+- Do not put internal provenance labels in the overall summary
 - Do not claim causality, guaranteed results, or that a recommendation was applied
 - If evidence is unavailable, say it is unavailable; never construct a substitute metric
 - Be professional and actionable
 - Each answer should have 2-4 sections
 - Include at least one recommendation per answer`;
 
-  const result = await callOpenAI([
-    { role: 'system', content: 'You are a Vietnamese digital advertising analyst. Output ONLY valid JSON. Be specific, data-driven, and professional.' },
-    { role: 'user', content: prompt },
-  ], { temperature: 0.6, max_completion_tokens: 8000 });
+  let result;
+  try {
+    result = await callOpenAI([
+      { role: 'system', content: 'You are a Vietnamese digital advertising analyst. Output ONLY valid JSON. Be specific, data-driven, and professional.' },
+      { role: 'user', content: prompt },
+    ], { temperature: 0.6, max_completion_tokens: 8000 });
 
-  validateAnalysisResult(result, questions, dataContract);
+    groundAnalysisResult(result, dataContract);
+    validateAnalysisResult(result, questions, dataContract);
+    result.analysisProvenance = { provider: 'openai', model: OPENAI_MODEL, reportType };
+  } catch (error) {
+    if (dataContract.contractVersion !== 'report-evidence-v2') throw error;
+    console.warn(`[reportGen] Report Specialist fallback for ${reportType}: ${error.message}`);
+    result = buildEvidenceAnalysis(input, dataContract, reportType, questions);
+    validateAnalysisResult(result, questions, dataContract);
+  }
   return { ...result, dataContract };
 }
 
 // ─── Main: generate all reports for a campaign ───────────────────────────────
 async function generateReports(campaign) {
-  const { campaignId } = campaign;
+  const input = campaign.contractVersion === 'report-input-v2'
+    ? campaign : normalizeReportInput(campaign);
+  const { campaignId } = input;
   console.log(`[reportGen] Starting generation for campaign ${campaignId}`);
 
   // Check if records already exist AND have real data
@@ -335,13 +557,16 @@ async function generateReports(campaign) {
   const existingWithData = existing > 0
     ? await AnalyticsRecord.countDocuments({ campaignId, impressions: { $gt: 0 } })
     : 0;
+  const existingForInput = existing > 0
+    ? await AnalyticsRecord.countDocuments({ campaignId, inputHash: input.inputHash })
+    : 0;
 
-  if (existing > 0 && existingWithData === 0) {
-    console.log(`[reportGen] ⚠️  ${existing} records found but ALL ZEROS — deleting and regenerating`);
+  if (existing > 0 && (existingWithData === 0 || existingForInput !== existing)) {
+    console.log(`[reportGen] Replacing ${existing} stale/legacy records for input ${input.inputHash.slice(0, 12)}`);
     await AnalyticsRecord.deleteMany({ campaignId });
   }
 
-  const shouldGenerate = existing === 0 || existingWithData === 0;
+  const shouldGenerate = existing === 0 || existingWithData === 0 || existingForInput !== existing;
   if (!shouldGenerate) {
     console.log(`[reportGen] ${existing} records (${existingWithData} with data) already exist for ${campaignId} — reusing`);
   }
@@ -350,7 +575,7 @@ async function generateReports(campaign) {
   let records;
   if (shouldGenerate) {
     try {
-      records = await generateRecords(campaign);
+      records = await generateRecords(input);
       console.log(`[reportGen] OpenAI returned ${records.length} records`);
       if (records.length > 0) {
         await AnalyticsRecord.insertMany(records);
@@ -385,8 +610,8 @@ async function generateReports(campaign) {
     );
 
     try {
-      const result = await generateAnalysis(campaign, records, reportType);
-      const questions = (QUESTIONS_MAP[reportType] || []).map((q) => {
+      const result = await generateAnalysis(input, records, reportType);
+      const questions = questionsForReport(reportType, result.dataContract).map((q) => {
         const answered = (result.questions || []).find(a => a.id === q.id);
         return {
           ...q,
@@ -403,9 +628,16 @@ async function generateReports(campaign) {
             overall: result.overall || '',
             questions,
             dataContract: result.dataContract,
+            inputHash: input.inputHash,
+            schemaVersion: result.dataContract.contractVersion,
+            performanceStatus: result.dataContract.performanceStatus,
+            actions: result.dataContract.actions,
             provenance: {
-              provider: 'openai', model: OPENAI_MODEL,
-              schema: 'report-evidence-v1', source: 'synthetic_showcase',
+              provider: result.analysisProvenance?.provider || 'openai',
+              model: result.analysisProvenance?.model || OPENAI_MODEL,
+              schema: 'report-evidence-v2', source: 'scenario_simulation',
+              inputHash: input.inputHash,
+              fallbackReason: result.analysisProvenance?.reason || null,
             },
             generatedAt: new Date(),
             error: '',
@@ -437,7 +669,7 @@ async function getReportStatus(campaignId) {
   const ready = Object.values(status).filter(s => s === 'ready').length;
   const errors = Object.values(status).filter(s => s === 'error').length;
   const contractReady = docs.filter(doc => (
-    doc?.status === 'ready' && doc?.dataContract?.contractVersion === 'report-evidence-v1'
+    doc?.status === 'ready' && doc?.dataContract?.contractVersion === 'report-evidence-v2'
   )).length;
   return { campaignId, total: REPORT_TYPES.length, ready, errors, contractReady, types: status };
 }
@@ -445,4 +677,5 @@ async function getReportStatus(campaignId) {
 module.exports = {
   generateReports, getReportStatus, REPORT_TYPES, QUESTIONS_MAP,
   buildOpenAIRequestBody, generateAnalysis, normalizeGeneratedRecordsToBudget,
+  generateRecords, questionsForReport, buildEvidenceAnalysis, groundAnalysisResult,
 };

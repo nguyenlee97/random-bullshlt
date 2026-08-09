@@ -18,12 +18,11 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
 
 // ─── Report tab config ───────────────────────────────────────────────────────
 const REPORT_TABS = [
-  { id: 'daily_ops',     label: 'Daily Ops',      icon: Activity,           color: '#3b82f6' },
+  { id: 'daily_ops',     label: 'Tổng quan',      icon: Activity,           color: '#3b82f6' },
   { id: 'awareness',     label: 'Awareness',      icon: Eye,                color: '#8b5cf6' },
   { id: 'consideration', label: 'Consideration',  icon: MousePointerClick,  color: '#f59e0b' },
   { id: 'conversion',    label: 'Conversion',     icon: Target,             color: '#10b981' },
   { id: 'retention',     label: 'Retention',      icon: RefreshCw,          color: '#ec4899' },
-  { id: 'executive',     label: 'Executive',      icon: DollarSign,         color: '#6366f1' },
 ]
 
 // ─── Number formatters ───────────────────────────────────────────────────────
@@ -48,13 +47,13 @@ function KPIScorecard({ records }) {
     a.spend += r.spend || 0
     a.conv += r.conversions || 0
     a.reach += r.reach || 0
-    a.viSum += r.vi || 0
+    a.viWeighted += (r.vi || 0) * (r.impressions || 0)
     a.n++
     return a
-  }, { imp: 0, clk: 0, spend: 0, conv: 0, reach: 0, viSum: 0, n: 0 })
+  }, { imp: 0, clk: 0, spend: 0, conv: 0, reach: 0, viWeighted: 0, n: 0 })
 
   const avgCTR = totals.imp > 0 ? (totals.clk / totals.imp * 100).toFixed(2) : '0'
-  const avgVI = totals.n > 0 ? (totals.viSum / totals.n).toFixed(1) : '0'
+  const avgVI = totals.imp > 0 ? (totals.viWeighted / totals.imp).toFixed(1) : '0'
   const avgCPM = totals.imp > 0 ? Math.round(totals.spend / totals.imp * 1000) : 0
 
   const kpis = [
@@ -62,7 +61,7 @@ function KPIScorecard({ records }) {
     { label: 'Clicks', value: fmtN(totals.clk), icon: MousePointerClick, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
     { label: 'CTR', value: avgCTR + '%', icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
     { label: 'Spend', value: fmtVND(totals.spend), icon: DollarSign, color: 'text-violet-600', bg: 'bg-violet-50 border-violet-200' },
-    { label: 'Reach', value: fmtN(totals.reach), icon: Users, color: 'text-pink-600', bg: 'bg-pink-50 border-pink-200' },
+    { label: 'Daily reach (sum)', value: fmtN(totals.reach), icon: Users, color: 'text-pink-600', bg: 'bg-pink-50 border-pink-200' },
     { label: 'Viewability', value: avgVI + '%', icon: Activity, color: 'text-cyan-600', bg: 'bg-cyan-50 border-cyan-200' },
   ]
 
@@ -77,6 +76,99 @@ function KPIScorecard({ records }) {
           <p className={`text-lg font-black ${color}`}>{value}</p>
         </div>
       ))}
+    </div>
+  )
+}
+
+const STATUS_STYLE = {
+  good: { label: 'GOOD', badge: 'bg-emerald-100 text-emerald-800', border: 'border-emerald-200', bar: 'bg-emerald-500' },
+  watch: { label: 'WATCH', badge: 'bg-amber-100 text-amber-900', border: 'border-amber-200', bar: 'bg-amber-500' },
+  bad: { label: 'BAD', badge: 'bg-red-100 text-red-800', border: 'border-red-200', bar: 'bg-red-500' },
+}
+
+function BusinessPerformance({ contract }) {
+  if (contract?.contractVersion !== 'report-evidence-v2') return null
+  const performanceStatus = contract.performanceStatus || { status: 'watch', counts: {} }
+  const overallStyle = STATUS_STYLE[performanceStatus.status] || STATUS_STYLE.watch
+  const kpiScorecard = contract.kpiScorecard || []
+  const funnel = contract.businessFunnel || []
+  const actions = contract.actions || []
+  const funnelMax = Math.max(1, ...funnel.map(item => Number(item.value || 0)))
+
+  return (
+    <div className="mb-4 space-y-3" data-testid="report-business-performance">
+      <Card className={`${overallStyle.border} bg-white`}>
+        <CardContent className="py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Hiệu quả theo KPI trong brief</p>
+              <p className="mt-1 text-sm font-bold text-slate-900">{performanceStatus.summary}</p>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-xs font-black ${overallStyle.badge}`}>{overallStyle.label}</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {kpiScorecard.length > 0 && (
+        <div className="grid gap-2 sm:grid-cols-2" data-testid="report-kpi-scorecard">
+          {kpiScorecard.map(kpi => {
+            const style = STATUS_STYLE[kpi.status] || STATUS_STYLE.watch
+            const actual = kpi.unit === 'VND' ? fmtVND(kpi.actual || 0)
+              : kpi.unit === 'percent' ? `${Number(kpi.actual || 0).toFixed(1)}%`
+              : fmtN(kpi.actual || 0)
+            const target = kpi.unit === 'VND' ? fmtVND(kpi.target || 0)
+              : kpi.unit === 'percent' ? `${kpi.target}%` : fmtN(kpi.target || 0)
+            return (
+              <article key={kpi.id} className={`rounded-xl border bg-white p-3 ${style.border}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-bold leading-5 text-slate-900">{kpi.label}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${style.badge}`}>{style.label}</span>
+                </div>
+                <p className="mt-2 text-lg font-black text-slate-950">{actual}</p>
+                <p className="text-[10px] text-slate-500">Mục tiêu {kpi.operator} {target} · Mức đạt {kpi.attainment ?? '—'}%</p>
+              </article>
+            )
+          })}
+        </div>
+      )}
+
+      {funnel.length > 0 && (
+        <Card data-testid="report-business-funnel">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Business outcome funnel</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {funnel.map((item, index) => (
+              <div key={item.eventId} className="grid grid-cols-[minmax(120px,1fr)_2fr_auto] items-center gap-2">
+                <span className="truncate text-[11px] font-semibold text-slate-700">{index + 1}. {item.label}</span>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.max(2, item.value / funnelMax * 100)}%` }} />
+                </div>
+                <strong className="min-w-12 text-right text-[11px] text-slate-900">{fmtN(item.value)}</strong>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {actions.length > 0 && (
+        <Card className="border-slate-200" data-testid="report-actions">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Action ưu tiên có kiểm chứng</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {actions.map(action => {
+              const style = STATUS_STYLE[action.status] || STATUS_STYLE.watch
+              return (
+                <article key={action.id} className={`rounded-xl border p-3 ${style.border}`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${style.badge}`}>{action.priority?.toUpperCase()}</span>
+                    <p className="text-xs font-bold text-slate-900">{action.problem}</p>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-slate-700">{action.proposedAction}</p>
+                  <p className="mt-1 text-[10px] leading-4 text-slate-500"><strong>Guardrail:</strong> {action.guardrail} · <strong>Đánh giá lại:</strong> {action.nextReviewWindow}</p>
+                </article>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
@@ -755,6 +847,7 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
   // Determine objective to highlight the primary report tab
   const objective = formState?.brief?.objective || 'awareness'
   const objectiveTab = REPORT_TABS.find(t => t.id === objective)
+  const visibleTabs = [REPORT_TABS[0], ...(objectiveTab ? [objectiveTab] : [])]
 
   // Poll report status
   useEffect(() => {
@@ -873,7 +966,7 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
           rel="noreferrer"
           download={`report-${campaignId}.pdf`}
           className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-brand-700"
-          aria-label="Tải PDF đầy đủ gồm 6 báo cáo"
+          aria-label="Tải PDF đầy đủ gồm 6 báo cáo tương thích"
         >
           <FileText className="h-3.5 w-3.5" />
           Tải PDF đầy đủ (6 báo cáo)
@@ -883,7 +976,7 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
 
       {/* Tab bar */}
       <div className="flex flex-wrap gap-1 mb-4 p-1 bg-muted/50 rounded-xl">
-        {REPORT_TABS.map(tab => {
+        {visibleTabs.map(tab => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
           const isObjective = tab.id === objective
@@ -924,7 +1017,7 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
           <div className="mt-3 space-y-3">
             <p>
               <strong>Thời gian:</strong> {currentAnalysis.dataContract.timeframe?.start || 'N/A'} → {currentAnalysis.dataContract.timeframe?.end || 'N/A'}
-              {' · '}<strong>Nguồn:</strong> {currentAnalysis.dataContract.source}
+              {' · '}<strong>Contract:</strong> {currentAnalysis.dataContract.contractVersion}
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               {Object.entries(currentAnalysis.dataContract.metricDefinitions || {}).map(([metricId, metric]) => (
@@ -943,6 +1036,7 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
       )}
 
       {/* KPI Scorecard */}
+      <BusinessPerformance contract={currentAnalysis?.dataContract} />
       <KPIScorecard records={records} />
 
       {/* Tab-specific charts */}

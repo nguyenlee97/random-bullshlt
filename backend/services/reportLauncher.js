@@ -1,6 +1,7 @@
 const ReportAnalysis = require('../models/ReportAnalysis');
 const { generateReports, getReportStatus, REPORT_TYPES } = require('./reportGenerator');
 const { hasActiveReportGeneration } = require('../lib/reportGenerationLease');
+const { normalizeReportInput } = require('../lib/reportMeasurement');
 
 
 function inferReportZone(rawId) {
@@ -19,9 +20,22 @@ function inferReportZone(rawId) {
 async function launchReportGeneration(input) {
   const campaignId = String(input.campaignId || '').trim();
   if (!campaignId) throw new Error('campaignId required');
+  const zones = (input.zones || []).map(zone => (
+    typeof zone === 'string' ? inferReportZone(zone) : zone
+  ));
+  const normalized = normalizeReportInput({
+    ...input,
+    campaignId,
+    zones: zones.length ? zones : [inferReportZone('znews_homepage_banner')],
+  });
 
   const current = await getReportStatus(campaignId);
-  if (current.ready >= current.total && current.contractReady >= current.total) {
+  const readyForInput = await ReportAnalysis.countDocuments({
+    campaignId, status: 'ready', schemaVersion: 'report-evidence-v2',
+    inputHash: normalized.inputHash,
+  });
+  if (current.ready >= current.total && current.contractReady >= current.total
+      && readyForInput >= current.total) {
     return { status: 'already_ready', campaignId };
   }
   if (Object.values(current.types || {}).includes('generating')) {
@@ -41,25 +55,17 @@ async function launchReportGeneration(input) {
     { upsert: true }
   )));
 
-  const zones = (input.zones || []).map(zone => (
-    typeof zone === 'string' ? inferReportZone(zone) : zone
-  ));
   setImmediate(async () => {
     try {
-      await generateReports({
-        campaignId,
-        brand: input.brand || 'Unknown Brand',
-        objective: input.objective || 'awareness',
-        budget: input.budget || 100000000,
-        startDate: input.startDate || new Date().toISOString().slice(0, 10),
-        zones: zones.length ? zones : [inferReportZone('znews_homepage_banner')],
-        audience: input.audience || [],
-      });
+      await generateReports(normalized);
     } catch (err) {
       console.error('[reports/generate] Background generation failed:', err.message);
     }
   });
-  return { status: 'generating', campaignId };
+  return {
+    status: 'generating', campaignId, inputHash: normalized.inputHash,
+    reportVersion: 2,
+  };
 }
 
 
