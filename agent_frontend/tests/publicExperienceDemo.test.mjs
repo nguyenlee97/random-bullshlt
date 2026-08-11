@@ -574,11 +574,11 @@ test('technical document keeps the removed evidence content out and provides rel
 
 test('technical document distinguishes the live feedback foundation from later learning stages', () => {
   assert.match(docs, /id="feedback-loop"/)
-  assert.match(docs, /Feedback tại điểm quyết định/)
-  assert.match(docs, /HITL adjudication/)
-  assert.match(docs, /SFT · DPO · RLHF \/ RLAIF/)
-  assert.match(docs, /Feedback hiện tại không tự sửa campaign/)
-  assert.match(docs, /Review queue, automated dataset-candidate pipeline/)
+  assert.match(docs, /Learning without uncontrolled self-modification/)
+  assert.match(docs, /Human Adjudication/)
+  assert.match(docs, /Feedback Agent/)
+  assert.match(docs, /feedback là versioned evidence/)
+  assert.match(docs, /Candidate chạy lại case mới/)
 })
 
 test('public experience is responsive and honors reduced motion', () => {

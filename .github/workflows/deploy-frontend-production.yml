@@ -3,7 +3,7 @@ name: Deploy frontend production
 on:
   push:
     branches:
-      - revamp/next-hackathon
+      - experiment/demo-day-flow-2026-08-02
     paths:
       - agent_frontend/**
       - .github/workflows/deploy-frontend-production.yml

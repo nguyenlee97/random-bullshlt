@@ -178,7 +178,7 @@ test('Autopilot exposes a placement-aware bounded creative format plan', async (
   assert.match(panel, /Kế hoạch creative theo placement/)
   assert.match(panel, /formatPlan\?\.max_assets/)
   assert.match(panel, /formatPlan\.estimated_provider_calls/)
-  assert.match(docs, /Bounded multi-format generation/)
+  assert.match(docs, /bounded image generation/)
   assert.doesNotMatch(docs, /Multi-format generation và creative variants vẫn là roadmap/)
 })
 

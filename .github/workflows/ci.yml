@@ -3,7 +3,7 @@ name: Advertising Agent CI
 on:
   pull_request:
   push:
-    branches: [main, "revamp/**"]
+    branches: [main, "revamp/**", "experiment/**"]
 
 permissions:
   contents: read
