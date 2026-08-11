@@ -3,7 +3,7 @@ name: Deploy frontend production
 on:
   push:
     branches:
-      - experiment/demo-day-flow-2026-08-02
+      - main
     paths:
       - agent_frontend/**
       - .github/workflows/deploy-frontend-production.yml
