@@ -844,6 +844,7 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
   const [retrying, setRetrying] = useState(false)
   const pollRef = useRef(null)
   const campaignId = data?.campaignId || formState?.report?.campaignId || ''
+  const objective = formState?.brief?.objective || 'awareness'
 
   // All six generated report perspectives remain available. The campaign
   // objective is used inside the report content, not to hide other evidence.

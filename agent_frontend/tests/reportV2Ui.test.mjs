@@ -12,4 +12,6 @@ test('Report v2 keeps all six generated report perspectives accessible', () => {
     assert.match(source, new RegExp(`id: '${tab}'`))
   }
   assert.match(source, /const visibleTabs = REPORT_TABS/)
+  assert.match(source, /const objective = formState\?\.brief\?\.objective \|\| 'awareness'/)
+  assert.match(source, /const isObjective = tab\.id === objective/)
 })
