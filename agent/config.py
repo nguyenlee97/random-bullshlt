@@ -82,7 +82,7 @@ class Config:
         os.getenv("PLACEMENT_RERANK_ENABLED", "false").lower() == "true"
     )
     PLACEMENT_RERANK_MODEL: str = os.getenv(
-        "PLACEMENT_RERANK_MODEL", "gpt-5.4-nano"
+        "PLACEMENT_RERANK_MODEL", "gpt-5.6-luna"
     )
     PLACEMENT_RERANK_REASONING_EFFORT: str = os.getenv(
         "PLACEMENT_RERANK_REASONING_EFFORT", "low"
@@ -135,7 +135,10 @@ class Config:
     OPENAI_IMAGE_TIMEOUT_SECONDS: float = float(
         os.getenv("OPENAI_IMAGE_TIMEOUT_SECONDS", "180")
     )
-    OPENAI_VLM_MODEL: str = os.getenv("OPENAI_VLM_MODEL", "gpt-5.4-mini")
+    # Creative review is a bounded vision specialist. Luna has stronger
+    # cost-efficiency and multimodal benchmark coverage than the prior model;
+    # deterministic image checks and the manual-review policy remain binding.
+    OPENAI_VLM_MODEL: str = os.getenv("OPENAI_VLM_MODEL", "gpt-5.6-luna")
     DEFAULT_CONVERSATION_MODEL: str = os.getenv(
         "DEFAULT_CONVERSATION_MODEL", "greennode_minimax"
     )
@@ -479,7 +482,7 @@ class Config:
         os.getenv("AUDIENCE_QUERY_PLANNER_TIMEOUT_SECONDS", "30")
     )
     AUDIENCE_NANO_RERANK_MODEL: str = os.getenv(
-        "AUDIENCE_NANO_RERANK_MODEL", "gpt-5.4-nano"
+        "AUDIENCE_NANO_RERANK_MODEL", "gpt-5.6-luna"
     )
     AUDIENCE_NANO_RERANK_REASONING_EFFORT: str = os.getenv(
         "AUDIENCE_NANO_RERANK_REASONING_EFFORT", "low"

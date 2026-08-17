@@ -17,7 +17,9 @@ const { simulateReportFacts } = require('../lib/reportSyntheticData');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 // Report generation is a fixed specialist. It is independent of the campaign
 // conversation engine and cannot drift to the GreenNode model selection.
-const OPENAI_MODEL = 'gpt-5.4-mini';
+// Report facts are deterministic and validated before this bounded Vietnamese
+// narrative pass. Luna is the cost-efficient specialist for this workload.
+const OPENAI_MODEL = 'gpt-5.6-luna';
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 
 // ─── Report types ────────────────────────────────────────────────────────────
