@@ -7,10 +7,12 @@ const { launchReportGeneration } = require('../services/reportLauncher');
 
 // ── POST /api/reports/generate ───────────────────────────────────────────────
 // Trigger report generation for a campaign. Idempotent — skips if already generating/ready.
-// Body: { campaignId, brand, objective, budget, startDate, zones, audience }
+// Body: complete report-input-v2 campaign snapshot. Legacy reports are kept
+// read-only unless an operator explicitly requests an upgrade.
 router.post('/generate', async (req, res) => {
   try {
-    res.json(await launchReportGeneration(req.body || {}));
+    const result = await launchReportGeneration(req.body || {});
+    res.json(result);
   } catch (err) {
     if (err.message === 'campaignId required') return res.status(400).json({ error: err.message });
     res.status(500).json({ error: err.message });

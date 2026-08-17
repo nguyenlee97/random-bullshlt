@@ -545,6 +545,29 @@ RULES:
   return { ...result, dataContract };
 }
 
+async function continueQueuedReportGeneration(campaignId, completedInputHash) {
+  const docs = await ReportAnalysis.find(
+    { campaignId, 'pendingInput.inputHash': { $exists: true } },
+    { pendingInput: 1 }
+  ).lean();
+  const nextInput = docs.map(doc => doc.pendingInput).find(input => (
+    input?.inputHash && input.inputHash !== completedInputHash
+  ));
+  if (!nextInput) return null;
+
+  // Claim the next snapshot before releasing this generation lease. A later
+  // request can then safely overwrite pendingInput and wait behind this one.
+  await ReportAnalysis.updateMany(
+    { campaignId, 'pendingInput.inputHash': nextInput.inputHash },
+    { $set: {
+      status: 'generating', error: '', inputHash: nextInput.inputHash,
+      schemaVersion: 'report-evidence-v2', pendingInput: null,
+    } }
+  );
+  console.log(`[reportGen] Continuing with queued input ${nextInput.inputHash.slice(0, 12)} for ${campaignId}`);
+  return generateReports(nextInput);
+}
+
 // ─── Main: generate all reports for a campaign ───────────────────────────────
 async function generateReports(campaign) {
   const input = campaign.contractVersion === 'report-input-v2'
@@ -593,6 +616,7 @@ async function generateReports(campaign) {
           { upsert: true }
         );
       }
+      await continueQueuedReportGeneration(campaignId, input.inputHash);
       throw err;
     }
   } else {
@@ -656,6 +680,7 @@ async function generateReports(campaign) {
 
   await Promise.allSettled(analysisPromises);
   console.log(`[reportGen] All analyses complete for ${campaignId}`);
+  await continueQueuedReportGeneration(campaignId, input.inputHash);
 }
 
 // ─── Get generation status ───────────────────────────────────────────────────

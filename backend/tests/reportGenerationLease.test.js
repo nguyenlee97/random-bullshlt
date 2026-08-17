@@ -8,13 +8,13 @@ const {
 } = require('../lib/reportGenerationLease');
 
 test('a recent generating report holds the generation lease', () => {
-  const nowMs = Date.parse('2026-07-17T10:00:00.000Z');
+  const nowMs = Date.parse('2026-08-17T10:00:00.000Z');
   const docs = [{ status: 'generating', updatedAt: new Date(nowMs - 60_000) }];
   assert.equal(hasActiveReportGeneration(docs, { nowMs }), true);
 });
 
 test('a stale generating report can be reclaimed after a restart', () => {
-  const nowMs = Date.parse('2026-07-17T10:00:00.000Z');
+  const nowMs = Date.parse('2026-08-17T10:00:00.000Z');
   const docs = [{
     status: 'generating',
     updatedAt: new Date(nowMs - DEFAULT_REPORT_GENERATION_LEASE_MS - 1),

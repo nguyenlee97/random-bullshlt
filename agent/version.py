@@ -3,7 +3,7 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-08-05.1"
+BUILD_VERSION = "2026-08-17.1"
 
 BUILD_FEATURES = [
     "hackathon-doc-links-and-diagram-zoom",
@@ -319,4 +319,5 @@ BUILD_FEATURES = [
     "production-grafana-openai-observability",               # current OpenAI/Zalo/tool paths populate zero-safe Agent Ops panels
     "production-creative-image-url-recovery",                # generated gallery and crop retain the CORS-enabled backend asset URL
     "generated-image-finalize-upload-limit",                 # owned crop and scale payloads can carry full-resolution canvas output
+    "report-evidence-v2-production-safe",  # complete snapshot, legacy preservation, queued updates
 ]

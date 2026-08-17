@@ -23,6 +23,7 @@ const REPORT_TABS = [
   { id: 'consideration', label: 'Consideration',  icon: MousePointerClick,  color: '#f59e0b' },
   { id: 'conversion',    label: 'Conversion',     icon: Target,             color: '#10b981' },
   { id: 'retention',     label: 'Retention',      icon: RefreshCw,          color: '#ec4899' },
+  { id: 'executive',     label: 'Executive',      icon: DollarSign,         color: '#6366f1' },
 ]
 
 // ─── Number formatters ───────────────────────────────────────────────────────
@@ -844,10 +845,9 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
   const pollRef = useRef(null)
   const campaignId = data?.campaignId || formState?.report?.campaignId || ''
 
-  // Determine objective to highlight the primary report tab
-  const objective = formState?.brief?.objective || 'awareness'
-  const objectiveTab = REPORT_TABS.find(t => t.id === objective)
-  const visibleTabs = [REPORT_TABS[0], ...(objectiveTab ? [objectiveTab] : [])]
+  // All six generated report perspectives remain available. The campaign
+  // objective is used inside the report content, not to hide other evidence.
+  const visibleTabs = REPORT_TABS
 
   // Poll report status
   useEffect(() => {
