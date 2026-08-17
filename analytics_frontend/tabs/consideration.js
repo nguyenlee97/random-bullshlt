@@ -3,7 +3,7 @@
  * Renders the full HTML shell then delegates to component modules:
  *   scorecard.js, b1-ctr.js, b2-clicks.js, b3-engagement.js
  */
-import { renderScorecard }             from './consideration/scorecard.js';
+import { renderScorecard }             from './consideration/scorecard.js?v=1.1.4';
 import { drawCtrTrend, drawCtrVsCpmScatter } from './consideration/b1-ctr.js';
 import { drawClickVolume, renderTopClicksTable } from './consideration/b2-clicks.js';
 import { drawCtrByFormat, renderCampaignRanking } from './consideration/b3-engagement.js';
@@ -52,14 +52,8 @@ function buildShell() {
           <div class="sub">Daily CTR % per placement over time</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Track engagement momentum per placement — is CTR holding, rising, or dropping?</div>
-      <div class="card-rule"><b>Decision rule:</b> CTR declining &gt;20% vs first week → creative fatigue on that placement. Pause or swap.</div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap tall"><canvas id="ch_co_ctr_trend"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_co_ctr_trend">i</span>
-        <span id="ins_co_ctr_trend">—</span>
       </div>
     </div>
 
@@ -72,14 +66,8 @@ function buildShell() {
           <div class="sub">Bubble size = impression volume · colour = channel</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Find placements delivering high CTR at low cost (upper-left quadrant = winners).</div>
-      <div class="card-rule"><b>Decision rule:</b> Lower-right quadrant = high CPM + low CTR → renegotiate rates or cut placement.</div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap tall"><canvas id="ch_co_scatter"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_co_scatter">i</span>
-        <span id="ins_co_scatter">—</span>
       </div>
     </div>
 
@@ -98,14 +86,8 @@ function buildShell() {
           <div class="sub">Stacked bars — total daily clicks segmented by channel</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Monitor day-to-day click delivery — identify spikes, dips, and channel contribution.</div>
-      <div class="card-rule"><b>Decision rule:</b> Single channel dominating &gt;80% → diversification risk. Day-over-day drop &gt;30% → investigate delivery issue.</div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap tall"><canvas id="ch_co_clicks"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_co_clicks">i</span>
-        <span id="ins_co_clicks">—</span>
       </div>
     </div>
   </div>
@@ -120,8 +102,6 @@ function buildShell() {
           <div class="sub">Ranked by total clicks · includes CTR, CPC, Conversions</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Find the highest-traffic placements to prioritise for budget allocation.</div>
-      <div class="card-rule"><b>Decision rule:</b> High clicks + low CTR → large impression base. High CPC + low conv → low-intent traffic.</div>
       <div class="card-body auto">
         <div id="co-top-clicks"></div>
       </div>
@@ -141,14 +121,8 @@ function buildShell() {
           <div class="sub">Grouped bars — find the highest-engaging channel × format combination</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Determine which ad format (banner vs video) performs best on each channel.</div>
-      <div class="card-rule"><b>Decision rule:</b> Video CTR &gt;2× banner CTR on same channel → shift budget to video for awareness uplift.</div>
       <div class="card-body auto" style="padding-bottom:16px">
         <div class="chart-wrap" style="min-height:240px"><canvas id="ch_co_ctr_fmt"></canvas></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_co_ctr_fmt">i</span>
-        <span id="ins_co_ctr_fmt">—</span>
       </div>
     </div>
   </div>
@@ -163,14 +137,8 @@ function buildShell() {
           <div class="sub">All campaigns ranked by CTR — with clicks, spend, CPC and CVR</div>
         </div>
       </div>
-      <div class="card-usecase"><b>When to use:</b> Holistic view of every campaign's engagement efficiency in one table.</div>
-      <div class="card-rule"><b>Decision rule:</b> Top-CTR campaign with low CVR = engagement without conversion → fix landing page or offer.</div>
       <div class="card-body auto">
         <div id="co-camp-ranking"></div>
-      </div>
-      <div class="card-insight">
-        <span class="insight-ic" id="ic_co_ranking">i</span>
-        <span id="ins_co_ranking">—</span>
       </div>
     </div>
   </div>

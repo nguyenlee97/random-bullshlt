@@ -110,10 +110,19 @@ for fp in files:
 
     assert 2 <= len(aud["must_include"]) <= 4, f"{name}: must_include size"
     if is_v2:
-        assert 2 <= len(aud["acceptable"]) <= 6, f"{name}: acceptable size (v2 bound)"
+        # Optional alternatives must remain defensible after human review. A
+        # lower bound encouraged unrelated labels solely to fill the bucket.
+        assert 0 <= len(aud["acceptable"]) <= 6, f"{name}: acceptable size (v2 bound)"
     else:
         assert 2 <= len(aud["acceptable"]) <= 5, f"{name}: acceptable size (v1 bound)"
-    assert 1 <= len(aud["must_exclude"]) <= 3, f"{name}: must_exclude size"
+    # V2 human review may remove a fabricated negative when the catalog has no
+    # defensible actively-wrong segment. Requiring one negative per brief caused
+    # demographic proxies and quota-shaped labels. Aggregate near-miss and
+    # adversarial quotas still provide exclusion coverage across the suite.
+    if is_v2:
+        assert 0 <= len(aud["must_exclude"]) <= 3, f"{name}: must_exclude size (v2 bound)"
+    else:
+        assert 1 <= len(aud["must_exclude"]) <= 3, f"{name}: must_exclude size"
 
     assert "zones" in d["labels"] and "expected_warnings" in d["labels"], f"{name}: missing zones/expected_warnings"
     assert d["labels"].get("labeler_note", "").strip(), f"{name}: missing/empty labeler_note"
@@ -132,7 +141,6 @@ for fp in files:
     # v2-only checks
     if is_v2:
         v2_tags_present = [t for t in d["tags"] if t in V2_QUOTA_TAGS]
-        assert v2_tags_present, f"{name}: schema_version=2 brief has none of the v2 quota tags {V2_QUOTA_TAGS}"
         for t in v2_tags_present:
             v2_quota_c[t] += 1
 

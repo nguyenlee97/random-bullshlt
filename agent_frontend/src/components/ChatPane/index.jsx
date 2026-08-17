@@ -1,6 +1,13 @@
 import { MessageSquare, Download } from 'lucide-react'
 import ChatThread from './ChatThread'
 import ChatComposer from './ChatComposer'
+import { AgentAPI } from '@/api/agentApi'
+import {
+  compactNetworkLog,
+  requestBodySnapshot,
+  safeDebugValue,
+  safePublicDebugValue,
+} from '@/lib/debugExport'
 
 // ─── Global fetch interceptor ─────────────────────────────────────────────────
 // Installed once per page load. Captures all fetch() calls (DMP, agent, campaigns).
@@ -24,8 +31,9 @@ if (typeof window !== 'undefined' && !window.__fetchIntercepted) {
         const ct = res.headers.get('content-type') || ''
         if (ct.includes('json')) {
           const json = await clone.json()
-          // Only keep first 500 chars to avoid bloat
-          responsePreview = JSON.stringify(json).slice(0, 500)
+          responsePreview = url.includes('/api/agent/logs/')
+            ? { omitted: 'included separately as backend_logs' }
+            : safeDebugValue(json)
         }
       } catch { /* ignore */ }
       _networkLog.push({
@@ -34,9 +42,10 @@ if (typeof window !== 'undefined' && !window.__fetchIntercepted) {
         url,
         status,
         duration_ms: Date.now() - t0,
-        req_body: reqBody ? String(reqBody).slice(0, 300) : null,
+        req_body: requestBodySnapshot(reqBody),
         res_preview: responsePreview,
       })
+      if (_networkLog.length > 2000) _networkLog.splice(0, _networkLog.length - 2000)
       return res
     } catch (err) {
       _networkLog.push({
@@ -47,6 +56,7 @@ if (typeof window !== 'undefined' && !window.__fetchIntercepted) {
         duration_ms: Date.now() - t0,
         error: err.message,
       })
+      if (_networkLog.length > 2000) _networkLog.splice(0, _networkLog.length - 2000)
       throw err
     }
   }
@@ -55,16 +65,25 @@ if (typeof window !== 'undefined' && !window.__fetchIntercepted) {
 }
 
 // ─── Export chat log ──────────────────────────────────────────────────────────
-function exportChatLog(messages) {
+async function exportChatLog(messages, debugContext = {}) {
   const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8000'
-
-  // Attempt to pull session logs from backend
   const sessionId = window.__AGENT_SESSION_ID__ || 'unknown'
+  let backendLogs = null
+  let backendLogsError = null
+  try {
+    backendLogs = safeDebugValue(await AgentAPI.getDebugLogs(500))
+  } catch (error) {
+    backendLogsError = error.message
+  }
+  const rawNetworkLog = window.__networkLog || []
+  const networkLog = compactNetworkLog(rawNetworkLog)
 
   const exportData = {
+    export_schema_version: 3,
     export_time: new Date().toISOString(),
     session_id: sessionId,
     agent_url: AGENT_URL,
+    ui_state: safeDebugValue(debugContext),
 
     // ── Conversation transcript ─────────────────────────────────────
     conversation: messages.map((m, i) => ({
@@ -72,18 +91,10 @@ function exportChatLog(messages) {
       role: m.role,           // 'user' | 'assistant' | 'thinking'
       content: m.content,
       timestamp: m.timestamp,
-      metadata: m.metadata || null,
-      blocks: (m.blocks || []).map(b => ({
-        type: b.type,
-        // Include table rows, text, etc for debugging
-        ...(b.title && { title: b.title }),
-        ...(b.columns && { columns: b.columns }),
-        ...(b.rows && { rows: b.rows }),
-        ...(b.text && { text: b.text }),
-        ...(b.campaigns && { campaigns: b.campaigns }),
-        ...(b.metrics && { metrics: b.metrics }),
-        ...(b.size !== undefined && { size: b.size }),
-      })),
+      metadata: safeDebugValue(m.metadata || null),
+      // Preserve proposal changes, warnings, instructions and evidence while
+      // removing image payloads and credentials.
+      blocks: safeDebugValue(m.blocks || []),
     })),
 
     // ── Tool call summary ───────────────────────────────────────────
@@ -101,30 +112,25 @@ function exportChatLog(messages) {
       total_messages: messages.length,
       agent_messages: messages.filter(m => m.role === 'assistant').length,
       user_messages: messages.filter(m => m.role === 'user').length,
-      fetch_backend_logs: `GET ${AGENT_URL}/api/agent/logs/${sessionId}`,
+      backend_logs_loaded: Boolean(backendLogs),
+      network_entries_captured: rawNetworkLog.length,
+      network_entries_exported: networkLog.length,
+      ...(backendLogsError && { backend_logs_error: backendLogsError }),
     },
+    backend_logs: backendLogs,
 
     // ── Network log (all fetch/XHR — like DevTools Network tab) ─────
     // Captured by the fetch interceptor installed at page load
-    network_log: (window.__networkLog || []).map(entry => ({
-      ts: entry.ts,
-      method: entry.method,
-      url: entry.url,
-      status: entry.status,
-      duration_ms: entry.duration_ms,
-      ...(entry.req_body && { req_body: entry.req_body }),
-      ...(entry.res_preview && { res_preview: entry.res_preview }),
-      ...(entry.error && { error: entry.error }),
-    })),
+    network_log: networkLog,
   }
 
   // Trigger download
-  const json = JSON.stringify(exportData, null, 2)
+  const json = JSON.stringify(safePublicDebugValue(exportData), null, 2)
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `camp-ads-log-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
+  a.download = `advertising-agent-log-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
@@ -132,7 +138,7 @@ function exportChatLog(messages) {
 }
 
 // ─── ChatPane ───────────────────────────────────────────────────────────────────────────────
-export default function ChatPane({ messages, busy, currentStep, onSend, onBack, onRetry, canRetry }) {
+export default function ChatPane({ messages, busy, currentStep, onSend, onBack, onRetry, canRetry, policy = { mode: 'normal' }, debugContext = {} }) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Pane header */}
@@ -150,7 +156,7 @@ export default function ChatPane({ messages, busy, currentStep, onSend, onBack, 
 
             {/* Export button — hidden on mobile to save space */}
             <button
-              onClick={() => exportChatLog(messages)}
+              onClick={() => exportChatLog(messages, debugContext)}
               disabled={messages.length === 0}
               title="Xuất log chat (JSON)"
               className="hidden md:flex items-center gap-1 text-[11px] font-semibold text-muted-foreground border border-border rounded-full px-2 py-1 hover:bg-muted/60 hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -168,7 +174,7 @@ export default function ChatPane({ messages, busy, currentStep, onSend, onBack, 
       </div>
 
       {/* Composer — always visible */}
-      <ChatComposer busy={busy} currentStep={currentStep} onSend={onSend} onBack={onBack} />
+      <ChatComposer busy={busy} currentStep={currentStep} onSend={onSend} onBack={onBack} policy={policy} />
     </div>
   )
 }

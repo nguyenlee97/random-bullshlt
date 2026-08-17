@@ -9,6 +9,7 @@ Ports freeform.py's LLM pipeline 1:1:
 
 Reuses freeform.py helpers (snapshot/diff/summary builders) — parity by import.
 """
+import asyncio
 import json
 import time
 
@@ -19,14 +20,17 @@ from handlers.freeform import (
     _build_workspace_diff,
     _build_workspace_snapshot,
     _field_to_step_index,
-    _is_confirm,
     _STEP_NAMES_VI,
 )
 from llm import chat_completion, force_text_completion, sanitize_response
 from prompts.system import SYSTEM_PROMPT
-from session import add_message, get_history, set_pending_proposal, update_form_state
+from session import add_message, get_history, set_pending_proposal
 from tools.registry import TOOL_DEFINITIONS, execute_tool
 from agent_logger import alog
+from workspace.service import create_proposal, get_workspace, legacy_view
+from workspace.intent import InvalidWorkspaceIntent, resolve_legacy_update
+from provider_resilience import PROVIDER_UNAVAILABLE_MESSAGE
+from time_context import campaign_time_system_message
 
 _TOOL_FALLBACKS = {
     "get_audience_list": "Đã tìm thấy các đối tượng phù hợp. Anh/Chị xem danh sách ở panel phải và chọn nhé!",
@@ -37,9 +41,21 @@ _TOOL_FALLBACKS = {
 
 async def context_node(state: AgentState) -> dict:
     """Build the message array. Snapshot is fresh every request (never stored)."""
-    workspace = state.get("workspace") or {}
+    client_workspace = state.get("workspace") or {}
+    canonical = await get_workspace(state["session_id"])
+    client_revision = state.get("workspace_revision")
+    canonical_revision = canonical["revision"]
+    stale_client = client_revision is not None and client_revision != canonical_revision
+    workspace = legacy_view(canonical) if stale_client or not client_workspace else client_workspace
     messages: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": (
+            f"WORKSPACE CANONICAL REVISION: {canonical_revision}. "
+            f"Client revision: {client_revision if client_revision is not None else 'migration/unknown'}. "
+            + ("Client snapshot is stale; canonical server artifacts are authoritative."
+               if stale_client else "Client snapshot is current for this turn.")
+        )},
+        {"role": "system", "content": campaign_time_system_message()},
         {"role": "system", "content": _build_workspace_snapshot(
             workspace, state.get("confirmed_steps") or [], current_step=state["step"])},
     ]
@@ -48,7 +64,16 @@ async def context_node(state: AgentState) -> dict:
         messages.append({"role": "system", "content": diff})
     messages.extend(await get_history(state["session_id"]))  # CONTEXT_WINDOW-trimmed
     messages.append({"role": "user", "content": state["user_message"]})
-    return {"messages": messages, "tool_rounds": 0, "fallback_level": 0}
+    return {
+        "messages": messages,
+        "tool_rounds": 0,
+        "fallback_level": 0,
+        "workspace": workspace,
+        "workspace_revision": canonical_revision,
+        "canonical_brief_missing": not bool(
+            canonical.get("artifacts", {}).get("brief", {}).get("value")
+        ),
+    }
 
 
 async def agent_node(state: AgentState) -> dict:
@@ -63,16 +88,40 @@ async def agent_node(state: AgentState) -> dict:
             "used_tool": "budget_exceeded"}
 
     await alog(session_id, "llm_call_start", {"handler": "graph_agent", "messages_count": len(messages)})
-    response = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
+    try:
+        started = time.perf_counter()
+        response = await asyncio.to_thread(
+            chat_completion, messages=messages, tools=TOOL_DEFINITIONS
+        )
+    except Exception as error:
+        from metrics import FALLBACK_LEVEL
+        FALLBACK_LEVEL.labels(level="3").inc()
+        await alog(session_id, "fallback", {
+            "attempt": 3,
+            "reason": "provider_unavailable",
+            "error_type": type(error).__name__,
+        })
+        return {
+            "response_text": PROVIDER_UNAVAILABLE_MESSAGE,
+            "used_tool": "provider_unavailable",
+            "fallback_level": 3,
+        }
     msg = response.choices[0].message
     tokens = (response.usage.total_tokens or 0) if getattr(response, "usage", None) else 0
+    await alog(session_id, "llm_call_end", {
+        "handler": "graph_agent",
+        "duration_ms": int((time.perf_counter() - started) * 1000),
+        "finish_reason": response.choices[0].finish_reason,
+        "tokens": tokens,
+        "tool_names": [call.function.name for call in (msg.tool_calls or [])],
+    })
 
     # length-exhaustion retry (ported)
     if response.choices[0].finish_reason == "length" and not msg.tool_calls:
         await alog(session_id, "warn", {"event": "llm_length_truncated", "path": "graph"})
         short = [messages[0]] + messages[-6:]
         try:
-            retry = force_text_completion(messages=short)
+            retry = await asyncio.to_thread(force_text_completion, messages=short)
             text = sanitize_response(retry.choices[0].message.content or "") or (
                 "Xin lỗi anh/chị, em bị quá tải ngữ cảnh ở tin nhắn này. "
                 "Anh/chị có thể hỏi ngắn hơn hoặc bắt đầu lại không ạ?")
@@ -119,22 +168,44 @@ async def tools_node(state: AgentState) -> dict:
                 value = json.loads(value)
             except Exception:
                 pass
-        reply = _build_update_summary(field, value, first_args.get("reason", ""))
+        canonical = await get_workspace(session_id)
+        try:
+            field, value, reason = await resolve_legacy_update(
+                field, value, canonical, first_args.get("reason", ""),
+                source_message=state["user_message"],
+            )
+        except InvalidWorkspaceIntent as exc:
+            reply = f"Em chưa thể tạo đề xuất an toàn: {exc}"
+            await add_message(session_id, "user", state["user_message"])
+            await add_message(session_id, "assistant", reply)
+            return {
+                "response_text": reply,
+                "response_blocks": [],
+                "used_tool": "workspace_clarification",
+            }
+
+        first_args.update({"field": field, "value": value, "reason": reason})
+        reply = _build_update_summary(field, value, reason)
         step_index = _field_to_step_index(field)
         is_locked = step_index in (state.get("confirmed_steps") or [])
-        is_confirm = _is_confirm(state["user_message"].lower().strip())
 
         await add_message(session_id, "user", state["user_message"])
         await add_message(session_id, "assistant", reply)
 
-        if is_confirm and not is_locked:
-            await update_form_state(session_id, field, value)
-            return {"response_text": reply,
-                    "response_blocks": [{"type": "info",
-                        "text": f"Workspace đã được cập nhật: `{field}`."}],
-                    "workspace_update": {"field": field, "value": value,
-                                         "reason": first_args.get("reason", "")},
-                    "used_tool": "update_workspace"}
+        proposal = await create_proposal(
+            session_id,
+            field,
+            value,
+            base_revision=canonical["revision"],
+            actor="campaign_copilot",
+            reason=reason,
+        )
+        proposal_changes = {
+            **first_args,
+            "proposal_id": proposal["proposal_id"],
+            "base_revision": proposal["base_revision"],
+            "affected_artifacts": proposal["affected_artifacts"],
+        }
 
         warning = ""
         if is_locked and step_index >= 0:
@@ -142,10 +213,11 @@ async def tools_node(state: AgentState) -> dict:
             if downstream:
                 warning = (f"⚠️ Bước {_STEP_NAMES_VI[step_index]} đã được xác nhận. Nếu thay đổi, "
                            f"các bước sau ({', '.join(downstream)}) sẽ bị reset.")
-        await set_pending_proposal(session_id, first_args)
+        await set_pending_proposal(session_id, proposal_changes)
         return {"response_text": reply,
-                "response_blocks": [{"type": "workspace_proposal", "changes": first_args,
-                                     "is_locked": is_locked, "warning": warning}],
+                "response_blocks": [{"type": "workspace_proposal", "changes": proposal_changes,
+                                     "is_locked": is_locked, "warning": warning,
+                                     "affected_artifacts": proposal["affected_artifacts"]}],
                 "suggestions": _WORKSPACE_SUGGESTIONS.get(field, []),
                 "used_tool": "update_workspace"}
 
@@ -163,7 +235,7 @@ async def tools_node(state: AgentState) -> dict:
         await alog(session_id, "tool_call", {"tool": name, "path": "graph",
                                              "args": {k: str(v)[:100] for k, v in args.items()}})
         t0 = time.time()
-        result = await execute_tool(name, args)
+        result = await execute_tool(name, args, session_id=session_id)
         await alog(session_id, "tool_result", {"tool": name,
                    "duration_ms": int((time.time() - t0) * 1000)})
         tool_results.append({"tool_call_id": tc["id"], "role": "tool",
@@ -181,7 +253,9 @@ async def fallback_node(state: AgentState) -> dict:
 
     await alog(session_id, "fallback", {"attempt": 2, "tool": used_tool, "path": "graph"})
     try:
-        forced = force_text_completion(messages=state["messages"])
+        forced = await asyncio.to_thread(
+            force_text_completion, messages=state["messages"]
+        )
         reply = sanitize_response(forced.choices[0].message.content or "")
     except Exception:
         reply = ""

@@ -16,26 +16,24 @@
       "must_include": [
         "6a48cc2381574c48dbd22bbb",
         "6a48cc2381574c48dbd22bb7",
-        "6a48cc2381574c48dbd22bbc"
+        "6a2df27adda0ba67f14c706d"
       ],
       "acceptable": [
-        "6a2df27adda0ba67f14c706d",
-        "6a48cc2381574c48dbd22bb2"
+        "6a48cc2381574c48dbd22bb2",
+        "6a48cc2381574c48dbd22bbc"
       ],
-      "must_exclude": [
-        "6a2df27adda0ba67f14c708b"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Small business / Management / Investment banking only exist in the full catalog. must_exclude=Investment(personal) because the brief explicitly excludes small individual retail investors — that segment is the near-opposite audience tier from SME owners."
+    "labeler_note": "Small business / Management / Investment banking only exist in the full catalog. must_exclude=Investment(personal) because the brief explicitly excludes small individual retail investors — that segment is the near-opposite audience tier from SME owners.\n\nHuman review 2026-07-16: accepted and applied the independent audit. The catalog cannot distinguish retail investors from SME owners seeking capital. Excluding broad Investment can remove valid SME prospects, while Investment banking is too institutional for must_include. Remaining catalog gap is intentional; no substitute label was invented."
   },
   "tags": [
     "consideration",
     "vi",
-    "full_catalog_only"
+    "catalog_gap"
   ]
 }

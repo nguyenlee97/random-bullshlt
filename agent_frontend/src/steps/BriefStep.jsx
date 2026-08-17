@@ -89,7 +89,7 @@ function KpiChips({ value, onChange }) {
 }
 
 export default function BriefStep({ data, onChange, isDone }) {
-  const update = (key, val) => onChange({ ...data, [key]: val })
+  const update = (key, val) => onChange(prev => ({ ...prev, [key]: val }))
 
   // Auto-compute duration from dates
   const computeDuration = (start, end) => {
@@ -117,7 +117,7 @@ export default function BriefStep({ data, onChange, isDone }) {
               ['Thương hiệu', data.brand],
               ['Mục tiêu', objectiveLabel || data.objective],
               ['KPI', data.kpi],
-              ['Ngân sách', `${data.budget} triệu`],
+              ['Ngân sách', Number(data.budget) > 0 ? `${data.budget} triệu` : '—'],
               ['Thời gian', data.startDate && data.endDate ? `${data.startDate} → ${data.endDate}` : data.startDate || '—'],
               ['Ghi chú', data.notes],
             ].map(([k, v]) => (

@@ -92,8 +92,7 @@ function showConfirm(message, onOk, okLabel = 'Delete') {
  *   #/edit/ORD-001            → Edit campaign ORD-001
  *   #/edit/ORD-001/creatives  → Edit ORD-001, scroll to Creatives
  *   #/report                  → Report view
- *   #/api                     → API Console
- *   #/docs                    → API Docs
+ *   #/api                     → Read-only API activity log
  */
 function parseHash() {
   const hash = window.location.hash.replace(/^#\/?/, ''); // strip leading #/
@@ -129,7 +128,7 @@ function setHash(hash, { replace = false } = {}) {
 /**
  * Navigate to a view, optionally scrolling to a named section.
  * Updates the URL hash for deep-linking.
- * @param {string} v        - view name: 'orders'|'create'|'report'|'api'|'docs'
+ * @param {string} v        - view name: 'orders'|'create'|'report'|'api'
  * @param {*}      payload  - extra data passed to render fn (unused currently)
  * @param {string} section  - optional section ID to scroll to after render
  */
@@ -165,9 +164,9 @@ function navTo(v, payload, section) {
   else if (v === 'create')                        renderCreate(payload, section);
   else if (v === 'report')                        renderReport();
   else if (v === 'api')                           renderApiConsole();
-  else if (v === 'docs')                          renderDocs();
   else if (v === 'log')                           renderApiConsole();
   else if (v === 'conversion' || v === 'bundle')  renderPlaceholder(v);
+  else                                             navTo('orders');
 }
 
 /**

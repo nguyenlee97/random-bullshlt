@@ -5,11 +5,24 @@ Phase 1: Creative assignment (auto_assign)
 Phase 2: Order creation (single POST /api/orders with all zones + creatives[])
 """
 from models import AgentResponse, SetupData, ResponseMeta
-from session import get_or_create_session, update_form_state, update_order_ids, log_event
+from session import add_message, get_or_create_session, update_form_state, update_order_ids, log_event
 from tools.zone_ranker import rank_zones
 from tools.creative_match import auto_assign
 from tools.order_api import create_order
 from tools.zone_catalog import get_zone_map
+from config import config
+from time_context import campaign_today
+
+
+def initial_order_status(start_date: str, *, today=None) -> str:
+    """Return the initial lifecycle state using the campaign's UTC+7 clock."""
+    from datetime import date
+
+    try:
+        start = date.fromisoformat(str(start_date)[:10])
+    except (TypeError, ValueError):
+        return "pending"
+    return "active" if start <= (today or campaign_today()) else "pending"
 
 
 async def handle_setup(setup: SetupData, session_id: str) -> AgentResponse:
@@ -27,7 +40,7 @@ async def handle_setup(setup: SetupData, session_id: str) -> AgentResponse:
     )
 
 
-async def handle_setup_entry(session_id: str) -> dict:
+async def handle_setup_entry(session_id: str, *, include_related: bool = False) -> dict:
     """
     GET /api/agent/setup-entry
     Proactive zone recommendation when user enters Step 3 (Setup).
@@ -39,8 +52,9 @@ async def handle_setup_entry(session_id: str) -> dict:
     Returns {skip: True} if zones already selected.
     """
     import asyncio
+    from tools.placement_relevance import build_placement_context
     from tools.zone_catalog import get_all_zones
-    from tools.order_api import fetch_zone_conflicts
+    from tools.order_api import fetch_zone_conflicts, public_conflict_details
 
     session = await get_or_create_session(session_id)
     brief = session["form_state"].get("brief", {})
@@ -71,19 +85,42 @@ async def handle_setup_entry(session_id: str) -> dict:
         budget=brief.get("budget", 0),
         kpi=brief.get("kpi", ""),
         creative_files=creative.get("files", []),
+        placement_context=build_placement_context(brief, segment),
         limit=len(all_zones_raw),
     )
 
     # Annotate conflicts and mark recommendations
-    top_set: set[str] = set()
     available = [z for z in ranked if not conflict_map.get(z["id"])]
-    for z in available[:6]:
-        top_set.add(z["id"])
+    top_ids = [z["id"] for z in available[:6]]
+    top_set = set(top_ids)
     top_zones = [z for z in ranked if z["id"] in top_set]
+    related_zones: list[dict] = []
+    if include_related:
+        top_topics = {
+            str(zone.get("topicId") or "")
+            for zone in top_zones
+            if zone.get("topicId")
+        }
+        remaining = [zone for zone in available if zone["id"] not in top_set]
+        context_related = [
+            zone for zone in remaining
+            if zone.get("recommendation_basis", {}).get("context_match")
+            or str(zone.get("topicId") or "") in top_topics
+        ]
+        context_ids = {zone["id"] for zone in context_related}
+        fallback_related = [
+            zone for zone in remaining if zone["id"] not in context_ids
+        ]
+        related_zones = (context_related + fallback_related)[:6]
+        related_ids = {zone["id"] for zone in related_zones}
+    else:
+        related_ids = set()
 
     for z in ranked:
-        z["conflict"] = conflict_map.get(z["id"])
+        z["conflict"] = public_conflict_details(conflict_map.get(z["id"]))
         z["recommended"] = z["id"] in top_set
+        if include_related:
+            z["related"] = z["id"] in related_ids
 
     await update_form_state(session_id, "reco_zones", top_zones)
 
@@ -121,15 +158,21 @@ async def handle_setup_entry(session_id: str) -> dict:
         f"Budget: **{budget:,.0f}M VND**, {segment_count} audience segments), "
         f"em đề xuất **{len(top_zones)} ad zones** tối ưu:\n\n"
         f"{zones_text}\n\n"
-        f"Anh/chị có thể xem chi tiết ở panel phải. "
-        f"Muốn **bỏ zone** nào hoặc **thêm** zone khác, cứ nhắn em nhé!"
+        + (
+            f"Panel phải có thêm **{len(related_zones)} ad zones liên quan** "
+            "để anh/chị cân nhắc; nhóm này chưa được chọn.\n\n"
+            if include_related and related_zones else ""
+        )
+        + "Anh/chị có thể xem chi tiết ở panel phải. "
+        "Muốn **bỏ zone** nào hoặc **thêm** zone khác, cứ nhắn em nhé!"
     )
 
     # ── Workspace proposal value ────────────────────────────────────────────────
     # Includes ALL zones so SetupStep doesn't need a separate fetch
     proposal_value = {
-        "selectedZoneIds": list(top_set),
+        "selectedZoneIds": top_ids,
         "recoZones": top_zones,
+        **({"relatedZones": related_zones} if include_related else {}),
         "allZones": ranked,
         "initialized": True,
         "phase": "zones",
@@ -157,11 +200,30 @@ async def handle_setup_entry(session_id: str) -> dict:
         {"label": "🗑️ Bỏ zone",             "action": "prefill", "text": "Bỏ zone "},
     ]
 
+    # Proactive messages are part of the conversation too. Persisting this is
+    # essential: otherwise the next free-form turn sees incomplete history and
+    # may answer as if the user were still on an earlier campaign step.
+    if include_related:
+        await log_event(session_id, "openai_setup_entry", {
+            "recommended_zone_ids": top_ids,
+            "related_zone_ids": [zone["id"] for zone in related_zones],
+            "ranked_zone_count": len(ranked),
+            "available_zone_count": len(available),
+            "conflicted_zone_count": len(ranked) - len(available),
+        })
+    await add_message(session_id, "assistant", reply_text)
+
     return {
         "skip": False,
         "text": reply_text,
         "blocks": blocks,
-        "meta": {"tool": "setup_entry", "model": "none", "step": 3},
+        "meta": {
+            "tool": "setup_entry",
+            "model": "none",
+            "step": 3,
+            "recommended_zone_count": len(top_zones),
+            "related_zone_count": len(related_zones),
+        },
         "suggestions": suggestions,
     }
 
@@ -169,15 +231,19 @@ async def handle_setup_entry(session_id: str) -> dict:
 
 
 async def _zone_recommend(setup: SetupData, session_id: str) -> AgentResponse:
+    from tools.placement_relevance import build_placement_context
+
     session = await get_or_create_session(session_id)
     brief = session["form_state"].get("brief", {})
     creative = session["form_state"].get("creative", {})
+    segment = session["form_state"].get("segment", {})
 
     ranked = await rank_zones(
         objective=brief.get("objective", "awareness"),
         budget=brief.get("budget", 0),
         kpi=brief.get("kpi", ""),
         creative_files=creative.get("files", []),
+        placement_context=build_placement_context(brief, segment),
         limit=6,
     )
 
@@ -219,11 +285,13 @@ async def handle_zone_recommend_api(session_id: str) -> dict:
     with a `conflict` object and excluded from AI recommendations.
     """
     from tools.zone_catalog import get_all_zones
-    from tools.order_api import fetch_zone_conflicts
+    from tools.order_api import fetch_zone_conflicts, public_conflict_details
+    from tools.placement_relevance import build_placement_context
 
     session = await get_or_create_session(session_id)
     brief = session["form_state"].get("brief", {})
     creative = session["form_state"].get("creative", {})
+    segment = session["form_state"].get("segment", {})
 
     start_date = brief.get("startDate", "")
     end_date = brief.get("endDate", "")
@@ -241,12 +309,13 @@ async def handle_zone_recommend_api(session_id: str) -> dict:
         budget=brief.get("budget", 0),
         kpi=brief.get("kpi", ""),
         creative_files=creative.get("files", []),
+        placement_context=build_placement_context(brief, segment),
         limit=len(all_zones),  # return all zones, sorted
     )
 
     # Annotate each zone with conflict info (if any)
     for z in ranked:
-        z["conflict"] = conflict_map.get(z["id"])
+        z["conflict"] = public_conflict_details(conflict_map.get(z["id"]))
 
     # Recommend top 6 available zones only (skip conflicted)
     available = [z for z in ranked if not z["conflict"]]
@@ -278,12 +347,9 @@ async def _creative_match(setup: SetupData, session_id: str) -> AgentResponse:
     # Phase 3: measured creative facts beat filename heuristics when available
     from config import config as _cfg
     if _cfg.USE_VLM_CREATIVE:
-        try:
-            from creative_intel.service import get_intel
-            from tools.creative_match import enrich_files_with_intel
-            files = enrich_files_with_intel(files, await get_intel(session_id))
-        except Exception:
-            pass  # enrichment is advisory
+        from creative_intel.service import get_intel
+        from tools.creative_match import enrich_files_with_intel
+        files = enrich_files_with_intel(files, await get_intel(session_id))
 
     result = auto_assign(selected_zones, files)
 
@@ -328,6 +394,13 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
     assignments = setup.assignments or session["form_state"].get("assignments", {})
     files = creative.get("files", [])
 
+    from config import config as _cfg
+    if _cfg.USE_VLM_CREATIVE:
+        from creative_intel.service import get_intel
+        from tools.creative_match import enrich_files_with_intel
+
+        files = enrich_files_with_intel(files, await get_intel(session_id))
+
     if not zone_ids:
         return AgentResponse(
             text="⚠ Không có zone nào được chọn.",
@@ -342,25 +415,26 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
             file_to_zones.setdefault(int(file_idx), []).append(zone_id)
 
     # Any zones not in assignments → assign file 0 as fallback
-    assigned_zones = set(assignments.keys())
-    for zid in zone_ids:
-        if zid not in assigned_zones:
-            file_to_zones.setdefault(0, []).append(zid)
-
     creatives_payload = []
     for file_idx, z_ids in file_to_zones.items():
         f = files[file_idx] if file_idx < len(files) else {}
-        is_skin = "skin" in (f.get("name") or "").lower()
+        intel = f.get("intel") or {}
+        is_skin = intel.get("is_skin")
+        if is_skin is None:
+            is_skin = "skin" in (f.get("name") or "").lower()
+        measured_width = intel.get("width") or f.get("width", 0)
+        measured_height = intel.get("height") or f.get("height", 0)
         # Prefer URL uploaded by frontend (base64→VPS), fall back to session-stored url
         resolved_url = setup.fileUrls.get(str(file_idx)) or f.get("url", "")
         creatives_payload.append({
             "groupId": f"g_{file_idx}",
             "name": f.get("name", ""),
-            "size": "skin" if is_skin else f.get("size", f"{f.get('width',0)}x{f.get('height',0)}"),
+            "size": "skin" if is_skin else f"{measured_width}x{measured_height}",
             "format": "skin" if is_skin else "banner",
             "url": resolved_url,
             "zones": z_ids,
             "label": f.get("name", ""),
+            "analysisId": f.get("analysisId") or intel.get("analysis_id", ""),
         })
 
     # ── DMP: use _id values ───────────────────────────────────────────────────
@@ -377,13 +451,8 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
     # ── Build single order payload ────────────────────────────────────────────
     total_budget_vnd = brief.get("budget", 0) * 1_000_000
 
-    # Auto-activate if campaign start date is today or already past
-    from datetime import date as _date
-    try:
-        start = _date.fromisoformat(brief.get("startDate", "")[:10])
-        order_status = "active" if start <= _date.today() else "pending"
-    except Exception:
-        order_status = "pending"
+    # Auto-activate if campaign start date is today or already past.
+    order_status = initial_order_status(brief.get("startDate", ""))
 
     payload = {
         "brand": brief.get("brand", "Brand"),
@@ -404,7 +473,8 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
         "freqCap": "3",
         # Phase 0 idempotency: frontend-provided key, or generated here as fallback
         # (fallback still protects against the create_order internal retry).
-        "idempotencyKey": setup.idempotencyKey or f"agent_{session_id}_{__import__('uuid').uuid4().hex[:12]}",
+        "demoNamespace": config.DEMO_NAMESPACE,
+        "idempotencyKey": setup.idempotencyKey or f"agent_{config.DEMO_NAMESPACE}_{session_id}_{__import__('uuid').uuid4().hex[:12]}",
     }
 
     # ── Phase 0 order guard ⛔ — deterministic server-side validation.
@@ -444,6 +514,8 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
     order_id = result.get("id", "—")
     ORDERS_CREATED.inc()
     await update_order_ids(session_id, [order_id])
+    from campaign_ownership import register_campaign_for_session
+    await register_campaign_for_session(session_id, order_id)
 
     api_warnings = result.get("warnings", [])
     budget_display = brief.get("budget", 0)

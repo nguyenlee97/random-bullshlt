@@ -13,13 +13,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from urllib.parse import urlparse
 
 # Budget ceilings (VND). Env-overridable via config; defaults here for pure-fn use.
 DEFAULT_MAX_ORDER_BUDGET_VND = 5_000_000_000  # 5 tỷ
 MAX_CAMPAIGN_DAYS = 370
 
 ALLOWED_OBJECTIVES = {"awareness", "consideration", "conversion", "retention"}
-ALLOWED_CREATIVE_URL_HOSTS = ("api.pawgrammers.io.vn", "localhost", "127.0.0.1")
+DEFAULT_ALLOWED_CREATIVE_URL_HOSTS = (
+    "api.pawgrammers.io.vn",
+    "localhost",
+    "127.0.0.1",
+)
 
 
 class OrderValidationError(Exception):
@@ -43,8 +48,11 @@ class GuardContext:
     known_zone_ids: set[str]         # from zone_catalog.get_zone_map()
     known_dmp_ids: set[str]          # from audience_library segment _ids
     conflict_map: dict = field(default_factory=dict)  # from order_api.fetch_zone_conflicts
+    creative_verdicts: dict = field(default_factory=dict)
+    require_creative_verdict: bool = False
     max_budget_vnd: int = DEFAULT_MAX_ORDER_BUDGET_VND
     today: date | None = None        # injectable for tests
+    allowed_creative_url_hosts: tuple[str, ...] = DEFAULT_ALLOWED_CREATIVE_URL_HOSTS
 
 
 def _parse_date(s: str) -> date | None:
@@ -93,7 +101,15 @@ def validate_order_payload(payload: dict, ctx: GuardContext) -> list[str]:
         reasons.append(f"Zone không tồn tại trong catalog: {', '.join(map(str, unknown_zones))}")
 
     # ── 4. Zone booking conflicts (re-checked at creation time — TOCTOU guard) ─
-    conflicted = [z for z in placements if ctx.conflict_map.get(z)]
+    request_key = payload.get("idempotencyKey") or ""
+    conflicted = [
+        z for z in placements
+        if ctx.conflict_map.get(z)
+        and not (
+            request_key
+            and ctx.conflict_map[z].get("idempotencyKey") == request_key
+        )
+    ]
     if conflicted:
         details = ", ".join(
             f"{z} (đã đặt bởi {ctx.conflict_map[z].get('orderId', '?')})" for z in conflicted
@@ -126,7 +142,9 @@ def validate_order_payload(payload: dict, ctx: GuardContext) -> list[str]:
 
     # ── 8. Creatives: zones ⊆ placements; URLs on our host ─────────────────
     placement_set = set(placements)
+    creative_zone_set: set[str] = set()
     for c in payload.get("creatives") or []:
+        creative_zone_set.update(c.get("zones") or [])
         stray = [z for z in (c.get("zones") or []) if z not in placement_set]
         if stray:
             reasons.append(
@@ -134,17 +152,57 @@ def validate_order_payload(payload: dict, ctx: GuardContext) -> list[str]:
             )
         url = c.get("url") or ""
         if url and not url.startswith("data:"):
-            host_ok = any(h in url for h in ALLOWED_CREATIVE_URL_HOSTS)
+            try:
+                creative_host = (urlparse(url).hostname or "").lower()
+            except Exception:
+                creative_host = ""
+            host_ok = creative_host in {
+                host.lower() for host in ctx.allowed_creative_url_hosts
+            }
             if not host_ok:
                 reasons.append(f"Creative URL không thuộc host cho phép: {url[:80]}")
+
+        if ctx.require_creative_verdict:
+            analysis_id = c.get("analysisId") or ""
+            verdict = ctx.creative_verdicts.get(analysis_id)
+            if not analysis_id:
+                reasons.append(f"Creative '{c.get('name', '?')}' thiếu analysisId")
+            elif not verdict:
+                reasons.append(
+                    f"Creative '{c.get('name', '?')}' không có verdict server-side hợp lệ"
+                )
+            elif verdict.get("url") != url:
+                reasons.append(
+                    f"Creative '{c.get('name', '?')}' không khớp URL đã được phân tích"
+                )
+            elif verdict.get("effective_status") not in {"auto_approved", "approved_override"}:
+                review = "; ".join(verdict.get("review_reasons") or [])
+                reasons.append(
+                    f"Creative '{c.get('name', '?')}' chưa được duyệt: "
+                    f"{review or verdict.get('status', 'unknown')}"
+                )
+
+    uncovered = placement_set - creative_zone_set
+    if uncovered:
+        reasons.append(
+            "Các zone chưa được gán creative: " + ", ".join(sorted(uncovered))
+        )
 
     return reasons
 
 
-async def guard_order(payload: dict, session: dict) -> None:
+async def guard_order(
+    payload: dict,
+    session: dict,
+    *,
+    trusted_creative_verdicts: dict[str, dict] | None = None,
+) -> None:
     """
     Async wrapper: gathers live context and raises OrderValidationError on failure.
     Call this in handlers/setup.py::_order_create and in any agentic order path.
+
+    ``trusted_creative_verdicts`` is internal-only input for server-produced
+    Autopilot skip approvals. It is never populated from the order payload.
     """
     import asyncio
 
@@ -167,12 +225,29 @@ async def guard_order(payload: dict, session: dict) -> None:
     known_dmp_ids: set[str] = set()
     if not isinstance(segments, Exception):
         known_dmp_ids = {s.get("_id", "") for s in segments if s.get("_id")}
+    creative_verdicts: dict = {}
+    if config.USE_VLM_CREATIVE:
+        from creative_intel.service import get_intel_by_ids
+
+        analysis_ids = [
+            c.get("analysisId", "") for c in (payload.get("creatives") or [])
+            if c.get("analysisId")
+        ]
+        creative_verdicts = await get_intel_by_ids(session.get("_id", "default"), analysis_ids)
+        creative_verdicts.update({
+            analysis_id: verdict
+            for analysis_id, verdict in (trusted_creative_verdicts or {}).items()
+            if analysis_id in analysis_ids
+        })
     ctx = GuardContext(
         brief=brief,
         known_zone_ids=set(zone_map.keys()),
         known_dmp_ids=known_dmp_ids,
         conflict_map=conflict_map if not isinstance(conflict_map, Exception) else {},
+        creative_verdicts=creative_verdicts,
+        require_creative_verdict=config.USE_VLM_CREATIVE,
         max_budget_vnd=getattr(config, "MAX_ORDER_BUDGET_VND", DEFAULT_MAX_ORDER_BUDGET_VND),
+        allowed_creative_url_hosts=config.ALLOWED_CREATIVE_URL_HOSTS,
     )
 
     reasons = validate_order_payload(payload, ctx)

@@ -12,12 +12,13 @@
 
 // ── Config ──────────────────────────────────────────────────────────────────
 const _isVPS  = !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1');
-const AD_API_BASE = _isVPS
+const AD_API_BASE = window.__ADSTACK_CONFIG__?.apiBase || (_isVPS
     ? 'https://api.pawgrammers.io.vn/api'
-    : 'http://localhost:3000/api';
+    : 'http://localhost:3000/api');
 
 const AD_SITE_ID  = 'zingmp3.vn';
 const AD_TIMEOUT  = 4000;
+const ALLOW_FALLBACK_ADS = window.__ADSTACK_CONFIG__?.allowFallbackAds ?? _isVPS;
 
 // ── Impression / Click Tracking ──────────────────────────────────────────────
 function trackImpression(campaignId, placementId) {
@@ -115,12 +116,16 @@ const AdsPilotClient = {
                 };
             }
 
-            console.log(`[AdsPilot] No live campaign for ${zoneId}. Using fallback.`);
-            return getFallbackMockAd(zoneId);
+            console.log(`[AdsPilot] No live campaign for ${zoneId}.`);
+            return ALLOW_FALLBACK_ADS
+                ? getFallbackMockAd(zoneId)
+                : { hasAd: false, zoneId, reason: 'no_active_campaign' };
 
         } catch (error) {
-            console.warn(`[AdsPilot] Ad server connection failed (${error.message}). Using offline fallback.`);
-            return getFallbackMockAd(zoneId);
+            console.warn(`[AdsPilot] Ad server connection failed (${error.message}).`);
+            return ALLOW_FALLBACK_ADS
+                ? getFallbackMockAd(zoneId)
+                : { hasAd: false, zoneId, reason: 'backend_unreachable' };
         }
     }
 };

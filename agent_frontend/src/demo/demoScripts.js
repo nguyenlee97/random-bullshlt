@@ -2,174 +2,103 @@
 // Used by DemoEngine to drive the guided walkthrough.
 
 // ─── Predefined Brief Pool (randomly selected per demo run) ─────────────────
-export const DEMO_BRIEFS = [
-  // 1. Mixi — Social networking app
-  {
-    id: 'mixi',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Mixi\n' +
-      '- Objective: awareness\n' +
-      '- KPI: Reach\n' +
-      '- Budget: 150 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng Nam 18–30 tuổi, quan tâm mạng xã hội và gaming',
-    briefPatch: { brand: 'Mixi', objective: 'awareness', kpi: 'Reach', budget: 150, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nam 18–30, mạng xã hội & gaming' },
-    budgetEdit: 180,
-  },
-  // 2. Café 24 — F&B chain
-  {
-    id: 'cafe24',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Café 24\n' +
-      '- Objective: awareness\n' +
-      '- KPI: CTR\n' +
-      '- Budget: 250 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng Nữ 22–35, thích cà phê và lifestyle',
-    briefPatch: { brand: 'Café 24', objective: 'awareness', kpi: 'CTR', budget: 250, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nữ 22–35, café & lifestyle' },
-    budgetEdit: 300,
-  },
-  // 3. ZPlay — Mobile gaming
-  {
-    id: 'zplay',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: ZPlay\n' +
-      '- Objective: awareness\n' +
-      '- KPI: Reach, VTR\n' +
-      '- Budget: 200 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng Nam 15–28, gaming và esports',
-    briefPatch: { brand: 'ZPlay', objective: 'awareness', kpi: 'Reach, VTR', budget: 200, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nam 15–28, gaming & esports' },
-    budgetEdit: 220,
-  },
-  // 4. VPBank Neo — Digital banking / Fintech
-  {
-    id: 'vpbank-neo',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: VPBank Neo\n' +
-      '- Objective: awareness\n' +
-      '- KPI: CTR, Reach\n' +
-      '- Budget: 400 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 22–40 tuổi, quan tâm tài chính số và đầu tư',
-    briefPatch: { brand: 'VPBank Neo', objective: 'awareness', kpi: 'CTR, Reach', budget: 400, startDate: '2026-06-30', endDate: '2026-07-07', notes: '22–40, tài chính số & đầu tư' },
-    budgetEdit: 450,
-  },
-  // 5. Tiki — E-commerce
-  {
-    id: 'tiki',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Tiki\n' +
-      '- Objective: awareness\n' +
-      '- KPI: CTR\n' +
-      '- Budget: 350 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 20–45 tuổi, thích mua sắm online và deals',
-    briefPatch: { brand: 'Tiki', objective: 'awareness', kpi: 'CTR', budget: 350, startDate: '2026-06-30', endDate: '2026-07-07', notes: '20–45, mua sắm online & deals' },
-    budgetEdit: 400,
-  },
-  // 6. Gentis — Healthcare / DNA testing
-  {
-    id: 'gentis',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Gentis\n' +
-      '- Objective: awareness\n' +
-      '- KPI: Reach, VTR\n' +
-      '- Budget: 180 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 28–50 tuổi, quan tâm sức khỏe và y tế gia đình',
-    briefPatch: { brand: 'Gentis', objective: 'awareness', kpi: 'Reach, VTR', budget: 180, startDate: '2026-06-30', endDate: '2026-07-07', notes: '28–50, sức khỏe & y tế gia đình' },
-    budgetEdit: 200,
-  },
-  // 7. ELSA Speak — EdTech / English learning
-  {
-    id: 'elsa',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: ELSA Speak\n' +
-      '- Objective: awareness\n' +
-      '- KPI: CTR, Reach\n' +
-      '- Budget: 220 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 16–35 tuổi, sinh viên và đi làm muốn học tiếng Anh',
-    briefPatch: { brand: 'ELSA Speak', objective: 'awareness', kpi: 'CTR, Reach', budget: 220, startDate: '2026-06-30', endDate: '2026-07-07', notes: '16–35, sinh viên & đi làm học tiếng Anh' },
-    budgetEdit: 250,
-  },
-  // 8. Vietjet Air — Low-cost travel
-  {
-    id: 'vietjet',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Vietjet Air\n' +
-      '- Objective: awareness\n' +
-      '- KPI: Reach, VTR\n' +
-      '- Budget: 500 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 20–45 tuổi, thích du lịch và săn vé giá rẻ',
-    briefPatch: { brand: 'Vietjet Air', objective: 'awareness', kpi: 'Reach, VTR', budget: 500, startDate: '2026-06-30', endDate: '2026-07-07', notes: '20–45, du lịch & săn vé rẻ' },
-    budgetEdit: 550,
-  },
-  // 9. Cocoon — Vietnamese beauty / skincare
-  {
-    id: 'cocoon',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: Cocoon\n' +
-      '- Objective: awareness\n' +
-      '- KPI: CTR, Reach\n' +
-      '- Budget: 160 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng Nữ 18–35, quan tâm làm đẹp và skincare thuần Việt',
-    briefPatch: { brand: 'Cocoon', objective: 'awareness', kpi: 'CTR, Reach', budget: 160, startDate: '2026-06-30', endDate: '2026-07-07', notes: 'Nữ 18–35, làm đẹp & skincare thuần Việt' },
-    budgetEdit: 200,
-  },
-  // 10. VinFast — EV automotive
-  {
-    id: 'vinfast',
-    chatMessage:
-      'Brief chiến dịch:\n' +
-      '- Brand: VinFast\n' +
-      '- Objective: awareness\n' +
-      '- KPI: Reach, VTR\n' +
-      '- Budget: 800 triệu VND\n' +
-      '- Thời gian: 30/6/2026 đến 7/7/2026\n' +
-      '- Ghi chú: Đối tượng 30–55 tuổi, thu nhập khá, quan tâm xe điện và công nghệ',
-    briefPatch: { brand: 'VinFast', objective: 'awareness', kpi: 'Reach, VTR', budget: 800, startDate: '2026-06-30', endDate: '2026-07-07', notes: '30–55, thu nhập khá, xe điện & công nghệ' },
-    budgetEdit: 900,
-  },
+// Dates are materialized when a walkthrough starts so no scenario can age into
+// an invalid campaign. The start is yesterday; the end is seven days later.
+const DEMO_BRIEF_TEMPLATES = [
+  { id: 'mixi', brand: 'Mixi', product: 'Nội dung livestream và cộng đồng gaming Mixi', kpi: 'Reach', budget: 150, budgetEdit: 180, audience: 'Nam 18–30 tuổi, quan tâm mạng xã hội, gaming và livestream', message: 'Nơi cộng đồng game thủ kết nối và giải trí mỗi ngày' },
+  { id: 'cafe24', brand: 'Café 24', product: 'Chuỗi cà phê và đồ uống phong cách sống', kpi: 'CTR', budget: 250, budgetEdit: 300, audience: 'Nữ 22–35 tuổi, thích cà phê, gặp gỡ bạn bè và lifestyle', message: 'Không gian cà phê tiện lợi cho nhịp sống hiện đại' },
+  { id: 'zplay', brand: 'ZPlay', product: 'Nền tảng game và giải đấu esports', kpi: 'Reach, VTR', budget: 200, budgetEdit: 220, audience: 'Nam 15–28 tuổi, quan tâm gaming, esports và game online', message: 'Khám phá sân chơi dành cho cộng đồng game thủ' },
+  { id: 'vpbank-neo', brand: 'VPBank Neo', product: 'Ứng dụng ngân hàng số VPBank NEO', kpi: 'CTR, Reach', budget: 400, budgetEdit: 450, audience: 'Người 22–40 tuổi, quan tâm tài chính số, thanh toán và đầu tư', message: 'Quản lý tài chính thuận tiện ngay trên điện thoại' },
+  { id: 'tiki', brand: 'Tiki', product: 'Sàn thương mại điện tử Tiki', kpi: 'CTR', budget: 350, budgetEdit: 400, audience: 'Người 20–45 tuổi, thường mua sắm online và săn ưu đãi', message: 'Mua sắm tiện lợi với nhiều lựa chọn phù hợp nhu cầu' },
+  { id: 'gentis', brand: 'Gentis', product: 'Dịch vụ xét nghiệm gen và chăm sóc sức khỏe gia đình', kpi: 'Reach, VTR', budget: 180, budgetEdit: 200, audience: 'Người 28–50 tuổi, quan tâm sức khỏe, xét nghiệm và y tế gia đình', message: 'Hiểu thêm về sức khỏe để chủ động chăm sóc gia đình' },
+  { id: 'elsa', brand: 'ELSA Speak', product: 'Ứng dụng luyện nói tiếng Anh ELSA Speak', kpi: 'CTR, Reach', budget: 220, budgetEdit: 250, audience: 'Người 16–35 tuổi, là sinh viên hoặc người đi làm muốn cải thiện tiếng Anh', message: 'Luyện nói tiếng Anh chủ động mọi lúc' },
+  { id: 'vietjet', brand: 'Vietjet Air', product: 'Vé máy bay giá rẻ cho các đường bay nội địa', kpi: 'Reach, VTR', budget: 500, budgetEdit: 550, audience: 'Người 20–45 tuổi, thích du lịch và thường săn vé máy bay giá rẻ', message: 'Bay nội địa thuận tiện với mức giá dễ tiếp cận' },
+  { id: 'cocoon', brand: 'Cocoon', product: 'Mỹ phẩm thuần chay chăm sóc da Cocoon', kpi: 'CTR, Reach', budget: 160, budgetEdit: 200, audience: 'Nữ 18–35 tuổi, quan tâm làm đẹp, skincare và sản phẩm thuần chay', message: 'Chăm sóc làn da với mỹ phẩm thuần chay Việt Nam' },
+  { id: 'vinfast', brand: 'VinFast', product: 'Ô tô điện thông minh VinFast', kpi: 'Reach, VTR', budget: 800, budgetEdit: 900, audience: 'Người 30–55 tuổi, thu nhập khá, quan tâm xe điện và công nghệ', message: 'Trải nghiệm di chuyển thông minh cùng ô tô điện' },
 ]
 
+const toLocalIsoDate = date => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+].join('-')
 
+const toDisplayDate = date => [
+  String(date.getDate()).padStart(2, '0'),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  date.getFullYear(),
+].join('/')
 
-// Pick a random brief, never repeating the last one
-let _lastBriefId = null
-export function pickRandomBrief() {
-  const pool = _lastBriefId
-    ? DEMO_BRIEFS.filter(b => b.id !== _lastBriefId)
-    : DEMO_BRIEFS
-  const pick = pool[Math.floor(Math.random() * pool.length)]
-  _lastBriefId = pick.id
-  return pick
+export function getDemoDateRange(now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
+  return {
+    startDate: toLocalIsoDate(start),
+    endDate: toLocalIsoDate(end),
+    displayStart: toDisplayDate(start),
+    displayEnd: toDisplayDate(end),
+  }
 }
 
+export function materializeDemoBrief(template, now = new Date()) {
+  const dates = getDemoDateRange(now)
+  return {
+    id: template.id,
+    chatMessage: [
+      'Brief chiến dịch:',
+      `- Brand: ${template.brand}`,
+      `- Sản phẩm / dịch vụ: ${template.product}`,
+      '- Objective: awareness',
+      `- KPI: ${template.kpi}`,
+      `- Budget: ${template.budget} triệu VND`,
+      `- Thời gian: ${dates.displayStart} đến ${dates.displayEnd}`,
+      `- Đối tượng mục tiêu: ${template.audience}`,
+      `- Thông điệp chính: ${template.message}`,
+    ].join('\n'),
+    briefPatch: {
+      brand: template.brand,
+      objective: 'awareness',
+      kpi: template.kpi,
+      budget: template.budget,
+      startDate: dates.startDate,
+      endDate: dates.endDate,
+      notes: [
+        `Sản phẩm / dịch vụ: ${template.product}.`,
+        `Đối tượng mục tiêu: ${template.audience}.`,
+        `Thông điệp chính: ${template.message}.`,
+      ].join(' '),
+    },
+    budgetEdit: template.budgetEdit,
+  }
+}
+
+// Exported for tooling/preview compatibility. `pickRandomBrief` rematerializes
+// the chosen template at run time, including if the page stays open overnight.
+export const DEMO_BRIEFS = DEMO_BRIEF_TEMPLATES.map(template => materializeDemoBrief(template))
+
+// Pick a random brief, never repeating the last one.
+let _lastBriefId = null
+export function pickRandomBrief(now = new Date()) {
+  const pool = _lastBriefId
+    ? DEMO_BRIEF_TEMPLATES.filter(brief => brief.id !== _lastBriefId)
+    : DEMO_BRIEF_TEMPLATES
+  const pick = pool[Math.floor(Math.random() * pool.length)]
+  _lastBriefId = pick.id
+  return materializeDemoBrief(pick, now)
+}
 // ─── Pre-generated creative format metadata ──────────────────────────────────
 // These formats are injected automatically after the Box AI generation step.
 // Images are served from /public/demo-creatives/{briefId}/{formatId}.png
 export const DEMO_AD_FORMAT_META = {
-  'zmp3-top-banner':      { width: 2032, height: 528,  label: 'ZMP3 Top Banner Panoramic' },
-  'znews-Background':     { width: 1504, height: 704,  label: 'ZNews Desktop Background' },
-  'znews-middle-banner':  { width: 2048, height: 512,  label: 'ZNews Mid-page Banner' },
-  'znews-side-banner':    { width: 736,  height: 1456, label: 'ZNews Side Skyscraper' },
-  'znews-top-banner':     { width: 2224, height: 480,  label: 'ZNews Top Banner Ultra-wide' },
-  'zuma-baomoi-masthead': { width: 1160, height: 280,  label: 'Baomoi Masthead Strip' },
-  'zuma-Left':            { width: 465,  height: 1200, label: 'Sticky Side Slider Left' },
-  'zuma-Right':           { width: 465,  height: 1200, label: 'Sticky Side Slider Right' },
+  'zmp3-top-banner':      { width: 2032, height: 528,  cropAnchor: 'center', label: 'ZMP3 Top Banner Panoramic' },
+  'znews-Background':     { width: 1504, height: 704,  cropAnchor: 'top',    label: 'ZNews Desktop Background' },
+  'znews-middle-banner':  { width: 2048, height: 512,  cropAnchor: 'center', label: 'ZNews Mid-page Banner' },
+  'znews-side-banner':    { width: 736,  height: 1456, cropAnchor: 'center', label: 'ZNews Side Skyscraper' },
+  'znews-top-banner':     { width: 2224, height: 480,  cropAnchor: 'center', label: 'ZNews Top Banner Ultra-wide' },
+  'zuma-baomoi-masthead': { width: 1160, height: 280,  cropAnchor: 'center', label: 'Baomoi Masthead Strip' },
+  'zuma-Left':            { width: 465,  height: 1200, cropAnchor: 'right',  label: 'Sticky Side Slider Left' },
+  'zuma-Right':           { width: 465,  height: 1200, cropAnchor: 'left',   label: 'Sticky Side Slider Right' },
 }
 export const DEMO_NON_BOX_FORMAT_IDS = Object.keys(DEMO_AD_FORMAT_META)
 
@@ -243,7 +172,7 @@ export const STAGE1_STEPS = [
     target: '[data-demo="chat-thread"]',
     position: 'right',
     title: '🤖 Chat Bubble',
-    text: 'Agent sẽ trả lời ở đây — bao gồm text, bảng dữ liệu, và các nút hành động. Mỗi tin nhắn hiển thị tool đã dùng và model AI.',
+    text: 'Agent sẽ trả lời ở đây — bao gồm nội dung tư vấn, bảng dữ liệu và các nút hành động phù hợp.',
   },
   {
     type: 'TOOLTIP',
@@ -257,7 +186,7 @@ export const STAGE1_STEPS = [
     target: '#chat-input',
     position: 'top',
     title: '⌨️ Ô nhập chat',
-    text: 'Hoặc gõ trực tiếp — agent hiểu tiếng Việt tự nhiên. Nhấn Enter để gửi.',
+    text: 'Hoặc gõ trực tiếp — agent hiểu tiếng Việt tự nhiên. Enter để xuống dòng; Ctrl/⌘+Enter để gửi, hoặc bấm nút gửi.',
   },
   {
     type: 'TOOLTIP',
@@ -291,8 +220,8 @@ export const STAGE1_STEPS = [
     type: 'TOOLTIP',
     target: '#new-chat-btn',
     position: 'bottom',
-    title: '🆕 New Chat',
-    text: '**New Chat** — tạo chiến dịch mới hoàn toàn. Xóa toàn bộ chat và workspace hiện tại.',
+    title: '🆕 Chiến dịch mới',
+    text: '**Chiến dịch mới** — mở workspace mới và giữ campaign hiện tại trong Lịch sử để có thể tiếp tục sau.',
   },
   {
     type: 'TOOLTIP',
@@ -305,7 +234,10 @@ export const STAGE1_STEPS = [
 
 // ─── Stage 2: Live Run (Brief → Audience) ────────────────────────────────────
 // `brief` is a placeholder replaced at runtime with the randomly picked brief.
-export function buildStage2Steps(brief) {
+export function buildStage2Steps(
+  brief,
+  { openaiCampaignFlow = false } = {},
+) {
   return [
     // ── Brief submission ──────────────────────────────────────────────────
     {
@@ -327,6 +259,7 @@ export function buildStage2Steps(brief) {
     },
     {
       type: 'WAIT_FOR_RESPONSE',
+      requiredSelector: '[data-demo="workspace-proposal-confirm"][data-workspace-field="brief"]',
       tooltip: {
         target: '[data-demo="chat-thread"]',
         position: 'right',
@@ -543,7 +476,7 @@ export function buildStage2Steps(brief) {
       target: '#btn-ai-generate',
       position: 'top',
       title: '🎨 Bảng điều khiển AI Tạo Ảnh',
-      text: 'Panel AI có **3 phần chính**:\n① **Chọn định dạng** — kích thước & tỉ lệ ảnh đầu ra\n② **Prompt tuỳ chỉnh** — hướng dẫn thêm về phong cách, màu sắc (tùy chọn)\n③ **Tạo ảnh** — AI sinh ảnh theo brief + prompt, kết quả hiện ngay bên dưới',
+      text: 'Panel AI có **4 phần chính**:\n① **Chọn định dạng** — kích thước & tỉ lệ ảnh đầu ra\n② **Reference assets** — logo, sản phẩm và hướng dẫn sử dụng\n③ **Creative direction & prompt spec** — Agent kết hợp brief, format và assets\n④ **Tạo ảnh** — kết quả hiện ngay bên dưới để bạn crop, scale và review',
     },
 
     // ── Explain the format picker ───────────────────────────────────────────
@@ -566,6 +499,15 @@ export function buildStage2Steps(brief) {
         text: 'Đang chọn định dạng **Display Box** cho ví dụ này...',
       },
       delay: 400,
+    },
+
+    // ── Introduce conversation-scoped reference assets ─────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="creative-reference-assets"]',
+      position: 'left',
+      title: '🏷️ Brand & reference assets',
+      text: 'Tại đây bạn có thể thêm **logo, packshot, sản phẩm, nhân vật hoặc ảnh tham khảo** cho creative.\n\nMỗi asset có:\n- **Tên riêng** để nhắc lại trong creative direction\n- **Loại asset**\n- Hướng dẫn **cách sử dụng**\n- Quy tắc **Bắt buộc xuất hiện**\n\nAsset chỉ thuộc **cuộc trò chuyện hiện tại**; chat mới sẽ có bộ asset riêng, không lẫn dữ liệu của campaign khác.',
     },
 
     // ── Open custom prompt accordion ─────────────────────────────────────
@@ -596,6 +538,40 @@ export function buildStage2Steps(brief) {
       charDelay: 14,
       title: '⌨️ Nhập Prompt tùy chỉnh',
       text: 'Đang nhập yêu cầu sáng tạo...\n\nPrompt này hướng AI tập trung vào **hình ảnh thương hiệu** rõ nét, tối giản chữ và phù hợp với đối tượng mục tiêu đã xác định ở bước Audience.',
+    },
+
+    // ── Compose a structured prompt from format, assets and direction ───────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '#btn-compose-creative-prompt',
+      position: 'top',
+      title: '🪄 AI soạn prompt theo format & assets',
+      text: 'Sau khi chọn format, thêm asset (nếu có) và mô tả creative direction, nút này sẽ tạo **prompt spec có cấu trúc** cho đúng kích thước quảng cáo.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '#btn-compose-creative-prompt',
+      tooltip: {
+        target: '#btn-compose-creative-prompt',
+        position: 'top',
+        title: '⏳ Đang soạn prompt spec...',
+        text: 'AI đang kết hợp brief, audience, format, creative direction và các reference assets của cuộc trò chuyện này.',
+      },
+      delay: 300,
+    },
+    {
+      type: 'WAIT_FOR_SELECTOR',
+      target: '[data-testid="creative-prompt-spec"]',
+      timeout: 90000,
+      title: '⏳ Đang chờ prompt spec...',
+      text: 'Bước này chuẩn bị prompt có cấu trúc trước khi tạo creative.',
+    },
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-testid="creative-prompt-spec"]',
+      position: 'left',
+      title: '✅ Prompt spec đã sẵn sàng',
+      text: 'Bạn có thể review **direction, promise, CTA và kích thước đích** trước khi tạo ảnh. Prompt spec này sẽ được kết hợp với các reference assets đã chọn.',
     },
 
     // ── Click generate ─────────────────────────────────────────────────────
@@ -656,52 +632,69 @@ export function buildStage2Steps(brief) {
       delay: 300,
     },
 
-    // ── Wait for image to appear in gallery, then select it ─────────────────
-    {
-      type: 'WAIT_FOR_SELECTOR',
-      target: '[id^="gen-img-ai-zuma-box"]',
-      timeout: 10000,
-      title: '⏳ Xử lý ảnh...',
-      text: 'Đang xử lý và hiển thị ảnh vào thư viện...',
-    },
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '[id^="gen-img-ai-zuma-box"]',
-      position: 'top',
-      title: '🖼️ Ảnh đã được tạo!',
-      text: 'Ảnh AI vừa sinh xong hiển thị trong **thư viện**. Bạn có thể **chọn nhiều ảnh** rồi thêm tất cả vào creative cùng lúc.\n\nNhấn vào ô chọn để đánh dấu ảnh muốn dùng.',
-    },
-    {
-      type: 'CLICK_EL',
-      target: '[data-demo="gen-img-footer"]',
-      tooltip: {
+    // OpenAI persists the generated draft immediately and returns to Upload so
+    // tab navigation cannot discard it. GreenNode retains the legacy gallery
+    // selection flow.
+    ...(openaiCampaignFlow ? [
+      {
+        type: 'WAIT_FOR_SELECTOR',
+        target: '[data-demo="creative-file-card"][data-ai-generated="true"][data-format-id="zuma-box"]',
+        timeout: 10000,
+        title: '⏳ Đang lưu creative...',
+        text: 'Ảnh đã tạo xong. Walkthrough đang chờ creative xuất hiện trong danh sách Upload...',
+      },
+      {
+        type: 'HIGHLIGHT_EL',
+        target: '[data-demo="creative-file-card"][data-ai-generated="true"][data-format-id="zuma-box"]',
+        position: 'top',
+        title: '🖼️ Creative đã được lưu!',
+        text: 'OpenAI flow tự động lưu ảnh vừa tạo vào creative pool để ảnh không bị mất khi chuyển tab. Walkthrough sẽ tiếp tục chuẩn bị các format còn lại.',
+      },
+    ] : [
+      {
+        type: 'WAIT_FOR_SELECTOR',
+        target: '[id^="gen-img-ai-zuma-box"]',
+        timeout: 10000,
+        title: '⏳ Xử lý ảnh...',
+        text: 'Đang xử lý và hiển thị ảnh vào thư viện...',
+      },
+      {
+        type: 'HIGHLIGHT_EL',
         target: '[id^="gen-img-ai-zuma-box"]',
         position: 'top',
-        title: '✅ Chọn ảnh để thêm vào Creative',
-        text: 'Đang chọn ảnh vừa tạo...',
+        title: '🖼️ Ảnh đã được tạo!',
+        text: 'Ảnh AI vừa sinh xong hiển thị trong **thư viện**. Bạn có thể **chọn nhiều ảnh** rồi thêm tất cả vào creative cùng lúc.\n\nNhấn vào ô chọn để đánh dấu ảnh muốn dùng.',
       },
-      delay: 400,
-    },
-
-    // ── Add to Creative ──────────────────────────────────────────────────────
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '#btn-add-to-creative',
-      position: 'top',
-      title: '➕ Thêm vào Creative',
-      text: 'Nút **Thêm ảnh vào Creative** sẽ chuyển ảnh AI sang tab Upload và đưa vào pool creative của chiến dịch.\n\nSau đó bạn có thể xác nhận và chuyển sang bước Setup!',
-    },
-    {
-      type: 'CLICK_EL',
-      target: '#btn-add-to-creative',
-      tooltip: {
+      {
+        type: 'CLICK_EL',
+        target: '[data-demo="gen-img-footer"]',
+        tooltip: {
+          target: '[id^="gen-img-ai-zuma-box"]',
+          position: 'top',
+          title: '✅ Chọn ảnh để thêm vào Creative',
+          text: 'Đang chọn ảnh vừa tạo...',
+        },
+        delay: 400,
+      },
+      {
+        type: 'HIGHLIGHT_EL',
         target: '#btn-add-to-creative',
         position: 'top',
-        title: '✅ Thêm vào Creative pool...',
-        text: 'Đang thêm ảnh AI vào creative...',
+        title: '➕ Thêm vào Creative',
+        text: 'Nút **Thêm ảnh vào Creative** sẽ chuyển ảnh AI sang tab Upload và đưa vào pool creative của chiến dịch.\n\nSau đó bạn có thể xác nhận và chuyển sang bước Setup!',
       },
-      delay: 300,
-    },
+      {
+        type: 'CLICK_EL',
+        target: '#btn-add-to-creative',
+        tooltip: {
+          target: '#btn-add-to-creative',
+          position: 'top',
+          title: '✅ Thêm vào Creative pool...',
+          text: 'Đang thêm ảnh AI vào creative...',
+        },
+        delay: 300,
+      },
+    ]),
 
     // ── Inject all pre-generated creatives (silent loader) ──────────────────
     {
@@ -726,13 +719,13 @@ export function buildStage2Steps(brief) {
       ms: 400,
     },
 
-    // ── Highlight approve button ──────────────────────────────────────────────
+    // ── Analyze creative, then wait for the real terminal review state ───────
     {
       type: 'HIGHLIGHT_EL',
       target: '[data-demo="approve-btn"]',
       position: 'top',
-      title: '✅ Creative đã sẵn sàng!',
-      text: 'Creative workspace giờ có đầy đủ: **Box 300×250** (vừa tạo bằng AI) và **8 định dạng** được chuẩn bị sẵn cho tất cả vị trí quảng cáo. 🎉\n\nỞ bước Setup, AI sẽ gợi ý các vị trí quảng cáo còn trống — và chúng ta đã có creative phù hợp cho mọi vị trí được đề xuất!\n\nNhấn **Đồng ý & Tiếp tục** để xác nhận và chuyển sang bước **Setup Campaign**.',
+      title: '🔎 Phân tích Creative Intelligence',
+      text: 'Creative đã được thêm vào workspace, nhưng chưa được phép đi tiếp ngay. Nhấn **Phân tích creative** để hệ thống kiểm tra từng ảnh, rồi walkthrough sẽ chờ đến khi tất cả creative có kết quả cuối cùng.\n\nBước này chỉ chạy phân tích; nó **chưa xác nhận chuyển sang Setup**.',
     },
     {
       type: 'CLICK_EL',
@@ -740,8 +733,71 @@ export function buildStage2Steps(brief) {
       tooltip: {
         target: '[data-demo="approve-btn"]',
         position: 'top',
-        title: '⏳ Xác nhận Creative...',
-        text: 'Đang xác nhận creative và chuyển sang bước Setup...',
+        title: '⏳ Đang phân tích creative...',
+        text: 'Creative Intelligence đang xử lý từng ảnh. Walkthrough sẽ chờ kết quả thay vì chạy trước sang Setup.',
+      },
+    },
+    {
+      type: 'WAIT_FOR_CREATIVE_REVIEW',
+      reviewStates: ['ready', 'blocked'],
+      retryPreviousStep: true,
+      timeout: 120000,
+      title: '⏳ Chờ kết quả Creative Intelligence...',
+      text: 'Hệ thống đang chờ tất cả creative hoàn tất phân tích. Nếu có ảnh cần con người xem lại, walkthrough sẽ hướng dẫn bước phê duyệt thủ công.',
+    },
+
+    // ── Conditional manual-review branch ─────────────────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="creative-manual-review"]',
+      whenReviewState: 'blocked',
+      position: 'top',
+      title: '⚠️ Creative cần duyệt thủ công',
+      text: 'Ít nhất một creative cần con người kiểm tra. Hãy đọc bằng chứng phân tích, nhập lý do phê duyệt, rồi xác nhận thủ công. Walkthrough sẽ không bỏ qua hàng rào an toàn này.',
+    },
+    {
+      type: 'TYPE_INPUT',
+      target: '#creative-manual-review-reason',
+      whenReviewState: 'blocked',
+      inputText: 'Đã kiểm tra thủ công nội dung, thương hiệu và chấp nhận sử dụng trong demo.',
+      charDelay: 12,
+      autoAdvance: true,
+    },
+    {
+      type: 'CLICK_EL',
+      target: '#creative-manual-review-approve',
+      whenReviewState: 'blocked',
+      tooltip: {
+        target: '#creative-manual-review-approve',
+        position: 'top',
+        title: '⏳ Ghi nhận phê duyệt thủ công...',
+        text: 'Đang lưu lý do phê duyệt cho các creative cần xem lại.',
+      },
+    },
+    {
+      type: 'WAIT_FOR_CREATIVE_REVIEW',
+      reviewStates: ['ready'],
+      timeout: 60000,
+      title: '⏳ Chờ creative sẵn sàng...',
+      text: 'Walkthrough chỉ tiếp tục khi mọi creative đã được tự động duyệt hoặc có phê duyệt thủ công hợp lệ.',
+    },
+
+    // ── Explicit operator confirmation after review ─────────────────────────
+    {
+      type: 'HIGHLIGHT_EL',
+      target: '[data-demo="approve-btn"]',
+      position: 'top',
+      title: '✅ Phân tích hoàn tất — tiếp tục sang Setup',
+      text: 'Tất cả creative đã có kết quả hợp lệ. Bây giờ nút đổi thành **Xác nhận & sang Setup**.\n\nĐây là lần bấm thứ hai, dành riêng cho quyết định của người vận hành sau khi đã xem kết quả phân tích.',
+    },
+    {
+      type: 'CLICK_EL',
+      target: '[data-demo="approve-btn"]',
+      tooltip: {
+        target: '[data-demo="approve-btn"]',
+        position: 'top',
+        title: '⏳ Xác nhận kết quả creative...',
+        text: 'Đang xác nhận kết quả đã duyệt và chuyển sang bước Setup Campaign.',
       },
     },
 
@@ -853,48 +909,12 @@ export function buildStage2Steps(brief) {
       title: '✅ Xác nhận & Tạo Chiến Dịch',
       text: 'Workspace tóm tắt đầy đủ: Brief, Audience, Zones với creative đã gắn, budget phân bổ và est. impressions.\n\nKiểm tra lại rồi nhấn **Tiếp theo** để xác nhận và tạo chiến dịch thật trên hệ thống!',
     },
-    { type: 'CLICK_EL', target: '#create-campaign-btn', delay: 400 },
-    {
-      type: 'WAIT_FOR_SELECTOR',
-      target: '[data-demo="result-hero"]',
-      timeout: 90000,
-      title: '⏳ Đang tạo chiến dịch...',
-      text: 'Hệ thống đang gửi order đến AdsPilot và tạo chiến dịch thật. Vui lòng chờ...',
-    },
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '[data-demo="result-hero"]',
-      position: 'bottom',
-      title: '🎉 Chiến dịch đã được tạo!',
-      text: 'Chiến dịch đã chạy thành công trên **AdsPilot**. Bước Kết quả tổng hợp thông tin về chiến dịch vừa tạo — từ zones, creative, budget đến các chỉ số dự kiến.',
-    },
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '[data-demo="quick-links-card"]',
-      position: 'top',
-      title: '🔗 Liên Kết Nhanh',
-      text: '**Xem trong AdsPilot**: Mở trực tiếp trang quản lý chiến dịch để kiểm tra, pause hoặc chỉnh sửa.\n\n**Test Site**: Mở trang web thực tế chứa ad zone để xác nhận quảng cáo đang hiển thị đúng vị trí.',
-    },
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '[data-demo="ad-live-card"]',
-      position: 'top',
-      title: '📸 Ảnh Chụp Ad Live',
-      text: 'Khi chiến dịch đang **live**, hệ thống triển khai một **sub-agent** tự động điều hướng đến trang web, chụp ảnh màn hình và cắt chính xác từng ad zone.\n\nKết quả trả về ảnh crop của từng zone kèm toàn cảnh trang có đánh dấu — xác nhận quảng cáo đang chạy đúng vị trí và đúng creative.',
-    },
-    {
-      type: 'HIGHLIGHT_EL',
-      target: '[data-demo="kpi-grid"]',
-      position: 'top',
-      title: '📊 Chỉ Số Dự Kiến',
-      text: 'Dựa trên dữ liệu lịch sử của từng zone, hệ thống ước tính:\n- **Impressions**: tổng lượt hiển thị\n- **Avg CTR**: tỷ lệ nhấp trung bình\n- **Avg Viewability**: % quảng cáo thực sự được nhìn thấy\n\nCác con số giúp đánh giá hiệu quả dự kiến ngay sau khi chiến dịch được tạo.',
-    },
     {
       type: 'POPUP',
-      title: '🎉 Demo hoàn thành!',
-      text: 'Bạn đã trải nghiệm toàn bộ luồng:\n**Brief → Audience → Creative → Setup → Kết quả**\n\nAgent đã tự động:\n- ✅ Phân tích brief và điền workspace\n- ✅ Gợi ý DMP audience segments\n- ✅ Sinh ảnh AI và thêm creative pool\n- ✅ Đề xuất ad zones không xung đột\n- ✅ Gắn creative phù hợp và tạo chiến dịch\n- ✅ Hiển thị kết quả và liên kết live\n\nTừ đây, bạn có thể tự khám phá bước **Report** và **Email**!',
+      title: 'Walkthrough hoàn tất tại launch gate',
+      text: 'Bạn đã đi qua **Brief → Audience → Creative → Setup → Launch review** trên workspace thật.\n\nTour chủ động dừng trước hành động tạo order. Hãy tự kiểm tra bản tóm tắt và chỉ launch khi bạn thực sự muốn.',
       buttons: [
-        { label: '🚀 Tiếp tục tự khám phá', variant: 'primary', action: 'skip' },
+        { label: 'Tiếp tục tự khám phá', variant: 'primary', action: 'skip' },
       ],
     },
   ]

@@ -1,0 +1,8 @@
+iter	timestamp	metric	delta	kept	description
+0	2026-08-08T13:35:00+07:00	0	+0	yes	baseline before report v2 implementation
+1	2026-08-08T13:42:00+07:00	30	+30	yes	add normalized report input and dynamic measurement contracts
+2	2026-08-08T13:49:00+07:00	60	+30	yes	add deterministic full-period media and business facts
+3	2026-08-08T13:56:00+07:00	90	+30	yes	add evidence v2 KPI status and actionable decisions
+4	2026-08-08T14:03:00+07:00	90	+0	yes	connect deterministic facts and evidence to report specialist
+5	2026-08-08T14:10:00+07:00	90	+0	yes	carry full brief context and input version through production boundary
+6	2026-08-08T14:18:00+07:00	100	+10	yes	present Overview plus objective KPI funnel and actions

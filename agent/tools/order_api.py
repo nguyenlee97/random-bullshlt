@@ -5,8 +5,14 @@ Real schema confirmed from live API data.
 import httpx
 from datetime import date
 from config import config
+from request_context import get_request_id
 
 _client = httpx.AsyncClient(base_url=config.BACKEND_URL, timeout=15.0)
+
+
+def _correlation_headers() -> dict[str, str]:
+    request_id = get_request_id()
+    return {"X-Request-Id": request_id} if request_id != "-" else {}
 
 
 async def create_order(payload: dict) -> dict:
@@ -21,7 +27,9 @@ async def create_order(payload: dict) -> dict:
     last_err: Exception | None = None
     for attempt in (1, 2):
         try:
-            resp = await _client.post("/api/orders", json=payload)
+            resp = await _client.post(
+                "/api/orders", json=payload, headers=_correlation_headers()
+            )
             if resp.status_code == 409:
                 return {"error": "conflict", "detail": resp.json()}
             resp.raise_for_status()
@@ -38,16 +46,59 @@ async def create_order(payload: dict) -> dict:
 
 async def fetch_order(order_id: str) -> dict:
     """GET /api/orders/:id"""
-    resp = await _client.get(f"/api/orders/{order_id}")
+    resp = await _client.get(
+        f"/api/orders/{order_id}", headers=_correlation_headers()
+    )
     resp.raise_for_status()
     return resp.json()
 
 
 async def fetch_all_orders() -> list[dict]:
     """GET /api/orders"""
-    resp = await _client.get("/api/orders")
+    resp = await _client.get("/api/orders", headers=_correlation_headers())
     resp.raise_for_status()
     return resp.json()
+
+
+def public_conflict_details(conflict: dict | None) -> dict | None:
+    """Return booking evidence without exposing another campaign's identity."""
+    if not conflict:
+        return None
+    return {
+        "booked": True,
+        "startDate": conflict.get("startDate"),
+        "endDate": conflict.get("endDate"),
+    }
+
+
+async def set_order_delivery_state(order_id: str, action: str) -> dict:
+    """Pause/resume one already ownership-resolved order.
+
+    The caller must prove ownership before entering this wrapper. Current state
+    is fetched again here so duplicate confirmations are harmless and no other
+    campaign field can be changed through the Zalo lifecycle path.
+    """
+    if action not in {"pause", "resume"}:
+        raise ValueError("action must be pause or resume")
+    current = await fetch_order(order_id)
+    status = str(current.get("status") or "").lower()
+    target = "paused" if action == "pause" else "active"
+    if status == target:
+        return {
+            "ok": True, "id": order_id, "newStatus": target,
+            "already_in_state": True,
+        }
+    allowed = {"active", "pending"} if action == "pause" else {"paused"}
+    if status not in allowed:
+        raise ValueError(
+            f"campaign status {status or 'unknown'} cannot be changed with {action}"
+        )
+    response = await _client.post(
+        f"/api/orders/{order_id}/{action}", headers=_correlation_headers()
+    )
+    response.raise_for_status()
+    result = response.json()
+    return {**result, "already_in_state": False}
 
 
 async def fetch_zone_conflicts(start_date: str, end_date: str) -> dict[str, dict]:
@@ -103,6 +154,7 @@ async def fetch_zone_conflicts(start_date: str, end_date: str) -> dict[str, dict
                         "campaignName": campaign_name,
                         "startDate": str(o_start),
                         "endDate": str(o_end),
+                        "idempotencyKey": order.get("idempotencyKey", ""),
                     }
 
     return conflicts

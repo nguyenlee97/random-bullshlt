@@ -20,18 +20,16 @@
       ],
       "acceptable": [
         "6a2df27adda0ba67f14c7117",
-        "6a48cc2381574c48dbd22c94"
+        "6a48cc2381574c48dbd22c4c"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22c3e"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Cameras / Camcorders / Audio equipment sit under the full-catalog-only 'Technology (computers & electronics)' category. must_exclude=Home Appliances: near-miss — both read as 'electronics store' but appliances are a different department a camera specialty shop doesn't stock."
+    "labeler_note": "Cameras / Camcorders / Audio equipment sit under the full-catalog-only 'Technology (computers & electronics)' category. must_exclude=Home Appliances: near-miss — both read as 'electronics store' but appliances are a different department a camera specialty shop doesn't stock.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Core camera/audio labels fit. GPS devices are unsupported; Home Appliances is harmlessly unrelated, not an active exclusion."
   },
   "tags": [
     "awareness",

@@ -1,0 +1,23 @@
+{
+  "date": "2026-07-15",
+  "environment": "local Docker Compose",
+  "profile": "session-isolation control-plane soak; 5 users per cycle",
+  "duration_seconds": 3603.03,
+  "cycles": 360,
+  "users_per_cycle": 5,
+  "sessions": 1800,
+  "requests": 9000,
+  "latency_seconds": {
+    "p50": 0.0254,
+    "p95": 0.0785,
+    "p99": 0.1024
+  },
+  "errors": 0,
+  "session_leaks": 0,
+  "agent_memory_mib": {
+    "before": 157.3,
+    "after": 170.7,
+    "delta": 13.4
+  },
+  "result": "PASS"
+}

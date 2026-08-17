@@ -1,0 +1,11 @@
+services:
+  agent:
+    environment:
+      USE_RAG_AUDIENCE: ${EVAL_USE_RAG_AUDIENCE:-false}
+      RAG_QUERY_REWRITE: ${EVAL_RAG_QUERY_REWRITE:-false}
+      RAG_USE_RERANK: ${EVAL_RAG_USE_RERANK:-false}
+      RAG_USE_CRITIC_SELECTOR: ${EVAL_RAG_USE_CRITIC_SELECTOR:-false}
+      RERANK_URL: ${EVAL_RERANK_URL-}
+      RERANK_MODEL: ${EVAL_RERANK_MODEL-}
+      AGENT_DEBUG: "false"
+      RATE_LIMIT_ENABLED: "false"

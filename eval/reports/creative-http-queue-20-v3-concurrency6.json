@@ -1,0 +1,1213 @@
+{
+  "label": "creative-http-queue-20-v3-concurrency6",
+  "created_at": "2026-07-14T20:39:36.274573+00:00",
+  "summary": {
+    "n": 20,
+    "jobs_returned": 20,
+    "terminal_rate": 1.0,
+    "status_counts": {
+      "auto_approved": 19,
+      "needs_review": 1
+    },
+    "total_queue_seconds": 10.285,
+    "worker_task_p50_seconds": 2.116,
+    "worker_task_p95_seconds": 3.576,
+    "end_to_end_p50_seconds": 5.15,
+    "end_to_end_p95_seconds": 9.428,
+    "within_20_seconds_rate": 1.0,
+    "attempts_max": 1,
+    "missing_analysis_ids": 0
+  },
+  "cases": [
+    {
+      "session_id": "creative_load_37d31e5d4b_1",
+      "file_id": "load-elsa-top",
+      "name": "znews-top-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565500_0e98b1e065113fbf.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.035000",
+      "updated_at": "2026-07-14T20:39:29.370000",
+      "started_at": "2026-07-14T20:39:26.063000",
+      "deterministic": {
+        "bytes": 357891,
+        "name": "znews-top-banner.png",
+        "kind": "image",
+        "width": 945,
+        "height": 244,
+        "format": "png",
+        "aspect": 3.873,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "ELSA",
+          "3 lần",
+          "Anh với AI thông minh",
+          "TẢI APP NGAY!"
+        ],
+        "brand_guess": "ELSA Speak",
+        "subject_desc": "Một banner quảng cáo ứng dụng học tiếng Anh với tông màu xanh dương chủ đạo, có hình ảnh minh họa sóng âm và các biểu tượng cửa hàng ứng dụng.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Brand khớp hoàn toàn với ELSA Speak.",
+          "Nội dung đề cập đến việc học tiếng Anh với AI, phù hợp với mô tả ứng dụng học ngôn ngữ.",
+          "Hình thức banner với CTA 'Tải app ngay' phù hợp với mục tiêu awareness và tăng reach."
+        ],
+        "confidence": 0.9
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:29.370000",
+      "analysis_id": "ci_9ef7619f403e8f2ba344945b",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_1",
+      "file_id": "load-elsa-side",
+      "name": "znews-side-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565510_b6d6b87bd0649d65.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.037000",
+      "updated_at": "2026-07-14T20:39:29.756000",
+      "started_at": "2026-07-14T20:39:26.074000",
+      "deterministic": {
+        "bytes": 525932,
+        "name": "znews-side-banner.png",
+        "kind": "image",
+        "width": 473,
+        "height": 910,
+        "format": "png",
+        "aspect": 0.52,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "ELSA Speak",
+          "Nâng Tầm Tiếng Anh Của Bạn",
+          "Pronunciation Score",
+          "Excellent! 92%",
+          "Can I have some water?",
+          "Học phát âm tiếng Anh như người bản xứ.",
+          "Hiệu quả. Vui vẻ.",
+          "Mọi lúc, mọi nơi.",
+          "Học thử miễn phí",
+          "Download on the App Store",
+          "GET IT ON Google Play"
+        ],
+        "brand_guess": "ELSA Speak",
+        "subject_desc": "Một chiếc điện thoại hiển thị ứng dụng ELSA Speak với giao diện chấm điểm phát âm, bên cạnh là hình minh họa một chàng trai đang nói tiếng Anh trên nền màu đỏ và tím.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Brand khớp hoàn toàn với ELSA Speak.",
+          "Nội dung tập trung vào việc nâng tầm tiếng Anh và học phát âm, phù hợp với mục tiêu awareness cho ứng dụng học ngôn ngữ.",
+          "Hình ảnh trực quan, thông điệp rõ ràng, có CTA thúc đẩy người dùng tải app."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:29.756000",
+      "analysis_id": "ci_d2788cd420992c33789a959c",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_1",
+      "file_id": "load-elsa-middle",
+      "name": "znews-middle-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565521_ccf036be5e994182.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.039000",
+      "updated_at": "2026-07-14T20:39:29.298000",
+      "started_at": "2026-07-14T20:39:26.075000",
+      "deterministic": {
+        "bytes": 407611,
+        "name": "znews-middle-banner.png",
+        "kind": "image",
+        "width": 914,
+        "height": 292,
+        "format": "png",
+        "aspect": 3.13,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "ELSA Speak",
+          "HỌC TIẾNG ANH CÙNG AI",
+          "Luyện phát âm chuẩn & tự tin giao tiếp",
+          "HỌC THỬ MIỄN PHÍ"
+        ],
+        "brand_guess": "ELSA Speak",
+        "subject_desc": "Một chiếc điện thoại hiển thị ứng dụng học tiếng Anh trên nền gradient màu đỏ tím với văn bản quảng cáo.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Brand khớp hoàn toàn với ELSA Speak.",
+          "Nội dung tập trung vào việc học tiếng Anh và luyện phát âm, đúng với đặc điểm sản phẩm.",
+          "Thông điệp ngắn gọn, trực diện, phù hợp với mục tiêu tăng nhận diện (awareness)."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:29.298000",
+      "analysis_id": "ci_6a91ebd83f6efe016ffe4ae1",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_1",
+      "file_id": "load-elsa-skin",
+      "name": "zuma-Left.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "skin",
+      "url": "http://localhost:3000/uploads/creative_1784061565536_c85cc6afd858c09f.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.041000",
+      "updated_at": "2026-07-14T20:39:28.195000",
+      "started_at": "2026-07-14T20:39:26.079000",
+      "deterministic": {
+        "bytes": 493293,
+        "name": "zuma-Left.png",
+        "kind": "image",
+        "width": 395,
+        "height": 890,
+        "format": "png",
+        "aspect": 0.444,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "ELSA Speak",
+          "ELSA Speak",
+          "Real-time speech analysis",
+          "Pronunciation",
+          "8.0",
+          "ELSA Speak: Instant corrections",
+          "Fluency",
+          "Cải thiện phát âm",
+          "Luyện nói AI",
+          "Giao tiếp tự tin",
+          "Học mọi lúc, mọi nơi",
+          "Học thử miễn phí"
+        ],
+        "brand_guess": "ELSA Speak",
+        "subject_desc": "Một chiếc điện thoại thông minh hiển thị giao diện ứng dụng ELSA Speak với các biểu đồ phân tích giọng nói, xung quanh là các nhân vật minh họa và các đặc điểm nổi bật của ứng dụng.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Hình ảnh hiển thị rõ logo và tên thương hiệu ELSA Speak.",
+          "Nội dung tập trung vào tính năng luyện phát âm, giao tiếp tiếng Anh, phù hợp với mục tiêu awareness cho ứng dụng học ngôn ngữ.",
+          "Có lời kêu gọi hành động (CTA) 'Học thử miễn phí' để thu hút người dùng mới."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:28.195000",
+      "analysis_id": "ci_5ad98c5ec1356959f0835116",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_2",
+      "file_id": "load-vietjet-top",
+      "name": "znews-top-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565597_5b96dad6c10338c0.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.105000",
+      "updated_at": "2026-07-14T20:39:28.103000",
+      "started_at": "2026-07-14T20:39:26.604000",
+      "deterministic": {
+        "bytes": 537971,
+        "name": "znews-top-banner.png",
+        "kind": "image",
+        "width": 945,
+        "height": 306,
+        "format": "png",
+        "aspect": 3.088,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "vietjet Air.com",
+          "LOW-COST CARRIER",
+          "Bay khắp Việt Nam",
+          "Giá từ 0 ĐỒNG*",
+          "*Chưa bao gồm thuế, phí",
+          "ĐẶT VÉ NGAY"
+        ],
+        "brand_guess": "Vietjet Air",
+        "subject_desc": "Một chiếc máy bay Vietjet Air đang bay trên bầu trời xanh, phía dưới là phong cảnh thiên nhiên vùng vịnh và núi non của Việt Nam.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Hình ảnh hiển thị rõ logo và máy bay của Vietjet Air.",
+          "Nội dung quảng cáo vé máy bay giá rẻ (từ 0 đồng) trực tiếp thúc đẩy việc đặt vé (Bookings).",
+          "Thông điệp \"Bay khắp Việt Nam\" phù hợp với mục tiêu tăng mức độ cân nhắc (consideration) cho các chuyến bay nội địa."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:28.103000",
+      "analysis_id": "ci_294dc03f1ed1e0048273642f",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_2",
+      "file_id": "load-vietjet-side",
+      "name": "znews-side-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565606_23881a5fbf751f89.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.113000",
+      "updated_at": "2026-07-14T20:39:28.484000",
+      "started_at": "2026-07-14T20:39:26.604000",
+      "deterministic": {
+        "bytes": 754312,
+        "name": "znews-side-banner.png",
+        "kind": "image",
+        "width": 480,
+        "height": 1024,
+        "format": "png",
+        "aspect": 0.469,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": true,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "Vietjet Air.com",
+          "Bay là thích ngay!",
+          "CHUYẾN BAY GIÁ RẺ CHỈ TỪ",
+          "99.000 VNĐ",
+          "(chưa bao gồm thuế, phí)",
+          "Hà Nội | TP.HCM | Đà Nẵng | Phú Quốc | Seoul | Tokyo",
+          "ĐẶT VÉ NGAY",
+          "*vietjetair.com | Tổng đài 1900 1886 | Tải app Vietjet"
+        ],
+        "brand_guess": "Vietjet Air",
+        "subject_desc": "Một chiếc máy bay Vietjet Air đang bay vút lên trên bầu trời xanh với thông tin khuyến mãi vé máy bay giá rẻ.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Hình ảnh hiển thị rõ ràng máy bay và logo của Vietjet Air.",
+          "Nội dung quảng cáo vé máy bay giá rẻ (99.000 VNĐ) trực tiếp thúc đẩy hành động đặt vé (Bookings).",
+          "Có nút CTA 'ĐẶT VÉ NGAY' rõ ràng, phù hợp với mục tiêu consideration và conversion."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:28.484000",
+      "analysis_id": "ci_1b679ac25db4f049154c944d",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_2",
+      "file_id": "load-vietjet-middle",
+      "name": "znews-middle-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565617_a25b5e6e17362a08.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.142000",
+      "updated_at": "2026-07-14T20:39:29.514000",
+      "started_at": "2026-07-14T20:39:28.108000",
+      "deterministic": {
+        "bytes": 501528,
+        "name": "znews-middle-banner.png",
+        "kind": "image",
+        "width": 967,
+        "height": 261,
+        "format": "png",
+        "aspect": 3.705,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "vietjet Air.com",
+          "GIÁ CHỈ TỪ 0Đ!",
+          "Vé 0 đồng",
+          "Bay cùng Vietjet, Săn vé Flash Sale siêu tiết kiệm ngay hôm nay!",
+          "XEM FLASH SALE",
+          "SẴN NGAY! Lịch bay phong phú, ưu đãi cực sốc!",
+          "Enjoy Flying!"
+        ],
+        "brand_guess": "Vietjet Air",
+        "subject_desc": "Banner quảng cáo vé máy bay 0 đồng của Vietjet Air với hình ảnh máy bay bay trên vùng vịnh và thành phố.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Hình ảnh hiển thị rõ logo Vietjet Air.",
+          "Nội dung quảng cáo vé máy bay 0 đồng và Flash Sale trực tiếp thúc đẩy việc đặt vé (Bookings).",
+          "Hình ảnh máy bay và phong cảnh du lịch phù hợp với mục tiêu khuyến khích cân nhắc (consideration) và đặt chuyến bay."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:29.514000",
+      "analysis_id": "ci_7dc304d45fda61da6391836d",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_2",
+      "file_id": "load-vietjet-skin",
+      "name": "zuma-Left.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "skin",
+      "url": "http://localhost:3000/uploads/creative_1784061565626_73f0c34771383d3f.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.152000",
+      "updated_at": "2026-07-14T20:39:29.416000",
+      "started_at": "2026-07-14T20:39:28.198000",
+      "deterministic": {
+        "bytes": 295381,
+        "name": "zuma-Left.png",
+        "kind": "image",
+        "width": 304,
+        "height": 859,
+        "format": "png",
+        "aspect": 0.354,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "Vietjet Air",
+          "Vé 0 đồng",
+          "Đặt vé ngay"
+        ],
+        "brand_guess": "Vietjet Air",
+        "subject_desc": "Hình ảnh quảng cáo vé máy bay giá 0 đồng của Vietjet Air trên nền xanh với hình bóng máy bay và nút kêu gọi hành động màu đỏ.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Brand khớp hoàn toàn với Vietjet Air.",
+          "Nội dung quảng cáo vé 0 đồng trực tiếp thúc đẩy việc đặt vé (Bookings), phù hợp với mục tiêu consideration và KPI."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:29.416000",
+      "analysis_id": "ci_e2e886cb60f72dd1bae57b48",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_3",
+      "file_id": "load-vinfast-top",
+      "name": "znews-top-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565729_cdd80313c500f9f5.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.170000",
+      "updated_at": "2026-07-14T20:39:31.419000",
+      "started_at": "2026-07-14T20:39:28.487000",
+      "deterministic": {
+        "bytes": 597374,
+        "name": "znews-top-banner.png",
+        "kind": "image",
+        "width": 1024,
+        "height": 310,
+        "format": "png",
+        "aspect": 3.303,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "VINFAST",
+          "Tự hào",
+          "Made in Vietnam",
+          "VF8 | VF9",
+          "ĐẶT CỌC NGAY",
+          "Khám phá ưu đãi hấp dẫn!",
+          "vinfastauto.com"
+        ],
+        "brand_guess": "VinFast",
+        "subject_desc": "Một chiếc xe ô tô điện VinFast màu bạc đang chạy trên đường cao tốc hiện đại với ánh đèn thành phố về đêm phía sau.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Brand khớp hoàn toàn với VinFast.",
+          "Sản phẩm là xe điện (VF8, VF9) đúng với automotive campaign.",
+          "Thông điệp \"Tự hào Made in Vietnam\" và hình ảnh hoành tráng phù hợp với mục tiêu tăng nhận diện thương hiệu (awareness)."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:31.419000",
+      "analysis_id": "ci_a26422074e3573dc70e46ec4",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_3",
+      "file_id": "load-vinfast-side",
+      "name": "znews-side-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565738_0abccb5aa566a01a.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.173000",
+      "updated_at": "2026-07-14T20:39:32.658000",
+      "started_at": "2026-07-14T20:39:29.300000",
+      "deterministic": {
+        "bytes": 879845,
+        "name": "znews-side-banner.png",
+        "kind": "image",
+        "width": 531,
+        "height": 1024,
+        "format": "png",
+        "aspect": 0.519,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": true,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "VINFAST",
+          "VF9",
+          "VINFAST VF9",
+          "MÃNH LỰC VÔ SONG.",
+          "KHÁM PHÁ NGAY.",
+          "XE SUV ĐIỆN 7 CHỖ CAO CẤP",
+          "VẬN HÀNH MẠNH MẼ",
+          "TIỆN NGHI CAO CẤP",
+          "AN TOÀN VƯỢT TRỘI",
+          "LÁI THỬ NGAY",
+          "VINFASTAUTO.COM | 1900 2323"
+        ],
+        "brand_guess": "VinFast",
+        "subject_desc": "Chiếc xe ô tô điện VinFast VF9 màu xanh dương hiện đại đặt trong bối cảnh thành phố về đêm.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Đúng thương hiệu VinFast.",
+          "Sản phẩm là xe điện (Electric vehicle) đúng theo yêu cầu.",
+          "Hình ảnh sang trọng, thông điệp mạnh mẽ phù hợp cho mục tiêu tăng nhận diện (awareness)."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:32.658000",
+      "analysis_id": "ci_d282f3b4032396c6bf33388b",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_3",
+      "file_id": "load-vinfast-middle",
+      "name": "znews-middle-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565750_28d46709e55f14dd.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.177000",
+      "updated_at": "2026-07-14T20:39:31.027000",
+      "started_at": "2026-07-14T20:39:29.373000",
+      "deterministic": {
+        "bytes": 572280,
+        "name": "znews-middle-banner.png",
+        "kind": "image",
+        "width": 1024,
+        "height": 317,
+        "format": "png",
+        "aspect": 3.23,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "VINFAST",
+          "KỶ NGUYÊN",
+          "XE ĐIỆN VIỆT NAM",
+          "VINFAST"
+        ],
+        "brand_guess": "VinFast",
+        "subject_desc": "Một chiếc xe ô tô điện màu xanh dương của VinFast đỗ trên đường phố thành phố hiện đại vào ban đêm.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Brand khớp hoàn toàn với VinFast.",
+          "Nội dung tập trung vào xe điện (Electric vehicle) đúng theo brief.",
+          "Hình ảnh mang tính chất quảng bá nhận diện thương hiệu (awareness) với thông điệp mạnh mẽ về kỷ nguyên xe điện."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:31.027000",
+      "analysis_id": "ci_32f6dc7a2e9634fa7e0222d2",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_3",
+      "file_id": "load-vinfast-skin",
+      "name": "zuma-Left.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "skin",
+      "url": "http://localhost:3000/uploads/creative_1784061565759_f9edee30f727a036.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.184000",
+      "updated_at": "2026-07-14T20:39:31.334000",
+      "started_at": "2026-07-14T20:39:29.419000",
+      "deterministic": {
+        "bytes": 439860,
+        "name": "zuma-Left.png",
+        "kind": "image",
+        "width": 366,
+        "height": 901,
+        "format": "png",
+        "aspect": 0.406,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "VINFAST",
+          "KHÁM PHÁ TƯƠNG LAI XANH",
+          "VF8",
+          "ĐỘNG CƠ MẠNH MẼ MẼ",
+          "VẬN HÀNH ÊM ÁI",
+          "TRẢI NGHIỆM ĐIỆN VINFAST NGAY HÔM NAY",
+          "LÁI THỬ NGAY >"
+        ],
+        "brand_guess": "VinFast",
+        "subject_desc": "Chiếc xe điện VinFast VF8 màu đen sang trọng trên nền tối với các đường nét ánh sáng xanh neon.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Đúng thương hiệu VinFast theo brief.",
+          "Nội dung quảng bá xe điện (Electric vehicle) phù hợp với ghi chú.",
+          "Thông điệp \"Khám phá tương lai xanh\" và lời kêu gọi \"Lái thử ngay\" nhằm tăng nhận diện và thu hút khách hàng, phù hợp với mục tiêu awareness."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:31.334000",
+      "analysis_id": "ci_c0379a4a899090a615f28651",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_4",
+      "file_id": "load-vpbank-top",
+      "name": "znews-top-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565860_cdb12a813182aa0d.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.248000",
+      "updated_at": "2026-07-14T20:39:31.292000",
+      "started_at": "2026-07-14T20:39:29.517000",
+      "deterministic": {
+        "bytes": 441387,
+        "name": "znews-top-banner.png",
+        "kind": "image",
+        "width": 971,
+        "height": 311,
+        "format": "png",
+        "aspect": 3.122,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "VPBank Neo",
+          "Ngân hàng số",
+          "TRẢI NGHIỆM NGÂN HÀNG SỐ TOÀN DIỆN",
+          "Thanh toán không tiền mặt 24/7",
+          "Chuyển khoản miễn phí nhanh chóng",
+          "Gửi tiết kiệm online lãi suất cao",
+          "Bảo mật tuyệt đối, an tâm sử dụng",
+          "TẢI NGAY TRÊN"
+        ],
+        "brand_guess": "VPBank NEO",
+        "subject_desc": "Hình ảnh quảng cáo ứng dụng ngân hàng số VPBank Neo với giao diện điện thoại và các tính năng chính trên nền xanh trắng.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Brand khớp hoàn toàn với VPBank NEO.",
+          "Mục tiêu conversion/App installs thể hiện rõ qua nút CTA 'TẢI NGAY TRÊN' kèm logo App Store và Google Play.",
+          "Nội dung tập trung vào các tính năng của ứng dụng ngân hàng số đúng theo ghi chú."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:31.292000",
+      "analysis_id": "ci_a56900b30b2fe7a44b32bdc2",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_4",
+      "file_id": "load-vpbank-side",
+      "name": "znews-side-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565871_051dc66fa8c332e9.png",
+      "status": "needs_review",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.256000",
+      "updated_at": "2026-07-14T20:39:33.337000",
+      "started_at": "2026-07-14T20:39:29.761000",
+      "deterministic": {
+        "bytes": 716088,
+        "name": "znews-side-banner.png",
+        "kind": "image",
+        "width": 477,
+        "height": 994,
+        "format": "png",
+        "aspect": 0.48,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "review_reasons": [
+        "VLM lỗi — cần duyệt thủ công (8 validation errors for CreativeVLMResult\nocr_text\n  Field required [type=missin)"
+      ],
+      "completed_at": "2026-07-14T20:39:33.337000",
+      "analysis_id": "ci_d9ac7faf720366e1194b12d7",
+      "effective_status": "needs_review"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_4",
+      "file_id": "load-vpbank-middle",
+      "name": "znews-middle-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565882_7e5c82a1c4d104e7.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.262000",
+      "updated_at": "2026-07-14T20:39:32.662000",
+      "started_at": "2026-07-14T20:39:31.030000",
+      "deterministic": {
+        "bytes": 513703,
+        "name": "znews-middle-banner.png",
+        "kind": "image",
+        "width": 947,
+        "height": 289,
+        "format": "png",
+        "aspect": 3.277,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "VPBank Neo",
+          "0 PHÍ CHUYỂN TIỀN TRỌN ĐỜI",
+          "Chuyển tiền nhanh, bảo mật & hoàn toàn miễn phí trên toàn hệ thống",
+          "Mở tài khoản ngay - Nhận ưu đãi hấp dẫn!",
+          "Tải App Ngay"
+        ],
+        "brand_guess": "VPBank NEO",
+        "subject_desc": "Hình ảnh quảng cáo ứng dụng ngân hàng số VPBank Neo với giao diện điện thoại và thành phố hiện đại làm nền.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Brand khớp hoàn toàn với VPBank NEO.",
+          "Objective conversion thể hiện rõ qua CTA 'Tải App Ngay'.",
+          "KPI App installs được nhắm tới trực tiếp thông qua lời kêu gọi tải ứng dụng.",
+          "Nội dung tập trung vào tính năng chuyển tiền miễn phí của ứng dụng ngân hàng số."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:32.662000",
+      "analysis_id": "ci_4e4f2799344c2b399cc5e9fb",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_4",
+      "file_id": "load-vpbank-skin",
+      "name": "zuma-Left.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "skin",
+      "url": "http://localhost:3000/uploads/creative_1784061565891_cea2c16ff7bb286b.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.268000",
+      "updated_at": "2026-07-14T20:39:33.339000",
+      "started_at": "2026-07-14T20:39:31.295000",
+      "deterministic": {
+        "bytes": 601281,
+        "name": "zuma-Left.png",
+        "kind": "image",
+        "width": 362,
+        "height": 955,
+        "format": "png",
+        "aspect": 0.379,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "VPBank Neo",
+          "Ngân hàng số trọn trải nghiệm",
+          "Chào Nguyễn Lan Phương!",
+          "25,000,000 VND",
+          "Chuyển khoản >",
+          "Chuyển khoản",
+          "Thanh toán",
+          "Tiết kiệm",
+          "QR Pay",
+          "Ưu đãi đặc biệt",
+          "Hạn mức cao, AN TOÀN",
+          "Ưu đãi độc đáo",
+          "MIỄN PHÍ CHUYỂN KHOẢN",
+          "GIAO DỊCH 24/7",
+          "THANH TOÁN HÓA ĐƠN",
+          "TIẾT KIỆM ONLINE",
+          "HẠN MỨC CAO, AN TOÀN",
+          "MỞ TÀI KHOẢN NGAY"
+        ],
+        "brand_guess": "VPBank NEO",
+        "subject_desc": "Một người phụ nữ trẻ mỉm cười cầm điện thoại bên cạnh giao diện ứng dụng ngân hàng số VPBank Neo trên nền xanh hiện đại.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Đúng thương hiệu VPBank NEO theo brief.",
+          "Nội dung tập trung vào các tính năng của ứng dụng ngân hàng số (chuyển khoản, tiết kiệm, thanh toán).",
+          "CTA \"MỞ TÀI KHOẢN NGAY\" thúc đẩy chuyển đổi (conversion) và cài đặt app (app installs)."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:33.339000",
+      "analysis_id": "ci_fabfea7dc92a91cc90b19701",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_5",
+      "file_id": "load-cocoon-top",
+      "name": "znews-top-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565952_0a2139194f277f7e.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.322000",
+      "updated_at": "2026-07-14T20:39:33.588000",
+      "started_at": "2026-07-14T20:39:31.346000",
+      "deterministic": {
+        "bytes": 673589,
+        "name": "znews-top-banner.png",
+        "kind": "image",
+        "width": 1021,
+        "height": 383,
+        "format": "png",
+        "aspect": 2.666,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "COCOON",
+          "NATURAL COSMETICS",
+          "COCOON NATURALS",
+          "HYDRATING FACE SERUM",
+          "Jojoba - Aloe - Rosehip",
+          "30ml 0.1 fl.oz.",
+          "Embrace Your Natural Glow.",
+          "Pure. Effective. Radiant.",
+          "SHOP THE COLLECTION"
+        ],
+        "brand_guess": "Cocoon Vietnam",
+        "subject_desc": "Một chai serum dưỡng ẩm của Cocoon đặt cạnh thìa gỗ chứa tinh chất, cánh hoa khô và lá xanh trên nền màu kem.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Thương hiệu khớp hoàn toàn với Cocoon Vietnam.",
+          "Hình ảnh sản phẩm mỹ phẩm thuần chay, thiên nhiên phù hợp với định vị thương hiệu.",
+          "Thông điệp ngắn gọn, tập trung vào nhận diện thương hiệu và kêu gọi mua sắm, phù hợp với mục tiêu awareness."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:33.588000",
+      "analysis_id": "ci_45418298ea1367ddd0020780",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_5",
+      "file_id": "load-cocoon-side",
+      "name": "znews-side-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565963_da7343069876cba1.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.326000",
+      "updated_at": "2026-07-14T20:39:33.515000",
+      "started_at": "2026-07-14T20:39:31.422000",
+      "deterministic": {
+        "bytes": 648544,
+        "name": "znews-side-banner.png",
+        "kind": "image",
+        "width": 469,
+        "height": 920,
+        "format": "png",
+        "aspect": 0.51,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "COCOON",
+          "100% Thuần Chay • Vietnam",
+          "the cocoon",
+          "100% Thuần Chay",
+          "TINH CHẤT NGHỆ HƯNG YẾN",
+          "Turmeric Serum",
+          "Sáng Da & Chống Oxy Hóa",
+          "Natural & Vegan",
+          "75ml",
+          "Chiết Xuất Từ Thiên Nhiên",
+          "SÁNG DA TỨC THÌ • GIẢM THÂM HIỆU QUẢ",
+          "KHÁM PHÁ"
+        ],
+        "brand_guess": "Cocoon Vietnam",
+        "subject_desc": "Sản phẩm serum nghệ của thương hiệu Cocoon đặt giữa các lá xanh và củ nghệ trên nền màu xanh nhạt.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Thương hiệu khớp hoàn toàn với brief (Cocoon Vietnam).",
+          "Hình ảnh tập trung vào giới thiệu sản phẩm và đặc tính thuần chay, phù hợp với mục tiêu awareness.",
+          "Thông điệp rõ ràng, hình ảnh bắt mắt, dễ dàng tiếp cận tệp khách hàng rộng để tăng Reach."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:33.515000",
+      "analysis_id": "ci_144356d98fc591cf9cfb5862",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_5",
+      "file_id": "load-cocoon-middle",
+      "name": "znews-middle-banner.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "banner",
+      "url": "http://localhost:3000/uploads/creative_1784061565974_93362415fff3dba1.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.329000",
+      "updated_at": "2026-07-14T20:39:35.773000",
+      "started_at": "2026-07-14T20:39:32.663000",
+      "deterministic": {
+        "bytes": 482088,
+        "name": "znews-middle-banner.png",
+        "kind": "image",
+        "width": 934,
+        "height": 274,
+        "format": "png",
+        "aspect": 3.409,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "cocoon",
+          "- Mỹ phẩm từ nguyên liệu Việt",
+          "MỸ PHẨM THUẦN VIỆT",
+          "Tinh dầu Tràm Trà",
+          "CÀ PHÊ Đắk Lắk",
+          "Dầu Tắm Oải Hương",
+          "Nước Tẩy Trang Hoa Hồng",
+          "Tẩy Tế Biko Chết Cà Phê",
+          "Gel Rửa Mặt Tràm Trà",
+          "Nước Dương Tóc Bưởi",
+          "Son Dưỡng Dầu Dừa",
+          "Dầu So Lông",
+          "150ml",
+          "150ml",
+          "200g",
+          "140ml",
+          "145ml",
+          "4g",
+          "15ml"
+        ],
+        "brand_guess": "Cocoon Vietnam",
+        "subject_desc": "Hình ảnh trưng bày bộ sản phẩm chăm sóc da và cơ thể của thương hiệu Cocoon với các thành phần thiên nhiên như tràm trà, cà phê, hoa hồng, bưởi và dừa.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Thương hiệu khớp hoàn toàn với brief (Cocoon Vietnam).",
+          "Hình ảnh giới thiệu đa dạng sản phẩm giúp tăng nhận diện thương hiệu (awareness).",
+          "Nội dung nhấn mạnh yếu tố thuần chay/nguyên liệu Việt Nam đúng với định vị của brand."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:35.773000",
+      "analysis_id": "ci_2bec3e5ec36ae12f57feaa9a",
+      "effective_status": "auto_approved"
+    },
+    {
+      "session_id": "creative_load_37d31e5d4b_5",
+      "file_id": "load-cocoon-skin",
+      "name": "zuma-Left.png",
+      "mime_type": "image/png",
+      "format_id": "",
+      "intended_format": "skin",
+      "url": "http://localhost:3000/uploads/creative_1784061565984_8cf596ea5d6a930e.png",
+      "status": "auto_approved",
+      "attempts": 1,
+      "created_at": "2026-07-14T20:39:26.446000",
+      "updated_at": "2026-07-14T20:39:35.874000",
+      "started_at": "2026-07-14T20:39:32.665000",
+      "deterministic": {
+        "bytes": 558473,
+        "name": "zuma-Left.png",
+        "kind": "image",
+        "width": 374,
+        "height": 947,
+        "format": "png",
+        "aspect": 0.395,
+        "animated": false,
+        "mode": "RGBA",
+        "is_skin_layout": false,
+        "min_size_ok": true
+      },
+      "vlm": {
+        "ocr_text": [
+          "COCOON",
+          "NATURAL SKINCARE",
+          "'Radiant Skin, Naturally'",
+          "Cocoon",
+          "NATURAL SKINCARE",
+          "Green Tea Serum",
+          "Cocoon - Serum Trà Xanh Nghệ Ngâm",
+          "Trà Xanh",
+          "Cho phả chơi hãn, thúng tránh đánh",
+          "Nghệ",
+          "Liên njua hòn, nghệ, lôn mặn",
+          "Lô Hội",
+          "Thàmre bản thơm, cóu dav, ló hội",
+          "MUA NGAY"
+        ],
+        "brand_guess": "Cocoon Vietnam",
+        "subject_desc": "Một hũ serum trà xanh của thương hiệu Cocoon đặt trên một phiến đá, xung quanh là lá trà xanh và các thành phần thiên nhiên như nghệ, lô hội trên nền xanh nhạt.",
+        "is_skin_takeover": false,
+        "safety": {
+          "nsfw": false,
+          "alcohol": false,
+          "gambling": false,
+          "political": false,
+          "medical": false
+        },
+        "brief_match_score": 5,
+        "brief_match_reasons": [
+          "Hình ảnh hiển thị rõ logo và tên thương hiệu Cocoon Vietnam.",
+          "Sản phẩm chăm sóc da thuần chay (vegan skincare) phù hợp với định vị thương hiệu.",
+          "Hình ảnh chất lượng cao, mang tính chất giới thiệu sản phẩm để tăng nhận diện (awareness)."
+        ],
+        "confidence": 1.0
+      },
+      "review_reasons": [],
+      "completed_at": "2026-07-14T20:39:35.874000",
+      "analysis_id": "ci_34a43b38ae33d98104a07151",
+      "effective_status": "auto_approved"
+    }
+  ]
+}

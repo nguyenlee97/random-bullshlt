@@ -2,12 +2,14 @@
 Creative handler — Step 1. Rule-based validation, NO LLM.
 Validates format, dimensions, file size. Suggests matching zones by ratio.
 """
+import hashlib
 import re
 from models import AgentResponse, CreativeData, ResponseMeta
 from session import update_form_state, log_event
 
 ALLOWED_FORMATS = {"image/png", "image/jpeg", "image/jpg", "image/gif", "video/mp4", "video/webm"}
-MIN_DIM = 300   # px
+MIN_WIDTH = 300
+MIN_HEIGHT = 50
 MAX_SIZE_MB = 10
 
 
@@ -33,10 +35,10 @@ async def handle_creative(creative: CreativeData, session_id: str) -> AgentRespo
         issues = []
         if f.type and f.type not in ALLOWED_FORMATS:
             issues.append(f"Format {f.type} không hỗ trợ")
-        if f.width > 0 and f.width < MIN_DIM:
-            issues.append(f"Chiều rộng {f.width}px < {MIN_DIM}px")
-        if f.height > 0 and f.height < MIN_DIM:
-            issues.append(f"Chiều cao {f.height}px < {MIN_DIM}px")
+        if f.width > 0 and f.width < MIN_WIDTH:
+            issues.append(f"Chiều rộng {f.width}px < {MIN_WIDTH}px")
+        if f.height > 0 and f.height < MIN_HEIGHT:
+            issues.append(f"Chiều cao {f.height}px < {MIN_HEIGHT}px")
         if f.size > MAX_SIZE_MB * 1_000_000:
             issues.append(f"File {_fmt_bytes(f.size)} > {MAX_SIZE_MB}MB")
 
@@ -55,11 +57,59 @@ async def handle_creative(creative: CreativeData, session_id: str) -> AgentRespo
     # ── Phase 3: async creative intelligence (deterministic + optional VLM) ──
     from config import config as _cfg
     if _cfg.USE_VLM_CREATIVE:
-        try:
-            from creative_intel.service import enqueue_analysis
-            enqueue_analysis(session_id, [f.model_dump() for f in files])
-        except Exception:
-            pass  # analysis is advisory — never blocks the upload flow
+        from creative_intel.service import get_intel_by_ids
+
+        analysis_ids = [f.analysisId for f in files if f.analysisId]
+        verdicts = await get_intel_by_ids(session_id, analysis_ids)
+        blocked = []
+        for f in files:
+            verdict = verdicts.get(f.analysisId)
+            if not verdict:
+                blocked.append(f"{f.name}: chưa có kết quả phân tích hợp lệ")
+                continue
+            if verdict.get("effective_status") not in {"auto_approved", "approved_override"}:
+                reasons = "; ".join(verdict.get("review_reasons") or [])
+                blocked.append(f"{f.name}: {reasons or verdict.get('status')}")
+        if len(verdicts) == len(analysis_ids) and analysis_ids:
+            # update_form_state above committed the final creative metadata and
+            # therefore invalidated the worker's earlier verdict artifact. Re-
+            # publish the already verified verdicts against this exact creative
+            # revision before allowing Setup to consume them.
+            from workspace.service import (
+                StaleTaskResult,
+                WorkspaceConflict,
+                commit_artifact_result,
+                get_task_context,
+            )
+
+            context = await get_task_context(session_id, "creative_verdict")
+            task_seed = ":".join(sorted(analysis_ids)) + ":" + str(
+                context["input_revisions"].get("creative", 0)
+            )
+            try:
+                await commit_artifact_result(
+                    session_id,
+                    "creative_verdict",
+                    {"files": [verdicts[analysis_id] for analysis_id in analysis_ids]},
+                    task_id=(
+                        "creative-final:"
+                        + hashlib.sha256(task_seed.encode()).hexdigest()[:24]
+                    ),
+                    input_revisions=context["input_revisions"],
+                    base_artifact_revision=context["artifact_revision"],
+                    actor="creative_handler",
+                    reason="final creative selection validated",
+                )
+            except (StaleTaskResult, WorkspaceConflict):
+                blocked.append(
+                    "Workspace đã thay đổi trong lúc xác nhận creative; vui lòng phân tích lại"
+                )
+        if blocked:
+            return AgentResponse(
+                text="⚠ Creative cần được phân tích và duyệt trước khi sang bước Setup.",
+                blocks=[{"type": "info", "text": "\n".join(f"- {item}" for item in blocked)}],
+                meta=ResponseMeta(tool="creative_blocked", model="none", step=2),
+            )
     await log_event(session_id, "handler", {"step": "creative", "files": len(files), "valid": valid_count})
 
     # ── Build blocks ──────────────────────────────────────────────────────────

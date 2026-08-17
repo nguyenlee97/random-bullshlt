@@ -1,6 +1,10 @@
-# Golden set v1 + v2 — DRAFT (machine-authored, pending human review)
+# Golden set v1 + v2 — review status
 
-These 40 briefs (`brief_001.json` … `brief_040.json`) are **draft, machine-authored labels** and must NOT be treated as shipped ground truth. Per `docs/production-plan/07-eval-framework.md` §1 step 4, a mandatory human review pass is required before use: the labeler browses the segment catalog (`docs/database-info/audience_library.json`) to confirm each pick, and a second pass on a different day sanity-checks **100% of `must_exclude`** and **30% of the rest**, recording labeler notes. All audience `_id` values reference real segments in the catalog (verified by `validate.py` in this directory); `zones` labels are intentionally left empty for v1 and will be filled in P2.
+The legacy 40 briefs (`brief_001.json` … `brief_040.json`) were reviewed and
+corrected in the earlier human-directed label pass recorded in `LABEL-REVIEW.md`.
+They predate the per-case status ledger used by v2. All audience `_id` values
+reference real segments in the catalog (verified by `validate.py`); `zones`
+labels remain intentionally empty for v1.
 
 ## Achieved stratification (validated by `validate.py`)
 
@@ -22,14 +26,15 @@ These 40 briefs (`brief_001.json` … `brief_040.json`) are **draft, machine-aut
 
 ---
 
-## Golden set v2 — DRAFT (machine-authored, pending human review)
+## Golden set v2 — HUMAN REVIEW COMPLETE (2026-07-16)
 
 `brief_041.json` … `brief_080.json` follow `AUTHORING-GUIDE.md` and extend the schema with
-`"schema_version": 2` and an optional `labels.targeting` block. Like v1, these are
-**machine-authored draft labels** — not shipped ground truth. The same mandatory human review
-(100% of `must_exclude`, 30% of the rest, second pass on a different day) still applies before
-these are trusted for grading. `labeler_note` on every brief documents non-obvious calls for the
-reviewer to check first.
+`"schema_version": 2` and an optional `labels.targeting` block. An independent AI
+audit reviewed all labels, and the project owner accepted its recommendations on
+2026-07-16. The accepted operations were applied to the source briefs: 12 cases
+were approved unchanged, 28 were marked edited, and 6 of those edited cases retain
+an explicit `catalog_gap` instead of an invented substitute. The human-owned status
+ledger is `v2_review_status.json`.
 
 ### Step 0 — catalog re-fetch
 
@@ -46,8 +51,8 @@ human-review flag if that ever regresses, rather than silently patching v1 label
 |---|---|---|---|
 | Deep-catalog coverage (`must_include` only uses `_id`s absent from the old 71-dump) | ≥ 15 | 15 | `full_catalog_only` |
 | Targeting-labeled (full `targeting` block; ≥ 3 with notes conflicting with naive defaults) | ≥ 12 | 12 (5 conflicting) | `targeting_labeled` |
-| Multi-segment tension (stated primary vs. secondary audience) | ≥ 5 | 5 | `primary_secondary` |
-| Near-miss traps (tempting-but-wrong segment in `must_exclude`) | ≥ 5 | 5 | `near_miss` |
+| Multi-segment tension (stated primary vs. secondary audience) | ≥ 5 | 6 | `primary_secondary` |
+| Near-miss traps (tempting-but-wrong segment in `must_exclude`) | ≥ 5 | 6 | `near_miss` |
 | Adversarial v2 (injection inside `brand`/`kpi` fields, not just `notes`) | ≥ 3 | 3 | `adversarial` |
 | **Total v2 briefs** | 40 | **40** | |
 
@@ -70,18 +75,19 @@ human-review flag if that ever regresses, rather than silently patching v1 label
 1. ✅ `validate.py` is schema-version aware, checks every `_id` against `catalog_full.json`
    (not the old 71-dump), checks every `targeting` value against `targeting_options.json`,
    prints the v2 quota table, and passes for all 80 briefs.
-2. ⛔ **Blocked in this environment**: `python eval/run_eval.py --no-judge --subset
-   tag=full_catalog_only` requires a running agent that itself calls the live backend
-   (`api.pawgrammers.io.vn`) and the LLM (`maas-llm-aiplatform-hcm.api.vngcloud.vn`). The
-   sandbox this batch was authored in has network egress restricted to an allowlist that does
-   not include those hosts (confirmed: direct `curl`/`httpx` to both return no route even
-   though credentials in `agent/.env` are present and valid). `run_eval.py`'s own
-   `fullLabel → _id` map was also still pointing at the old 71-item dump — fixed to read
-   `catalog_full.json` so the run will work correctly once someone runs it in an environment
-   with real network access. **Action needed from a human with agent access**: run the command
-   above (and ideally the full `--subset tag=targeting_labeled` and `tag=near_miss` cells too)
-   against a live agent before trusting these labels — a recall of 0.0 across the new briefs
-   would flag a label bug, not necessarily an agent bug.
-3. This README is updated; all v2 briefs are tagged for human review per the note above.
-4. ⛔ No labels in `brief_041.json`–`brief_080.json` have been marked reviewed by this pass —
-   that is explicitly the next human's job, not the authoring model's.
+2. ✅ The local agent evaluation is operational. The final 100-request grounded soak completed
+   without errors, fallback, exclusions, unknown IDs, or source-citation violations; see
+   `../reports/rag-soak-100-grounded.json`.
+3. ✅ The 12 targeting-labeled cases have a dedicated gate. The structured critic candidate
+   reached 95.8% expected-value recall with zero forbidden or out-of-catalog values and p95
+   3.99 seconds; see `../reports/targeting-critic-v2.json`.
+4. ✅ Run `python eval/golden_set/build_v2_review_packet.py` to refresh
+   `V2-HUMAN-REVIEW-PACKET.md`. It preserves an existing `v2_review_status.json` so reviewer
+   decisions are never overwritten.
+5. ✅ Human review is recorded for all 40 v2 cases. `python
+   eval/golden_set/check_v2_review.py` passes only when every case has a reviewer,
+   timestamp, and `approved` or `edited` status.
+6. ✅ Optional `acceptable` and `must_exclude` buckets may be empty after human
+   review. This prevents demographic proxies or unrelated labels from being added
+   only to meet a per-brief lower bound; aggregate near-miss/adversarial quotas
+   still preserve exclusion coverage.

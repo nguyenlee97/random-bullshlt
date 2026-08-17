@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -5,12 +6,9 @@ import log from '@/lib/logger'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
-import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer
-} from 'recharts'
 import { fmt } from '@/lib/utils'
-import { Users, TrendingUp, TrendingDown, Minus, Mail, CheckCircle2, RefreshCw, Pencil, X } from 'lucide-react'
+import { Users, TrendingUp, TrendingDown, Minus, Mail, CheckCircle2, RefreshCw, Pencil, X, AlertTriangle, BarChart } from 'lucide-react'
+import ChartBlock from './ChartBlock'
 
 // ─── Table Block ─────────────────────────────────────────────────────────────
 function TableBlock({ block }) {
@@ -47,51 +45,12 @@ function TableBlock({ block }) {
 }
 
 // ─── Chart Block ─────────────────────────────────────────────────────────────
-function ChartBlock({ block }) {
-  const chartData = block.data.labels.map((label, i) => {
-    const entry = { label }
-    block.data.series.forEach(s => { entry[s.name] = s.values[i] })
-    return entry
-  })
-
-  return (
-    <Card className="mt-2">
-      <CardHeader className="pb-2 pt-3">
-        <CardTitle className="text-xs text-muted-foreground">{block.title}</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 pb-3">
-        <ResponsiveContainer width="100%" height={180}>
-          {block.chartType === 'line' ? (
-            <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {block.data.series.map(s => (
-                <Line key={s.name} type="monotone" dataKey={s.name} stroke={s.color} strokeWidth={2} dot={{ r: 3 }} />
-              ))}
-            </LineChart>
-          ) : (
-            <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {block.data.series.map(s => (
-                <Bar key={s.name} dataKey={s.name} fill={s.color} radius={[3, 3, 0, 0]} />
-              ))}
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  )
-}
-
 // ─── Audience Size Block ──────────────────────────────────────────────────────
 function AudienceSizeBlock({ block }) {
+  const sizeKnown = block.size_known ?? (
+    Number(block.size || 0) > 0
+    || (block.breakdown || []).some(item => Number(item.size || 0) > 0)
+  )
   return (
     <Card className="mt-2 border-brand-200 bg-brand-50">
       <CardContent className="py-3 flex items-center gap-4">
@@ -99,8 +58,17 @@ function AudienceSizeBlock({ block }) {
           <Users className="w-5 h-5 text-white" />
         </div>
         <div>
-          <p className="text-2xl font-black text-brand-700">{fmt(block.size)}</p>
-          <p className="text-xs text-brand-600 font-medium">người dùng · {block.count} attributes</p>
+          <p className="text-2xl font-black text-brand-700">{sizeKnown ? fmt(block.size) : '—'}</p>
+          <p className="text-xs text-brand-600 font-medium">
+            {sizeKnown
+              ? `unique reach ước lượng · ${block.confidence || 'medium'} confidence`
+              : 'chưa thể tính unique reach'} · {block.count ?? block.breakdown?.length ?? 0} attributes
+          </p>
+          {block.range && (
+            <p className="text-[10px] text-brand-600 mt-0.5">
+              Khoảng {fmt(block.range.low)}–{fmt(block.range.high)} · universe tối đa {fmt(block.universe)}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -301,15 +269,31 @@ function WorkspaceProposalBlock({ block }) {
   })()
 
   const isAudience = field === 'segment'
-  const isSetup = field === 'setup'
+  const isSetup = field === 'setup' || field === 'setup.selectedZoneIds'
+  const proposalId = changes.proposal_id
+  const [decision, setDecision] = useState(changes.status || 'pending')
+
+  useEffect(() => {
+    const listener = event => {
+      if (!proposalId || event.detail?.proposal_id !== proposalId) return
+      setDecision(event.detail.status || 'pending')
+    }
+    window.addEventListener('agent:workspace_proposal_result', listener)
+    return () => window.removeEventListener('agent:workspace_proposal_result', listener)
+  }, [proposalId])
 
   const handleConfirm = () => {
+    if (!['pending', 'failed'].includes(decision)) return
+    setDecision('processing')
     log.block('workspace_proposal CONFIRM', { field, value_type: typeof rawValue })
     if (isSetup) {
       // Setup is special: do NOT apply the stale proposal value (which has all recommended
       // zones regardless of what the user deselected). Instead dispatch a dedicated event
       // so App.jsx advances the sub-phase to 'assign' using the CURRENT workspace selection.
-      window.dispatchEvent(new CustomEvent('agent:setup_zones_confirmed'))
+      window.dispatchEvent(new CustomEvent('agent:setup_zones_confirmed', {
+        detail: { proposal_id: changes.proposal_id }
+      }))
+      setDecision('approved')
     } else {
       window.dispatchEvent(new CustomEvent('agent:workspace_confirm', {
         detail: { patch: changes }
@@ -318,8 +302,12 @@ function WorkspaceProposalBlock({ block }) {
   }
 
   const handleCancel = () => {
+    if (!['pending', 'failed'].includes(decision)) return
+    setDecision('rejected')
     log.block('workspace_proposal CANCEL', { field })
-    window.dispatchEvent(new CustomEvent('agent:workspace_cancel', { detail: { field } }))
+    window.dispatchEvent(new CustomEvent('agent:workspace_cancel', {
+      detail: { field, proposal_id: changes.proposal_id }
+    }))
   }
 
   return (
@@ -368,10 +356,28 @@ function WorkspaceProposalBlock({ block }) {
         )}
       </div>
 
-      {/* Confirm / Cancel */}
-      <div className="flex gap-2 px-3 pb-3">
+      {/* Proposal lifecycle */}
+      {decision === 'approved' ? (
+        <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
+          <CheckCircle2 className="h-4 w-4" /> Đã áp dụng vào workspace
+        </div>
+      ) : decision === 'rejected' ? (
+        <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
+          <X className="h-4 w-4" /> Đã bỏ qua đề xuất
+        </div>
+      ) : decision === 'superseded' ? (
+        <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+          <AlertTriangle className="h-4 w-4" /> Đề xuất đã lỗi thời vì workspace có thay đổi mới. Hãy tạo lại đề xuất nếu vẫn cần.
+        </div>
+      ) : decision === 'processing' ? (
+        <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700" role="status">
+          <RefreshCw className="h-4 w-4 animate-spin" /> Đang cập nhật workspace…
+        </div>
+      ) : <div className="flex gap-2 px-3 pb-3">
         <button
           onClick={handleConfirm}
+          data-demo="workspace-proposal-confirm"
+          data-workspace-field={field}
           className="flex-1 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
         >
           {isAudience ? '✅ Áp dụng tất cả segments' : isSetup ? '✅ Duyệt các zones này' : '✅ Đồng ý, cập nhật'}
@@ -382,7 +388,8 @@ function WorkspaceProposalBlock({ block }) {
         >
           <X className="w-3 h-3" /> {isAudience ? 'Tự chọn' : isSetup ? 'Chỉnh sửa' : 'Hủy'}
         </button>
-      </div>
+        {decision === 'failed' && <span className="self-center text-[10px] font-semibold text-red-600">Cập nhật thất bại · thử lại</span>}
+      </div>}
     </div>
   )
 }
@@ -391,80 +398,94 @@ function WorkspaceProposalBlock({ block }) {
 function ReportAnalysisBlock({ block }) {
   const sections = block.sections || []
   return (
-    <Card className="mt-2 border-violet-200 bg-gradient-to-br from-violet-50/50 to-indigo-50/50">
+    <Card className="border-violet-200 bg-gradient-to-br from-violet-50/50 to-indigo-50/50 overflow-hidden">
       {block.title && (
-        <CardHeader className="pb-2 pt-3 flex-row items-center gap-2">
-          <BarChart className="w-4 h-4 text-violet-500" />
-          <CardTitle className="text-xs text-violet-700 font-bold">{block.title}</CardTitle>
+        <CardHeader className="px-3.5 pb-2.5 pt-3.5 flex-row items-start gap-2 border-b border-violet-100/80">
+          <BarChart className="w-4 h-4 mt-0.5 text-violet-500 flex-shrink-0" />
+          <CardTitle className="text-[13px] leading-snug text-violet-800 font-bold break-words">{block.title}</CardTitle>
         </CardHeader>
       )}
-      <CardContent className={`${block.title ? 'pt-0' : 'pt-3'} pb-3 space-y-2.5`}>
+      <CardContent className="pt-3 px-3.5 pb-3.5 space-y-3">
         {sections.map((section, i) => {
           switch (section.type) {
             case 'summary':
             case 'paragraph':
               return (
-                <p key={i} className="text-xs text-foreground leading-relaxed">
-                  {section.text}
-                </p>
+                <div key={i} className="markdown-content text-xs text-foreground leading-relaxed [&_p]:my-0 [&_ul]:my-1 [&_ol]:my-1">
+                  <ReactMarkdown>{section.text || ''}</ReactMarkdown>
+                </div>
               )
             case 'heading':
               return (
-                <p key={i} className="text-xs font-bold text-foreground mt-1">
+                <p key={i} className="text-xs font-bold text-foreground pt-0.5">
                   {section.text}
                 </p>
               )
-            case 'metrics':
+            case 'metrics': {
+              const items = section.items || []
+              const useSingleColumn = items.some(m =>
+                String(m.label || '').length > 24 ||
+                String(m.value || '').length > 18 ||
+                String(m.delta || '').length > 22
+              )
               return (
-                <div key={i} className="grid grid-cols-2 gap-1.5">
-                  {(section.items || []).map((m, j) => (
-                    <div key={j} className="flex items-center gap-2 p-2 rounded-lg bg-white border border-border">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[10px] text-muted-foreground font-medium truncate">{m.label}</p>
-                        <p className="text-sm font-black text-foreground">{m.value}</p>
+                <div key={i} className={`grid gap-2 ${useSingleColumn ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                  {items.map((m, j) => {
+                    const delta = String(m.delta || '').trim()
+                    const showTrend = Boolean(
+                      m.trend &&
+                      delta &&
+                      !/^(?:0(?:[.,]0+)?%?|n\/?a|—|-)$/i.test(delta)
+                    )
+                    return (
+                    <div key={j} className="p-2.5 rounded-lg bg-white/90 border border-violet-100 shadow-sm min-w-0">
+                      <div className="w-full min-w-0">
+                        <p className="text-[10px] leading-snug text-muted-foreground font-semibold break-words">{m.label}</p>
+                        <p className="mt-0.5 text-sm leading-snug font-bold text-foreground break-words">{m.value}</p>
+                        {showTrend && (
+                          <div className={`mt-1 flex items-start gap-1 text-[10px] leading-snug font-semibold min-w-0 ${
+                            m.trend === 'up' ? 'text-green-600' : m.trend === 'down' ? 'text-red-600' : 'text-muted-foreground'
+                          }`}>
+                            {m.trend === 'up' ? <TrendingUp className="w-3 h-3 mt-px flex-shrink-0" /> :
+                             m.trend === 'down' ? <TrendingDown className="w-3 h-3 mt-px flex-shrink-0" /> : null}
+                            <span className="min-w-0 break-words">{delta}</span>
+                          </div>
+                        )}
                       </div>
-                      {m.trend && (
-                        <div className={`flex items-center gap-0.5 text-[10px] font-semibold ${
-                          m.trend === 'up' ? 'text-green-600' : m.trend === 'down' ? 'text-red-600' : 'text-gray-500'
-                        }`}>
-                          {m.trend === 'up' ? <TrendingUp className="w-3 h-3" /> :
-                           m.trend === 'down' ? <TrendingDown className="w-3 h-3" /> :
-                           <Minus className="w-3 h-3" />}
-                          {m.delta || ''}
-                        </div>
-                      )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )
+            }
             case 'insight':
               return (
-                <div key={i} className={`p-2 rounded-lg border text-xs font-medium ${
+                <div key={i} className={`flex items-start gap-1.5 p-2.5 rounded-lg border text-xs leading-relaxed font-medium ${
                   section.level === 'good' ? 'bg-green-50 border-green-200 text-green-800' :
                   section.level === 'bad' || section.level === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
                   'bg-blue-50 border-blue-200 text-blue-800'
                 }`}>
-                  {section.level === 'good' ? '✅ ' : section.level === 'bad' ? '⚠️ ' : '💡 '}
-                  {section.text}
+                  <span className="flex-shrink-0">{section.level === 'good' ? '✅' : section.level === 'bad' || section.level === 'warning' ? '⚠️' : '💡'}</span>
+                  <div className="markdown-content min-w-0 [&_p]:my-0"><ReactMarkdown>{section.text || ''}</ReactMarkdown></div>
                 </div>
               )
             case 'comparison':
               return (
-                <div key={i} className="overflow-x-auto">
-                  {section.title && <p className="text-[10px] font-semibold text-muted-foreground mb-1">{section.title}</p>}
-                  <table className="w-full text-[11px]">
+                <div key={i} className="overflow-x-auto rounded-lg border border-violet-100 bg-white/80">
+                  {section.title && <p className="text-[10px] font-semibold text-muted-foreground px-2.5 pt-2">{section.title}</p>}
+                  <table className="w-full min-w-[420px] text-[11px]">
                     <thead>
-                      <tr className="border-b border-border">
+                      <tr className="border-b border-violet-100 bg-violet-50/60">
                         {(section.headers || []).map((h, hi) => (
-                          <th key={hi} className="text-left py-1 px-1.5 font-semibold text-muted-foreground">{h}</th>
+                          <th key={hi} className="text-left py-2 px-2.5 font-semibold text-violet-800 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {(section.rows || []).map((row, ri) => (
-                        <tr key={ri} className="border-b border-border/50">
+                        <tr key={ri} className="border-b border-border/50 last:border-0 even:bg-slate-50/60">
                           {(Array.isArray(row) ? row : []).map((cell, ci) => (
-                            <td key={ci} className="py-1 px-1.5">{cell}</td>
+                            <td key={ci} className="py-2 px-2.5 align-top leading-snug">{cell}</td>
                           ))}
                         </tr>
                       ))}
@@ -476,7 +497,7 @@ function ReportAnalysisBlock({ block }) {
               return (
                 <div key={i} className="space-y-1">
                   {(section.items || []).map((r, ri) => (
-                    <div key={ri} className={`flex items-start gap-2 p-2 rounded-lg border ${
+                    <div key={ri} className={`flex items-start gap-2 p-2.5 rounded-lg border ${
                       r.priority === 'high' ? 'bg-red-50 border-red-200' :
                       r.priority === 'medium' ? 'bg-amber-50 border-amber-200' :
                       'bg-blue-50 border-blue-200'
@@ -485,13 +506,19 @@ function ReportAnalysisBlock({ block }) {
                              className="text-[8px] px-1.5 py-0 flex-shrink-0 mt-0.5">
                         {r.priority === 'high' ? '🔴 Cao' : r.priority === 'medium' ? '🟡 TB' : '🟢 Thấp'}
                       </Badge>
-                      <p className="text-[11px] text-foreground">{r.text}</p>
+                      <div className="markdown-content text-[11px] leading-relaxed text-foreground [&_p]:my-0 [&_ul]:my-1">
+                        <ReactMarkdown>{r.text || ''}</ReactMarkdown>
+                      </div>
                     </div>
                   ))}
                 </div>
               )
             default:
-              return section.text ? <p key={i} className="text-xs text-muted-foreground">{section.text}</p> : null
+              return section.text ? (
+                <div key={i} className="markdown-content text-xs leading-relaxed text-muted-foreground [&_p]:my-0">
+                  <ReactMarkdown>{section.text}</ReactMarkdown>
+                </div>
+              ) : null
           }
         })}
       </CardContent>

@@ -22,16 +22,14 @@
         "6a2df27adda0ba67f14c7070",
         "6a2df27adda0ba67f14c707f"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22bb8"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Online advertising / Email marketing / Social media marketing are full-catalog-only Business and industry > Online sub-segments. must_exclude=Retail(industry): a near-miss — sounds SMB-adjacent but targets retail-sector operators specifically, not the cross-industry marketers this SaaS tool is built for."
+    "labeler_note": "Online advertising / Email marketing / Social media marketing are full-catalog-only Business and industry > Online sub-segments. must_exclude=Retail(industry): a near-miss — sounds SMB-adjacent but targets retail-sector operators specifically, not the cross-industry marketers this SaaS tool is built for.\n\nHuman review 2026-07-16: accepted and applied the independent audit. The SaaS and marketing positives fit. Retail businesses are a valid subset of small-business marketers, so Retail (industry) must not be excluded."
   },
   "tags": [
     "consideration",

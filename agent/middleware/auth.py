@@ -1,14 +1,13 @@
 """
-API-key auth middleware (Phase 0). Upgraded to JWT in Phase 5.
+Internal API-key authentication for the agent service.
 
 Behavior:
-- If AGENT_API_KEY is unset/empty → middleware is a NO-OP (deploy-safe default:
+- If AGENT_API_KEY is unset/empty → middleware is a NO-OP (local development:
   turning this on is an explicit .env change, not a surprise lockout).
 - Health/version/metrics endpoints and CORS preflights are always exempt.
 
-Known limitation (accepted for Phase 0, see docs/production-plan/01 §A1):
-the key ships in the frontend bundle. Goal is stopping drive-by scripted abuse
-of an open LLM endpoint, not bulletproof auth.
+The browser never receives this key. Nginx injects it while proxying same-origin
+``/agent`` requests to the private agent container.
 """
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -16,7 +15,15 @@ from starlette.responses import JSONResponse
 
 from config import config
 
-EXEMPT_PATHS = {"/api/health", "/health", "/api/version", "/metrics"}
+EXEMPT_PATHS = {"/api/health", "/health", "/ready", "/api/version", "/metrics"}
+EXEMPT_PREFIXES = ("/api/public/observability",)
+
+
+def _is_exempt_path(path: str) -> bool:
+    return path in EXEMPT_PATHS or any(
+        path == prefix or path.startswith(prefix + "/")
+        for prefix in EXEMPT_PREFIXES
+    )
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
@@ -24,7 +31,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         key_required = bool(getattr(config, "AGENT_API_KEY", ""))
         if (
             key_required
-            and request.url.path not in EXEMPT_PATHS
+            and not _is_exempt_path(request.url.path)
             and request.method != "OPTIONS"
         ):
             provided = request.headers.get("X-API-Key", "")

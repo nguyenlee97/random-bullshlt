@@ -19,10 +19,10 @@
       ],
       "acceptable": [
         "6a2df27adda0ba67f14c7137",
-        "6a48cc2381574c48dbd22c56"
+        "6a48cc2381574c48dbd22c4c"
       ],
       "must_exclude": [
-        "6a48cc2381574c48dbd22c6d"
+        "6a48cc2381574c48dbd22c50"
       ]
     },
     "zones": {
@@ -30,7 +30,7 @@
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Notes deliberately state the higher-lifetime-value business-traveler segment is secondary despite being 'obviously' more valuable — tests whether the agent follows the brief's stated priority instead of its own value assumption."
+    "labeler_note": "Notes deliberately state the higher-lifetime-value business-traveler segment is secondary despite being 'obviously' more valuable — tests whether the agent follows the brief's stated priority instead of its own value assumption.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Adventure/air travel and hotels fit. Tourism is an industry label, not a traveler persona. Luxury goods is a weak wealth proxy; Cruises is a closer premium-travel near miss for a backpacker airline."
   },
   "tags": [
     "awareness",

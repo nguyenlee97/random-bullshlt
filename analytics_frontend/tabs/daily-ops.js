@@ -14,8 +14,9 @@ function norm(r) {
   const campaignId = r.campaignId || r['Campaign ID'] || '';
   const placementId = r.placementId || r.zone || r.Zone || '';
   const channel = r.channel || '';
-  // Derive a "brand" label from campaignId prefix or Brand field
-  const brand = r.brand || r.Brand || campaignId.replace(/-\d+$/, '') || 'Unknown';
+  // Preserve the exact campaign ID. Collapsing the numeric suffix merges
+  // ORD-2026-004 through ORD-2026-013 into one misleading series.
+  const brand = r.brand || r.Brand || campaignId || 'Unknown';
   // Audience comes from mock data or fall back to channel
   const audience = r.audienceSegment || r['Audience Segment'] || channel || 'Unknown';
 
@@ -43,7 +44,6 @@ function norm(r) {
     engRate:       Number(r.engagementRate || r['Engagement Rate'] || 0),
   };
 }
-
 
 /* ── Render entry point ──────────────────────────────────────────── */
 export function render(State, utils) {
@@ -94,8 +94,6 @@ function buildHTML(rows, utils) {
             <div class="sub">Impressions + Clicks (bars) · CTR % (line)</div>
           </div>
         </div>
-        <div class="card-usecase"><b>When to use:</b> Default ad-ops view. Check daily delivery volume, reach, clicks and CTR at a glance.</div>
-        <div class="card-rule"><b>Decision rule:</b> Flat impressions + dropping CTR = creative fatigue. Large gap between impressions and reach = over-frequency.</div>
         <div class="card-body auto" style="padding-bottom:16px">
           <div class="ctrl-row">
             <span class="ctrl-label">Campaign:</span>
@@ -103,10 +101,6 @@ function buildHTML(rows, utils) {
             <span class="ctrl-note" id="op-camp-stat">—</span>
           </div>
           <div class="chart-wrap tall"><canvas id="ch_op_combo"></canvas></div>
-        </div>
-        <div class="card-insight">
-          <span class="insight-ic" id="ic_op_combo">i</span>
-          <span id="ins_op_combo">—</span>
         </div>
       </div>
     </div>
@@ -121,8 +115,6 @@ function buildHTML(rows, utils) {
             <div class="sub">Grouped bars per date · toggle metric · top 4 audiences by spend</div>
           </div>
         </div>
-        <div class="card-usecase"><b>When to use:</b> Compare audience segments day-by-day — which segment delivers most, which engages best.</div>
-        <div class="card-rule"><b>Decision rule:</b> Dominant impressions but low CTR = audience-creative mismatch. High CTR but low volume = scale this audience.</div>
         <div class="card-body auto" style="padding-bottom:16px">
           <div class="ctrl-row">
             <span class="ctrl-label">Metric:</span>
@@ -134,10 +126,6 @@ function buildHTML(rows, utils) {
             <span class="ctrl-note">Top 4 audiences by spend</span>
           </div>
           <div class="chart-wrap tall"><canvas id="ch_op_audience"></canvas></div>
-        </div>
-        <div class="card-insight">
-          <span class="insight-ic" id="ic_op_audience">i</span>
-          <span id="ins_op_audience">—</span>
         </div>
       </div>
     </div>
@@ -152,8 +140,6 @@ function buildHTML(rows, utils) {
             <div class="sub">Compare up to 5 entities on 1 metric · top 5 by total volume</div>
           </div>
         </div>
-        <div class="card-usecase"><b>When to use:</b> Compare campaigns or segments on the same tab — who is outperforming, whose trend is declining.</div>
-        <div class="card-rule"><b>Decision rule:</b> Trend down &gt; 2× baseline → fatigue. Steady + above baseline = winner to scale.</div>
         <div class="card-body auto" style="padding-bottom:16px">
           <div class="ctrl-row">
             <span class="ctrl-label">Metric:</span>
@@ -177,10 +163,6 @@ function buildHTML(rows, utils) {
           </div>
           <div class="chart-wrap tall"><canvas id="ch_op_compare"></canvas></div>
         </div>
-        <div class="card-insight">
-          <span class="insight-ic" id="ic_op_compare">i</span>
-          <span id="ins_op_compare">—</span>
-        </div>
       </div>
     </div>
   `;
@@ -195,25 +177,18 @@ function buildScorecard(rows, utils) {
   const avgCTR   = totImp > 0 ? totClk / totImp : 0;
   const avgCPM   = rows.length > 0 ? rows.reduce((s,r) => s + r.cpm, 0) / rows.length : 0;
 
-  const good = rows.filter(r => r.verdict === 'good').length;
-  const bad  = rows.filter(r => r.verdict === 'bad').length;
-  const goodPct = rows.length > 0 ? (good / rows.length * 100).toFixed(0) : '—';
-
   const kpis = [
-    { label: 'Impressions', val: fmtK(totImp),        delta: null },
-    { label: 'Clicks',      val: fmtK(totClk),         delta: null },
-    { label: 'Avg CTR',     val: fmtPct(avgCTR),       delta: null },
-    { label: 'Total Spend', val: fmtVND(totSpend),     delta: null },
-    { label: 'Avg CPM',     val: '₫' + Math.round(avgCPM).toLocaleString('vi-VN'), delta: null },
-    { label: '✅ Good',     val: good + ' campaigns',  delta: `${goodPct}% pass rate`, cls: 'good' },
-    { label: '❌ Bad',      val: bad  + ' campaigns',  delta: null, cls: bad > good ? 'bad' : 'neutral' },
+    { label: 'Impressions', val: fmtK(totImp) },
+    { label: 'Clicks',      val: fmtK(totClk) },
+    { label: 'Avg CTR',     val: fmtPct(avgCTR) },
+    { label: 'Total Spend', val: fmtVND(totSpend) },
+    { label: 'Avg CPM',     val: '₫' + Math.round(avgCPM).toLocaleString('vi-VN') }
   ];
 
   return kpis.map(k => `
     <div class="sc-item">
       <div class="sc-label">${k.label}</div>
       <div class="sc-val">${k.val}</div>
-      ${k.delta ? `<div class="sc-delta ${k.cls || ''}">${k.delta}</div>` : ''}
     </div>
   `).join('');
 }
@@ -317,32 +292,13 @@ function drawCombo(rows, utils, campFilter = '') {
 
   registerChart('ch_op_combo', chart);
 
-  // Update campaign stat + insight
+  // Update factual campaign totals shown beside the chart controls.
   const totImp = imps.reduce((s,v) => s+v, 0);
   const totClk = clks.reduce((s,v) => s+v, 0);
   const avgCTR = totImp > 0 ? (totClk / totImp * 100) : 0;
   const el2 = el('op-camp-stat');
   if (el2) el2.textContent = `${dates.length} days · ${fmt(totImp)} imps · CTR ${avgCTR.toFixed(2)}%`;
 
-  // Insight
-  const ctrLast3 = ctrs.slice(-3);
-  const ctrFirst3 = ctrs.slice(0, 3);
-  const avgLast = ctrLast3.reduce((s,v) => s+v,0) / (ctrLast3.length||1);
-  const avgFirst = ctrFirst3.reduce((s,v) => s+v,0) / (ctrFirst3.length||1);
-  const ic = el('ic_op_combo');
-  const ins = el('ins_op_combo');
-  if (ic && ins) {
-    if (avgLast < avgFirst * 0.8) {
-      ic.className = 'insight-ic bad'; ic.textContent = '▼';
-      ins.innerHTML = `<b>CTR declining</b> — last 3 days avg ${avgLast.toFixed(2)}% vs opening ${avgFirst.toFixed(2)}%. Possible creative fatigue. Consider refreshing creative assets.`;
-    } else if (avgLast > avgFirst * 1.1) {
-      ic.className = 'insight-ic good'; ic.textContent = '▲';
-      ins.innerHTML = `<b>CTR improving</b> — last 3 days avg ${avgLast.toFixed(2)}% vs opening ${avgFirst.toFixed(2)}%. Campaign is gaining momentum.`;
-    } else {
-      ic.className = 'insight-ic'; ic.textContent = 'i';
-      ins.innerHTML = `CTR stable around <b>${avgLast.toFixed(2)}%</b>. Total <b>${fmt(totImp)}</b> impressions, <b>${fmt(totClk)}</b> clicks across <b>${dates.length}</b> days.`;
-    }
-  }
 }
 
 /* ── Chart 2: Audience grouped bars ─────────────────────────────── */
@@ -415,19 +371,6 @@ function drawAudience(rows, metric, utils) {
 
   registerChart('ch_op_audience', chart);
 
-  // Insight
-  const ic = el('ic_op_audience');
-  const ins = el('ins_op_audience');
-  if (ic && ins && top4.length > 0) {
-    const audTotals = top4.map(aud => ({
-      aud,
-      imp: rows.filter(r=>r.audience===aud).reduce((s,r)=>s+r.impressions,0),
-      clk: rows.filter(r=>r.audience===aud).reduce((s,r)=>s+r.clicks,0),
-    }));
-    const topCTR = audTotals.sort((a,b) => (b.clk/Math.max(b.imp,1)) - (a.clk/Math.max(a.imp,1)))[0];
-    ic.className = 'insight-ic good'; ic.textContent = '✓';
-    ins.innerHTML = `<b>${topCTR.aud}</b> leads with the highest CTR (${(topCTR.clk/Math.max(topCTR.imp,1)*100).toFixed(2)}%) among the top 4 audiences. Consider increasing budget allocation to this segment.`;
-  }
 }
 
 /* ── Chart 3: Campaign comparison multi-line ─────────────────────── */
@@ -530,13 +473,6 @@ function drawCompare(rows, metric, compareBy, utils) {
 
   registerChart('ch_op_compare', chart);
 
-  // Insight
-  const ic = el('ic_op_compare');
-  const ins = el('ins_op_compare');
-  if (ic && ins && top5.length > 0) {
-    ic.className = 'insight-ic'; ic.textContent = 'i';
-    ins.innerHTML = `Comparing <b>${compareBy}</b> on <b>${metric.toUpperCase()}</b> — top 5 entities by impression volume. <b>${top5[0]}</b> leads overall.`;
-  }
 }
 
 /* ── Controls binding ────────────────────────────────────────────── */

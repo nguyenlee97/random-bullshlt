@@ -1,0 +1,69 @@
+{
+  "label": "rag-qdrant-fallback-smoke",
+  "created_at": "2026-07-14T19:03:24.844489+00:00",
+  "agent_url": "http://localhost:8080",
+  "k": 15,
+  "expect_rag": true,
+  "summary": {
+    "n": 1,
+    "errors": 0,
+    "mean_recall@15": 1.0,
+    "mean_mrr@15": 1.0,
+    "exclusion_violations_total": 0,
+    "judge_score": null,
+    "unknown_recommendations_total": 0,
+    "rag_fallbacks": 1,
+    "mean_recommendations": 6,
+    "p50_latency_s": 26.1,
+    "p95_latency_s": 26.1
+  },
+  "results": [
+    {
+      "id": "brief_004",
+      "tags": [
+        "consideration",
+        "vi"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 1.0,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "latency_s": 26.1,
+      "rag": null,
+      "rag_fallback": true,
+      "recommendations": [
+        {
+          "segmentId": "INT159",
+          "fullLabel": "Organic food (food & drink)",
+          "reason": "Trực tiếp phản ánh định vị sản phẩm hữu cơ - yếu tố cốt lõi trong brief"
+        },
+        {
+          "segmentId": "INT125",
+          "fullLabel": "Yoga (fitness)",
+          "reason": "Đối tượng mục tiêu ưu tiên tập yoga, segment fitness phổ biến nhất cho dân văn phòng"
+        },
+        {
+          "segmentId": "INT122",
+          "fullLabel": "Physical fitness (fitness)",
+          "reason": "Phủ rộng đối tượng quan tâm fitness tổng quát, bổ sung cho Yoga segment"
+        },
+        {
+          "segmentId": "INT120",
+          "fullLabel": "Bodybuilding (sport)",
+          "reason": "Liên quan trực tiếp đến gym - một trong những hoạt động fitness được nhắc đến trong brief"
+        },
+        {
+          "segmentId": "INT162",
+          "fullLabel": "Veganism (diets)",
+          "reason": "Phản ánh xu hướng plant-based và lối sống lành mạnh, gần với đối tượng ưu tiên thực phẩm organic"
+        },
+        {
+          "segmentId": "INT163",
+          "fullLabel": "Vegetarianism (diets)",
+          "reason": "Bổ sung cho Veganism, tăng phạm vi tiếp cận nhóm quan tâm chế độ ăn thực vật và healthy eating"
+        }
+      ]
+    }
+  ]
+}

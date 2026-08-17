@@ -4,20 +4,28 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Check, AlertTriangle, CheckCircle2, Layers, ArrowRight, Film, Wand2 } from 'lucide-react'
-import { checkMismatch, canCheckRatio, scoreFile, getSelectedZones } from './setupUtils'
+import { checkMismatch, checkAutopilotMismatch, canCheckRatio, scoreFile, getSelectedZones } from './setupUtils'
+
+const isCreativeApproved = (file) =>
+  ['auto_approved', 'approved_override'].includes(file.analysisStatus)
 
 // ─── Single creative thumbnail option ─────────────────────────────────────────
-function CreativeOption({ file, zone, selected, onSelect, rank }) {
-  const mismatch = checkMismatch(zone, file)
+function CreativeOption({ file, zone, selected, onSelect, rank, strictCompatibility = false }) {
+  const mismatch = strictCompatibility
+    ? checkAutopilotMismatch(zone, file)
+    : checkMismatch(zone, file)
   const isBest = rank === 0
+  const approved = isCreativeApproved(file)
+  const incompatible = Boolean(mismatch)
 
   return (
     <button
-      onClick={() => onSelect(selected ? null : file.id)}
+      onClick={() => approved && (!incompatible || selected) && onSelect(selected ? null : file.id)}
+      disabled={!approved || (incompatible && !selected)}
       className={cn(
         'relative flex flex-col rounded-lg border-2 overflow-hidden text-left transition-all duration-150',
         selected ? 'border-brand-500 shadow-md ring-2 ring-brand-200' : 'border-border hover:border-brand-300',
-        mismatch && !selected && 'opacity-75',
+        (incompatible && !selected) || !approved ? 'opacity-50 cursor-not-allowed' : '',
       )}
       title={file.name}
     >
@@ -44,10 +52,13 @@ function CreativeOption({ file, zone, selected, onSelect, rank }) {
             </div>
           </div>
         )}
-        {mismatch && (
+        {incompatible && (
           <div className="absolute top-1 right-1">
             <AlertTriangle className="w-3.5 h-3.5 text-red-500 drop-shadow" />
           </div>
+        )}
+        {!approved && (
+          <p className="text-[9px] text-amber-600 leading-tight mt-0.5">Chưa được duyệt</p>
         )}
       </div>
 
@@ -57,7 +68,7 @@ function CreativeOption({ file, zone, selected, onSelect, rank }) {
         <p className="text-[10px] text-muted-foreground mt-0.5">
           {file.width && file.height ? `${file.width}×${file.height}px` : file.type?.split('/')[1]?.toUpperCase()}
         </p>
-        {mismatch && (
+        {incompatible && (
           <p className="text-[9px] text-red-500 leading-tight mt-0.5">⚠ Tỷ lệ lệch</p>
         )}
       </div>
@@ -66,13 +77,26 @@ function CreativeOption({ file, zone, selected, onSelect, rank }) {
 }
 
 // ─── Single zone assignment row ───────────────────────────────────────────────
-function AssignRow({ zone, files, assignedFileId, onAssign, onGroupSameSize, groupedCount }) {
+function AssignRow({
+  zone,
+  files,
+  assignedFileId,
+  onAssign,
+  onGroupSameSize,
+  groupedCount,
+  strictCompatibility = false,
+  identityAware = false,
+}) {
   const assignedFile = files.find(f => f.id === assignedFileId)
-  const mismatch = assignedFile ? checkMismatch(zone, assignedFile) : null
+  const mismatch = assignedFile
+    ? (strictCompatibility
+        ? checkAutopilotMismatch(zone, assignedFile)
+        : checkMismatch(zone, assignedFile))
+    : null
 
   // Rank files by smart score for this zone
   const rankedFiles = [...files]
-    .map(f => ({ ...f, _score: scoreFile(f, zone) }))
+    .map(f => ({ ...f, _score: scoreFile(f, zone, { identityAware }) }))
     .sort((a, b) => b._score - a._score)
 
   return (
@@ -109,6 +133,7 @@ function AssignRow({ zone, files, assignedFileId, onAssign, onGroupSameSize, gro
               selected={file.id === assignedFileId}
               onSelect={(id) => onAssign(zone.id, id)}
               rank={rank}
+              strictCompatibility={strictCompatibility}
             />
           ))}
         </div>
@@ -145,23 +170,58 @@ function AssignRow({ zone, files, assignedFileId, onAssign, onGroupSameSize, gro
 }
 
 // ─── Phase 2 component ─────────────────────────────────────────────────────────
-export default function CreativeAssignPhase({ data, onChange, files, allZones, recoZones }) {
+export default function CreativeAssignPhase({
+  data, onChange, files, allZones, recoZones,
+  repairMode = false, openaiCampaignFlow = false,
+}) {
   const selectedZones = getSelectedZones(data.selectedZoneIds || [], allZones || null, recoZones || null)
   const assignments = data.assignments || {}
+  const strictCompatibility = repairMode || openaiCampaignFlow
 
   const handleAssign = (zoneId, fileId) => {
     onChange({ ...data, assignments: { ...assignments, [zoneId]: fileId } })
   }
 
-  // Auto-assign: pick best scored file for each zone
+  // Autopilot reuses the canonical server recommendation. Guided setup keeps
+  // its local scorer because it has no Autopilot assignment artifact.
   const handleAutoAssign = () => {
-    if (files.length === 0) return
+    const approvedFiles = files.filter(isCreativeApproved)
+    if (approvedFiles.length === 0) return
     const newAssignments = { ...assignments }
+    const recommended = data.recommendedAssignments || {}
     selectedZones.forEach(zone => {
-      const best = [...files]
-        .map(f => ({ ...f, _score: scoreFile(f, zone) }))
-        .sort((a, b) => b._score - a._score)[0]
+      const recommendedFile = approvedFiles.find(file =>
+        file.id === recommended[zone.id]
+      )
+      if (repairMode) {
+        if (recommendedFile) {
+          newAssignments[zone.id] = recommendedFile.id
+        } else {
+          const bestFallback = [...approvedFiles]
+            .map(file => ({
+              ...file,
+              _score: scoreFile(file, zone, { identityAware: true }),
+            }))
+            .sort((a, b) => b._score - a._score)
+            .at(0)
+          if (bestFallback) newAssignments[zone.id] = bestFallback.id
+          else delete newAssignments[zone.id]
+        }
+        return
+      }
+      const compatibleFiles = strictCompatibility
+        ? approvedFiles.filter(file => !checkAutopilotMismatch(zone, file))
+        : approvedFiles
+      const assignmentPool = compatibleFiles.length ? compatibleFiles : approvedFiles
+      const best = [...assignmentPool]
+        .map(f => ({
+          ...f,
+          _score: scoreFile(f, zone, { identityAware: openaiCampaignFlow || repairMode }),
+        }))
+        .sort((a, b) => b._score - a._score)
+        .at(0)
       if (best) newAssignments[zone.id] = best.id
+      else delete newAssignments[zone.id]
     })
     onChange({ ...data, assignments: newAssignments })
   }
@@ -204,11 +264,11 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones, r
   const assignedCount = selectedZones.filter(z => assignments[z.id]).length
   const mismatchCount = selectedZones.filter(z => {
     const f = files.find(f => f.id === assignments[z.id])
-    return f && checkMismatch(z, f)
+    return f && (strictCompatibility ? checkAutopilotMismatch(z, f) : checkMismatch(z, f))
   }).length
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-demo="autopilot-creative-assignment-editor">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-xs">
         <button
@@ -241,10 +301,12 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones, r
               data-demo="auto-assign-btn"
               onClick={handleAutoAssign}
               className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-100 hover:bg-violet-200 text-violet-700 text-xs font-semibold transition-colors border border-violet-200"
-              title="Tự động gắn creative phù hợp nhất vào mỗi zone"
+              title={repairMode
+                ? 'Khôi phục đề xuất đã được Agent kiểm tra theo verdict, format và tỷ lệ'
+                : 'Tự động gắn creative phù hợp nhất vào mỗi zone'}
             >
               <Wand2 className="w-3.5 h-3.5" />
-              Tự động gắn
+              {repairMode ? 'Dùng gán đề xuất' : 'Tự động gắn'}
             </button>
           )}
           {mismatchCount > 0 && (
@@ -278,19 +340,29 @@ export default function CreativeAssignPhase({ data, onChange, files, allZones, r
             onAssign={handleAssign}
             onGroupSameSize={handleGroupSameSize}
             groupedCount={countGroupable(zone, assignments[zone.id])}
+            strictCompatibility={strictCompatibility}
+            identityAware={openaiCampaignFlow || repairMode}
           />
         ))}
       </div>
 
-      {/* Proceed to confirm */}
-      <Button
-        onClick={() => onChange({ ...data, phase: 'confirm' })}
-        className="w-full gap-2"
-        id="proceed-to-confirm-btn"
-      >
-        <ArrowRight className="w-4 h-4" />
-        Xem tổng kết & xác nhận tạo chiến dịch
-      </Button>
+      {/* Guided setup owns order confirmation. Autopilot repairs are persisted
+          by the workspace footer so the existing run remains in control. */}
+      {repairMode ? (
+        <div className="rounded-xl border border-brand-200 bg-brand-50 px-3 py-2.5 text-xs leading-relaxed text-brand-800">
+          Gán một creative đã duyệt cho từng placement, sau đó dùng nút
+          <strong> Lưu &amp; quay lại Autopilot</strong> ở cuối màn hình.
+        </div>
+      ) : (
+        <Button
+          onClick={() => onChange({ ...data, phase: 'confirm' })}
+          className="w-full gap-2"
+          id="proceed-to-confirm-btn"
+        >
+          <ArrowRight className="w-4 h-4" />
+          Xem tổng kết & xác nhận tạo chiến dịch
+        </Button>
+      )}
     </div>
   )
 }

@@ -4,13 +4,17 @@
  * Exposes window.AnalyticsApi
  */
 
-const BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? 'http://localhost:3000/api'
-  : 'https://api.pawgrammers.io.vn/api';
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const localApiOverride = isLocal
+  ? new URLSearchParams(window.location.search).get('apiBase')
+  : '';
+export const API_BASE = window.__ADSTACK_CONFIG__?.apiBase || localApiOverride || (
+  isLocal ? 'http://localhost:3000/api' : 'https://api.pawgrammers.io.vn/api'
+);
 
 
 async function apiFetch(path, opts = {}) {
-  const resp = await fetch(BASE + path, {
+  const resp = await fetch(API_BASE + path, {
     headers: { 'Content-Type': 'application/json' },
     ...opts
   });
@@ -20,16 +24,15 @@ async function apiFetch(path, opts = {}) {
 
 /**
  * GET /api/analytics/data
- * Params: brand, zone, audience, startDate, endDate, limit
+ * Params: campaignId, placementId, channel, startDate, endDate
  */
 export async function fetchData(filters = {}) {
   const params = new URLSearchParams();
-  if (filters.brand)     params.set('brand', filters.brand);
-  if (filters.zone)      params.set('zone', filters.zone);
-  if (filters.audience)  params.set('audience', filters.audience);
+  if (filters.campaignId)  params.set('campaignId', filters.campaignId);
+  if (filters.placementId) params.set('placementId', filters.placementId);
+  if (filters.channel)     params.set('channel', filters.channel);
   if (filters.startDate) params.set('startDate', filters.startDate);
   if (filters.endDate)   params.set('endDate', filters.endDate);
-  if (filters.limit)     params.set('limit', filters.limit);
   const qs = params.toString();
   return apiFetch('/analytics/data' + (qs ? '?' + qs : ''));
 }
@@ -39,9 +42,7 @@ export async function fetchData(filters = {}) {
  */
 export async function fetchSummary(filters = {}) {
   const params = new URLSearchParams();
-  if (filters.brand)     params.set('brand', filters.brand);
-  if (filters.zone)      params.set('zone', filters.zone);
-  if (filters.audience)  params.set('audience', filters.audience);
+  if (filters.campaignId) params.set('campaignId', filters.campaignId);
   if (filters.startDate) params.set('startDate', filters.startDate);
   if (filters.endDate)   params.set('endDate', filters.endDate);
   const qs = params.toString();
@@ -53,7 +54,6 @@ export async function fetchSummary(filters = {}) {
  */
 export async function fetchByCampaign(filters = {}) {
   const params = new URLSearchParams();
-  if (filters.brand)     params.set('brand', filters.brand);
   if (filters.startDate) params.set('startDate', filters.startDate);
   if (filters.endDate)   params.set('endDate', filters.endDate);
   const qs = params.toString();
@@ -65,8 +65,7 @@ export async function fetchByCampaign(filters = {}) {
  */
 export async function fetchByDate(filters = {}) {
   const params = new URLSearchParams();
-  if (filters.brand)     params.set('brand', filters.brand);
-  if (filters.zone)      params.set('zone', filters.zone);
+  if (filters.campaignId) params.set('campaignId', filters.campaignId);
   if (filters.startDate) params.set('startDate', filters.startDate);
   if (filters.endDate)   params.set('endDate', filters.endDate);
   const qs = params.toString();
@@ -78,7 +77,7 @@ export async function fetchByDate(filters = {}) {
  */
 export async function fetchByPlacement(filters = {}) {
   const params = new URLSearchParams();
-  if (filters.brand)     params.set('brand', filters.brand);
+  if (filters.campaignId) params.set('campaignId', filters.campaignId);
   if (filters.startDate) params.set('startDate', filters.startDate);
   if (filters.endDate)   params.set('endDate', filters.endDate);
   const qs = params.toString();
@@ -90,4 +89,20 @@ export async function fetchByPlacement(filters = {}) {
  */
 export async function fetchHealth() {
   return apiFetch('/health');
+}
+
+/**
+ * GET /api/orders
+ * Used only for human-readable campaign labels in the selector.
+ */
+export async function fetchOrders() {
+  return apiFetch('/orders');
+}
+
+/**
+ * GET /api/reports/data/:campaignId
+ * This is the exact record set consumed by the Agent UI report step.
+ */
+export async function fetchReportData(campaignId) {
+  return apiFetch(`/reports/data/${encodeURIComponent(campaignId)}`);
 }

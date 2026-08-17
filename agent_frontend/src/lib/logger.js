@@ -1,5 +1,5 @@
 /**
- * Centralized frontend logger for Camp Ads Agent.
+ * Centralized frontend logger for Advertising Agent.
  * All log lines are prefixed with a category tag for easy filtering in DevTools.
  *
  * Usage:
@@ -18,10 +18,10 @@ const STYLES = {
   API:       'background:#1e40af;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
   CHAT:      'background:#059669;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
   WORKSPACE: 'background:#d97706;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
-  STEP:      'background:#7c3aed;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
+  STEP:      'background:#0057d9;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
   EVENT:     'background:#db2777;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
   BLOCK:     'background:#0891b2;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
-  FORM:      'background:#4f46e5;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
+  FORM:      'background:#0068ff;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
   ERROR:     'background:#dc2626;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
   INFO:      'background:#6b7280;color:#fff;padding:1px 6px;border-radius:3px;font-weight:bold',
 }

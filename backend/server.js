@@ -6,6 +6,9 @@ const morgan = require('morgan');
 
 const app = express();
 
+const { requestContext } = require('./middleware/requestContext');
+app.use(requestContext);
+
 // ── CORS ─────────────────────────────────────────────────────────────────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
@@ -22,14 +25,15 @@ app.use(
       cb(new Error(`CORS: origin ${origin} not allowed`));
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Idempotency-Key'],
   })
 );
 
 // ── BODY / LOGGING ────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '25mb' }));   // 25mb for base64 AI-generated images
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
-app.use(morgan('dev'));
+morgan.token('request-id', (req) => req.requestId || '-');
+app.use(morgan('[:request-id] :method :url :status :response-time ms'));
 
 // ── STATIC: uploaded creatives ────────────────────────────────────────────────
 // Serves files in backend/uploads/ at /uploads/<filename>
@@ -56,7 +60,13 @@ app.use('/api/reports',        require('./routes/reports'));
 
 // ── HEALTH ────────────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, ts: new Date().toISOString(), env: process.env.NODE_ENV });
+  const dbReady = mongoose.connection.readyState === 1;
+  res.status(dbReady ? 200 : 503).json({
+    ok: dbReady,
+    db: dbReady ? 'connected' : 'disconnected',
+    ts: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+  });
 });
 
 // ── 404 ───────────────────────────────────────────────────────────────────────

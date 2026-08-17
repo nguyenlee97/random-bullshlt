@@ -19,18 +19,16 @@
       ],
       "acceptable": [
         "6a2df27adda0ba67f14c70d5",
-        "6a2df27adda0ba67f14c7103"
-      ],
-      "must_exclude": [
         "6a48cc2381574c48dbd22c08"
-      ]
+      ],
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "must_exclude=Fatherhood is a deliberate, notes-driven call (mother-focused messaging), not a generic gender exclude — worth flagging since Fatherhood is not brand-unsafe, just off-brief.",
+    "labeler_note": "must_exclude=Fatherhood is a deliberate, notes-driven call (mother-focused messaging), not a generic gender exclude — worth flagging since Fatherhood is not brand-unsafe, just off-brief.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Motherhood and parenting fit. Organic food is unsupported, while Fatherhood remains a legitimate buyer interest even when creative is mother-focused; gender preference belongs in targeting.",
     "targeting": {
       "expected": {
         "gender": [

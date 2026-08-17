@@ -22,16 +22,14 @@
         "6a48cc2381574c48dbd22c25",
         "6a48cc2381574c48dbd22c2c"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22c23"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Italian cuisine / Pizza / Wine are full-catalog-only Food and drink (consumables) segments. must_exclude=Thai cuisine: different cuisine positioning, no synergy with an Italian concept."
+    "labeler_note": "Italian cuisine / Pizza / Wine are full-catalog-only Food and drink (consumables) segments. must_exclude=Thai cuisine: different cuisine positioning, no synergy with an Italian concept.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Italian cuisine, pizza, wine, food and diner labels fit. Thai cuisine is only an unrelated cuisine and does not meet the actively-wrong must_exclude threshold."
   },
   "tags": [
     "consideration",

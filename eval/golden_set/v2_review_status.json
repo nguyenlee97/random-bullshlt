@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "instructions": "Human review completed 2026-07-16. `approved` means no source edit was needed; `edited` means the accepted audit operations were applied.",
+  "cases": [
+    {
+      "id": "brief_041",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_042",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; catalog gap remains documented in labeler_note."
+    },
+    {
+      "id": "brief_043",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_044",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_045",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_046",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_047",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_048",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_049",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_050",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_051",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_052",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_053",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_054",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_055",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_056",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_057",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_058",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_059",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; catalog gap remains documented in labeler_note."
+    },
+    {
+      "id": "brief_060",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_061",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_062",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; catalog gap remains documented in labeler_note."
+    },
+    {
+      "id": "brief_063",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_064",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; catalog gap remains documented in labeler_note."
+    },
+    {
+      "id": "brief_065",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_066",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; catalog gap remains documented in labeler_note."
+    },
+    {
+      "id": "brief_067",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_068",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_069",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_070",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_071",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_072",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_073",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_074",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; catalog gap remains documented in labeler_note."
+    },
+    {
+      "id": "brief_075",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_076",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_077",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    },
+    {
+      "id": "brief_078",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_079",
+      "status": "edited",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Applied accepted audit operations; source labels edited."
+    },
+    {
+      "id": "brief_080",
+      "status": "approved",
+      "reviewer": "project_owner",
+      "reviewed_at": "2026-07-16T00:00:00Z",
+      "comment": "Accepted independent audit; no label changes required."
+    }
+  ]
+}

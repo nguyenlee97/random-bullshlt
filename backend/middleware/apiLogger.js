@@ -1,4 +1,5 @@
 const ApiLog = require('../models/ApiLog');
+const { redact } = require('./redact');
 
 /**
  * Express middleware that fires AFTER route handlers to log every API call.
@@ -23,11 +24,12 @@ function logRequest(req, res, next) {
     // Store log entry (non-blocking)
     ApiLog.create({
       method:  req.method,
+      requestId: req.requestId,
       path:    req.path,
-      query:   Object.keys(req.query).length ? req.query : null,
-      body:    req.method !== 'GET' ? (req.body || null) : null,
+      query:   Object.keys(req.query).length ? redact(req.query) : null,
+      body:    req.method !== 'GET' ? redact(req.body || null) : null,
       status:  res.statusCode,
-      resBody: typeof body === 'object' ? body : null,
+      resBody: typeof body === 'object' ? redact(body) : null,
       ip:      req.ip,
     }).catch(() => {});
 

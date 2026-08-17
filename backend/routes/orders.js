@@ -3,6 +3,7 @@ const router = express.Router();
 const Campaign = require('../models/Campaign');
 const ZoneCatalog = require('../models/Zone');
 const { validatePlacements } = require('../middleware/zoneValidator');
+const { launchReportGeneration } = require('../services/reportLauncher');
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function nextOrderId(seq) {
@@ -11,18 +12,76 @@ function nextOrderId(seq) {
 }
 
 async function getSeq() {
-  // Scan ALL docs including soft-deleted so orderId sequence never reuses a number.
-  const last = await Campaign.findOne({}, { orderId: 1 })
-    .sort({ createdAt: -1 })
-    .lean();
-  if (!last) return 4; // seed has 3 orders
-  const match = last.orderId.match(/(\d+)$/);
-  return match ? parseInt(match[1], 10) + 1 : 4;
+  // createdAt is not a sequence: seed rows may share a timestamp, and two
+  // concurrent requests can read the same "latest" row. Establish the current
+  // year's maximum once, then advance it atomically in MongoDB.
+  const year = new Date().getFullYear();
+  const prefix = `ORD-${year}-`;
+  const existing = await Campaign.find(
+    { orderId: { $regex: `^${prefix}` } },
+    { orderId: 1 }
+  ).lean();
+  const baseline = existing.reduce((highest, item) => {
+    const match = String(item.orderId || '').match(/(\d+)$/);
+    return match ? Math.max(highest, parseInt(match[1], 10)) : highest;
+  }, 0);
+
+  const result = await Campaign.db.collection('counters').findOneAndUpdate(
+    { _id: `campaign_order_${year}` },
+    [{
+      $set: {
+        seq: {
+          $add: [
+            {
+              $cond: [
+                { $gt: [{ $ifNull: ['$seq', 0] }, baseline] },
+                { $ifNull: ['$seq', 0] },
+                baseline,
+              ],
+            },
+            1,
+          ],
+        },
+      },
+    }],
+    { upsert: true, returnDocument: 'after' }
+  );
+  const counter = result && (result.value || result);
+  if (!counter || !Number.isInteger(counter.seq)) {
+    throw new Error('Could not allocate an order sequence');
+  }
+  return counter.seq;
 }
 
-async function getZonePlacements() {
+async function getPlacementSnapshot(placementIds = []) {
   const catalog = await ZoneCatalog.findOne({}).lean();
-  return catalog ? catalog.placements || [] : [];
+  if (!catalog) return { catalogVersion: null, placements: [], catalogPlacements: [] };
+  const selected = new Set(placementIds);
+  const snapshots = (catalog.placements || [])
+    .filter((placement) => selected.has(placement.id))
+    .map((placement) => ({
+      id: placement.id,
+      publisher: placement.publisher || null,
+      channel: placement.channel,
+      format: placement.format,
+      size: placement.size,
+      topicId: placement.topicId || null,
+      placementFamily: placement.placementFamily || null,
+      comparisonGroupId: placement.comparisonGroupId || null,
+      creativeContractId: placement.creativeContractId || null,
+      metricSource: placement.metricSource || null,
+      reach: placement.reach,
+      vi: placement.vi,
+      ctr: placement.ctr,
+      cpm: placement.cpm,
+      siteUrl: placement.siteUrl || null,
+      catalogVersion: placement.catalogVersion || catalog.catalogVersion || null,
+    }));
+  return {
+    catalogVersion: catalog.catalogVersion || 'legacy-35',
+    placements: snapshots,
+    catalogPlacements: catalog.placements || [],
+  };
 }
 
 /**
@@ -79,12 +138,34 @@ function formatOrder(doc) {
     creative:   doc.creative,
     creatives:  doc.creatives || [],
     placements: doc.placements,
+    catalogVersion: doc.catalogVersion || null,
+    placementSnapshots: doc.placementSnapshots || [],
     targeting:  doc.targeting,
     dmp:        doc.dmp,
+    idempotencyKey: doc.idempotencyKey,
     warnings:   doc.warnings || [],
     createdAt:  doc.createdAt,
     updatedAt:  doc.updatedAt,
   };
+}
+
+
+async function ensureOrderReports(order) {
+  try {
+    await launchReportGeneration({
+      campaignId: order.orderId,
+      brand: order.brand,
+      objective: order.objective,
+      budget: order.budget,
+      startDate: order.startDate,
+      zones: order.placements || [],
+      audience: [],
+    });
+  } catch (reportError) {
+    // The order is already committed. Reporting can be retried idempotently
+    // from the Report tab or Zalo without falsifying launch success.
+    console.warn(`[orders] Report generation did not start for ${order.orderId}: ${reportError.message}`);
+  }
 }
 
 // ── GET /api/orders ───────────────────────────────────────────────────────────
@@ -127,12 +208,14 @@ router.post('/', async (req, res) => {
         deletedAt: null,
       }).lean();
       if (existing) {
+        await ensureOrderReports(existing);
         return res.status(200).json({ ...formatOrder(existing), deduplicated: true });
       }
     }
 
     const seq = await getSeq();
-    const placements = await getZonePlacements();
+    const snapshot = await getPlacementSnapshot(payload.placements || []);
+    const placements = snapshot.catalogPlacements;
 
     const sizeWarnings = validatePlacements(
       payload.placements || [],
@@ -172,11 +255,17 @@ router.post('/', async (req, res) => {
       creative:   payload.creative   || { name: '', size: '', url: '' },
       creatives:  payload.creatives  || [],
       placements: payload.placements || [],
+      catalogVersion: snapshot.catalogVersion,
+      placementSnapshots: snapshot.placements,
       targeting:  payload.targeting  || {},
       dmp:        payload.dmp        || { include: [], exclude: [] },
       idempotencyKey: payload.idempotencyKey || undefined,
       warnings,
     });
+
+    // Acquire the idempotent report-generation lease at the campaign commit
+    // boundary. The Report tab remains a retry/polling client, not a dependency.
+    await ensureOrderReports(order);
 
     res.status(201).json(formatOrder(order.toObject()));
   } catch (err) {
@@ -186,7 +275,10 @@ router.post('/', async (req, res) => {
       const winner = await Campaign.findOne({
         idempotencyKey: req.body.idempotencyKey,
       }).lean();
-      if (winner) return res.status(200).json({ ...formatOrder(winner), deduplicated: true });
+      if (winner) {
+        await ensureOrderReports(winner);
+        return res.status(200).json({ ...formatOrder(winner), deduplicated: true });
+      }
     }
     if (err.name === 'ValidationError') return res.status(400).json({ error: err.message });
     res.status(500).json({ error: err.message });
@@ -202,8 +294,9 @@ router.put('/:id', async (req, res) => {
     if (!order) return res.status(404).json({ error: `Order "${req.params.id}" not found` });
 
     // Re-validate zone compatibility if placements or creative changed
-    const placements = await getZonePlacements();
     const targetPlacements = patch.placements  || order.placements;
+    const snapshot = await getPlacementSnapshot(targetPlacements);
+    const placements = snapshot.catalogPlacements;
     const targetCreative   = patch.creative    || order.creative;
     const targetStart      = patch.startDate   !== undefined ? patch.startDate : order.startDate;
     const targetEnd        = patch.endDate     !== undefined ? patch.endDate   : order.endDate;
@@ -230,6 +323,10 @@ router.put('/:id', async (req, res) => {
     const allowed = ['brand','advertiser','objective','status','budget','daily','rate','rateType',
                      'startDate','endDate','creative','creatives','placements','targeting','dmp'];
     allowed.forEach((k) => { if (patch[k] !== undefined) order[k] = patch[k]; });
+    if (patch.placements !== undefined) {
+      order.catalogVersion = snapshot.catalogVersion;
+      order.placementSnapshots = snapshot.placements;
+    }
     order.warnings = warnings;
 
     await order.save();

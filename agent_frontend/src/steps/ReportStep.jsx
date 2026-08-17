@@ -11,17 +11,18 @@ import {
 import {
   BarChart2, Loader2, TrendingUp, TrendingDown, Minus, CheckCircle2,
   Activity, Eye, MousePointerClick, DollarSign, RefreshCw, Users, Target,
-  AlertCircle, Zap,
+  AlertCircle, Zap, Download, FileText,
 } from 'lucide-react'
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
 
 // ─── Report tab config ───────────────────────────────────────────────────────
 const REPORT_TABS = [
-  { id: 'daily_ops',     label: 'Daily Ops',      icon: Activity,           color: '#3b82f6' },
+  { id: 'daily_ops',     label: 'Tổng quan',      icon: Activity,           color: '#3b82f6' },
   { id: 'awareness',     label: 'Awareness',      icon: Eye,                color: '#8b5cf6' },
   { id: 'consideration', label: 'Consideration',  icon: MousePointerClick,  color: '#f59e0b' },
   { id: 'conversion',    label: 'Conversion',     icon: Target,             color: '#10b981' },
   { id: 'retention',     label: 'Retention',      icon: RefreshCw,          color: '#ec4899' },
-  { id: 'executive',     label: 'Executive',      icon: DollarSign,         color: '#6366f1' },
 ]
 
 // ─── Number formatters ───────────────────────────────────────────────────────
@@ -46,13 +47,13 @@ function KPIScorecard({ records }) {
     a.spend += r.spend || 0
     a.conv += r.conversions || 0
     a.reach += r.reach || 0
-    a.viSum += r.vi || 0
+    a.viWeighted += (r.vi || 0) * (r.impressions || 0)
     a.n++
     return a
-  }, { imp: 0, clk: 0, spend: 0, conv: 0, reach: 0, viSum: 0, n: 0 })
+  }, { imp: 0, clk: 0, spend: 0, conv: 0, reach: 0, viWeighted: 0, n: 0 })
 
   const avgCTR = totals.imp > 0 ? (totals.clk / totals.imp * 100).toFixed(2) : '0'
-  const avgVI = totals.n > 0 ? (totals.viSum / totals.n).toFixed(1) : '0'
+  const avgVI = totals.imp > 0 ? (totals.viWeighted / totals.imp).toFixed(1) : '0'
   const avgCPM = totals.imp > 0 ? Math.round(totals.spend / totals.imp * 1000) : 0
 
   const kpis = [
@@ -60,7 +61,7 @@ function KPIScorecard({ records }) {
     { label: 'Clicks', value: fmtN(totals.clk), icon: MousePointerClick, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
     { label: 'CTR', value: avgCTR + '%', icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
     { label: 'Spend', value: fmtVND(totals.spend), icon: DollarSign, color: 'text-violet-600', bg: 'bg-violet-50 border-violet-200' },
-    { label: 'Reach', value: fmtN(totals.reach), icon: Users, color: 'text-pink-600', bg: 'bg-pink-50 border-pink-200' },
+    { label: 'Daily reach (sum)', value: fmtN(totals.reach), icon: Users, color: 'text-pink-600', bg: 'bg-pink-50 border-pink-200' },
     { label: 'Viewability', value: avgVI + '%', icon: Activity, color: 'text-cyan-600', bg: 'bg-cyan-50 border-cyan-200' },
   ]
 
@@ -75,6 +76,99 @@ function KPIScorecard({ records }) {
           <p className={`text-lg font-black ${color}`}>{value}</p>
         </div>
       ))}
+    </div>
+  )
+}
+
+const STATUS_STYLE = {
+  good: { label: 'GOOD', badge: 'bg-emerald-100 text-emerald-800', border: 'border-emerald-200', bar: 'bg-emerald-500' },
+  watch: { label: 'WATCH', badge: 'bg-amber-100 text-amber-900', border: 'border-amber-200', bar: 'bg-amber-500' },
+  bad: { label: 'BAD', badge: 'bg-red-100 text-red-800', border: 'border-red-200', bar: 'bg-red-500' },
+}
+
+function BusinessPerformance({ contract }) {
+  if (contract?.contractVersion !== 'report-evidence-v2') return null
+  const performanceStatus = contract.performanceStatus || { status: 'watch', counts: {} }
+  const overallStyle = STATUS_STYLE[performanceStatus.status] || STATUS_STYLE.watch
+  const kpiScorecard = contract.kpiScorecard || []
+  const funnel = contract.businessFunnel || []
+  const actions = contract.actions || []
+  const funnelMax = Math.max(1, ...funnel.map(item => Number(item.value || 0)))
+
+  return (
+    <div className="mb-4 space-y-3" data-testid="report-business-performance">
+      <Card className={`${overallStyle.border} bg-white`}>
+        <CardContent className="py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Hiệu quả theo KPI trong brief</p>
+              <p className="mt-1 text-sm font-bold text-slate-900">{performanceStatus.summary}</p>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-xs font-black ${overallStyle.badge}`}>{overallStyle.label}</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {kpiScorecard.length > 0 && (
+        <div className="grid gap-2 sm:grid-cols-2" data-testid="report-kpi-scorecard">
+          {kpiScorecard.map(kpi => {
+            const style = STATUS_STYLE[kpi.status] || STATUS_STYLE.watch
+            const actual = kpi.unit === 'VND' ? fmtVND(kpi.actual || 0)
+              : kpi.unit === 'percent' ? `${Number(kpi.actual || 0).toFixed(1)}%`
+              : fmtN(kpi.actual || 0)
+            const target = kpi.unit === 'VND' ? fmtVND(kpi.target || 0)
+              : kpi.unit === 'percent' ? `${kpi.target}%` : fmtN(kpi.target || 0)
+            return (
+              <article key={kpi.id} className={`rounded-xl border bg-white p-3 ${style.border}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-bold leading-5 text-slate-900">{kpi.label}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${style.badge}`}>{style.label}</span>
+                </div>
+                <p className="mt-2 text-lg font-black text-slate-950">{actual}</p>
+                <p className="text-[10px] text-slate-500">Mục tiêu {kpi.operator} {target} · Mức đạt {kpi.attainment ?? '—'}%</p>
+              </article>
+            )
+          })}
+        </div>
+      )}
+
+      {funnel.length > 0 && (
+        <Card data-testid="report-business-funnel">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Business outcome funnel</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {funnel.map((item, index) => (
+              <div key={item.eventId} className="grid grid-cols-[minmax(120px,1fr)_2fr_auto] items-center gap-2">
+                <span className="truncate text-[11px] font-semibold text-slate-700">{index + 1}. {item.label}</span>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.max(2, item.value / funnelMax * 100)}%` }} />
+                </div>
+                <strong className="min-w-12 text-right text-[11px] text-slate-900">{fmtN(item.value)}</strong>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {actions.length > 0 && (
+        <Card className="border-slate-200" data-testid="report-actions">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Action ưu tiên có kiểm chứng</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {actions.map(action => {
+              const style = STATUS_STYLE[action.status] || STATUS_STYLE.watch
+              return (
+                <article key={action.id} className={`rounded-xl border p-3 ${style.border}`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${style.badge}`}>{action.priority?.toUpperCase()}</span>
+                    <p className="text-xs font-bold text-slate-900">{action.problem}</p>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-slate-700">{action.proposedAction}</p>
+                  <p className="mt-1 text-[10px] leading-4 text-slate-500"><strong>Guardrail:</strong> {action.guardrail} · <strong>Đánh giá lại:</strong> {action.nextReviewWindow}</p>
+                </article>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
@@ -738,23 +832,26 @@ function TabCharts({ tabId, records }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ReportStep — Main Component
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function ReportStep({ data, onChange, isDone, formState, onSendChat }) {
+export default function ReportStep({ data, onChange, isDone, formState, onSendChat, onRetry }) {
   const [activeTab, setActiveTab] = useState('daily_ops')
   const [records, setRecords] = useState([])
   const [reportStatus, setReportStatus] = useState(null)
   const [analyses, setAnalyses] = useState({})
   const [loading, setLoading] = useState(true)
   const [allReady, setAllReady] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const pollRef = useRef(null)
   const campaignId = data?.campaignId || formState?.report?.campaignId || ''
 
   // Determine objective to highlight the primary report tab
   const objective = formState?.brief?.objective || 'awareness'
   const objectiveTab = REPORT_TABS.find(t => t.id === objective)
+  const visibleTabs = [REPORT_TABS[0], ...(objectiveTab ? [objectiveTab] : [])]
 
   // Poll report status
   useEffect(() => {
-    if (!campaignId || allReady) return
+    if (!campaignId || allReady || failed || retrying) return
 
     const poll = async () => {
       const status = await AgentAPI.getReportStatus(campaignId)
@@ -775,13 +872,30 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
         setAnalyses(analysisMap)
         setLoading(false)
         onChange?.({ ...data, analyzed: true, campaignId })
+      } else if (status.errors > 0 && status.ready + status.errors >= status.total) {
+        clearInterval(pollRef.current)
+        setLoading(false)
+        setFailed(true)
       }
     }
 
     poll()
     pollRef.current = setInterval(poll, 3000)
     return () => clearInterval(pollRef.current)
-  }, [campaignId, allReady])
+  }, [campaignId, allReady, failed, retrying])
+
+  const retryGeneration = async () => {
+    setRetrying(true)
+    setFailed(false)
+    setLoading(true)
+    setReportStatus(null)
+    try {
+      if (onRetry) await onRetry()
+      else await AgentAPI.reportEntry()
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   // Get questions for current tab
   const currentAnalysis = analyses[activeTab] || analyses['daily_ops']
@@ -807,9 +921,25 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
         </div>
         <div className="text-center">
           <p className="font-semibold text-foreground">Báo cáo chiến dịch</p>
-          <p className="text-xs text-muted-foreground mt-1">Đang chuẩn bị tạo báo cáo mô phỏng...</p>
+          <p className="text-xs text-muted-foreground mt-1">Đang chuẩn bị dữ liệu và phân tích báo cáo...</p>
         </div>
         <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
+      </div>
+    )
+  }
+
+  if (failed) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center" role="alert">
+        <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
+        <h3 className="mt-3 font-bold text-red-950">Không thể tạo báo cáo</h3>
+        <p className="mt-2 text-xs leading-5 text-red-800">
+          {reportStatus?.errors || 0}/{reportStatus?.total || 6} hạng mục gặp lỗi. Vui lòng thử tạo lại báo cáo.
+        </p>
+        <button type="button" onClick={retryGeneration} disabled={retrying}
+          className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-60">
+          {retrying ? 'Đang thử lại…' : 'Tạo lại báo cáo'}
+        </button>
       </div>
     )
   }
@@ -822,17 +952,31 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
   // ── Reports ready — show tabs + charts ─────────────────────────────────────
   return (
     <div className="space-y-0">
-      {/* Showcase badge */}
-      <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-amber-50 border border-amber-200">
-        <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-        <p className="text-[11px] text-amber-700 font-medium">
-          Dữ liệu mô phỏng (showcase) · {records.length} records · {Object.keys(analyses).length} phân tích AI
-        </p>
+      {/* Ready summary + shared Copilot/Autopilot export action */}
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+          <p className="text-[11px] text-slate-700 font-medium">
+            {records.length} bản ghi · {Object.keys(analyses).length} nhóm phân tích đã sẵn sàng
+          </p>
+        </div>
+        <a
+          href={`${BACKEND_URL}/api/reports/export/${encodeURIComponent(campaignId)}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+          download={`report-${campaignId}.pdf`}
+          className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-brand-700"
+          aria-label="Tải PDF đầy đủ gồm 6 báo cáo tương thích"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          Tải PDF đầy đủ (6 báo cáo)
+          <Download className="h-3.5 w-3.5" />
+        </a>
       </div>
 
       {/* Tab bar */}
       <div className="flex flex-wrap gap-1 mb-4 p-1 bg-muted/50 rounded-xl">
-        {REPORT_TABS.map(tab => {
+        {visibleTabs.map(tab => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
           const isObjective = tab.id === objective
@@ -865,7 +1009,34 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
         </Card>
       )}
 
+      {currentAnalysis?.dataContract && (
+        <details className="mb-3 rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700" data-testid="report-evidence-contract">
+          <summary className="cursor-pointer font-bold text-slate-900">
+            Nguồn số liệu, công thức & giới hạn · {currentAnalysis.dataContract.contractVersion}
+          </summary>
+          <div className="mt-3 space-y-3">
+            <p>
+              <strong>Thời gian:</strong> {currentAnalysis.dataContract.timeframe?.start || 'N/A'} → {currentAnalysis.dataContract.timeframe?.end || 'N/A'}
+              {' · '}<strong>Contract:</strong> {currentAnalysis.dataContract.contractVersion}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {Object.entries(currentAnalysis.dataContract.metricDefinitions || {}).map(([metricId, metric]) => (
+                <div key={metricId} className="rounded-lg border border-slate-100 bg-slate-50 p-2">
+                  <p className="font-bold">{metric.label} <code className="text-[9px] text-slate-500">{metricId}</code></p>
+                  <p className="mt-0.5 text-slate-600">{metric.formula}</p>
+                  {metric.limitation && <p className="mt-0.5 text-amber-700">{metric.limitation}</p>}
+                </div>
+              ))}
+            </div>
+            <ul className="list-disc space-y-1 pl-4 text-slate-600">
+              {(currentAnalysis.dataContract.limitations || []).map((item, index) => <li key={index}>{item}</li>)}
+            </ul>
+          </div>
+        </details>
+      )}
+
       {/* KPI Scorecard */}
+      <BusinessPerformance contract={currentAnalysis?.dataContract} />
       <KPIScorecard records={records} />
 
       {/* Tab-specific charts */}

@@ -1,0 +1,58 @@
+export const AUTOPILOT_TOUR_STEPS = [
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-canvas"]',
+    position: 'left',
+    title: 'Campaign Autopilot',
+    text: 'Đây là **không gian thực của Autopilot** — nơi một brief được chuyển thành kế hoạch có thứ tự, bằng chứng và các điểm review. Tour chỉ hướng dẫn giao diện, không khởi chạy run hay tạo order.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-intro"]',
+    position: 'bottom',
+    title: 'Một run, một campaign truth',
+    text: 'Autopilot dùng cùng canonical workspace với Copilot. Chat, brief, audience, creative, placement và report không bị tách thành những bản sao khác nhau.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-guide"]',
+    position: 'bottom',
+    title: 'Bắt đầu từ guide bốn mốc',
+    text: 'Đây là bản đồ đọc Autopilot ngay trong layout: **Brief → Creative source → Control policy → Run**. Nó luôn ở đây để bạn kiểm tra đầu vào, không phải một walkthrough riêng cần chạy lại.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-brief-status"]',
+    position: 'left',
+    title: 'Brief phải đủ để Agent ra quyết định',
+    text: 'Tối thiểu cần **brand, objective, budget và thời gian chạy** đã được duyệt. KPI cùng ghi chú về audience, thị trường hoặc thông điệp không phải lúc nào cũng chặn run, nhưng chúng làm strategy và creative plan cụ thể hơn nhiều.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-creative-source"]',
+    position: 'bottom',
+    title: 'Chọn đúng loại creative đầu vào',
+    text: 'Chọn **Upload** nếu bạn đã có asset chính thức cần giữ nguyên. Chọn **AI tự tạo** nếu muốn Agent sinh draft theo các format placement đã lập kế hoạch. Cả hai đường đều đi qua Creative Intelligence trước launch.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-policy"]',
+    position: 'bottom',
+    title: 'Đặt mức kiểm soát',
+    text: 'Ba chính sách review cho phép bạn chọn giữa tự động tối đa, chỉ dừng ở điểm quan trọng hoặc duyệt từng giai đoạn. **Launch luôn là quyết định có kiểm soát.**',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="chat-pane"]',
+    position: 'right',
+    title: 'Chat vẫn luôn ở bên cạnh',
+    text: 'Bạn có thể nhờ Agent làm rõ brief, giải thích một quyết định hoặc mở đúng artifact cần chỉnh. Trên điện thoại, tour tự chuyển giữa tab Chat và Autopilot.',
+  },
+  {
+    type: 'TOOLTIP',
+    target: '[data-demo="autopilot-start"]',
+    position: 'top',
+    title: 'Bắt đầu rồi đọc stage và evidence',
+    text: 'Khi mọi điều kiện đã đủ, nút này tạo durable run. Sau đó hãy theo dõi stage đang chạy, evidence được tạo và checkpoint màu vàng cần review. Tour dừng tại đây để **không khởi chạy run hoặc tạo order thay bạn**.',
+  },
+]

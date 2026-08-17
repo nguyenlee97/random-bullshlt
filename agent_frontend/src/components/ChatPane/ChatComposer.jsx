@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Send, Loader2, ChevronLeft } from 'lucide-react'
+import { Send, Loader2, ChevronLeft, LockKeyhole, ShieldCheck } from 'lucide-react'
 
 // ─── Step-specific quick chips ────────────────────────────────────────────────
 const STEP_CHIPS = {
@@ -8,12 +8,12 @@ const STEP_CHIPS = {
   1: ['Hãy tự động chọn targeting phù hợp nhất cho chiến dịch này', 'DMP segment nào phù hợp với brief?', 'Audience size bao nhiêu là đủ?'],
   2: ['Creative size nào phù hợp cho Banner?', 'Skin zone cần creative như thế nào?', 'Format nào được hỗ trợ?'],
   3: ['Zone nào tốt nhất cho objective của tôi?', 'VI% và CTR có nghĩa là gì?', 'CPM bao nhiêu là hợp lý?'],
-  4: ['Tổng kết chiến dịch', 'Xem link AdsPilot', 'Tạo chiến dịch mới'],
+  4: ['Tổng kết chiến dịch', 'Mở trình quản lý quảng cáo', 'Tạo chiến dịch mới'],
   5: ['Campaign nào hiệu quả nhất?', 'Đề xuất tối ưu tiếp theo'],
   6: ['Thêm người nhận', 'Chỉnh sửa nội dung email'],
 }
 
-export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
+export default function ChatComposer({ busy, currentStep, onSend, onBack, policy = { mode: 'normal' } }) {
   const [text, setText] = useState('')
   const inputRef = useRef(null)
 
@@ -45,7 +45,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
   }
 
   const handleSend = () => {
-    if (!text.trim() || busy) return
+    if (!text.trim() || busy || policy.mode === 'locked') return
     onSend(text.trim())
     setText('')
     // Reset height
@@ -55,21 +55,45 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
   }
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key !== 'Enter' || e.nativeEvent?.isComposing) return
+    if (e.ctrlKey || e.metaKey) {
       e.preventDefault()
       handleSend()
     }
   }
 
   const chips = STEP_CHIPS[currentStep] || STEP_CHIPS[0]
+  const locked = policy.mode === 'locked'
+  const reviewOnly = policy.mode === 'review'
+  const placeholder = locked
+    ? 'Chat tạm khóa trong khi Autopilot thực thi'
+    : reviewOnly
+      ? 'Nhập “Đồng ý” hoặc “Từ chối”…'
+      : policy.mode === 'readonly'
+        ? 'Hỏi Agent về audience, creative, forecast, placement hoặc order…'
+        : 'Trao đổi với agent về bước hiện tại...'
 
   return (
     <div
       className="border-t border-border bg-white p-3 flex-shrink-0"
       style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
     >
-      {/* Quick chips — hidden on mobile for steps 0-4, shown on mobile for Report(5)/Email(6) */}
+      {policy.mode !== 'normal' && (
+        <div className={`mb-2.5 flex items-start gap-2 rounded-xl border px-3 py-2 text-[11px] leading-5 ${locked ? 'border-slate-200 bg-slate-50 text-slate-600' : reviewOnly ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-blue-100 bg-blue-50 text-blue-900'}`}>
+          {locked ? <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+          <span>{policy.message}</span>
+        </div>
+      )}
+
+      {/* Autopilot review exposes only explicit decision phrases. */}
       <div data-demo="chat-chips" className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1 mb-2.5 flex-nowrap">
+        {reviewOnly && ['Đồng ý, tiếp tục', 'Từ chối'].map(chip => (
+          <button key={chip} onClick={() => !busy && onSend(chip)} disabled={busy}
+            className="flex-shrink-0 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50">
+            {chip}
+          </button>
+        ))}
+        {!locked && !reviewOnly && policy.mode !== 'readonly' && <>
         {currentStep > 0 && (
           <button
             onClick={onBack}
@@ -89,6 +113,7 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
             {chip}
           </button>
         ))}
+        </>}
       </div>
 
       {/* Input row */}
@@ -99,8 +124,9 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
           value={text}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="Trao đổi với agent về bước hiện tại... (Shift+Enter xuống dòng)"
-          disabled={busy}
+          placeholder={placeholder}
+          aria-label="Tin nhắn gửi Advertising Agent"
+          disabled={busy || locked}
           rows={1}
           className={[
             'flex-1 text-sm resize-none rounded-md border border-input bg-background px-3 py-2',
@@ -115,14 +141,21 @@ export default function ChatComposer({ busy, currentStep, onSend, onBack }) {
 
         <Button
           onClick={handleSend}
-          disabled={busy || !text.trim()}
+          disabled={busy || locked || !text.trim()}
           size="icon"
           className="h-10 w-10 flex-shrink-0 self-end"
           id="chat-send-btn"
+          aria-label={busy ? 'Advertising Agent đang xử lý' : 'Gửi tin nhắn'}
+          title={busy ? 'Advertising Agent đang xử lý' : 'Gửi tin nhắn (Ctrl/⌘+Enter)'}
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </Button>
       </div>
+      {!locked && (
+        <p className="mt-1.5 hidden text-right text-[10px] text-muted-foreground sm:block">
+          Enter để xuống dòng · Ctrl/⌘+Enter để gửi
+        </p>
+      )}
     </div>
   )
 }

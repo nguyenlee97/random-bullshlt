@@ -21,16 +21,14 @@
         "6a2df27adda0ba67f14c70d5",
         "6a48cc2381574c48dbd22c08"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22bb6"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Geo=HCM-only is the conflicting call (single campus); must_not_set=Under 18 reflects that the buyer/decision-maker is the parent, not the (legally too young to be targeted) child.",
+    "labeler_note": "Geo=HCM-only is the conflicting call (single campus); must_not_set=Under 18 reflects that the buyer/decision-maker is the parent, not the (legally too young to be targeted) child.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Parent labels identify buyers, but the 310-segment catalog has no preschool/early-childhood education interest. Higher education is an education-level near miss, not an actively wrong parent audience. Remaining catalog gap is intentional; no substitute label was invented.",
     "targeting": {
       "expected": {
         "geo": [
@@ -55,6 +53,7 @@
   "tags": [
     "consideration",
     "vi",
-    "targeting_labeled"
+    "targeting_labeled",
+    "catalog_gap"
   ]
 }

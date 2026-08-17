@@ -1,46 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const { generateReports, getReportStatus } = require('../services/reportGenerator');
+const { getReportStatus } = require('../services/reportGenerator');
 const ReportAnalysis = require('../models/ReportAnalysis');
 const AnalyticsRecord = require('../models/AnalyticsRecord');
+const { launchReportGeneration } = require('../services/reportLauncher');
 
 // ── POST /api/reports/generate ───────────────────────────────────────────────
 // Trigger report generation for a campaign. Idempotent — skips if already generating/ready.
 // Body: { campaignId, brand, objective, budget, startDate, zones, audience }
 router.post('/generate', async (req, res) => {
   try {
-    const { campaignId, brand, objective, budget, startDate, zones, audience } = req.body;
-    if (!campaignId) return res.status(400).json({ error: 'campaignId required' });
-
-    // Check if already generating or ready
-    const existing = await ReportAnalysis.findOne({ campaignId });
-    if (existing && existing.status === 'ready') {
-      return res.json({ status: 'already_ready', campaignId });
-    }
-    if (existing && existing.status === 'generating') {
-      return res.json({ status: 'already_generating', campaignId });
-    }
-
-    // Return immediately, generate in background
-    res.json({ status: 'generating', campaignId });
-
-    // Fire and forget — generate in background
-    setImmediate(async () => {
-      try {
-        await generateReports({
-          campaignId,
-          brand: brand || 'Unknown Brand',
-          objective: objective || 'awareness',
-          budget: budget || 100000000,
-          startDate: startDate || new Date().toISOString().slice(0, 10),
-          zones: zones || [],
-          audience: audience || [],
-        });
-      } catch (err) {
-        console.error('[reports/generate] Background generation failed:', err.message);
-      }
-    });
+    res.json(await launchReportGeneration(req.body || {}));
   } catch (err) {
+    if (err.message === 'campaignId required') return res.status(400).json({ error: err.message });
     res.status(500).json({ error: err.message });
   }
 });
@@ -212,6 +184,9 @@ router.post('/send-email/:campaignId', async (req, res) => {
     res.json({ ok: true, messageId: result.messageId, to: email });
   } catch (err) {
     console.error('[send-email] Error:', err.message);
+    if (err.code === 'REPORT_NOT_READY') {
+      return res.status(409).json({ error: err.message, missingTypes: err.missingTypes || [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -224,9 +199,13 @@ router.get('/export/:campaignId/pdf', async (req, res) => {
     const { generatePDF } = require('../services/reportPDFGenerator');
     const buf = await generatePDF(campaignId);
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Disposition', `attachment; filename="report_${campaignId}.pdf"`);
     res.send(buf);
   } catch (err) {
+    if (err.code === 'REPORT_NOT_READY') {
+      return res.status(409).json({ error: err.message, missingTypes: err.missingTypes || [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });

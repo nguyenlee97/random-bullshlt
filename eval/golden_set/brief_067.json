@@ -15,22 +15,20 @@
     "audience": {
       "must_include": [
         "6a48cc2381574c48dbd22c10",
-        "6a48cc2381574c48dbd22c19"
+        "6a2df27adda0ba67f14c70e2"
       ],
       "acceptable": [
-        "6a2df27adda0ba67f14c70e2",
-        "6a48cc2381574c48dbd22c1d"
+        "6a2df27adda0ba67f14c7108",
+        "6a48cc2381574c48dbd22c19"
       ],
-      "must_exclude": [
-        "6a2df27adda0ba67f14c70e3"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "must_not_set includes 18-24 in addition to Under 18 specifically because the notes call out students/early-career as excluded, not just legal minors — a stronger conflict than the typical alcohol case.",
+    "labeler_note": "must_not_set includes 18-24 in addition to Under 18 specifically because the notes call out students/early-career as excluded, not just legal minors — a stronger conflict than the typical alcohol case.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Wine is central; source country does not make French cuisine a required audience. Italian cuisine is unsupported, and Beer may overlap with adult alcohol enthusiasts rather than requiring exclusion.",
     "targeting": {
       "expected": {
         "age": [

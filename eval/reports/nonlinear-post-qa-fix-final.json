@@ -1,0 +1,538 @@
+{
+  "summary": {
+    "cases": 30,
+    "passed": 30,
+    "failed": 0,
+    "discarded_unaffected_values": 0
+  },
+  "results": [
+    {
+      "id": "nl_001",
+      "name": "brief edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "strategy",
+        "audience",
+        "targeting",
+        "creative_verdict",
+        "placements",
+        "assignments",
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_002",
+      "name": "strategy edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "audience",
+        "targeting",
+        "creative_verdict",
+        "placements",
+        "assignments",
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_003",
+      "name": "audience edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "targeting",
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "audience",
+        "creative",
+        "creative_verdict",
+        "placements",
+        "assignments"
+      ]
+    },
+    {
+      "id": "nl_004",
+      "name": "targeting edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "audience",
+        "targeting",
+        "creative",
+        "creative_verdict",
+        "placements",
+        "assignments"
+      ]
+    },
+    {
+      "id": "nl_005",
+      "name": "creative edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "creative_verdict",
+        "placements",
+        "assignments",
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "audience",
+        "targeting",
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_006",
+      "name": "creative verdict edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "assignments",
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "audience",
+        "targeting",
+        "creative",
+        "creative_verdict",
+        "placements"
+      ]
+    },
+    {
+      "id": "nl_007",
+      "name": "placement edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "assignments",
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "audience",
+        "targeting",
+        "creative",
+        "creative_verdict",
+        "placements"
+      ]
+    },
+    {
+      "id": "nl_008",
+      "name": "assignment edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "audience",
+        "targeting",
+        "creative",
+        "creative_verdict",
+        "placements",
+        "assignments"
+      ]
+    },
+    {
+      "id": "nl_009",
+      "name": "forecast edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "audience",
+        "targeting",
+        "creative",
+        "creative_verdict",
+        "placements",
+        "assignments",
+        "forecast"
+      ]
+    },
+    {
+      "id": "nl_010",
+      "name": "order draft edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "audience",
+        "targeting",
+        "creative",
+        "creative_verdict",
+        "placements",
+        "assignments",
+        "forecast",
+        "order_draft"
+      ]
+    },
+    {
+      "id": "nl_011",
+      "name": "order edit with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "audience",
+        "targeting",
+        "creative",
+        "creative_verdict",
+        "placements",
+        "assignments",
+        "forecast",
+        "order_draft",
+        "order"
+      ]
+    },
+    {
+      "id": "nl_012",
+      "name": "report refresh with complete workspace",
+      "ok": true,
+      "errors": [],
+      "recompute": [],
+      "reuse": [
+        "brief",
+        "strategy",
+        "audience",
+        "targeting",
+        "creative",
+        "creative_verdict",
+        "placements",
+        "assignments",
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ]
+    },
+    {
+      "id": "nl_013",
+      "name": "brief edit in sparse draft",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "audience",
+        "targeting",
+        "placements",
+        "forecast",
+        "order_draft"
+      ],
+      "reuse": [
+        "brief",
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_014",
+      "name": "strategy edit preserves uploaded creative",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "audience",
+        "placements",
+        "assignments"
+      ],
+      "reuse": [
+        "brief",
+        "strategy",
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_015",
+      "name": "audience edit after order exists",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "targeting",
+        "forecast",
+        "order"
+      ],
+      "reuse": [
+        "brief",
+        "audience",
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_016",
+      "name": "targeting edit preserves creative and audience",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "forecast",
+        "order_draft"
+      ],
+      "reuse": [
+        "brief",
+        "audience",
+        "targeting",
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_017",
+      "name": "creative replacement after placement choice",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "creative_verdict",
+        "placements",
+        "assignments",
+        "order"
+      ],
+      "reuse": [
+        "brief",
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_018",
+      "name": "manual creative verdict changes assignments",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "assignments",
+        "forecast"
+      ],
+      "reuse": [
+        "creative",
+        "creative_verdict"
+      ]
+    },
+    {
+      "id": "nl_019",
+      "name": "zone edit after draft forecast",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "assignments",
+        "forecast",
+        "order_draft"
+      ],
+      "reuse": [
+        "brief",
+        "creative",
+        "placements"
+      ]
+    },
+    {
+      "id": "nl_020",
+      "name": "assignment edit after order",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "assignments"
+      ]
+    },
+    {
+      "id": "nl_021",
+      "name": "forecast refresh with report",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "forecast"
+      ]
+    },
+    {
+      "id": "nl_022",
+      "name": "order draft correction before launch",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "order"
+      ],
+      "reuse": [
+        "order_draft"
+      ]
+    },
+    {
+      "id": "nl_023",
+      "name": "verified order update invalidates report",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "report"
+      ],
+      "reuse": [
+        "order"
+      ]
+    },
+    {
+      "id": "nl_024",
+      "name": "standalone report rerun",
+      "ok": true,
+      "errors": [],
+      "recompute": [],
+      "reuse": [
+        "report"
+      ]
+    },
+    {
+      "id": "nl_025",
+      "name": "late brand messaging change preserves creatives",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "strategy",
+        "audience",
+        "targeting",
+        "creative_verdict",
+        "placements",
+        "assignments",
+        "forecast",
+        "order_draft",
+        "order",
+        "report"
+      ],
+      "reuse": [
+        "brief",
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_026",
+      "name": "creative uploaded before audience",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "creative_verdict"
+      ],
+      "reuse": [
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_027",
+      "name": "remove audience after order draft",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "targeting",
+        "forecast",
+        "order_draft",
+        "order"
+      ],
+      "reuse": [
+        "brief",
+        "audience"
+      ]
+    },
+    {
+      "id": "nl_028",
+      "name": "change dates while creative work exists",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "creative_verdict",
+        "placements",
+        "assignments"
+      ],
+      "reuse": [
+        "brief",
+        "creative"
+      ]
+    },
+    {
+      "id": "nl_029",
+      "name": "placement conflict introduced mid draft",
+      "ok": true,
+      "errors": [],
+      "recompute": [
+        "assignments",
+        "forecast",
+        "order_draft",
+        "order"
+      ],
+      "reuse": [
+        "placements"
+      ]
+    },
+    {
+      "id": "nl_030",
+      "name": "rerun report without touching verified order",
+      "ok": true,
+      "errors": [],
+      "recompute": [],
+      "reuse": [
+        "order",
+        "report"
+      ]
+    }
+  ]
+}

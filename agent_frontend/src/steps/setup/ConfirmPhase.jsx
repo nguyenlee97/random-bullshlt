@@ -8,7 +8,9 @@ import {
   FileText, Users, LayoutGrid, DollarSign, XCircle,
 } from 'lucide-react'
 import { checkMismatch, getSelectedZones, fmtVnd, fmtImp, estImpressions } from './setupUtils'
-import { createCampaignOrder, uploadCreativeFile } from '@/api/agentApi'
+import { createCampaignOrder, fetchZonesFromAgent } from '@/api/agentApi'
+import { hasKnownAudienceSize } from '@/lib/audience'
+import { getAssignmentIssues, removeInvalidAssignments } from '@/lib/setupAssignments'
 
 const OBJECTIVE_LABELS = {
   awareness: 'Awareness — Tăng nhận biết',
@@ -33,9 +35,10 @@ function SectionCard({ icon: Icon, title, iconClass, children }) {
   )
 }
 
-export default function ConfirmPhase({ data, onChange, brief, segment, files, allZones, recoZones }) {
+export default function ConfirmPhase({ data, onChange, brief, segment, files, allZones, recoZones, onOpenCreativeReview }) {
   const [submitting, setSubmitting] = useState(false)
-  const [uploadStatus, setUploadStatus] = useState('')  // upload progress label
+  const [submitError, setSubmitError] = useState('')
+  const [guardRejected, setGuardRejected] = useState(false)
 
   const selectedZones = getSelectedZones(data.selectedZoneIds || [], allZones || null, recoZones || null)
   const assignments = data.assignments || {}
@@ -49,42 +52,62 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
   // Zones that have booking conflicts with the campaign date range
   const conflictedZones = selectedZones.filter(z => z.conflict)
   const hasConflicts = conflictedZones.length > 0
+  const hasAudienceEstimate = Number(segment?.size || 0) > 0
+    || hasKnownAudienceSize(segment?.attrs || [])
+  const assignmentIssues = getAssignmentIssues(selectedZones, assignments, files)
+  const validZoneCount = selectedZones.length - assignmentIssues.length
+  const hasReviewIssue = assignmentIssues.some(issue => issue.kind === 'needs_review' || issue.kind === 'not_approved')
 
   const handleCreate = async () => {
     setSubmitting(true)
+    setSubmitError('')
+    setGuardRejected(false)
 
-    // 1. Convert assignments: fileId → fileIndex
-    const assignmentsAsIndex = {}
-    const uniqueFileIndexes = new Set()
-    for (const [zoneId, fileId] of Object.entries(data.assignments || {})) {
-      const idx = files.findIndex(f => f.id === fileId)
-      const safeIdx = idx >= 0 ? idx : 0
-      assignmentsAsIndex[zoneId] = safeIdx
-      uniqueFileIndexes.add(safeIdx)
-    }
-
-    // 2. Upload each unique creative to AdsPilot VPS to get a real URL
-    const fileUrls = {}
-    let uploadsDone = 0
-    const totalUploads = [...uniqueFileIndexes].filter(idx => files[idx]?.dataUrl).length
-    for (const idx of uniqueFileIndexes) {
-      const f = files[idx]
-      if (!f) continue
-      if (f.url) {
-        // Already has a URL (previously uploaded)
-        fileUrls[String(idx)] = f.url
-      } else if (f.dataUrl) {
-        uploadsDone++
-        setUploadStatus(`Đang tải creative ${uploadsDone}/${totalUploads}...`)
-        const url = await uploadCreativeFile(f.dataUrl, f.name, f.type)
-        if (url) fileUrls[String(idx)] = url
+    try {
+      if (assignmentIssues.length) return
+      const assignmentsAsIndex = {}
+      const fileUrls = {}
+      for (const [zoneId, fileId] of Object.entries(data.assignments || {})) {
+        const idx = files.findIndex(file => file.id === fileId)
+        if (idx < 0) continue
+        const file = files[idx]
+        if (!['auto_approved', 'approved_override'].includes(file.analysisStatus) || !file.url) continue
+        assignmentsAsIndex[zoneId] = idx
+        fileUrls[String(idx)] = file.url
       }
-    }
-    setUploadStatus('')
 
-    // 3. Create the order with resolved creative URLs
-    await createCampaignOrder(data.selectedZoneIds || [], assignmentsAsIndex, fileUrls)
-    onChange({ ...data, submitted: true })
+      const response = await createCampaignOrder(
+        data.selectedZoneIds || [], assignmentsAsIndex, fileUrls,
+      )
+      if (response?.metadata?.tool !== 'order_create') {
+        if (response?.metadata?.tool === 'order_guard') {
+          setGuardRejected(true)
+          // Inventory is re-checked at commit time. Refresh the visible catalog
+          // so a newly booked zone is marked and can be deselected safely.
+          const refreshed = await fetchZonesFromAgent()
+          if (refreshed?.zones?.length) {
+            const latestById = new Map(refreshed.zones.map(zone => [zone.id, zone]))
+            const mergeLatest = zone => ({
+              ...zone,
+              ...(latestById.get(zone.id) || {}),
+              conflict: latestById.get(zone.id)?.conflict || null,
+            })
+            onChange({
+              ...data,
+              allZones: (allZones || []).map(mergeLatest),
+              recoZones: (recoZones || []).map(mergeLatest),
+              submitted: false,
+            })
+          }
+        }
+        throw new Error(response?.content || 'Order guard từ chối tạo chiến dịch')
+      }
+      onChange({ ...data, submitted: true })
+    } catch (error) {
+      setSubmitError(error.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const dateRange = brief?.startDate && brief?.endDate
@@ -115,6 +138,56 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
         </div>
       )}
 
+      {assignmentIssues.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50" role="alert">
+          <CardContent className="space-y-2 py-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+              <div>
+                <p className="text-xs font-bold text-amber-900">
+                  {assignmentIssues.length} zone cần xử lý creative trước khi tạo chiến dịch
+                </p>
+                <p className="mt-0.5 text-[10px] leading-4 text-amber-800">
+                  Đây là cảnh báo có thể sửa: gắn lại creative, mở kết quả phân tích để duyệt thủ công,
+                  hoặc bỏ riêng các zone lỗi và giữ phần còn lại của campaign.
+                </p>
+              </div>
+            </div>
+            <ul className="space-y-1 pl-6">
+              {assignmentIssues.map(issue => (
+                <li key={issue.zoneId} className="text-[11px] text-amber-800">
+                  <strong>{issue.zoneName}</strong>: {issue.message}
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-2 pl-6">
+              <Button type="button" variant="outline" size="sm"
+                className="h-8 border-amber-300 bg-white text-xs text-amber-800 hover:bg-amber-100"
+                onClick={() => onChange({ ...data, phase: 'assign' })}>
+                Gắn lại creative
+              </Button>
+              {hasReviewIssue && onOpenCreativeReview && (
+                <Button type="button" variant="outline" size="sm"
+                  className="h-8 border-amber-300 bg-white text-xs text-amber-800 hover:bg-amber-100"
+                  onClick={onOpenCreativeReview}>
+                  Mở phân tích &amp; duyệt creative
+                </Button>
+              )}
+              {validZoneCount > 0 && (
+                <Button type="button" variant="outline" size="sm"
+                  className="h-8 border-amber-300 bg-white text-xs text-amber-800 hover:bg-amber-100"
+                  onClick={() => onChange({
+                    ...removeInvalidAssignments(data, assignmentIssues),
+                    phase: 'confirm',
+                  })}>
+                  Bỏ {assignmentIssues.length} zone lỗi
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Brief ─────────────────────────────────────────────────────────────── */}
       <SectionCard icon={FileText} title="Brief chiến dịch" iconClass="text-brand-500">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
@@ -143,7 +216,12 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
           </div>
           <div className="border-l border-border pl-4">
             <p className="text-xs text-muted-foreground">Audience size ước lượng</p>
-            <p className="text-lg font-black text-brand-700">{fmt(segment?.size || 0)} người</p>
+            <p className="text-lg font-black text-brand-700">
+              {hasAudienceEstimate ? `${fmt(segment?.size || 0)} người` : '—'}
+            </p>
+            {!hasAudienceEstimate && (
+              <p className="text-[10px] text-muted-foreground">Catalog chưa cung cấp size</p>
+            )}
           </div>
         </div>
         {(segment?.attrs || []).length > 0 && (
@@ -234,8 +312,7 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
             <ul className="space-y-1 pl-6">
               {conflictedZones.map(z => (
                 <li key={z.id} className="text-[11px] text-red-600 leading-tight">
-                  <span className="font-bold">{z.name || z.id}</span>: đang được chiến dịch{' '}
-                  <span className="font-bold">&ldquo;{z.conflict.campaignName}&rdquo;</span>{' '}
+                  <span className="font-bold">{z.name || z.id}</span>: đang được một chiến dịch khác{' '}
                   đặt từ {z.conflict.startDate} đến {z.conflict.endDate}
                 </li>
               ))}
@@ -248,17 +325,43 @@ export default function ConfirmPhase({ data, onChange, brief, segment, files, al
       )}
 
       {/* ── Create button ──────────────────────────────────────────────────────── */}
+      {submitError && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="py-3 flex items-start gap-2">
+            <XCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-2">
+              <p className="text-xs text-red-700 whitespace-pre-line">{submitError}</p>
+              {guardRejected && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-red-300 bg-white text-xs text-red-700 hover:bg-red-100"
+                  onClick={() => onChange({ ...data, phase: 'zones' })}
+                >
+                  Chọn zone khác
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {!data.submitted ? (
         <Button
           onClick={handleCreate}
-          disabled={submitting || hasConflicts}
+          disabled={submitting || hasConflicts || assignmentIssues.length > 0}
           className="w-full gap-2 h-11 text-sm font-bold"
           id="create-campaign-btn"
         >
-          {submitting ? (
+          {assignmentIssues.length > 0 ? (
+            <>
+              <AlertTriangle className="w-5 h-5" />
+              Xử lý cảnh báo creative trước khi tạo
+            </>
+          ) : submitting ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              {uploadStatus || 'Đang gọi Agent API · Tạo chiến dịch...'}
+              Đang kiểm tra an toàn · Tạo chiến dịch...
             </>
           ) : (
             <>

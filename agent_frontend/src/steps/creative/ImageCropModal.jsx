@@ -1,14 +1,15 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { X, Crop, Maximize2 } from 'lucide-react'
+import { X, Crop, Loader2, Maximize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { creativeImageCrossOrigin, creativeImageSource } from '@/lib/creativeImageUrl'
 
 /**
  * ImageCropModal
  * Shows the raw AI-generated image and lets the user drag a locked-ratio crop box.
  *
  * Props:
- *   src        — raw base64 string (no data: prefix) from API
+ *   src        — absolute/root-relative URL, data URL, blob URL, or raw base64
  *   targetW    — target output width  (e.g. 2032)
  *   targetH    — target output height (e.g.  528)
  *   label      — format label for display
@@ -19,12 +20,20 @@ import { cn } from '@/lib/utils'
 export default function ImageCropModal({ src, targetW, targetH, label, onConfirm, onScale, onCancel }) {
   const containerRef = useRef(null)
   const imgRef       = useRef(null)
+  const imageSrc = creativeImageSource(src)
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 })
   const [display,    setDisplay]    = useState({ w: 0, h: 0, offsetX: 0, offsetY: 0 })
 
   // Crop box in display-space pixels
   const [box, setBox] = useState(null)         // { x, y, w, h }
+  const boxRef = useRef(null)
+  const displayRef = useRef(display)
   const dragState = useRef(null)               // { mode, startX, startY, origBox }
+  const moveFrame = useRef(null)
+  const pendingBox = useRef(null)
+  const mounted = useRef(true)
+  const [processing, setProcessing] = useState(false)
+  const [processingError, setProcessingError] = useState('')
 
   const TARGET_RATIO = targetW / targetH
 
@@ -45,7 +54,9 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
     const dispW = Math.round(natW * scale)
     const dispH = Math.round(natH * scale)
     const offX  = Math.round((maxW - dispW) / 2)
-    setDisplay({ w: dispW, h: dispH, offsetX: offX, offsetY: 0 })
+    const nextDisplay = { w: dispW, h: dispH, offsetX: offX, offsetY: 0 }
+    displayRef.current = nextDisplay
+    setDisplay(nextDisplay)
 
     // Initial crop box: largest box of target ratio that fits inside the display image
     const srcRatio = natW / natH
@@ -61,7 +72,9 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
     }
     const boxX = Math.round((dispW - boxW) / 2)
     const boxY = Math.round((dispH - boxH) / 2)
-    setBox({ x: boxX, y: boxY, w: boxW, h: boxH })
+    const nextBox = { x: boxX, y: boxY, w: boxW, h: boxH }
+    boxRef.current = nextBox
+    setBox(nextBox)
   }, [TARGET_RATIO])
 
   // ── Mouse drag handling ───────────────────────────────────────────────────────
@@ -78,20 +91,24 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
     return { x, y, w, h }
   }, [TARGET_RATIO])
 
-  const onMouseDown = useCallback((e, mode) => {
+  const onPointerDown = useCallback((e, mode) => {
     e.preventDefault()
+    const currentBox = boxRef.current
+    if (!currentBox) return
     dragState.current = {
       mode,
+      pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      origBox: { ...box },
+      origBox: { ...currentBox },
     }
-  }, [box])
+  }, [])
 
   useEffect(() => {
     const onMove = (e) => {
-      if (!dragState.current || !box) return
-      const { mode, startX, startY, origBox } = dragState.current
+      if (!dragState.current) return
+      const { mode, pointerId, startX, startY, origBox } = dragState.current
+      if (pointerId != null && e.pointerId !== pointerId) return
       const dx = e.clientX - startX
       const dy = e.clientY - startY
 
@@ -123,22 +140,90 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
         next.y = origBox.y + origBox.h - next.h
       }
 
-      setBox(clampBox(next, display.w, display.h))
+      const currentDisplay = displayRef.current
+      pendingBox.current = clampBox(next, currentDisplay.w, currentDisplay.h)
+      if (moveFrame.current == null) {
+        moveFrame.current = window.requestAnimationFrame(() => {
+          moveFrame.current = null
+          const nextBox = pendingBox.current
+          pendingBox.current = null
+          if (!nextBox) return
+          boxRef.current = nextBox
+          setBox(nextBox)
+        })
+      }
     }
 
-    const onUp = () => { dragState.current = null }
+    const onUp = (e) => {
+      if (dragState.current?.pointerId != null && e.pointerId !== dragState.current.pointerId) return
+      dragState.current = null
+    }
 
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup',   onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
     return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup',   onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      if (moveFrame.current != null) {
+        window.cancelAnimationFrame(moveFrame.current)
+        moveFrame.current = null
+      }
     }
-  }, [box, display, clampBox, TARGET_RATIO])
+  }, [clampBox])
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  const canvasToDataUrl = useCallback((canvas) => new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (!blob) {
+        reject(new Error('Không thể xuất ảnh đã crop.'))
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = () => reject(new Error('Không thể đọc ảnh đã crop.'))
+      reader.readAsDataURL(blob)
+    }, 'image/png')
+  }), [])
+
+  const renderImage = useCallback(async ({ sourceRect, callback }) => {
+    const img = imgRef.current
+    if (!img?.complete || processing) return
+    setProcessing(true)
+    setProcessingError('')
+    try {
+      // Paint feedback before the browser starts drawing the full-size canvas.
+      await new Promise(resolve => window.requestAnimationFrame(resolve))
+      const canvas = document.createElement('canvas')
+      canvas.width = targetW
+      canvas.height = targetH
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('Không thể khởi tạo canvas creative.')
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      const { sx, sy, sw, sh } = sourceRect
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH)
+      const dataUrl = await canvasToDataUrl(canvas)
+      await callback(dataUrl)
+    } catch (error) {
+      if (mounted.current) {
+        setProcessingError(error.message || 'Không thể xử lý ảnh. Vui lòng thử lại.')
+      }
+    } finally {
+      if (mounted.current) setProcessing(false)
+    }
+  }, [canvasToDataUrl, processing, targetW, targetH])
 
   // ── Crop to canvas ────────────────────────────────────────────────────────────
-  const handleConfirm = useCallback(() => {
-    if (!box || !imgNatural.w) return
+  const handleConfirm = useCallback(async () => {
+    if (!box || !imgNatural.w || processing) return
     // Convert display-space box to natural image coordinates
     const scaleX = imgNatural.w / display.w
     const scaleY = imgNatural.h / display.h
@@ -147,33 +232,20 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
     const sw = Math.round(box.w * scaleX)
     const sh = Math.round(box.h * scaleY)
 
-    const canvas = document.createElement('canvas')
-    canvas.width  = targetW
-    canvas.height = targetH
-    const ctx = canvas.getContext('2d')
-    const img = new window.Image()
-    img.onload = () => {
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH)
-      onConfirm(canvas.toDataURL('image/png'))
-    }
-    img.src = `data:image/png;base64,${src}`
-  }, [box, imgNatural, display, targetW, targetH, src, onConfirm])
+    await renderImage({ sourceRect: { sx, sy, sw, sh }, callback: onConfirm })
+  }, [box, imgNatural, display, processing, renderImage, onConfirm])
 
   // ── Handle scale-stretch ──────────────────────────────────────────────────────
-  const handleScale = useCallback(() => {
-    const canvas = document.createElement('canvas')
-    canvas.width  = targetW
-    canvas.height = targetH
-    const ctx = canvas.getContext('2d')
-    const img = new window.Image()
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, targetW, targetH)
-      onScale(canvas.toDataURL('image/png'))
-    }
-    img.src = `data:image/png;base64,${src}`
-  }, [src, targetW, targetH, onScale])
+  const handleScale = useCallback(async () => {
+    const img = imgRef.current
+    if (!img?.complete || processing) return
+    await renderImage({
+      sourceRect: { sx: 0, sy: 0, sw: img.naturalWidth, sh: img.naturalHeight },
+      callback: onScale,
+    })
+  }, [processing, renderImage, onScale])
 
-  const dataUrl = `data:image/png;base64,${src}`
+  const dataUrl = imageSrc
 
   // ── Handle window resize ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -183,39 +255,42 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
   }, [handleImgLoad])
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-2 backdrop-blur-sm sm:p-3">
       <div
         ref={containerRef}
-        className="relative bg-[#0f0f0f] rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[95vh] overflow-hidden"
+        className="relative flex max-h-[calc(100dvh-16px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-[#0f0f0f] shadow-2xl sm:max-h-[95vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 flex-shrink-0">
-          <div>
-            <p className="text-white font-semibold text-sm flex items-center gap-2">
+        <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-white/10 px-3 py-2.5 sm:items-center sm:px-4 sm:py-3">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-semibold text-white">
               <Crop className="w-4 h-4 text-violet-400" />
-              Crop ảnh — <span className="text-violet-300">{label}</span>
+              <span className="min-w-0 truncate">Crop ảnh — <span className="text-violet-300">{label}</span></span>
             </p>
-            <p className="text-white/50 text-xs mt-0.5">
+            <p className="mt-0.5 text-[11px] leading-4 text-white/50 sm:text-xs">
               Tỉ lệ cố định {targetW}:{targetH} · Kéo góc để resize, kéo giữa để di chuyển
             </p>
           </div>
           <button
             onClick={onCancel}
-            className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            disabled={processing}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 disabled:cursor-wait disabled:opacity-40"
+            aria-label="Đóng cửa sổ crop"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Image area */}
-        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-[#0a0a0a]">
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#0a0a0a] p-2 sm:p-4">
           <div className="relative" style={{ width: display.w || 'auto', height: display.h || 'auto' }}>
             {/* Raw image */}
             <img
               ref={imgRef}
               src={dataUrl}
-              alt="Generated"
+              crossOrigin={creativeImageCrossOrigin(dataUrl)}
+              alt="Creative cần crop"
               onLoad={handleImgLoad}
               className="block select-none pointer-events-none"
               style={{ width: display.w, height: display.h }}
@@ -247,9 +322,16 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
             {/* Crop box */}
             {box && (
               <div
-                className="absolute border-2 border-violet-400 cursor-move"
-                style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
-                onMouseDown={e => onMouseDown(e, 'move')}
+                className="absolute cursor-move touch-none border-2 border-violet-400"
+                style={{
+                  left: 0,
+                  top: 0,
+                  width: box.w,
+                  height: box.h,
+                  transform: `translate3d(${box.x}px, ${box.y}px, 0)`,
+                  willChange: 'transform, width, height',
+                }}
+                onPointerDown={e => onPointerDown(e, 'move')}
               >
                 {/* Rule-of-thirds grid */}
                 <div className="absolute inset-0 pointer-events-none opacity-30">
@@ -268,9 +350,9 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
                 ].map(({ mode, style }) => (
                   <div
                     key={mode}
-                    className="absolute w-3 h-3 bg-violet-400 rounded-sm border border-white/60 shadow"
+                    className="absolute h-3 w-3 touch-none rounded-sm border border-white/60 bg-violet-400 shadow"
                     style={style}
-                    onMouseDown={e => { e.stopPropagation(); onMouseDown(e, mode) }}
+                    onPointerDown={e => { e.stopPropagation(); onPointerDown(e, mode) }}
                   />
                 ))}
 
@@ -284,24 +366,30 @@ export default function ImageCropModal({ src, targetW, targetH, label, onConfirm
         </div>
 
         {/* Footer actions */}
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-white/10 flex-shrink-0 bg-[#0f0f0f]">
+        {processingError && (
+          <p className="border-t border-red-400/20 bg-red-950/40 px-4 py-2 text-xs text-red-200" role="alert">
+            {processingError}
+          </p>
+        )}
+        <div className="flex flex-shrink-0 flex-col items-stretch gap-2 border-t border-white/10 bg-[#0f0f0f] px-3 py-2.5 sm:flex-row sm:items-center sm:px-4 sm:py-3">
           <Button
             onClick={handleConfirm}
-            disabled={!box}
-            className="flex-1 gap-1.5 bg-violet-600 hover:bg-violet-500 text-white"
+            disabled={!box || processing}
+            className="w-full flex-1 gap-1.5 bg-violet-600 text-white hover:bg-violet-500"
             id="btn-crop-confirm"
           >
-            <Crop className="w-3.5 h-3.5" />
-            Crop & Dùng
+            {processing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Crop className="w-3.5 h-3.5" />}
+            {processing ? 'Đang xử lý…' : 'Crop & Dùng'}
           </Button>
           <Button
             onClick={handleScale}
+            disabled={processing}
             variant="outline"
-            className="flex-1 gap-1.5 bg-transparent border-white/30 text-white hover:bg-white/10 hover:text-white hover:border-white/50"
+            className="w-full flex-1 gap-1.5 border-white/30 bg-transparent text-white hover:border-white/50 hover:bg-white/10 hover:text-white"
             id="btn-crop-scale"
           >
             <Maximize2 className="w-3.5 h-3.5" />
-            Giữ nguyên & Scale
+            Scale toàn ảnh <span className="hidden sm:inline">(có thể méo)</span>
           </Button>
         </div>
       </div>

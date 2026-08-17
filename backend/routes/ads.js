@@ -20,6 +20,7 @@ router.get('/check', async (req, res) => {
 
     const campaigns = await Campaign.find({
       status: 'active',
+      deletedAt: null,
       placements: zone,
       $or: [
         { startDate: { $in: ['', null] } },                     // always-on (no date)

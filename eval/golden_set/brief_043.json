@@ -23,16 +23,14 @@
         "6a48cc2381574c48dbd22bc3",
         "6a2df27adda0ba67f14c7083"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22bb5"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Web design/development/hosting are Business and industry/Online segments new to the full catalog. must_exclude=Engineering: weak but real mismatch — shares a vague 'technical' vibe but targets hardware/civil engineers, not web/marketing buyers (same weak-signal-but-real-mismatch reasoning as brief_002/003)."
+    "labeler_note": "Web design/development/hosting are Business and industry/Online segments new to the full catalog. must_exclude=Engineering: weak but real mismatch — shares a vague 'technical' vibe but targets hardware/civil engineers, not web/marketing buyers (same weak-signal-but-real-mismatch reasoning as brief_002/003).\n\nHuman review 2026-07-16: accepted and applied the independent audit. All positive labels are defensible. Engineering is merely unrelated and may include legitimate technical SME buyers; it is not a valid must_exclude."
   },
   "tags": [
     "awareness",

@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://advertising-agent.local/schemas/external-test-report-1.0.json",
+  "title": "Advertising Agent external test report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run", "environment", "results", "summary"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "started_at", "ended_at", "executor", "scope"],
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "started_at": {"type": "string", "format": "date-time"},
+        "ended_at": {"type": "string", "format": "date-time"},
+        "executor": {"type": "string", "minLength": 1},
+        "scope": {"enum": ["full", "p0", "targeted"]},
+        "notes": {"type": "string"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["git_commit", "dirty", "agent_version", "frontend_url", "agent_url", "backend_url", "feature_flags", "models", "containers", "browser_profiles"],
+      "properties": {
+        "git_commit": {"type": "string", "minLength": 7},
+        "dirty": {"type": "boolean"},
+        "agent_version": {"type": "string", "minLength": 1},
+        "frontend_url": {"type": "string"},
+        "agent_url": {"type": "string"},
+        "backend_url": {"type": "string"},
+        "feature_flags": {"type": "object", "additionalProperties": {"type": ["string", "boolean", "number", "null"]}},
+        "models": {"type": "object", "additionalProperties": {"type": ["string", "null"]}},
+        "catalogs": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean", "null"]}},
+        "containers": {"type": "object", "additionalProperties": {"type": "string"}},
+        "browser_profiles": {"type": "array", "items": {"type": "string"}},
+        "deviations": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scenario_id", "suite", "priority", "status", "started_at", "duration_ms", "input", "expected_assertions", "observations", "evidence", "defects", "notes", "blocked_reason"],
+        "properties": {
+          "scenario_id": {"type": "string", "pattern": "^[A-Z]+(?:-[A-Z]+)*-[0-9]{2,3}$"},
+          "suite": {"type": "string", "minLength": 1},
+          "priority": {"enum": ["P0", "P1", "P2"]},
+          "status": {"enum": ["pass", "fail", "blocked", "not_run"]},
+          "started_at": {"type": "string", "format": "date-time"},
+          "duration_ms": {"type": "integer", "minimum": 0},
+          "input": {"type": ["string", "object", "array", "null"]},
+          "expected_assertions": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "observations": {"type": "array", "items": {"type": "string"}},
+          "response": {"type": ["object", "array", "string", "null"]},
+          "state_before": {"type": ["object", "null"]},
+          "state_after": {"type": ["object", "null"]},
+          "metrics": {"type": "object", "additionalProperties": {"type": ["number", "string", "boolean", "null"]}},
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "path", "description"],
+              "properties": {
+                "kind": {"enum": ["screenshot", "log", "api", "trace", "metric", "report", "other"]},
+                "path": {"type": "string", "minLength": 1},
+                "description": {"type": "string", "minLength": 1},
+                "request_id": {"type": ["string", "null"]},
+                "trace_id": {"type": ["string", "null"]}
+              }
+            }
+          },
+          "defects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["defect_id", "severity", "title", "fingerprint", "expected", "actual", "reproduction"],
+              "properties": {
+                "defect_id": {"type": "string", "minLength": 1},
+                "severity": {"enum": ["blocker", "major", "minor", "cosmetic"]},
+                "title": {"type": "string", "minLength": 1},
+                "fingerprint": {"type": "string", "minLength": 1},
+                "expected": {"type": "string", "minLength": 1},
+                "actual": {"type": "string", "minLength": 1},
+                "reproduction": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+                "evidence_paths": {"type": "array", "items": {"type": "string"}}
+              }
+            }
+          },
+          "notes": {"type": "string"},
+          "blocked_reason": {"type": ["string", "null"]},
+          "constituent_scenarios": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "pass", "fail", "blocked", "not_run", "by_suite", "release_gate", "blockers", "majors"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "pass": {"type": "integer", "minimum": 0},
+        "fail": {"type": "integer", "minimum": 0},
+        "blocked": {"type": "integer", "minimum": 0},
+        "not_run": {"type": "integer", "minimum": 0},
+        "by_suite": {"type": "object", "additionalProperties": {"type": "object"}},
+        "release_gate": {"enum": ["pass", "fail", "incomplete"]},
+        "blockers": {"type": "integer", "minimum": 0},
+        "majors": {"type": "integer", "minimum": 0},
+        "top_findings": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { AgentAPI, AGENT_SCENARIOS, fetchDmpAttributes, matchDmpByKeywords, extractTargetingKeywords, extractTargetingMap } from '@/api/agentApi'
+import { AgentAPI, AGENT_SCENARIOS, fetchDmpAttributes, matchDmpByKeywords, extractTargetingKeywords, extractTargetingMap, prepareCreativeFiles } from '@/api/agentApi'
+import { creativeReviewState } from '@/lib/creativeIntel'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
+import { responseAllowsAdvance } from '@/lib/workflowValidation'
 
 
 function userMessage(text) {
@@ -33,6 +35,8 @@ export function useChat({
   onStepApproved,
   onAutoSelectAudience,
   onWorkspaceUpdate,
+  onCreativePrepared,
+  openaiCampaignFlow = false,
   onSnapshotRequest,   // () => { formState, stepStatuses, currentStep } — called before each send
   onRestoreSnapshot,  // (snapshot) => void — called on retry to revert external state
 }) {
@@ -67,15 +71,23 @@ export function useChat({
     }
   }, [])
 
-  const boot = useCallback(async () => {
+  const boot = useCallback(async (experienceMode = 'guided') => {
     if (bootedRef.current) return
     bootedRef.current = true
     setBusy(true)
     log.chat('boot → start')
-    const response = await AgentAPI.boot()
+    const response = await AgentAPI.boot(experienceMode)
     log.chat('boot ← done', { content_preview: response?.content?.slice(0, 100) })
     setMessages([response])
     setBusy(false)
+  }, [])
+
+  const hydrateMessages = useCallback((storedMessages = []) => {
+    const restored = Array.isArray(storedMessages) ? storedMessages : []
+    bootedRef.current = restored.length > 0
+    thinkingIdRef.current = null
+    lastSentRef.current = null
+    setMessages(restored)
   }, [])
 
   // Listen for externally-injected assistant messages (e.g. audience-entry recommendation from App.jsx)
@@ -90,18 +102,31 @@ export function useChat({
     return () => window.removeEventListener('agent:inject_message', handler)
   }, [])
 
-  // Full reset: generate NEW session ID then re-run boot greeting
-  // Without newSession(), the old session_id is reused and the backend
-  // still has the old conversation history / workspace context.
-  const newChat = useCallback(async () => {
-    AgentAPI.newSession()   // ← fresh session ID; backend starts clean
-    bootedRef.current = false
-    setMessages([])
+  // Start a new owned conversation. The previous campaign remains available
+  // in History instead of being deleted from MongoDB.
+  const newChat = useCallback(async (options = {}) => {
     setBusy(true)
-    log.chat('newChat → new session + re-boot')
-    const response = await AgentAPI.boot()
-    setMessages([response])
-    setBusy(false)
+    try {
+      const context = await AgentAPI.createConversation(options)
+      bootedRef.current = false
+      setMessages([])
+      lastSentRef.current = null
+      log.chat('newChat → persistent conversation created', {
+        conversation_id: context?.conversation_id,
+      })
+      setBusy(false)
+      return context
+    } catch (error) {
+      const response = {
+        id: generateId(), role: 'error', blocks: [],
+        content: '⚠️ Không thể tạo chiến dịch mới. Workspace hiện tại vẫn được giữ nguyên; hãy thử lại khi kết nối phục hồi.',
+        timestamp: new Date().toISOString(),
+        metadata: { tool: 'conversation_create_failed', model: 'none' },
+      }
+      setMessages(prev => [...prev, response])
+      setBusy(false)
+      return null
+    }
   }, [])
 
 
@@ -226,7 +251,7 @@ export function useChat({
       const proposals = (response?.blocks || []).filter(b => b.type === 'workspace_proposal' && b.changes?.field)
       for (const block of proposals) {
         log.workspace('workspace_proposal block → pre-populating form', block.changes)
-        onWorkspaceUpdate(block.changes)
+        onWorkspaceUpdate(block.changes, { confirmed: false })
       }
     }
 
@@ -240,8 +265,9 @@ export function useChat({
       const STEP_PRIMARY_FIELDS = { 0: 'brief', 1: 'segment', 2: 'creative', 3: 'setup' }
       const updatedField = response.workspace_update.field?.split('.')?.[0]  // 'brief.brand' → 'brief'
       const isCurrentStepField = STEP_PRIMARY_FIELDS[currentStep] === updatedField
+      const isConfirmedUpdate = response.workspace_update.workspace_revision != null
       const alreadyDone = (stepStatuses || [])[currentStep] === 'done'
-      if (isCurrentStepField && !alreadyDone) {
+      if (isConfirmedUpdate && isCurrentStepField && currentStep !== 3 && !alreadyDone) {
         log.step(`workspace_update for step ${currentStep} field "${updatedField}" → auto-advance`)
         setTimeout(() => onStepApproved?.(currentStep), 700)
       }
@@ -280,10 +306,14 @@ export function useChat({
 
   const STEP_LABELS = ['Brief', 'Audience', 'Creative', 'Setup', 'Result', 'Report', 'Email']
 
-  const approveStep = useCallback(async (stepIndex, stepData) => {
-    if (busy) return
+  const approveStep = useCallback(async (stepIndex, stepData, options = {}) => {
+    if (busy) return { response: null, shouldAdvance: false }
+    const silent = options.silent === true
+    const markApproved = options.markApproved !== false
+    const persistReadyCreative = options.persistReadyCreative === true
+    const completeReadyCreative = options.completeReadyCreative === true
     setBusy(true)
-    startThinking()
+    if (!silent) startThinking()
 
     log.step(`approveStep ${stepIndex} (${STEP_LABELS[stepIndex] ?? '?'}) → start`, {
       stepData_keys: Object.keys(stepData || {}),
@@ -292,10 +322,12 @@ export function useChat({
     })
 
     let response
+    let shouldAdvance = true
     switch (stepIndex) {
       // Step 0 — Brief
       case 0:
         response = await AgentAPI.approveBrief(stepData.brief)
+        shouldAdvance = responseAllowsAdvance(response)
         break
 
       // Step 1 — Audience (NEW: was step 2)
@@ -303,22 +335,96 @@ export function useChat({
         response = await AgentAPI.approveAudience({
           attrs: stepData.attrs || [],
           size: stepData.size || 0,
+          targeting: stepData.targeting || {},
         })
+        shouldAdvance = responseAllowsAdvance(response)
         break
 
-      // Step 2 — Creative: pure upload step — no agent action needed.
-      // The files are already on the CDN; sending them to the agent would be
-      // a no-op and causes 413 if dataUrls are included in the payload.
       case 2: {
-        const fileCount = stepData.creative?.files?.length || 0
-        response = {
-          id: generateId(),
-          role: 'assistant',
-          content: `✅ **${fileCount} creative** đã upload thành công! Chuyển sang bước **Setup** để chọn ad zones và gán creative nhé.`,
-          blocks: [],
-          timestamp: new Date().toISOString(),
-          metadata: { tool: 'creative_confirm', model: 'none', step: 2 },
-          suggestions: [],
+        try {
+          const currentFiles = stepData.creative?.files || []
+          if (creativeReviewState(currentFiles) === 'ready') {
+            // Guided mode reaches this state only after the authoritative
+            // creative input has already been committed. The Autopilot repair
+            // editor is different: a manual verdict can make its local file
+            // ready while the waiting prepare_creatives task still references
+            // the earlier proposal. Persisting the reviewed file set creates a
+            // creative revision, allowing Autopilot to recheck that input gate.
+            if (persistReadyCreative) {
+              response = await AgentAPI.approveCreative(stepData.creative)
+              shouldAdvance = responseAllowsAdvance(response)
+              if (!shouldAdvance) break
+            }
+            if (markApproved) await AgentAPI.confirmWorkflowStep(2)
+            response = response || {
+              id: generateId(),
+              role: 'assistant',
+              content: '✅ Kết quả phân tích creative đã được xác nhận. Mời Anh/Chị tiếp tục sang Setup Camp.',
+              blocks: [],
+              timestamp: new Date().toISOString(),
+              metadata: { tool: 'creative_review_confirmed', model: 'none', step: 2 },
+              suggestions: [],
+            }
+            shouldAdvance = true
+            break
+          }
+          const prepared = await prepareCreativeFiles(
+            currentFiles,
+            files => onCreativePrepared?.(files),
+            { resilientUpload: openaiCampaignFlow },
+          )
+          onCreativePrepared?.(prepared)
+          const reviewFiles = prepared.filter(file => file.analysisStatus === 'needs_review')
+          if (reviewFiles.length) {
+            shouldAdvance = false
+            response = {
+              id: generateId(),
+              role: 'assistant',
+              content: `⚠ **${reviewFiles.length} creative cần duyệt thủ công.** Xem lý do ở workspace, nhập lý do phê duyệt rồi xác nhận lại.`,
+              blocks: [],
+              timestamp: new Date().toISOString(),
+              metadata: { tool: 'creative_blocked', model: 'none', step: 2 },
+              suggestions: [],
+            }
+          } else {
+            if (completeReadyCreative) {
+              response = await AgentAPI.approveCreative({
+                ...(stepData.creative || {}),
+                files: prepared,
+                uploaded: prepared.length > 0,
+              })
+              shouldAdvance = responseAllowsAdvance(response)
+              break
+            }
+            // The authoritative file set was committed before analysis.
+            // Recommitting it now would invalidate the fresh verdict artifact.
+            response = {
+              id: generateId(),
+              role: 'assistant',
+              content: markApproved
+                ? `✅ Đã phân tích xong ${prepared.length} creative. Anh/Chị hãy đọc kết quả trong workspace, sau đó bấm “Xác nhận & sang Setup” khi đã sẵn sàng.`
+                : `✅ ${prepared.length} creative đã được phân tích. Anh/Chị hãy đọc kết quả, sau đó bấm “Lưu & quay lại Autopilot” khi đã sẵn sàng.`,
+              blocks: [],
+              timestamp: new Date().toISOString(),
+              metadata: { tool: 'creative_approved', model: 'none', step: 2 },
+              suggestions: [],
+            }
+            // Both modes pause after the first analysis pass so the operator
+            // can read an auto-approved result instead of being fast-forwarded.
+            // A second explicit confirmation persists the ready file set.
+            shouldAdvance = false
+          }
+        } catch (error) {
+          shouldAdvance = false
+          response = {
+            id: generateId(),
+            role: 'assistant',
+            content: `⚠ Không thể hoàn tất phân tích creative: ${error.message}`,
+            blocks: [],
+            timestamp: new Date().toISOString(),
+            metadata: { tool: 'creative_analysis_error', model: 'none', step: 2 },
+            suggestions: [],
+          }
         }
         break
       }
@@ -329,7 +435,7 @@ export function useChat({
         response = {
           id: generateId(),
           role: 'assistant',
-          content: '✅ Chiến dịch đã được tạo thành công trên AdsPilot! Anh/Chị xem tổng kết ở bước Kết quả bên phải.',
+          content: '✅ Chiến dịch đã được tạo thành công trên nền tảng quảng cáo! Anh/Chị xem tổng kết ở bước Kết quả bên phải.',
           blocks: [{ type: 'info', text: '🎉 Order đã được khởi tạo. Chuyển sang bước Kết quả...' }],
           timestamp: new Date().toISOString(),
           metadata: { tool: 'order_create', model: 'minimax', step: 3 },
@@ -339,6 +445,7 @@ export function useChat({
       // Step 4 — Result
       case 4:
         response = await AgentAPI.getResult()
+        shouldAdvance = responseAllowsAdvance(response)
         break
 
       // Steps 5-6 — Report / Email
@@ -355,6 +462,7 @@ export function useChat({
             metadata: { tool: 'report_entry', model: 'none', step: 5 },
           }
         }
+        shouldAdvance = responseAllowsAdvance(response)
         break
       }
       case 6:
@@ -372,16 +480,19 @@ export function useChat({
         }
     }
 
-    stopThinking(response)
+    if (!silent) stopThinking(response)
     log.step(`approveStep ${stepIndex} ← done`, {
       tool: response?.metadata?.tool,
       content_preview: response?.content?.slice(0, 150),
       blocks: response?.blocks?.map(b => b.type),
     })
     setBusy(false)
-    if (onStepApproved) onStepApproved(stepIndex)
-  }, [busy, startThinking, stopThinking, onStepApproved])
+    if (shouldAdvance && markApproved && onStepApproved) onStepApproved(stepIndex)
+    return { response, shouldAdvance }
+  }, [busy, startThinking, stopThinking, onStepApproved, onCreativePrepared, openaiCampaignFlow])
 
-  return { messages, busy, boot, newChat, sendMessage, approveStep, retryLastMessage, canRetry: !!lastSentRef.current }
+  return {
+    messages, busy, boot, hydrateMessages, newChat, sendMessage, approveStep,
+    retryLastMessage, canRetry: !!lastSentRef.current,
+  }
 }
-

@@ -18,19 +18,16 @@
         "6a2df27adda0ba67f14c716a"
       ],
       "acceptable": [
-        "6a48cc2381574c48dbd22c70",
-        "6a2df27adda0ba67f14c708b"
+        "6a48cc2381574c48dbd22c70"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22c80"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Geo narrowed to the two actual course cities and gender skewed male per the described membership base — a real conflict vs. a naive nationwide/balanced-gender default.",
+    "labeler_note": "Geo narrowed to the two actual course cities and gender skewed male per the described membership base — a real conflict vs. a naive nationwide/balanced-gender default.\n\nHuman review 2026-07-16: accepted and applied the independent audit. A retention campaign should target existing members, which an interest catalog cannot represent. Investment is a wealth proxy and Swimming is merely unrelated; neither is defensible label truth. Remaining catalog gap is intentional; no substitute label was invented.",
     "targeting": {
       "expected": {
         "geo": [
@@ -56,6 +53,7 @@
   "tags": [
     "retention",
     "vi",
-    "targeting_labeled"
+    "targeting_labeled",
+    "catalog_gap"
   ]
 }

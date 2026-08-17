@@ -15,22 +15,20 @@
     "audience": {
       "must_include": [
         "6a2df27adda0ba67f14c7088",
-        "6a48cc2381574c48dbd22bcb"
+        "6a48cc2381574c48dbd22bbd"
       ],
       "acceptable": [
-        "6a2df27adda0ba67f14c708b",
-        "6a2df27adda0ba67f14c715f"
+        "6a48cc2381574c48dbd22bcb",
+        "6a48cc2381574c48dbd22bbe"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22c6d"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "No geo restriction stated, so geo intentionally left unlabeled per the guide ('unlabeled != wrong'); income and age reflect the stated mass-market working-age borrower.",
+    "labeler_note": "No geo restriction stated, so geo intentionally left unlabeled per the guide ('unlabeled != wrong'); income and age reflect the stated mass-market working-age borrower.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Personal finance fits. Credit cards is an adjacent credit product, while online banking better represents an app-based borrower. Investment and luxury-interest labels are demographic/value proxies.",
     "targeting": {
       "expected": {
         "age": [

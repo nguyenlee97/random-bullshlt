@@ -1,4 +1,8 @@
 import { ALL_ZONES } from '@/data/zones'
+import {
+  creativeAssignmentIdentityScore,
+  highConfidenceCreativeIdentity,
+} from '@/lib/creativeAssignmentIdentity'
 
 // ─── Parse size string — handles both 'x' (DB format) and '×' (display format)
 function _parseDims(sizeStr) {
@@ -39,21 +43,49 @@ export function checkMismatch(zone, file) {
   return false                                    // explicitly OK
 }
 
+// Autopilot uses the server's launch-safe 15% ratio boundary. Keep the looser
+// Guided warning band above unchanged for the legacy/GreenNode setup flow.
+export function checkAutopilotMismatch(zone, file) {
+  if (!file?.width || !file?.height) return null
+  if (highConfidenceCreativeIdentity(file, zone)) return false
+  const dims = _parseDims(zone?.size)
+  if (!dims) return null
+  const [zoneWidth, zoneHeight] = dims
+  const zoneRatio = zoneWidth / zoneHeight
+  const fileRatio = file.width / file.height
+  const ratioDiff = Math.abs(zoneRatio - fileRatio) / zoneRatio
+  if (ratioDiff < 0.15) return false
+  const zoneLabel = zoneWidth > zoneHeight ? 'ngang' : 'dọc'
+  const fileLabel = file.width > file.height ? 'ngang' : 'dọc'
+  return `Zone ${zone.size} (${zoneLabel}) · Ảnh ${file.width}×${file.height}px (${fileLabel})`
+}
+
 
 // ─── Smart score: how well a file fits a zone ─────────────────────────────────
-export function scoreFile(file, zone) {
+export function scoreFile(file, zone, { identityAware = false } = {}) {
   let score = 0
   const fname = (file.name || '').toLowerCase()
-  const platform = (zone.platform || zone.channel || zone.id?.split('_')[0] || '').toLowerCase()
   const format = (zone.format || '').toLowerCase()
   const dims = _parseDims(zone?.size)
+  const canonicalIdentity = identityAware
+    && highConfidenceCreativeIdentity(file, zone)
 
-  // ─── 1. Skin format — filename "skin" is the strongest signal (±15)
+  // ─── 1. Canonical identity — platform + placement role/direction.
+  // Known cross-platform or left/right conflicts are hard negatives. Generic
+  // names stay neutral so measured geometry can still provide a safe fallback.
+  if (canonicalIdentity) score += 100
+  else if (identityAware) score += creativeAssignmentIdentityScore(file, zone)
+
+  // ─── 2. Generic skin hint. This is deliberately weaker than platform and
+  // role identity: a filename containing "skin" is not enough to prove that a
+  // BaoMoi asset belongs on ZNews, or that a Left asset belongs on SideRight.
   if (format === 'skin') {
-    score += fname.includes('skin') ? 12 : -6
+    score += identityAware
+      ? (fname.includes('skin') ? 4 : 0)
+      : (fname.includes('skin') ? 12 : -6)
   }
 
-  // ─── 2. Orientation match — portrait vs landscape (±10)
+  // ─── 3. Orientation match — portrait vs landscape (±10)
   if (dims && file.width && file.height) {
     const [zw, zh] = dims
     const zPortrait = zh > zw
@@ -61,32 +93,20 @@ export function scoreFile(file, zone) {
     score += zPortrait === fPortrait ? 10 : -10
   }
 
-  // ─── 3. Aspect ratio closeness (only within same orientation)
+  // ─── 4. Aspect ratio closeness (only within same orientation)
   if (dims && file.width && file.height) {
     const [zw, zh] = dims
     const diff = Math.abs((zw / zh) - (file.width / file.height)) / (zw / zh)
     if (diff < 0.02)       score += 8
     else if (diff < 0.08)  score += 4
     else if (diff < 0.15)  score += 1
-    else                   score -= 3
+    else                   score -= 3 + Math.round(diff * 100)
   }
 
-  // ─── 4. Size string in filename (+5)
+  // ─── 5. Size string in filename (+5)
   if (zone.size && format !== 'skin') {
     const sNorm = zone.size.replace(/[x×]/i, 'x')
     if (fname.includes(sNorm) || fname.includes(sNorm.replace('x', '_'))) score += 5
-  }
-
-  // ─── 5. Platform name in filename (+2, reduced — should not override size signals)
-  if (platform && format !== 'skin') {
-    const aliases = [
-      platform,
-      platform.replace('zing', 'z'),      // zingmp3 → zmp3, zingnews → znews
-      platform.replace('zingmp3', 'zmp3'),
-      platform.replace('zingnews', 'znews'),
-      platform.slice(0, 4),
-    ]
-    if (aliases.some(a => a.length > 2 && fname.includes(a))) score += 2
   }
 
   return score

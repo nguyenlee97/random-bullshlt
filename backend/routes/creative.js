@@ -4,6 +4,7 @@ const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 const crypto  = require('crypto');
+const { deterministicUploadFilename } = require('../lib/creativeUploadIdempotency');
 
 // ── Uploads directory ──────────────────────────────────────────────────────
 // Resolve once at startup: <project_root>/uploads/
@@ -20,9 +21,14 @@ const ALLOWED_TYPES = new Set([
     'image/png',
     'image/webp',
     'image/gif',
+    'video/mp4',
+    'video/webm',
+    'video/quicktime',
 ]);
 
-const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const ALLOWED_EXTENSIONS = new Set([
+    '.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp4', '.webm', '.mov'
+]);
 
 // ── Unique filename generator ──────────────────────────────────────────────
 function uniqueName(originalname) {
@@ -45,7 +51,9 @@ const upload = multer({
         if (ALLOWED_TYPES.has(file.mimetype)) {
             cb(null, true);
         } else {
-            cb(new Error(`Unsupported file type: ${file.mimetype}. Allowed: JPEG, PNG, WEBP, GIF`));
+            cb(new Error(
+                `Unsupported file type: ${file.mimetype}. Allowed: JPEG, PNG, WEBP, GIF, MP4, WEBM, MOV`
+            ));
         }
     },
 });
@@ -72,16 +80,50 @@ router.post('/upload', upload.single('file'), (req, res) => {
         return res.status(400).json({ error: 'No file received. Send as multipart field "file".' });
     }
 
-    const url = buildPublicUrl(req, req.file.filename);
+    const idempotencyKey = String(req.get('x-idempotency-key') || '').trim();
+    let filename = req.file.filename;
+    let reused = false;
 
-    console.log(`[Creative] Uploaded: ${req.file.filename} (${(req.file.size / 1024).toFixed(1)} KB)`);
+    if (idempotencyKey) {
+        const stableFilename = deterministicUploadFilename(idempotencyKey, req.file.originalname);
+        const stablePath = path.join(UPLOADS_DIR, stableFilename);
+        try {
+            if (fs.existsSync(stablePath)) {
+                fs.unlinkSync(req.file.path);
+                reused = true;
+            } else {
+                fs.renameSync(req.file.path, stablePath);
+            }
+            filename = stableFilename;
+        } catch (error) {
+            // A concurrent retry may win the rename race. The stable file is
+            // authoritative; discard this request's temporary duplicate.
+            if ((error.code === 'EEXIST' || error.code === 'EPERM') && fs.existsSync(stablePath)) {
+                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+                filename = stableFilename;
+                reused = true;
+            } else {
+                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+                console.error('[Creative] Idempotent upload finalize failed:', error);
+                return res.status(500).json({ error: 'Failed to finalize uploaded file.' });
+            }
+        }
+    }
 
-    res.status(201).json({
+    const url = buildPublicUrl(req, filename);
+
+    console.log(
+        `[Creative] Uploaded: ${filename} (${(req.file.size / 1024).toFixed(1)} KB)`
+        + ` original=${req.file.originalname} reused=${reused}`
+    );
+
+    res.status(reused ? 200 : 201).json({
         ok:       true,
         url,
-        filename: req.file.filename,
+        filename,
         size:     req.file.size,
         mimeType: req.file.mimetype,
+        reused,
     });
 });
 
@@ -90,7 +132,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
 // Used by AI agent passing image bytes from image generation API
 // Returns: { ok, url, filename, size }
 router.post('/upload-base64', (req, res) => {
-    const { base64, filename: rawName, mimeType } = req.body || {};
+    const { base64, filename: rawName, mimeType, idempotencyKey: rawKey } = req.body || {};
 
     if (!base64) {
         return res.status(400).json({ error: '"base64" field is required.' });
@@ -107,13 +149,23 @@ router.post('/upload-base64', (req, res) => {
     // Determine file extension from provided mimeType or filename
     let ext = '.jpg';
     if (mimeType && ALLOWED_TYPES.has(mimeType)) {
-        ext = { 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }[mimeType] || '.jpg';
+        ext = {
+            'image/png': '.png',
+            'image/webp': '.webp',
+            'image/gif': '.gif',
+            'video/mp4': '.mp4',
+            'video/webm': '.webm',
+            'video/quicktime': '.mov',
+        }[mimeType] || '.jpg';
     } else if (rawName) {
         const candidate = path.extname(rawName).toLowerCase();
         if (ALLOWED_EXTENSIONS.has(candidate)) ext = candidate;
     }
 
-    const filename = uniqueName(`upload${ext}`);
+    const idempotencyKey = String(rawKey || '').trim();
+    const filename = idempotencyKey
+        ? `creative_ai_${crypto.createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 24)}${ext}`
+        : uniqueName(`upload${ext}`);
     const filepath = path.join(UPLOADS_DIR, filename);
 
     let buffer;
@@ -131,22 +183,30 @@ router.post('/upload-base64', (req, res) => {
         });
     }
 
-    fs.writeFile(filepath, buffer, (err) => {
+    const respond = (reused = false) => res.status(reused ? 200 : 201).json({
+        ok: true,
+        url: buildPublicUrl(req, filename),
+        filename,
+        size: buffer.length,
+        mimeType: mimeType || 'image/jpeg',
+        reused,
+    });
+
+    // A deterministic filename makes Autopilot retries and worker recovery
+    // idempotent at the storage boundary. Never overwrite an existing asset.
+    if (idempotencyKey && fs.existsSync(filepath)) {
+        return respond(true);
+    }
+
+    fs.writeFile(filepath, buffer, { flag: idempotencyKey ? 'wx' : 'w' }, (err) => {
+        if (err && err.code === 'EEXIST') return respond(true);
         if (err) {
             console.error('[Creative] Write failed:', err);
             return res.status(500).json({ error: 'Failed to save file to disk.' });
         }
 
-        const url = buildPublicUrl(req, filename);
         console.log(`[Creative] Base64 upload: ${filename} (${(buffer.length / 1024).toFixed(1)} KB)`);
-
-        res.status(201).json({
-            ok:       true,
-            url,
-            filename,
-            size:     buffer.length,
-            mimeType: mimeType || 'image/jpeg',
-        });
+        respond(false);
     });
 });
 

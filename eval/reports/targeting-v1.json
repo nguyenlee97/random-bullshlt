@@ -1,0 +1,782 @@
+{
+  "label": "targeting-v1",
+  "created_at": "2026-07-14T21:36:41.111490+00:00",
+  "summary": {
+    "n": 12,
+    "errors": 0,
+    "expected_value_recall": 0.875,
+    "dimension_exact_rate": 0.742,
+    "forbidden_violations": 0,
+    "catalog_violations": 0,
+    "tool_contract_failures": 0,
+    "p50_latency_s": 28.904,
+    "p95_latency_s": 39.674
+  },
+  "results": [
+    {
+      "id": "brief_056",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "TP.HCM",
+          "Đà Nẵng"
+        ],
+        "age": [
+          "25-34"
+        ],
+        "gender": [
+          "Female"
+        ],
+        "interest": [
+          "Fashion"
+        ]
+      },
+      "expected": {
+        "geo": [
+          "TP.HCM",
+          "Đà Nẵng"
+        ],
+        "age": [
+          "25-34"
+        ],
+        "gender": [
+          "Female"
+        ]
+      },
+      "forbidden": {
+        "geo": [
+          "Hà Nội"
+        ],
+        "gender": [
+          "Male"
+        ]
+      },
+      "expected_value_recall": 1.0,
+      "expected_hits": 4,
+      "expected_total": 4,
+      "dimension_exact": {
+        "geo": true,
+        "age": true,
+        "gender": true
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 39.674
+    },
+    {
+      "id": "brief_057",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "Hà Nội",
+          "TP.HCM",
+          "Đà Nẵng",
+          "Hải Phòng",
+          "Cần Thơ",
+          "Đồng Nai",
+          "Bình Dương"
+        ],
+        "age": [
+          "25-34",
+          "35-44"
+        ],
+        "gender": [
+          "Male"
+        ],
+        "deviceOS": [
+          "Android",
+          "iOS"
+        ],
+        "deviceBrand": [
+          "Samsung",
+          "Apple",
+          "Xiaomi",
+          "Oppo"
+        ],
+        "education": [
+          "College & Bachelor",
+          "Master"
+        ],
+        "income": [
+          "Top 10-25%",
+          "Top 25-50%"
+        ],
+        "career": [
+          "Office Worker",
+          "Sales",
+          "Shop owner"
+        ],
+        "interest": [
+          "F&B",
+          "Sports",
+          "Entertainment > Movie",
+          "Travel"
+        ],
+        "weather": [
+          "Sunny"
+        ]
+      },
+      "expected": {
+        "age": [
+          "25-34",
+          "35-44",
+          "45-54"
+        ],
+        "gender": [
+          "Male"
+        ]
+      },
+      "forbidden": {
+        "age": [
+          "Under 18"
+        ]
+      },
+      "expected_value_recall": 0.75,
+      "expected_hits": 3,
+      "expected_total": 4,
+      "dimension_exact": {
+        "age": false,
+        "gender": true
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 39.677
+    },
+    {
+      "id": "brief_058",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "Hà Nội",
+          "TP.HCM",
+          "Cao Bằng",
+          "Hải Phòng",
+          "Quảng Ninh",
+          "Sơn La",
+          "Thái Bình",
+          "Bắc Ninh",
+          "Vĩnh Phúc",
+          "Đà Nẵng",
+          "Huế",
+          "Nghệ An",
+          "Thanh Hóa",
+          "Khánh Hòa",
+          "Bình Định",
+          "Cần Thơ",
+          "Đồng Nai",
+          "Bình Dương",
+          "Vũng Tàu",
+          "Long An"
+        ],
+        "age": [
+          "25-34",
+          "35-44"
+        ],
+        "gender": [
+          "Male",
+          "Female"
+        ],
+        "deviceOS": [
+          "Android",
+          "iOS"
+        ],
+        "income": [
+          "Top 50-75%",
+          "Top 75-100%"
+        ],
+        "career": [
+          "Office Worker",
+          "Labour Worker",
+          "Sales",
+          "Shop owner"
+        ],
+        "interest": [
+          "Fintech",
+          "Credit cards",
+          "F&B",
+          "Travel",
+          "Entertainment > Movie"
+        ]
+      },
+      "expected": {
+        "age": [
+          "25-34",
+          "35-44"
+        ],
+        "income": [
+          "Top 50-75%",
+          "Top 75-100%"
+        ]
+      },
+      "forbidden": {},
+      "expected_value_recall": 1.0,
+      "expected_hits": 4,
+      "expected_total": 4,
+      "dimension_exact": {
+        "age": true,
+        "income": true
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 29.362
+    },
+    {
+      "id": "brief_059",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "TP.HCM"
+        ],
+        "age": [
+          "25-34",
+          "35-44"
+        ],
+        "gender": [
+          "Male",
+          "Female"
+        ],
+        "parental": [
+          "Have children under age 6"
+        ],
+        "income": [
+          "Top 5%"
+        ],
+        "interest": [
+          "Education"
+        ]
+      },
+      "expected": {
+        "geo": [
+          "TP.HCM"
+        ],
+        "parental": [
+          "Have children under age 6"
+        ],
+        "income": [
+          "Top 5%",
+          "Top 5-10%"
+        ]
+      },
+      "forbidden": {
+        "age": [
+          "Under 18"
+        ]
+      },
+      "expected_value_recall": 0.75,
+      "expected_hits": 3,
+      "expected_total": 4,
+      "dimension_exact": {
+        "geo": true,
+        "parental": true,
+        "income": false
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 29.358
+    },
+    {
+      "id": "brief_060",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "Hà Nội",
+          "TP.HCM",
+          "Đà Nẵng",
+          "Huế",
+          "Cần Thơ",
+          "Hải Phòng",
+          "Nghệ An",
+          "Thanh Hóa",
+          "Khánh Hòa",
+          "Bình Định",
+          "Bắc Ninh",
+          "Vĩnh Phúc",
+          "Đồng Nai",
+          "Bình Dương",
+          "Long An"
+        ],
+        "age": [
+          "18-24"
+        ],
+        "gender": [
+          "Male",
+          "Female"
+        ],
+        "deviceOS": [
+          "Android",
+          "iOS"
+        ],
+        "education": [
+          "College & Bachelor"
+        ],
+        "career": [
+          "Student"
+        ],
+        "interest": [
+          "Automotive",
+          "Education"
+        ]
+      },
+      "expected": {
+        "age": [
+          "18-24"
+        ],
+        "career": [
+          "Student"
+        ],
+        "geo": [
+          "Hà Nội",
+          "TP.HCM",
+          "Đà Nẵng",
+          "Hải Phòng",
+          "Cần Thơ"
+        ]
+      },
+      "forbidden": {},
+      "expected_value_recall": 1.0,
+      "expected_hits": 7,
+      "expected_total": 7,
+      "dimension_exact": {
+        "age": true,
+        "career": true,
+        "geo": false
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 28.904
+    },
+    {
+      "id": "brief_061",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "TP.HCM"
+        ],
+        "age": [
+          "35-44",
+          "45-54"
+        ],
+        "gender": [
+          "Male",
+          "Female"
+        ],
+        "marital": [
+          "Married"
+        ],
+        "education": [
+          "Master",
+          "Doctor"
+        ],
+        "income": [
+          "Top 5%"
+        ],
+        "career": [
+          "Engineering",
+          "Sales",
+          "Office Worker"
+        ],
+        "interest": [
+          "Real Estate",
+          "Travel",
+          "Air travel",
+          "Hotel",
+          "Credit cards",
+          "Fintech"
+        ]
+      },
+      "expected": {
+        "geo": [
+          "TP.HCM"
+        ],
+        "income": [
+          "Top 5%"
+        ],
+        "marital": [
+          "Married"
+        ]
+      },
+      "forbidden": {
+        "geo": [
+          "Hà Nội",
+          "Đà Nẵng"
+        ]
+      },
+      "expected_value_recall": 1.0,
+      "expected_hits": 3,
+      "expected_total": 3,
+      "dimension_exact": {
+        "geo": true,
+        "income": true,
+        "marital": true
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 28.9
+    },
+    {
+      "id": "brief_062",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "Hà Nội",
+          "TP.HCM"
+        ],
+        "age": [
+          "25-34"
+        ],
+        "gender": [
+          "Male",
+          "Female"
+        ],
+        "deviceOS": [
+          "iOS",
+          "Android"
+        ],
+        "deviceBrand": [
+          "Apple",
+          "Samsung",
+          "Xiaomi",
+          "Oppo",
+          "Vivo"
+        ],
+        "marital": [
+          "Single"
+        ],
+        "education": [
+          "College & Bachelor",
+          "Master"
+        ],
+        "income": [
+          "Top 10-25%",
+          "Top 25-50%"
+        ],
+        "career": [
+          "Office Worker"
+        ],
+        "interest": [
+          "Travel",
+          "Entertainment > Movie",
+          "F&B",
+          "Fashion"
+        ]
+      },
+      "expected": {
+        "age": [
+          "25-34"
+        ],
+        "marital": [
+          "Single"
+        ],
+        "career": [
+          "Office Worker"
+        ]
+      },
+      "forbidden": {},
+      "expected_value_recall": 1.0,
+      "expected_hits": 3,
+      "expected_total": 3,
+      "dimension_exact": {
+        "age": true,
+        "marital": true,
+        "career": true
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 27.174
+    },
+    {
+      "id": "brief_063",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "Hà Nội",
+          "TP.HCM"
+        ],
+        "age": [
+          "25-34",
+          "35-44"
+        ],
+        "gender": [
+          "Female"
+        ],
+        "deviceOS": [
+          "Android",
+          "iOS"
+        ],
+        "marital": [
+          "Married"
+        ],
+        "parental": [
+          "Have children under age 6"
+        ],
+        "education": [
+          "College & Bachelor",
+          "Master"
+        ],
+        "income": [
+          "Top 10-25%",
+          "Top 25-50%"
+        ],
+        "career": [
+          "Office Worker",
+          "Housewife"
+        ],
+        "interest": [
+          "F&B",
+          "Education",
+          "Healthcare"
+        ]
+      },
+      "expected": {
+        "gender": [
+          "Female"
+        ],
+        "parental": [
+          "Have children under age 6"
+        ]
+      },
+      "forbidden": {
+        "age": [
+          "Under 18"
+        ]
+      },
+      "expected_value_recall": 1.0,
+      "expected_hits": 2,
+      "expected_total": 2,
+      "dimension_exact": {
+        "gender": true,
+        "parental": true
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 27.173
+    },
+    {
+      "id": "brief_064",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "TP.HCM",
+          "Hà Nội"
+        ],
+        "age": [
+          "35-44",
+          "45-54",
+          "55-64"
+        ],
+        "gender": [
+          "Male"
+        ],
+        "income": [
+          "Top 5%",
+          "Top 5-10%"
+        ],
+        "interest": [
+          "Sports",
+          "Travel",
+          "Real Estate"
+        ]
+      },
+      "expected": {
+        "geo": [
+          "TP.HCM",
+          "Hà Nội"
+        ],
+        "gender": [
+          "Male"
+        ],
+        "income": [
+          "Top 5%"
+        ]
+      },
+      "forbidden": {
+        "geo": [
+          "Đà Nẵng",
+          "Cần Thơ"
+        ]
+      },
+      "expected_value_recall": 1.0,
+      "expected_hits": 4,
+      "expected_total": 4,
+      "dimension_exact": {
+        "geo": true,
+        "gender": true,
+        "income": false
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 25.863
+    },
+    {
+      "id": "brief_065",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "Hà Nội",
+          "TP.HCM"
+        ],
+        "age": [
+          "25-34",
+          "35-44"
+        ],
+        "gender": [
+          "Male"
+        ],
+        "deviceOS": [
+          "Android",
+          "iOS"
+        ],
+        "marital": [
+          "Married"
+        ],
+        "education": [
+          "College & Bachelor",
+          "Master"
+        ],
+        "income": [
+          "Top 25-50%",
+          "Top 50-75%"
+        ],
+        "career": [
+          "Office Worker",
+          "Engineering",
+          "Sales"
+        ],
+        "interest": [
+          "Fashion"
+        ]
+      },
+      "expected": {
+        "gender": [
+          "Male"
+        ],
+        "career": [
+          "Office Worker"
+        ],
+        "income": [
+          "Top 25-50%"
+        ]
+      },
+      "forbidden": {},
+      "expected_value_recall": 1.0,
+      "expected_hits": 3,
+      "expected_total": 3,
+      "dimension_exact": {
+        "gender": true,
+        "career": false,
+        "income": false
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 25.855
+    },
+    {
+      "id": "brief_066",
+      "tool": "targeting_autopick",
+      "actual": {
+        "geo": [
+          "Hà Nội",
+          "TP.HCM",
+          "Đà Nẵng"
+        ],
+        "age": [
+          "25-34",
+          "35-44"
+        ],
+        "gender": [
+          "Male",
+          "Female"
+        ],
+        "deviceOS": [
+          "Android",
+          "iOS"
+        ],
+        "deviceBrand": [
+          "Apple",
+          "Samsung"
+        ],
+        "marital": [
+          "Single",
+          "Married"
+        ],
+        "parental": [
+          "Have children"
+        ],
+        "education": [
+          "College & Bachelor",
+          "Master"
+        ],
+        "income": [
+          "Top 5%",
+          "Top 5-10%",
+          "Top 10-25%"
+        ],
+        "career": [
+          "Office Worker",
+          "Engineering",
+          "Sales"
+        ],
+        "interest": [
+          "Education",
+          "F&B",
+          "Fashion",
+          "Travel"
+        ]
+      },
+      "expected": {
+        "parental": [
+          "Have children"
+        ],
+        "age": [
+          "25-34",
+          "35-44"
+        ]
+      },
+      "forbidden": {
+        "age": [
+          "Under 18"
+        ]
+      },
+      "expected_value_recall": 1.0,
+      "expected_hits": 3,
+      "expected_total": 3,
+      "dimension_exact": {
+        "parental": true,
+        "age": true
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 33.724
+    },
+    {
+      "id": "brief_067",
+      "tool": "targeting_autopick",
+      "actual": {},
+      "expected": {
+        "age": [
+          "35-44",
+          "45-54"
+        ],
+        "income": [
+          "Top 10-25%"
+        ]
+      },
+      "forbidden": {
+        "age": [
+          "Under 18",
+          "18-24"
+        ]
+      },
+      "expected_value_recall": 0.0,
+      "expected_hits": 0,
+      "expected_total": 3,
+      "dimension_exact": {
+        "age": false,
+        "income": false
+      },
+      "forbidden_hits": {},
+      "catalog_violations": {},
+      "latency_s": 33.724
+    }
+  ]
+}

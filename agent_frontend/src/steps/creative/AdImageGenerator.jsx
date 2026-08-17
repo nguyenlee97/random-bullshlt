@@ -1,15 +1,54 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
   Sparkles, Loader2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
-  X, PlusCircle, ImageIcon, ZoomIn, Wand2, Pencil,
+  X, PlusCircle, ImageIcon, ZoomIn, Wand2, Pencil, Clock3,
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
 import { AD_FORMATS, AD_FORMATS_MAP } from '@/data/adFormats'
+import { creativeImageCrossOrigin, creativeImageSource } from '@/lib/creativeImageUrl'
 import ImageCropModal from './ImageCropModal'
+import {
+  MAX_CONCURRENT_GENERATIONS,
+  MAX_PENDING_GENERATIONS,
+  canEnqueueGeneration,
+  countActiveGenerations,
+  countPendingGenerations,
+  nextQueuedGenerations,
+} from './generationQueue'
+
+function galleryImage(job) {
+  const result = job.result || {}
+  const metadata = job.metadata || {}
+  const formatId = metadata.format_id || job.formatId || ''
+  const finalUrl = result.final_url || ''
+  return {
+    id: job.job_id,
+    name: result.final_filename || `ai-${formatId}-${job.job_id}.png`,
+    type: result.final_mime_type || 'image/png',
+    size: result.bytes || 0,
+    dataUrl: creativeImageSource(finalUrl),
+    url: finalUrl,
+    width: result.width || AD_FORMATS_MAP[formatId]?.width,
+    height: result.height || AD_FORMATS_MAP[formatId]?.height,
+    formatId,
+    aiGenerated: true,
+    generation: {
+      provider: metadata.provider,
+      model: metadata.model,
+      promptVersion: metadata.promptVersion,
+      promptFingerprint: metadata.promptFingerprint,
+      generationSize: metadata.generationSize,
+      finalSize: metadata.finalSize,
+      jobId: job.job_id,
+      requestId: result.request_id,
+      assetIds: metadata.asset_ids || [],
+    },
+  }
+}
 
 // ─── Format Card ──────────────────────────────────────────────────────────────
 function FormatCard({ fmt, selected, onClick }) {
@@ -140,86 +179,272 @@ function GenLightbox({ img, onClose }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
+export default function AdImageGenerator({
+  brief,
+  segment,
+  onAddToCreative,
+  openaiCampaignFlow = false,
+  autoPersistFinalizedImage = false,
+}) {
   const [selectedFormatId, setSelectedFormatId] = useState(null)
-  const [generating, setGenerating]             = useState(false)
   const [error, setError]                       = useState('')
-  const [generatedImages, setGeneratedImages]   = useState([])
+  const [generationJobs, setGenerationJobs]     = useState([])
+  const [hiddenJobIds, setHiddenJobIds]         = useState(new Set())
+  const [deferredCropIds, setDeferredCropIds]   = useState(new Set())
+  const [finalizing, setFinalizing]             = useState(false)
   const [selectedIds, setSelectedIds]           = useState(new Set())
-  const [remaining, setRemaining]               = useState(10)
   const [briefExpanded, setBriefExpanded]       = useState(false)
   const [lightboxImg, setLightboxImg]           = useState(null)
   const [customPrompt, setCustomPrompt]         = useState('')
   const [promptExpanded, setPromptExpanded]     = useState(false)
+  const [assets, setAssets]                     = useState([])
+  const [selectedAssetIds, setSelectedAssetIds] = useState(new Set())
+  const [assetDraft, setAssetDraft]             = useState({ name: '', kind: 'logo', useInstruction: '', required: true })
+  const [assetUploading, setAssetUploading]      = useState(false)
+  const [promptSpec, setPromptSpec]              = useState(null)
+  const [composingPrompt, setComposingPrompt]    = useState(false)
+  const startedGenerationIds = useRef(new Set())
 
   // Pending crop: raw response waiting for user crop action
   // { b64, formatId, width, height }
   const [pendingCrop, setPendingCrop] = useState(null)
 
-  // Fetch initial quota
-  useEffect(() => {
-    AgentAPI.getImageGenStatus().then(s => setRemaining(s.remaining ?? 10))
+  const refreshGeneratedJobs = useCallback(async () => {
+    const jobs = await AgentAPI.listGeneratedImages()
+    setGenerationJobs(previous => {
+      const serverIds = new Set(jobs.map(job => job.job_id))
+      const localOnly = previous.filter(job => job.localOnly && !serverIds.has(job.job_id))
+      return [...jobs, ...localOnly]
+    })
   }, [])
 
-  const handleGenerate = useCallback(async () => {
-    if (!selectedFormatId || generating || remaining <= 0) return
-    setGenerating(true)
+  useEffect(() => {
+    AgentAPI.listCreativeAssets().then(setAssets)
+    refreshGeneratedJobs()
+  }, [refreshGeneratedJobs])
+
+  const activeGenerationCount = countActiveGenerations(generationJobs)
+  const pendingGenerationCount = countPendingGenerations(generationJobs)
+  const queuedGenerationCount = generationJobs.filter(job => job.status === 'queued').length
+  const generating = activeGenerationCount > 0
+
+  useEffect(() => {
+    if (!generationJobs.some(job => ['reserved', 'ambiguous'].includes(job.status))) return undefined
+    const timer = window.setInterval(refreshGeneratedJobs, 3000)
+    return () => window.clearInterval(timer)
+  }, [generationJobs, refreshGeneratedJobs])
+
+  const runGenerationJob = useCallback(async job => {
+    const request = job.request || {}
+    try {
+      const result = await AgentAPI.generateAdImage(
+        request.brief,
+        request.formatId,
+        request.customPrompt,
+        {
+          assetIds: request.assetIds,
+          promptSpec: request.promptSpec,
+          quality: request.quality,
+          campaignFlow: request.campaignFlow,
+          audienceContext: request.audienceContext,
+          idempotencyKey: job.job_id,
+        },
+      )
+
+      if (!result.ok) {
+        const unavailableToday = result.remaining === 0
+          || result.status === 'quota_exhausted'
+          || result.quota?.status === 'quota_exhausted'
+        setError(unavailableToday
+          ? 'Tạm thời chưa thể tạo thêm ảnh hôm nay. Vui lòng thử lại vào ngày mai.'
+          : (result.error || 'Tạo ảnh thất bại — hãy thử lại'))
+        setGenerationJobs(previous => previous.map(previousJob => {
+          if (previousJob.job_id === job.job_id) {
+            return { ...previousJob, status: result.jobStatus || 'failed' }
+          }
+          if (unavailableToday && previousJob.status === 'queued') {
+            return { ...previousJob, status: 'quota_exhausted' }
+          }
+          return previousJob
+        }))
+        await refreshGeneratedJobs()
+        return
+      }
+
+      await refreshGeneratedJobs()
+    } finally {
+      startedGenerationIds.current.delete(job.job_id)
+    }
+  }, [refreshGeneratedJobs])
+
+  useEffect(() => {
+    const jobsToStart = nextQueuedGenerations(generationJobs).filter(
+      job => !startedGenerationIds.current.has(job.job_id),
+    )
+    if (jobsToStart.length === 0) return
+
+    const startingIds = new Set(jobsToStart.map(job => job.job_id))
+    jobsToStart.forEach(job => startedGenerationIds.current.add(job.job_id))
+    setGenerationJobs(previous => previous.map(job =>
+      startingIds.has(job.job_id) && job.status === 'queued'
+        ? { ...job, status: 'generating' }
+        : job
+    ))
+    jobsToStart.forEach(job => { void runGenerationJob(job) })
+  }, [generationJobs, runGenerationJob])
+
+  const handleGenerate = useCallback(() => {
+    if (!selectedFormatId) return
     setError('')
 
-    const result = await AgentAPI.generateAdImage(brief, selectedFormatId, customPrompt)
+    const jobId = `guided:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
+    const formatId = selectedFormatId
+    const request = {
+      brief,
+      formatId,
+      customPrompt,
+      assetIds: [...selectedAssetIds],
+      promptSpec,
+      quality: promptSpec?.quality || 'medium',
+      campaignFlow: openaiCampaignFlow ? 'openai' : '',
+      audienceContext: openaiCampaignFlow ? segment : {},
+    }
+    setGenerationJobs(previous => {
+      if (!canEnqueueGeneration(previous)) return previous
+      return [...previous, {
+        job_id: jobId,
+        status: 'queued',
+        localOnly: true,
+        created_at: new Date().toISOString(),
+        metadata: { format_id: formatId },
+        request,
+        result: {},
+      }]
+    })
+  }, [selectedFormatId, brief, customPrompt, selectedAssetIds, promptSpec, openaiCampaignFlow, segment])
 
-    if (!result.ok) {
-      setError(result.error || 'Tạo ảnh thất bại — hãy thử lại')
-      setGenerating(false)
+  const handleFormatSelect = useCallback((formatId) => {
+    setSelectedFormatId(formatId)
+    setPromptSpec(null)
+  }, [])
+
+  const handleAssetFile = useCallback(async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!assetDraft.name.trim()) {
+      setError('Hãy đặt tên cho asset trước khi tải ảnh lên.')
       return
     }
+    setAssetUploading(true)
+    setError('')
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const asset = await AgentAPI.createCreativeAsset({ ...assetDraft, dataUrl })
+      setAssets(prev => [asset, ...prev])
+      setSelectedAssetIds(prev => new Set([...prev, asset.asset_id]))
+      setAssetDraft({ name: '', kind: 'logo', useInstruction: '', required: true })
+      setPromptSpec(null)
+    } catch (uploadError) {
+      setError(uploadError.message || 'Không thể lưu reference asset.')
+    } finally {
+      setAssetUploading(false)
+    }
+  }, [assetDraft])
 
-    // Update quota from server response
-    setRemaining(result.remaining ?? Math.max(0, remaining - 1))
-
-    // Open crop modal instead of auto-cropping
-    setPendingCrop({
-      b64:      result.imageB64,
-      formatId: selectedFormatId,
-      width:    result.width,
-      height:   result.height,
-    })
-    setGenerating(false)
-  }, [selectedFormatId, generating, remaining, brief, customPrompt])
+  const handleComposePrompt = useCallback(async () => {
+    if (!selectedFormatId || composingPrompt) return
+    setComposingPrompt(true)
+    setError('')
+    try {
+      const result = await AgentAPI.composeCreativePrompt({
+        brief, formatId: selectedFormatId, assetIds: [...selectedAssetIds], direction: customPrompt,
+      })
+      setPromptSpec(result.prompt_spec)
+      setPromptExpanded(true)
+    } catch (composeError) {
+      setError(composeError.message || 'Không thể soạn prompt creative.')
+    } finally {
+      setComposingPrompt(false)
+    }
+  }, [brief, selectedFormatId, selectedAssetIds, customPrompt, composingPrompt])
 
   // ── After crop modal resolves ─────────────────────────────────────────────
-  const finishImage = useCallback((croppedDataUrl, fmtId, w, h) => {
-    const timestamp = Date.now()
-    const newImg = {
-      id: `ai-${fmtId}-${timestamp}`,
-      name: `ai-${fmtId}-${timestamp}.png`,
-      type: 'image/png',
-      size: Math.round(croppedDataUrl.length * 0.75),
-      dataUrl: croppedDataUrl,
-      width: w,
-      height: h,
-      formatId: fmtId,
-      aiGenerated: true,
+  const visibleJobs = generationJobs.filter(job => !hiddenJobIds.has(job.job_id))
+  const generatedImages = visibleJobs
+    .filter(job => job.status === 'succeeded' && job.result?.final_url)
+    .map(galleryImage)
+  const readyToCrop = visibleJobs.filter(job =>
+    job.status === 'succeeded' && job.result?.raw_url && !job.result?.final_url
+  )
+
+  useEffect(() => {
+    if (pendingCrop || finalizing) return
+    const next = readyToCrop.find(job => !deferredCropIds.has(job.job_id))
+    if (!next) return
+    const formatId = next.metadata?.format_id || ''
+    setPendingCrop({
+      jobId: next.job_id,
+      src: creativeImageSource(next.result.raw_url),
+      formatId,
+      width: next.result.width || AD_FORMATS_MAP[formatId]?.width,
+      height: next.result.height || AD_FORMATS_MAP[formatId]?.height,
+    })
+  }, [readyToCrop, deferredCropIds, pendingCrop, finalizing])
+
+  const finishImage = useCallback(async (croppedDataUrl) => {
+    if (!pendingCrop || finalizing) return
+    setFinalizing(true)
+    setError('')
+    try {
+      const updated = await AgentAPI.finalizeGeneratedImage(pendingCrop.jobId, croppedDataUrl)
+      setGenerationJobs(previous => previous.map(job =>
+        job.job_id === updated.job_id ? updated : job
+      ))
+      setDeferredCropIds(previous => {
+        const next = new Set(previous)
+        next.delete(pendingCrop.jobId)
+        return next
+      })
+      setPendingCrop(null)
+      if (
+        autoPersistFinalizedImage
+        && updated.status === 'succeeded'
+        && updated.result?.final_url
+      ) {
+        // The interactive walkthrough treats the finalized image as campaign
+        // truth immediately. Persist it through the same parent callback as
+        // manual gallery selection before leaving the generator tab.
+        onAddToCreative([galleryImage(updated)])
+      }
+    } catch (cropError) {
+      setError(cropError.message || 'Không thể lưu ảnh đã crop.')
+    } finally {
+      setFinalizing(false)
     }
-    setGeneratedImages(prev => [newImg, ...prev])
-    setPendingCrop(null)
-  }, [])
+  }, [pendingCrop, finalizing, autoPersistFinalizedImage, onAddToCreative])
 
   const handleCropConfirm = useCallback((croppedDataUrl) => {
     if (!pendingCrop) return
-    const fmt = AD_FORMATS_MAP[pendingCrop.formatId]
-    finishImage(croppedDataUrl, pendingCrop.formatId, fmt?.width ?? pendingCrop.width, fmt?.height ?? pendingCrop.height)
+    return finishImage(croppedDataUrl)
   }, [pendingCrop, finishImage])
 
   const handleScale = useCallback((scaledDataUrl) => {
     if (!pendingCrop) return
-    const fmt = AD_FORMATS_MAP[pendingCrop.formatId]
-    finishImage(scaledDataUrl, pendingCrop.formatId, fmt?.width ?? pendingCrop.width, fmt?.height ?? pendingCrop.height)
+    return finishImage(scaledDataUrl)
   }, [pendingCrop, finishImage])
 
   const handleCropCancel = useCallback(() => {
+    if (pendingCrop?.jobId) {
+      setDeferredCropIds(previous => new Set([...previous, pendingCrop.jobId]))
+    }
     setPendingCrop(null)
-  }, [])
+  }, [pendingCrop])
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
@@ -230,7 +455,7 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
   }
 
   const removeGen = (id) => {
-    setGeneratedImages(prev => prev.filter(i => i.id !== id))
+    setHiddenJobIds(previous => new Set([...previous, id]))
     setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
   }
 
@@ -240,11 +465,6 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
     onAddToCreative(toAdd)
     setSelectedIds(new Set())
   }
-
-  // Quota display helpers
-  const quotaColor = remaining === 0 ? 'text-red-600 bg-red-50 border-red-200'
-                   : remaining <= 3  ? 'text-amber-700 bg-amber-50 border-amber-200'
-                   : 'text-violet-700 bg-violet-50 border-violet-200'
 
   // Brief preview — only visually-relevant fields (mirrors backend)
   const briefLines = [
@@ -271,7 +491,7 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
       {/* Crop modal — rendered when API returns raw image */}
       {pendingCrop && (
         <ImageCropModal
-          src={pendingCrop.b64}
+          src={pendingCrop.src}
           targetW={pendingFmt?.width  ?? pendingCrop.width}
           targetH={pendingFmt?.height ?? pendingCrop.height}
           label={pendingFmt?.label ?? pendingCrop.formatId}
@@ -280,15 +500,6 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
           onCancel={handleCropCancel}
         />
       )}
-
-      {/* Quota counter */}
-      <div className={cn('flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold', quotaColor)}>
-        <div className="flex items-center gap-1.5">
-          <Wand2 className="w-3.5 h-3.5" />
-          <span>AI Tạo Ảnh — Beta</span>
-        </div>
-        <span>{remaining}/10 lượt còn lại</span>
-      </div>
 
       {/* Brief preview (collapsed by default) */}
       <Card className="border-slate-200 bg-slate-50">
@@ -345,10 +556,59 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
               key={fmt.id}
               fmt={fmt}
               selected={selectedFormatId === fmt.id}
-              onClick={setSelectedFormatId}
+              onClick={handleFormatSelect}
             />
           ))}
         </div>
+      </div>
+
+      {/* Named brand/reference assets */}
+      <div
+        className="rounded-xl border border-sky-200 bg-sky-50/40 p-3 space-y-3"
+        data-testid="creative-asset-pack"
+        data-demo="creative-reference-assets"
+      >
+        <div>
+          <p className="text-xs font-bold text-sky-800">Brand & reference assets</p>
+          <p className="text-[10px] text-sky-700 mt-0.5">Đặt tên cho logo, sản phẩm hoặc ảnh tham khảo và mô tả chính xác cách dùng trong creative.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <input value={assetDraft.name} onChange={event => setAssetDraft(current => ({ ...current, name: event.target.value }))}
+            placeholder="Tên asset, ví dụ Logo Hutao" className="col-span-2 text-xs border rounded-lg px-2.5 py-2 bg-white" />
+          <select value={assetDraft.kind} onChange={event => setAssetDraft(current => ({ ...current, kind: event.target.value }))}
+            className="text-xs border rounded-lg px-2.5 py-2 bg-white">
+            <option value="logo">Logo</option><option value="product">Product</option>
+            <option value="packshot">Packshot</option><option value="character">Character</option>
+            <option value="style_reference">Style reference</option><option value="background">Background</option>
+            <option value="legal">Legal artwork</option>
+          </select>
+          <label className="flex items-center gap-2 text-[11px] text-sky-800 px-2">
+            <input type="checkbox" checked={assetDraft.required}
+              onChange={event => setAssetDraft(current => ({ ...current, required: event.target.checked }))} />
+            Bắt buộc xuất hiện
+          </label>
+          <input value={assetDraft.useInstruction}
+            onChange={event => setAssetDraft(current => ({ ...current, useInstruction: event.target.value }))}
+            placeholder="Cách dùng: logo ở góc trái, giữ nguyên màu…" className="col-span-2 text-xs border rounded-lg px-2.5 py-2 bg-white" />
+          <label className={cn('col-span-2 flex items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs font-semibold cursor-pointer', assetUploading ? 'opacity-60' : 'bg-white hover:border-sky-400 text-sky-700')}>
+            {assetUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+            {assetUploading ? 'Đang lưu asset…' : 'Chọn ảnh và thêm asset'}
+            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={assetUploading} onChange={handleAssetFile} />
+          </label>
+        </div>
+        {assets.length > 0 && <div className="space-y-1.5">{assets.map(asset => {
+          const selected = selectedAssetIds.has(asset.asset_id)
+          return <div key={asset.asset_id} className="flex items-center gap-2 rounded-lg border bg-white p-2">
+            <button className={cn('w-4 h-4 rounded border flex items-center justify-center', selected && 'bg-sky-600 border-sky-600')}
+              onClick={() => setSelectedAssetIds(previous => { const next = new Set(previous); next.has(asset.asset_id) ? next.delete(asset.asset_id) : next.add(asset.asset_id); setPromptSpec(null); return next })}>
+              {selected && <CheckCircle2 className="w-3 h-3 text-white" />}
+            </button>
+            <img src={asset.url} alt={asset.name} className="w-9 h-9 rounded object-cover border" />
+            <div className="min-w-0 flex-1"><p className="text-[11px] font-semibold truncate">{asset.name} · {asset.kind}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{asset.use_instruction || 'Không có hướng dẫn riêng'}</p></div>
+            {asset.required && <Badge className="text-[9px]">Required</Badge>}
+          </div>
+        })}</div>}
       </div>
 
       {/* Custom prompt */}
@@ -375,7 +635,7 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
             <textarea
               id="custom-prompt-input"
               value={customPrompt}
-              onChange={e => setCustomPrompt(e.target.value)}
+              onChange={e => { setCustomPrompt(e.target.value); setPromptSpec(null) }}
               placeholder="Ví dụ: minimalist design, pastel blue tones, no text overlay..."
               rows={3}
               className="w-full text-xs border border-border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 placeholder:text-muted-foreground/60"
@@ -392,6 +652,18 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
         )}
       </div>
 
+      <Button variant="outline" className="w-full gap-2" onClick={handleComposePrompt}
+        disabled={!selectedFormatId || composingPrompt} id="btn-compose-creative-prompt">
+        {composingPrompt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+        {promptSpec ? 'Tạo lại prompt spec' : 'AI soạn prompt theo format & assets'}
+      </Button>
+      {promptSpec && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-[11px] text-emerald-900" data-testid="creative-prompt-spec">
+        <p className="font-bold">Prompt spec đã sẵn sàng · {promptSpec.target_width}×{promptSpec.target_height}</p>
+        <p className="mt-1"><strong>Direction:</strong> {promptSpec.creative_direction}</p>
+        <p className="mt-1"><strong>Promise:</strong> {promptSpec.primary_promise}</p>
+        <p className="mt-1"><strong>CTA:</strong> {promptSpec.cta}</p>
+      </div>}
+
       {/* Error */}
       {error && (
         <div className="flex items-center gap-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700">
@@ -400,22 +672,17 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
         </div>
       )}
 
-      {/* Generate button */}
+      {/* The server still enforces the per-actor daily generation limit. */}
       <Button
         onClick={handleGenerate}
-        disabled={!selectedFormatId || generating || remaining <= 0}
+        disabled={!selectedFormatId || pendingGenerationCount >= MAX_PENDING_GENERATIONS}
         className="w-full gap-2"
         id="btn-ai-generate"
       >
-        {generating ? (
+        {pendingGenerationCount >= MAX_PENDING_GENERATIONS ? (
           <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Đang tạo ảnh... (có thể mất 30-60 giây)
-          </>
-        ) : remaining <= 0 ? (
-          <>
-            <AlertCircle className="w-4 h-4" />
-            Hết lượt tạo ảnh (10/10)
+            <Clock3 className="w-4 h-4" />
+            Hàng đợi đã đầy ({MAX_PENDING_GENERATIONS}/{MAX_PENDING_GENERATIONS})
           </>
         ) : (
           <>
@@ -424,6 +691,72 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
           </>
         )}
       </Button>
+      {pendingGenerationCount > 0 && (
+        <p className="text-center text-[10px] text-muted-foreground" data-testid="generated-image-queue-summary">
+          {activeGenerationCount}/{MAX_CONCURRENT_GENERATIONS} đang tạo
+          {' · '}{queuedGenerationCount} đang chờ
+          {' · '}{pendingGenerationCount}/{MAX_PENDING_GENERATIONS} yêu cầu
+        </p>
+      )}
+
+      {(pendingGenerationCount > 0 || readyToCrop.length > 0) && (
+        <div className="grid grid-cols-2 gap-2" data-testid="generated-image-job-list">
+          {visibleJobs.filter(job => job.status === 'queued').map((job, index) => {
+            const fmt = AD_FORMATS_MAP[job.metadata?.format_id] || {}
+            return (
+              <div key={job.job_id} className="h-36 rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 p-3 text-center">
+                <Clock3 className="w-6 h-6 text-slate-500" />
+                <p className="text-[11px] font-semibold text-slate-700">Đang chờ · #{index + 1}</p>
+                <p className="text-[10px] text-slate-500">{fmt.label || 'AI creative'}</p>
+              </div>
+            )
+          })}
+          {visibleJobs.filter(job => ['reserved', 'generating'].includes(job.status)).map(job => {
+            const fmt = AD_FORMATS_MAP[job.metadata?.format_id] || {}
+            return (
+              <div key={job.job_id} className="h-36 rounded-xl border border-violet-200 bg-violet-50/60 flex flex-col items-center justify-center gap-2 p-3 text-center">
+                <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
+                <p className="text-[11px] font-semibold text-violet-800">Đang tạo creative</p>
+                <p className="text-[10px] text-violet-600">{fmt.label || 'AI creative'}</p>
+              </div>
+            )
+          })}
+          {readyToCrop.map(job => {
+            const formatId = job.metadata?.format_id || ''
+            const fmt = AD_FORMATS_MAP[formatId] || {}
+            return (
+              <div key={job.job_id} className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+                <img
+                  src={creativeImageSource(job.result.raw_url)}
+                  crossOrigin={creativeImageCrossOrigin(job.result.raw_url)}
+                  alt={fmt.label || 'Generated creative'}
+                  className="w-full h-24 object-cover"
+                />
+                <div className="p-2">
+                  <p className="text-[10px] font-semibold truncate">{fmt.label || formatId}</p>
+                  <Button size="sm" variant="outline" className="w-full h-7 mt-1 text-[10px]"
+                    onClick={() => {
+                      setDeferredCropIds(previous => {
+                        const next = new Set(previous)
+                        next.delete(job.job_id)
+                        return next
+                      })
+                      setPendingCrop({
+                        jobId: job.job_id,
+                        src: creativeImageSource(job.result.raw_url),
+                        formatId,
+                        width: job.result.width || fmt.width,
+                        height: job.result.height || fmt.height,
+                      })
+                    }}>
+                    Crop / scale
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Gallery */}
       {generatedImages.length > 0 && (
@@ -466,7 +799,7 @@ export default function AdImageGenerator({ brief, segment, onAddToCreative }) {
         </Button>
       )}
 
-      {generatedImages.length === 0 && !generating && (
+      {generatedImages.length === 0 && !generating && pendingGenerationCount === 0 && readyToCrop.length === 0 && (
         <div className="flex flex-col items-center gap-2 py-6 text-center text-muted-foreground">
           <Sparkles className="w-8 h-8 text-violet-300" />
           <p className="text-xs">Chọn định dạng và bấm <strong>Tạo ảnh AI</strong> để bắt đầu.</p>

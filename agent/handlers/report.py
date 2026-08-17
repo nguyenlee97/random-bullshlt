@@ -6,7 +6,12 @@ from session import get_or_create_session, add_message, log_event
 from config import config
 
 
-async def handle_report_entry(session_id: str, campaign_data: dict = None) -> AgentResponse:
+async def handle_report_entry(
+    session_id: str,
+    campaign_data: dict = None,
+    *,
+    suppress_message: bool = False,
+) -> AgentResponse:
     """
     Called when user enters Report step (step 5).
     1. Fetches campaign info from session
@@ -20,13 +25,41 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
     segment = form.get("segment", {})
     order_ids = session.get("created_order_ids", [])
 
+    # Autopilot stores its authoritative result in the canonical workspace,
+    # while the older Copilot flow also mirrors data into ``form_state``.
+    # Read both so one report pipeline works for either experience.
+    canonical_workspace = {}
+    try:
+        from workspace.service import get_workspace
+        canonical_workspace = await get_workspace(session_id)
+    except Exception as exc:
+        await log_event(session_id, "warn", {
+            "handler": "report_entry", "workspace_error": str(exc),
+        })
+    artifacts = canonical_workspace.get("artifacts", {})
+
+    def artifact_value(name: str) -> dict:
+        value = (artifacts.get(name, {}) or {}).get("value")
+        return value if isinstance(value, dict) else {}
+
+    canonical_brief = artifact_value("brief")
+    canonical_audience = artifact_value("audience")
+    canonical_placements = artifact_value("placements")
+    canonical_order = artifact_value("order")
+    canonical_order = canonical_order.get("order", canonical_order)
+    if canonical_brief:
+        brief = canonical_brief
+    if canonical_audience:
+        segment = canonical_audience
+
     brand = brief.get("brand", "Unknown")
     objective = brief.get("objective", "awareness")
     budget = brief.get("budget", 100)
     start_date = brief.get("startDate", "2026-06-17")
 
     # Build campaign ID from first order
-    campaign_id = order_ids[0] if order_ids else f"CAMP-{session_id[:8]}"
+    canonical_order_id = canonical_order.get("id") or canonical_order.get("_id")
+    campaign_id = str(canonical_order_id or (order_ids[0] if order_ids else f"CAMP-{session_id[:8]}"))
 
     # Build zone list — prefer fetching real order from backend
     zones = []
@@ -66,7 +99,21 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
                         for c in order_data.get("creatives", []):
                             placements.extend(c.get("zones", []))
                     placements = list(dict.fromkeys(placements))  # deduplicate
-                    zones = [infer_zone(zid) for zid in placements[:8]]
+                    canonical_zone_by_id = {
+                        str(zone.get("id")): zone
+                        for zone in canonical_placements.get("zones", [])
+                        if zone.get("id")
+                    }
+                    zones = []
+                    for zid in placements[:8]:
+                        source = canonical_zone_by_id.get(str(zid), {})
+                        fallback = infer_zone(str(zid))
+                        zones.append({
+                            "id": str(zid),
+                            "channel": source.get("channel") or source.get("platform") or fallback["channel"],
+                            "format": source.get("format") or source.get("size") or fallback["format"],
+                            "cpm": source.get("cpm") or fallback["cpm"],
+                        })
                     # Also update brief from order if session was stale
                     if not brand or brand == "Unknown":
                         brand = order_data.get("brand", brand)
@@ -83,6 +130,22 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
             await log_event(session_id, "warn", {"handler": "report_entry", "fetch_order_error": str(e)})
 
     # Fall back to session form_state if order fetch failed
+    if not zones:
+        canonical_zones = canonical_placements.get("zones", [])
+        canonical_selected = canonical_placements.get("selectedZoneIds", [])
+        selected = set(str(item) for item in canonical_selected)
+        for zone in canonical_zones:
+            zid = str(zone.get("id") or "")
+            if not zid or (selected and zid not in selected):
+                continue
+            fallback = infer_zone(zid)
+            zones.append({
+                "id": zid,
+                "channel": zone.get("channel") or zone.get("platform") or fallback["channel"],
+                "format": zone.get("format") or zone.get("size") or fallback["format"],
+                "cpm": zone.get("cpm") or fallback["cpm"],
+            })
+
     if not zones:
         reco_zones = setup.get("recoZones", []) or setup.get("allZones", [])
         selected_ids = setup.get("selectedZoneIds", [])
@@ -106,18 +169,44 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
             {'id': 'znews_article_mrec',    'channel': 'Znews',   'format': 'mrec',          'cpm': 25000},
         ]
 
-    # Trigger report generation via Node.js backend
+    # Trigger report generation via Node.js backend. Report v2 receives the
+    # complete measurement context while legacy callers remain supported.
+    strategy = artifact_value("strategy")
+    forecast = artifact_value("forecast")
+    targeting = artifact_value("targeting") or segment.get("targeting", {})
+    creative = artifact_value("creative")
     generate_payload = {
         "campaignId": campaign_id,
         "brand": brand,
         "objective": objective,
         "budget": budget * 1_000_000,  # Convert from M VND to VND
         "startDate": start_date,
+        "endDate": brief.get("endDate"),
+        "kpi": brief.get("kpi", ""),
+        "notes": brief.get("notes", ""),
         "zones": zones,
         "audience": [
-            {"name": a.get("name", ""), "context": a.get("category", "")}
+            {
+                "name": a.get("fullLabel") or a.get("label") or a.get("name", ""),
+                "context": a.get("category") or a.get("reason", ""),
+            }
             for a in segment.get("attrs", [])[:5]
         ],
+        "geo": targeting.get("geo", []) if isinstance(targeting, dict) else [],
+        "strategy": strategy,
+        "forecast": forecast,
+        "targeting": targeting,
+        "creative": {
+            "files": [
+                {
+                    "id": item.get("id") or item.get("_id"),
+                    "name": item.get("name"),
+                    "formatId": item.get("formatId"),
+                    "intendedFormat": item.get("intendedFormat"),
+                }
+                for item in creative.get("files", [])[:20]
+            ]
+        } if isinstance(creative, dict) else None,
     }
 
     try:
@@ -141,7 +230,10 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
         "gen_status": gen_status.get("status", "unknown"),
     }
     from session import update_form_state
-    await update_form_state(session_id, "report_context", report_ctx)
+    await update_form_state(
+        session_id, "report_context", report_ctx,
+        sync_workspace=canonical_workspace.get("experience_mode") != "autopilot",
+    )
 
     await log_event(session_id, "report_entry", {
         "campaign_id": campaign_id,
@@ -178,7 +270,11 @@ async def handle_report_entry(session_id: str, campaign_data: dict = None) -> Ag
         "Gợi ý tối ưu chiến dịch",
     ]
 
-    await add_message(session_id, "assistant", intro_text)
+    # Successful launch now starts report generation before the user opens the
+    # Report tab. Keep that background trigger out of the visible chat history;
+    # entering the tab still records and displays the same introduction.
+    if not suppress_message:
+        await add_message(session_id, "assistant", intro_text)
 
     return AgentResponse(
         text=intro_text,
@@ -193,6 +289,7 @@ async def handle_report_chat(
     message: str,
     session_id: str,
     active_report_tab: str = "all",
+    conversation_model: str | None = None,
 ) -> AgentResponse:
     """
     Handle freeform chat within the Report step.
@@ -270,7 +367,58 @@ async def handle_report_chat(
             meta=ResponseMeta(tool="report_chat", model="none", step=5),
         )
 
-    # ── Cross-analysis question matching ────────────────────────────────────────
+    # OpenAI-locked conversations use semantic, evidence-cited report Q&A.
+    # GreenNode conversations retain their existing independent report matcher.
+    from campaign_models import OPENAI_GPT_5_4_MINI
+    if conversation_model == OPENAI_GPT_5_4_MINI:
+        try:
+            from openai_campaign.report_qa import answer_report_question
+
+            answer, provenance = await answer_report_question(
+                session_id=session_id, message=message,
+                preferred_type=preferred_type, analyses=all_analyses,
+                history=session.get("history") or [],
+            )
+            citations = [
+                *[f"finding:{item}" for item in answer.finding_ids],
+                *[f"metric:{item}" for item in answer.metric_ids],
+            ]
+            source_text = (
+                "Nguồn: " + ", ".join(citations)
+                if citations else "Nguồn: report-evidence-v1"
+            )
+            blocks = [{
+                "type": "report_analysis",
+                "title": f"Phân tích — {answer.report_type.replace('_', ' ').title()}",
+                "sections": [
+                    {"type": "summary", "text": answer.answer},
+                    {"type": "limitation", "text": source_text},
+                ],
+            }]
+            await add_message(session_id, "user", message)
+            await add_message(session_id, "assistant", answer.answer)
+            return AgentResponse(
+                text=answer.answer, blocks=blocks,
+                suggestions=answer.suggestions,
+                meta=ResponseMeta(
+                    tool="report_semantic_qa", model=provenance["model"], step=5,
+                ),
+            )
+        except Exception as exc:
+            await log_event(session_id, "error", {
+                "handler": "report_semantic_qa", "error": str(exc),
+                "state_changed": False,
+            })
+            return AgentResponse(
+                text=(
+                    "Em chưa thể trả lời an toàn từ dữ liệu báo cáo hiện có ở lượt này. "
+                    "Các số liệu hiện có vẫn giữ nguyên; anh/chị thử lại sau khi báo cáo hoàn tất nhé."
+                ),
+                blocks=[],
+                meta=ResponseMeta(tool="report_semantic_qa_unavailable", model="gpt-5.4-mini", step=5),
+            )
+
+    # ── GreenNode report matcher (independent legacy component) ───────────────
     # Score every question across all 6 analyses, prefer preferred_type on tie
     msg_lower = message.lower().strip()
     msg_words = set(msg_lower.split())

@@ -1,0 +1,90 @@
+{
+  "label": "rag-qdrant-recovery-v2",
+  "created_at": "2026-07-14T21:45:10.402320+00:00",
+  "agent_url": "http://localhost:8080",
+  "k": 15,
+  "expect_rag": true,
+  "summary": {
+    "n": 1,
+    "errors": 0,
+    "mean_recall@15": 0.667,
+    "mean_mrr@15": 1.0,
+    "exclusion_violations_total": 0,
+    "judge_score": null,
+    "unknown_recommendations_total": 0,
+    "source_grounding_violations_total": 0,
+    "rag_fallbacks": 0,
+    "mean_recommendations": 6,
+    "p50_latency_s": 4.14,
+    "p95_latency_s": 4.14
+  },
+  "results": [
+    {
+      "id": "brief_003",
+      "tags": [
+        "awareness",
+        "en"
+      ],
+      "n_recs": 6,
+      "recall_at_k": 0.6666666666666666,
+      "mrr_at_k": 1.0,
+      "exclusion_violations": [],
+      "unknown_recommendations": [],
+      "source_grounding_violations": [],
+      "latency_s": 4.14,
+      "rag": {
+        "queries": [
+          "SkyJet Air | awareness | 12M reach for the two new domestic routes | Launching two new budget domestic routes (HAN-PQC, SGN-DAD). Target frequent domestic travelers and young holiday planners booking year-end trips.",
+          "Travel enthusiasts",
+          "Online shopping",
+          "Young professionals"
+        ],
+        "candidates": 116,
+        "rewrite_enabled": true,
+        "rerank_enabled": false,
+        "selector": "critic",
+        "guard_rejected": 0,
+        "reranked": false,
+        "stage_ms": {
+          "rewrite": 1449,
+          "retrieve": 88,
+          "rerank": 0,
+          "generate": 2591
+        }
+      },
+      "rag_fallback": false,
+      "recommendations": [
+        {
+          "segmentId": "INT206",
+          "fullLabel": "Air travel (transportation)",
+          "reason": "Phù hợp trực tiếp với nhu cầu bay nội địa và hành vi quan tâm đến di chuyển bằng máy bay."
+        },
+        {
+          "segmentId": "INT004",
+          "fullLabel": "Aviation (air travel)",
+          "reason": "Bám sát ngữ cảnh hàng không, phù hợp để tiếp cận người có quan tâm rõ đến sản phẩm bay."
+        },
+        {
+          "segmentId": "INT204",
+          "fullLabel": "Travel (travel & tourism)",
+          "reason": "Bao phủ nhóm người có nhu cầu du lịch nói chung, phù hợp với mục tiêu awareness cho tuyến mới."
+        },
+        {
+          "segmentId": "INT205",
+          "fullLabel": "Adventure travel (travel & tourism)",
+          "reason": "Phù hợp với nhóm lên kế hoạch đi chơi/du lịch, đặc biệt cho các chuyến nghỉ lễ cuối năm."
+        },
+        {
+          "segmentId": "INT211",
+          "fullLabel": "Hotels (lodging)",
+          "reason": "Thể hiện ý định du lịch và đặt chỗ lưu trú, là tín hiệu mạnh cho người đang chuẩn bị chuyến đi."
+        },
+        {
+          "segmentId": "INT208",
+          "fullLabel": "Car rentals (transportation)",
+          "reason": "Liên quan trực tiếp đến hành vi lên kế hoạch di chuyển cho chuyến đi, bổ trợ tốt cho nhu cầu du lịch nội địa."
+        }
+      ]
+    }
+  ]
+}

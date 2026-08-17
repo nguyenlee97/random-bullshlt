@@ -21,16 +21,14 @@
         "6a2df27adda0ba67f14c70d5",
         "6a2df27adda0ba67f14c711d"
       ],
-      "must_exclude": [
-        "6a2df27adda0ba67f14c715f"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Geo restricted to a single city is the conflicting call here — a nationwide-default agent would be visibly wrong for a single-tower launch.",
+    "labeler_note": "Geo restricted to a single city is the conflicting call here — a nationwide-default agent would be visibly wrong for a single-tower launch.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Real estate and investment fit; family/furniture are defensible. Online shopping is unrelated, not an actively wrong luxury-property prospect.",
     "targeting": {
       "expected": {
         "geo": [

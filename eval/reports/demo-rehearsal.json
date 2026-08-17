@@ -1,0 +1,55 @@
+{
+  "started_at": "2026-07-15T04:04:25.470065+00:00",
+  "finished_at": "2026-07-15T04:04:32.831617+00:00",
+  "namespace": "final-rc",
+  "runs": 5,
+  "offline_recovery_suite": "PASS",
+  "rehearsals": [
+    {
+      "run": 1,
+      "session_id": "sess_final-rc_rehearsal_1784088266034_1",
+      "idempotency": "PASS",
+      "prompt_injection": "PASS",
+      "strategy_simulator": "PASS",
+      "autopilot_review_gate": "PASS",
+      "cleanup": "PASS"
+    },
+    {
+      "run": 2,
+      "session_id": "sess_final-rc_rehearsal_1784088267537_2",
+      "idempotency": "PASS",
+      "prompt_injection": "PASS",
+      "strategy_simulator": "PASS",
+      "autopilot_review_gate": "PASS",
+      "cleanup": "PASS"
+    },
+    {
+      "run": 3,
+      "session_id": "sess_final-rc_rehearsal_1784088268783_3",
+      "idempotency": "PASS",
+      "prompt_injection": "PASS",
+      "strategy_simulator": "PASS",
+      "autopilot_review_gate": "PASS",
+      "cleanup": "PASS"
+    },
+    {
+      "run": 4,
+      "session_id": "sess_final-rc_rehearsal_1784088270054_4",
+      "idempotency": "PASS",
+      "prompt_injection": "PASS",
+      "strategy_simulator": "PASS",
+      "autopilot_review_gate": "PASS",
+      "cleanup": "PASS"
+    },
+    {
+      "run": 5,
+      "session_id": "sess_final-rc_rehearsal_1784088271344_5",
+      "idempotency": "PASS",
+      "prompt_injection": "PASS",
+      "strategy_simulator": "PASS",
+      "autopilot_review_gate": "PASS",
+      "cleanup": "PASS"
+    }
+  ],
+  "result": "PASS"
+}

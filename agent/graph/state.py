@@ -22,10 +22,14 @@ class AgentState(TypedDict, total=False):
 
     # ── context (rebuilt per request, never checkpointed into history) ──────
     workspace: dict                  # live workspace from frontend
+    workspace_revision: int | None
     workspace_snapshot: str
     workspace_events: list[str]
     confirmed_steps: list[int]
     pending_proposal: dict | None
+    auto_approve_brief: bool
+    workspace_intent_checked: bool
+    canonical_brief_missing: bool
 
     # ── llm conversation (graph-managed) ────────────────────────────────────
     messages: list[dict]             # OpenAI-format dicts (system/user/assistant/tool)

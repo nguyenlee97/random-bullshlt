@@ -25,6 +25,7 @@ from session import (
     update_form_state,
 )
 from agent_logger import alog
+from workspace.intent import is_explicit_decline
 
 
 async def intercepts_node(state: AgentState) -> dict:
@@ -38,7 +39,7 @@ async def intercepts_node(state: AgentState) -> dict:
     if any(kw in msg_lower for kw in _AUTOPICK_TRIGGERS):
         await alog(session_id, "info", {"intent": "autopick_targeting", "path": "graph"})
         resp = await handle_targeting_autopick(session_id)
-        return _from_agent_response(resp, used_tool="autopick_targeting")
+        return _from_agent_response(resp, used_tool="targeting_autopick")
 
     # 2. Next-step redirect (pure nav messages only, ≤80 chars — ported guard) --
     if len(msg_lower) <= 80 and any(kw in msg_lower for kw in _NEXT_STEP_TRIGGERS):
@@ -71,10 +72,100 @@ async def intercepts_node(state: AgentState) -> dict:
     # 4. Confirm handling (pending proposal + step-1/step-3 auto-confirm) -------
     is_confirm = _is_confirm(msg_lower)
     pending = await get_pending_proposal(session_id)
+    from workspace.service import list_pending_proposals
+    durable_pending = await list_pending_proposals(session_id)
+
+    if len(durable_pending) == 1:
+        durable = durable_pending[0]
+        pending = {
+            "field": durable["field"],
+            "value": durable["value"],
+            "reason": durable.get("reason", ""),
+            "proposal_id": durable["proposal_id"],
+            "base_revision": durable["base_revision"],
+            "affected_artifacts": durable.get("affected_artifacts", []),
+        }
+
+    if is_explicit_decline(message) and len(durable_pending) > 1:
+        text = (
+            "Hiện có nhiều đề xuất đang chờ. Anh/chị bấm **Từ chối** trên đúng "
+            "đề xuất muốn bỏ; workspace chưa thay đổi."
+        )
+        await add_message(session_id, "user", message)
+        await add_message(session_id, "assistant", text)
+        return {
+            "response_text": text,
+            "response_blocks": [{"type": "info", "text": text}],
+            "used_tool": "workspace_clarification",
+        }
+
+    if is_explicit_decline(message) and pending:
+        proposal_id = pending.get("proposal_id")
+        if proposal_id:
+            from workspace.service import reject_proposal
+            await reject_proposal(
+                proposal_id, actor="campaign_operator", reason="rejected in chat"
+            )
+        await clear_pending_proposal(session_id)
+        await log_event(session_id, "proposal_rejected", {
+            "proposal_id": proposal_id, "changes": pending,
+        })
+        text = "Đã từ chối đề xuất. Workspace được giữ nguyên."
+        await add_message(session_id, "user", message)
+        await add_message(session_id, "assistant", text)
+        return {
+            "response_text": text,
+            "response_blocks": [{"type": "info", "text": text}],
+            "used_tool": "workspace_rejected",
+        }
+
+    if is_confirm and len(durable_pending) > 1:
+        choices = [
+            f"- `{item['proposal_id']}`: cập nhật `{item['field']}`"
+            for item in durable_pending
+        ]
+        text = (
+            "Hiện có nhiều đề xuất đang chờ duyệt nên câu **đồng ý** chưa đủ rõ. "
+            "Anh/chị chọn nút xác nhận trên đúng đề xuất muốn áp dụng:\n\n"
+            + "\n".join(choices)
+        )
+        await add_message(session_id, "user", message)
+        await add_message(session_id, "assistant", text)
+        return {
+            "response_text": text,
+            "response_blocks": [{
+                "type": "info",
+                "text": "Chọn đúng đề xuất cần áp dụng; hệ thống chưa thay đổi workspace.",
+            }],
+            "used_tool": "workspace_clarification",
+        }
 
     if is_confirm and pending:
+        proposal_id = pending.get("proposal_id")
+        mutation = None
+        if proposal_id:
+            from workspace.service import WorkspaceConflict, approve_proposal
+            try:
+                mutation = await approve_proposal(
+                    proposal_id, actor="campaign_operator"
+                )
+            except WorkspaceConflict as exc:
+                return {
+                    "response_text": (
+                        "⚠ Workspace đã thay đổi sau khi đề xuất này được tạo. "
+                        "Em chưa áp dụng để tránh ghi đè dữ liệu mới; Anh/Chị xem lại đề xuất nhé."
+                    ),
+                    "response_blocks": [{
+                        "type": "workspace_conflict",
+                        "expected_revision": exc.expected,
+                        "actual_revision": exc.actual,
+                    }],
+                    "used_tool": "workspace_conflict",
+                }
         await clear_pending_proposal(session_id)
-        await log_event(session_id, "proposal_confirmed", {"changes": pending})
+        await log_event(session_id, "proposal_confirmed", {
+            "proposal_id": proposal_id, "changes": pending,
+        })
         await add_message(session_id, "user", message)
         field = pending.get("field", "")
         value = pending.get("value")
@@ -84,13 +175,19 @@ async def intercepts_node(state: AgentState) -> dict:
                 value = _j.loads(value)
             except Exception:
                 pass
-        await update_form_state(session_id, field, value)
+        if not proposal_id:
+            await update_form_state(session_id, field, value)
         text = f"✅ Đã áp dụng thay đổi cho `{field}`. Anh/Chị xem panel phải nhé!"
         await add_message(session_id, "assistant", text)
         return {
             "response_text": text,
             "response_blocks": [{"type": "info", "text": f"Workspace đã cập nhật: `{field}`."}],
-            "workspace_update": {"field": field, "value": value},
+            "workspace_update": {
+                "field": field,
+                "value": value,
+                "proposal_id": proposal_id,
+                "workspace_revision": mutation.get("workspace_revision") if mutation else None,
+            },
             "used_tool": "workspace_confirmed",
         }
 
@@ -133,6 +230,31 @@ async def intercepts_node(state: AgentState) -> dict:
                     {"label": "🗑️ Bỏ zone", "action": "prefill", "text": "Bỏ zone "},
                 ],
             }
+
+    if is_confirm and not pending:
+        if step == 0:
+            from workspace.service import get_workspace
+            canonical = await get_workspace(session_id)
+            if not canonical.get("artifacts", {}).get("brief", {}).get("value"):
+                # Recovery path for old/model-only recommendations. Let the typed
+                # Brief collector reconstruct a safe proposal from history instead
+                # of claiming the conversation has been forgotten.
+                return {
+                    "pending_proposal": None,
+                    "auto_approve_brief": True,
+                    "used_tool": "",
+                }
+        text = (
+            "Hiện không có đề xuất nào đang chờ duyệt. "
+            "Anh/chị hãy yêu cầu thay đổi cụ thể trước nhé."
+        )
+        await add_message(session_id, "user", message)
+        await add_message(session_id, "assistant", text)
+        return {
+            "response_text": text,
+            "response_blocks": [{"type": "info", "text": text}],
+            "used_tool": "workspace_clarification",
+        }
 
     # No intercept hit → carry confirm flag forward for the agent node
     return {"pending_proposal": pending, "used_tool": ""}

@@ -16,22 +16,21 @@
       "must_include": [
         "6a48cc2381574c48dbd22c69",
         "6a48cc2381574c48dbd22c68",
-        "6a48cc2381574c48dbd22c6a"
+        "6a48cc2381574c48dbd22c6d"
       ],
       "acceptable": [
         "6a2df27adda0ba67f14c7149",
-        "6a2df27adda0ba67f14c7150"
+        "6a2df27adda0ba67f14c7150",
+        "6a48cc2381574c48dbd22c6a"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22c6f"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Jewelry / Handbags / Sunglasses (Fashion accessories subcategory) exist only in the full catalog. must_exclude=Toys: no relevance to an adult luxury-accessories shopper."
+    "labeler_note": "Jewelry / Handbags / Sunglasses (Fashion accessories subcategory) exist only in the full catalog. must_exclude=Toys: no relevance to an adult luxury-accessories shopper.\n\nHuman review 2026-07-16: accepted and applied the independent audit. The brief sells jewelry and handbags, not sunglasses. Luxury goods is a stronger must_include; Toys is merely unrelated."
   },
   "tags": [
     "consideration",

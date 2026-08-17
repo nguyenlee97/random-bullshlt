@@ -8,6 +8,7 @@ Workspace Sync Protocol:
   - Workspace diff events from direct UI edits are injected as system message
   - update_workspace tool produces a proposal block (Option B: confirm before apply)
 """
+import asyncio
 import json
 import time
 from models import AgentResponse, ResponseMeta
@@ -20,9 +21,11 @@ from session import (
 from prompts.system import SYSTEM_PROMPT, STEP_NAMES
 from tools.zone_catalog import get_all_zones
 from agent_logger import alog
+from time_context import campaign_time_system_message
 
 from tools.registry import TOOL_DEFINITIONS, execute_tool
 from handlers.audience import handle_targeting_autopick
+from workspace.intent import InvalidWorkspaceIntent, resolve_legacy_update
 
 # Intent keywords that trigger targeting auto-pick directly
 _AUTOPICK_TRIGGERS = [
@@ -122,7 +125,15 @@ def _is_confirm(msg_lower: str) -> bool:
             continue
         # Is this specific trigger directly negated? ("không đồng ý", "chưa xác nhận" ...)
         is_negated = any(f"{neg} {kw}" in msg_lower for neg in _NEGATION_ROOTS)
-        if not is_negated:
+        # Approval-bypass requests are edits, not confirmations. Inspect only a
+        # short prefix window so "không sao, đồng ý" remains a valid approval.
+        position = msg_lower.find(kw)
+        prefix = msg_lower[max(0, position - 28):position]
+        is_bypass = any(
+            phrase in prefix
+            for phrase in ("bỏ qua", "không cần", "chưa cần", "khỏi cần", "đừng")
+        )
+        if not is_negated and not is_bypass:
             return True  # trigger present and not negated
     return False
 
@@ -189,6 +200,67 @@ def _build_update_summary(field: str, value, reason: str) -> str:
             return f"Em đã tổng hợp thông tin brief. Anh/chị xác nhận để lưu:\n\n{summary}"
         return "Em đề xuất cập nhật brief. Anh/Chị xem và xác nhận nhé!"
 
+    if field.startswith("brief."):
+        label = {
+            "brief.brand": "thương hiệu",
+            "brief.objective": "mục tiêu",
+            "brief.kpi": "KPI",
+            "brief.budget": "ngân sách (triệu VND)",
+            "brief.startDate": "ngày bắt đầu",
+            "brief.endDate": "ngày kết thúc",
+            "brief.notes": "ghi chú",
+        }.get(field, field)
+        return f"Em đề xuất đổi **{label}** thành **{value}**. Anh/chị xác nhận để áp dụng nhé!"
+
+    if field == "segment" and isinstance(value, dict):
+        attrs = value.get("attrs", [])
+        labels = [
+            item.get("fullLabel") or item.get("name") or item.get("segmentId", "?")
+            for item in attrs
+        ]
+        shown = ", ".join(labels[:6])
+        suffix = f" và {len(labels) - 6} segment khác" if len(labels) > 6 else ""
+        return (
+            f"Em đề xuất chọn **{len(labels)} audience segment**: {shown}{suffix}. "
+            f"Audience ước tính **{value.get('size', 0):,} người**. "
+            "Anh/chị xác nhận để áp dụng nhé!"
+        )
+
+    if field == "targeting" and isinstance(value, dict):
+        rows = []
+        for dimension, picks in value.items():
+            values = picks if isinstance(picks, list) else [picks]
+            rows.append(f"**{dimension}**: {', '.join(map(str, values)) or '(trống)'}")
+        return "Em đề xuất targeting:\n\n" + "\n".join(
+            f"- {row}" for row in rows
+        ) + "\n\nAnh/chị xác nhận để áp dụng nhé!"
+
+    if field == "creative.files" and isinstance(value, list):
+        names = [item.get("name") or item.get("id", "?") for item in value]
+        return (
+            f"Em đề xuất giữ lại **{len(names)} creative**: "
+            f"{', '.join(names) or '(không còn file)'}. "
+            "Anh/chị xác nhận để áp dụng nhé!"
+        )
+
+    if field == "setup.selectedZoneIds" and isinstance(value, list):
+        return (
+            f"Em đề xuất chọn **{len(value)} ad zone**: {', '.join(map(str, value))}. "
+            "Anh/chị xác nhận để áp dụng nhé!"
+        )
+
+    if field == "assignments" and isinstance(value, dict):
+        rows = []
+        for zone, file_index in value.items():
+            try:
+                display_index = int(file_index) + 1
+            except (TypeError, ValueError):
+                display_index = file_index
+            rows.append(f"`{zone}` → creative #{display_index}")
+        return "Em đề xuất cách gắn creative:\n\n" + "\n".join(
+            f"- {row}" for row in rows
+        ) + "\n\nAnh/chị xác nhận để áp dụng nhé!"
+
     # Single field update
     value_str = str(value)[:80]
     return f"Em đề xuất cập nhật `{field}` → `{value_str}`. Anh/Chị xác nhận để lưu nhé!"
@@ -243,12 +315,23 @@ def _build_workspace_snapshot(workspace: dict, confirmed_steps: list[int], curre
         import json as _json
         lines.append("--- Audience ---")
         lines.append(f"Segments hiện tại: {len(attrs)} đã chọn")
-        lines.append(f"Size ước tính: {segment.get('size', 0):,} người dùng")
+        audience_size = segment.get("size", 0)
+        size_known = segment.get("sizeKnown", audience_size > 0)
+        lines.append(
+            f"Size ước tính: {audience_size:,} người dùng"
+            if size_known
+            else "Size ước tính: chưa biết (catalog không cung cấp size; không phải 0 người)"
+        )
         # ─ Provide FULL segment data so LLM can modify without hallucinating ─
         # LLM must use this exact JSON as the base when calling update_workspace
         lines.append("CURRENT_SEGMENT_DATA (dùng làm base khi gọi update_workspace):")
         lines.append(_json.dumps(
-            {"attrs": attrs, "targeting": segment.get("targeting", {}), "size": segment.get("size", 0)},
+            {
+                "attrs": attrs,
+                "targeting": segment.get("targeting", {}),
+                "size": audience_size,
+                "sizeKnown": size_known,
+            },
             ensure_ascii=False, separators=(',', ':')
         ))
         lines.append("")
@@ -346,6 +429,7 @@ async def handle_freeform(
     step: int,
     session_id: str,
     workspace: dict | None = None,
+    workspace_revision: int | None = None,
     confirmed_steps: list[int] | None = None,
     workspace_events: list[str] | None = None,
 ) -> AgentResponse:
@@ -399,13 +483,50 @@ async def handle_freeform(
     # ── Check if this message confirms a pending proposal ─────────────────────
     # NOTE: pending must be loaded BEFORE the step-1 auto-confirm block below
     pending = await get_pending_proposal(session_id)
+
+    # The legacy path used to let an initial Brief recommendation exist only as
+    # prose. Route every uncommitted step-0 turn through the same typed collector
+    # used by LangGraph. If this turn is an explicit approval, the collector can
+    # safely reconstruct and approve the validated proposal in one operation.
+    if step == 0 and not pending:
+        from workspace.service import get_workspace
+
+        canonical = await get_workspace(session_id)
+        if not canonical.get("artifacts", {}).get("brief", {}).get("value"):
+            from graph.nodes.brief_collector import brief_collector_node
+
+            history = await get_history(session_id)
+            typed = await brief_collector_node({
+                "session_id": session_id,
+                "step": step,
+                "user_message": message,
+                "messages": [
+                    *history,
+                    {"role": "user", "content": message},
+                ],
+                "tokens_spent": 0,
+                "auto_approve_brief": is_confirm_trigger,
+            })
+            # The graph's respond node normally persists explanatory/clarifying
+            # replies. This direct legacy adapter must do that itself.
+            if typed.get("used_tool") == "freeform_chat" and typed.get("response_text"):
+                await add_message(session_id, "user", message)
+                await add_message(session_id, "assistant", typed["response_text"])
+            return AgentResponse(
+                text=typed.get("response_text", ""),
+                blocks=typed.get("response_blocks", []),
+                meta=ResponseMeta(
+                    tool=typed.get("used_tool") or "freeform_chat",
+                    model="minimax",
+                    step=step,
+                ),
+                workspace_update=typed.get("workspace_update"),
+                suggestions=typed.get("suggestions", []),
+            )
+
     if is_confirm_trigger:
         await alog(session_id, "confirm", {"has_pending": bool(pending), "trigger_word": msg_lower[:20]})
         if pending:
-            await clear_pending_proposal(session_id)
-            await log_event(session_id, "proposal_confirmed", {"changes": pending})
-            await add_message(session_id, "user", message)
-
             field = pending.get("field", "")
             value = pending.get("value")
             # Parse JSON-stringified value if needed
@@ -415,6 +536,33 @@ async def handle_freeform(
                     value = _j.loads(value)
                 except Exception:
                     pass
+            proposal_id = pending.get("proposal_id")
+            workspace_revision = None
+            if proposal_id:
+                from workspace.service import approve_proposal
+                mutation = await approve_proposal(
+                    proposal_id, actor="campaign_operator"
+                )
+                workspace_revision = mutation["workspace_revision"]
+            else:
+                await update_form_state(session_id, field, value)
+            await clear_pending_proposal(session_id)
+            await log_event(session_id, "proposal_confirmed", {
+                "proposal_id": proposal_id, "changes": pending,
+            })
+            await add_message(session_id, "user", message)
+            text = f"✅ Đã áp dụng thay đổi cho `{field}`. Anh/chị xem workspace nhé!"
+            await add_message(session_id, "assistant", text)
+            return AgentResponse(
+                text=text,
+                blocks=[{"type": "info", "text": f"Workspace đã cập nhật: `{field}`."}],
+                meta=ResponseMeta(tool="workspace_confirmed", model="none", step=step),
+                workspace_update={
+                    "field": field, "value": value,
+                    "proposal_id": proposal_id,
+                    "workspace_revision": workspace_revision,
+                },
+            )
 
     # ── Step 1 (Audience) auto-confirm ───────────────────────────────────────
     # No pending_proposal for segment (audience-entry doesn't use pending_proposal).
@@ -462,6 +610,19 @@ async def handle_freeform(
                 ],
             )
 
+    if is_confirm_trigger and not pending:
+        text = (
+            "Hiện không có đề xuất nào đang chờ duyệt. "
+            "Anh/chị hãy yêu cầu thay đổi cụ thể trước nhé."
+        )
+        await add_message(session_id, "user", message)
+        await add_message(session_id, "assistant", text)
+        return AgentResponse(
+            text=text,
+            blocks=[{"type": "info", "text": text}],
+            meta=ResponseMeta(tool="workspace_clarification", model="none", step=step),
+        )
+
     effective_workspace = workspace or {}
 
     if not effective_workspace:
@@ -482,6 +643,7 @@ async def handle_freeform(
     # ── Build message array ───────────────────────────────────────────────────
     messages: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": campaign_time_system_message()},
         {"role": "system", "content": _build_workspace_snapshot(effective_workspace, confirmed_steps or [], current_step=step)},
     ]
 
@@ -503,7 +665,9 @@ async def handle_freeform(
 
     # ── Call LLM ─────────────────────────────────────────────────────────────
     try:
-        response = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
+        response = await asyncio.to_thread(
+            chat_completion, messages=messages, tools=TOOL_DEFINITIONS
+        )
         msg = response.choices[0].message
         raw_content = msg.content or ""
         tool_calls_names = [tc.function.name for tc in (msg.tool_calls or [])]
@@ -527,7 +691,9 @@ async def handle_freeform(
             })
             short_msgs = [messages[0]] + messages[-6:]  # system prompt + last 6 turns
             try:
-                retry_resp = force_text_completion(messages=short_msgs)
+                retry_resp = await asyncio.to_thread(
+                    force_text_completion, messages=short_msgs
+                )
                 retry_content = sanitize_response(retry_resp.choices[0].message.content or "")
                 raw_content = retry_content or (
                     "Xin lỗi anh/chị, em bị quá tải ngữ cảnh ở tin nhắn này. "
@@ -565,7 +731,9 @@ async def handle_freeform(
                     "args": {k: str(v)[:100] for k, v in args.items()},
                 })
                 t_tool = time.time()
-                result = await execute_tool(tc.function.name, args)
+                result = await execute_tool(
+                    tc.function.name, args, session_id=session_id
+                )
                 await alog(session_id, "tool_result", {
                     "tool": tc.function.name,
                     "duration_ms": int((time.time() - t_tool) * 1000),
@@ -590,30 +758,37 @@ async def handle_freeform(
                     except Exception:
                         pass
 
+                # Validate and rebuild the model payload from authoritative
+                # catalogs/current workspace before it becomes approvable.
+                from workspace.service import create_proposal, get_workspace
+                canonical = await get_workspace(session_id)
+                try:
+                    field, value, reason = await resolve_legacy_update(
+                        field, value, canonical, first_args.get("reason", ""),
+                        source_message=message,
+                    )
+                except InvalidWorkspaceIntent as exc:
+                    reply = f"Em chưa thể tạo đề xuất an toàn: {exc}"
+                    await add_message(session_id, "user", message)
+                    await add_message(session_id, "assistant", reply)
+                    return AgentResponse(
+                        text=reply,
+                        blocks=[],
+                        meta=ResponseMeta(
+                            tool="workspace_clarification", model="minimax", step=step
+                        ),
+                        workspace_update=None,
+                    )
+
+                first_args.update({"field": field, "value": value, "reason": reason})
+
                 # Build a deterministic confirmation message — skip 2 LLM calls entirely
                 # (MiniMax consistently returns empty on the second call after update_workspace)
-                reply = _build_update_summary(field, value, first_args.get("reason", ""))
+                reply = _build_update_summary(field, value, reason)
                 await alog(session_id, "info", {"update_workspace": "skipped_llm_summary", "field": field})
 
                 step_index = _field_to_step_index(field)
                 is_locked = step_index in (confirmed_steps or [])
-
-                # If the user already said 'xác nhận' / confirm keywords → auto-apply, skip proposal block
-                if is_confirm_trigger and not is_locked:
-                    await alog(session_id, "confirm", {"auto_apply": True, "field": field})
-                    await add_message(session_id, "user", message)
-                    await add_message(session_id, "assistant", reply)
-                    # ── Persist to MongoDB so audience-entry / dmp-recommend see the data immediately ──
-                    await update_form_state(session_id, field, value)
-                    return AgentResponse(
-                        text=reply,
-                        blocks=[{
-                            "type": "info",
-                            "text": f"Workspace đã được cập nhật: `{field}`. Chọn Audience ở panel phải hoặc hỏi em để tiếp tục.",
-                        }],
-                        meta=ResponseMeta(tool="update_workspace", model="minimax", step=step),
-                        workspace_update={"field": field, "value": value, "reason": first_args.get("reason", "")},
-                    )
 
                 # Build cascading reset warning
                 warning = ""
@@ -622,7 +797,20 @@ async def handle_freeform(
                     if downstream:
                         warning = f"⚠️ Bước {_STEP_NAMES_VI[step_index]} đã được xác nhận. Nếu thay đổi, các bước sau ({', '.join(downstream)}) sẽ bị reset."
 
-                # Store pending proposal in session (for chat-based confirmation)
+                # Store a durable proposal. Even if this tool call was triggered
+                # by a bare confirmation phrase, it is never auto-applied: only
+                # confirmation of an already-visible proposal may mutate state.
+                proposal = await create_proposal(
+                    session_id, field, value,
+                    base_revision=canonical["revision"],
+                    actor="legacy_campaign_copilot",
+                    reason=reason,
+                )
+                first_args.update({
+                    "proposal_id": proposal["proposal_id"],
+                    "base_revision": proposal["base_revision"],
+                    "affected_artifacts": proposal["affected_artifacts"],
+                })
                 await set_pending_proposal(session_id, first_args)
                 await alog(session_id, "info", {"pending_proposal_stored": True, "field": field, "is_locked": is_locked})
 
@@ -656,7 +844,9 @@ async def handle_freeform(
             # Attempt 1: normal second call (model summarises tool results)
             await alog(session_id, "llm_call_start", {"attempt": 1, "purpose": f"{used_tool}_summary"})
             t1 = time.time()
-            final = chat_completion(messages=messages, tools=TOOL_DEFINITIONS)
+            final = await asyncio.to_thread(
+                chat_completion, messages=messages, tools=TOOL_DEFINITIONS
+            )
             reply = sanitize_response(final.choices[0].message.content or "")
             await alog(session_id, "llm_call_done", {"attempt": 1, "duration_ms": int((time.time()-t1)*1000), "reply_len": len(reply), "empty": not reply})
 
@@ -666,7 +856,9 @@ async def handle_freeform(
                 FALLBACK_LEVEL.labels(level="2").inc()
                 await alog(session_id, "fallback", {"attempt": 2, "tool": used_tool, "reason": "attempt1_empty"})
                 t2 = time.time()
-                forced = force_text_completion(messages=messages)  # no tools!
+                forced = await asyncio.to_thread(
+                    force_text_completion, messages=messages
+                )  # no tools!
                 reply = sanitize_response(forced.choices[0].message.content or "")
                 await alog(session_id, "llm_call_done", {"attempt": 2, "duration_ms": int((time.time()-t2)*1000), "reply_len": len(reply), "empty": not reply})
 
@@ -725,8 +917,9 @@ async def handle_freeform(
             "error": str(e),
             "traceback": tb[-600:],  # last 600 chars of traceback
         })
+        from provider_resilience import PROVIDER_UNAVAILABLE_MESSAGE
         return AgentResponse(
-            text=f"Em gặp lỗi khi xử lý: {str(e)[:100]}. Anh/Chị thử lại nhé!",
+            text=PROVIDER_UNAVAILABLE_MESSAGE,
             blocks=[],
             meta=ResponseMeta(tool="freeform_chat", model="none", step=step),
         )

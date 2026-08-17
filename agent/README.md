@@ -1,4 +1,4 @@
-# Camp Ads Agent — Autonomous Ad Campaign Manager
+# Advertising Agent — Autonomous Ad Campaign Manager
 
 > An AI agent that autonomously drives the full lifecycle of a display advertising campaign — from brief to live reporting — built on **GreenNode AgentBase** and **GreenNode MaaS**.
 
@@ -29,7 +29,7 @@ Each step is manual, siloed, and error-prone. Campaign managers spend 60-70% of 
 
 ## Solution
 
-**Camp Ads Agent** is a conversational AI agent that walks the user through all 6 steps in a single guided session — making decisions, populating the platform, generating insights, and delivering the final PDF report to stakeholders via email.
+**Advertising Agent** is a conversational AI agent that supports both a guided campaign workflow and a durable Campaign Autopilot — making grounded decisions, populating the workspace, requesting human review, generating insights, and delivering the final PDF report to stakeholders via email.
 
 ### How it works
 
@@ -51,12 +51,12 @@ User ─── Chat ──► Agent (FastAPI + GreenNode MaaS)
 | Capability | Detail |
 |---|---|
 | **Conversational campaign setup** | Step-by-step guided chat, with auto-advance on confirmation |
-| **AI creative generation** | Calls OpenAI gpt-image-1 with per-format safe-zone prompts |
+| **AI creative generation** | Direct OpenAI GPT Image 2 with named assets, exact-format safe zones and a durable 20-output daily actor quota |
 | **AI analytics (6 tabs)** | Daily Ops, Awareness, Consideration, Conversion, Retention, Executive |
 | **PDF report generation** | Server-side via pdfkit — no headless browser required |
 | **Email delivery** | Resend API — PDF + optional CSV/JSON raw data |
 | **Real-time polling** | Frontend polls report status every 3s with progress indicator |
-| **GreenNode MaaS** | LLM inference via minimax-m2.5 on GreenNode AI Platform |
+| **Conversation engines** | Independent, immutable per-run GreenNode MiniMax or OpenAI GPT-5.4-mini components; no cross-provider fallback |
 
 ---
 
@@ -71,7 +71,7 @@ User ─── Chat ──► Agent (FastAPI + GreenNode MaaS)
 └────────────────────┬────────────────────────────────────────────┘
                      │ REST
 ┌────────────────────▼────────────────────────────────────────────┐
-│  Camp Ads Agent  ◄── THIS REPO                                  │
+│  Advertising Agent  ◄── THIS REPO                               │
 │  FastAPI · Python 3.11 · Port 8080                              │
 │  agent-api.pawgrammers.io.vn                                    │
 │  ├─ router.py        (6-step state machine)                     │
@@ -96,12 +96,12 @@ User ─── Chat ──► Agent (FastAPI + GreenNode MaaS)
 | Layer | Technology |
 |---|---|
 | **Agent runtime** | FastAPI · Python 3.11 · Uvicorn |
-| **LLM** | GreenNode MaaS — minimax/minimax-m2.5 (OpenAI-compatible) |
+| **Campaign LLMs** | Independent GreenNode MiniMax and OpenAI GPT-5.4-mini components, locked per conversation |
 | **Session memory** | MongoDB (Motor async driver) |
-| **AI report generation** | OpenAI gpt-4o-mini (6-tab analytical Q&A) |
+| **AI report generation** | Fixed OpenAI GPT-5.4-mini specialist with report-evidence-v1 metric contracts |
 | **PDF generation** | pdfkit (server-side, no puppeteer) |
 | **Email delivery** | Resend API |
-| **Image generation** | OpenAI gpt-image-1 |
+| **Image generation** | Direct OpenAI GPT Image 2; GPT-5.4-mini visual QA |
 | **Frontend** | React 18 · Vite · Recharts · Tailwind |
 | **Ad platform** | AdsPilot (Express + MongoDB) |
 | **Deployment** | GreenNode AgentBase Custom Agent Runtime |
@@ -195,7 +195,9 @@ The container reads from `.env` at startup. See `.env.example` for all variables
 # 1. Clone and install deps
 git clone https://github.com/your-org/camp-ads-agent
 cd camp-ads-agent
-pip install -r requirements.txt
+pip install -r requirements.lock
+# Required by the live-ad screenshot feature. Re-run after Playwright upgrades.
+python -m playwright install chromium
 
 # 2. Configure environment
 cp .env.example .env

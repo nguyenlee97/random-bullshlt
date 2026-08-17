@@ -1,0 +1,52 @@
+name: Manual model evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: Evaluation report label
+        required: true
+        default: manual-online
+
+permissions:
+  contents: read
+
+jobs:
+  online-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AI_PLATFORM_API_KEY: ${{ secrets.AI_PLATFORM_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      AGENT_API_KEY: ci-eval-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: agent/requirements.lock
+      - run: python -m pip install --requirement agent/requirements.lock
+      - name: Materialize ephemeral agent environment
+        run: |
+          printf 'AI_PLATFORM_API_KEY=%s\n' "$AI_PLATFORM_API_KEY" > agent/.env
+          printf 'LLM_BASE_URL=%s\n' 'https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1' >> agent/.env
+          printf 'LLM_MODEL=%s\n' 'minimax/minimax-m2.5' >> agent/.env
+          printf 'USE_LANGGRAPH_FREEFORM=true\n' >> agent/.env
+      - run: docker compose up --detach --build mongo qdrant backend agent
+      - name: Wait for agent health
+        run: |
+          for attempt in $(seq 1 60); do
+            curl --fail --silent http://127.0.0.1:8080/health && exit 0
+            sleep 2
+          done
+          docker compose logs agent
+          exit 1
+      - run: python eval/run_eval.py --agent-url http://127.0.0.1:8080 --label "${{ inputs.label }}" --concurrency 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evaluation-${{ inputs.label }}
+          path: eval/reports/*.json
+      - if: always()
+        run: docker compose down --volumes

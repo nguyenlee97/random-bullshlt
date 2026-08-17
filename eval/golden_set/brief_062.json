@@ -15,22 +15,19 @@
     "audience": {
       "must_include": [
         "6a2df27adda0ba67f14c7083",
-        "6a48cc2381574c48dbd22be5"
+        "6a48cc2381574c48dbd22c09"
       ],
       "acceptable": [
-        "6a2df27adda0ba67f14c715f",
-        "6a48cc2381574c48dbd22bb2"
+        "6a48cc2381574c48dbd22be5"
       ],
-      "must_exclude": [
-        "6a48cc2381574c48dbd22c0a"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "must_exclude=Marriage is a clean life-stage mismatch — the notes are specifically about singles, so a 'married' interest segment is a visible miss, not just irrelevant.",
+    "labeler_note": "must_exclude=Marriage is a clean life-stage mismatch — the notes are specifically about singles, so a 'married' interest segment is a visible miss, not just irrelevant.\n\nHuman review 2026-07-16: accepted and applied the independent audit. There is no dating or relationship-seeking segment. Nightclubs, online shopping and business are weak persona proxies. Marriage means wedding interest and can include engaged singles, so it is unsafe as an exclusion. Remaining catalog gap is intentional; no substitute label was invented.",
     "targeting": {
       "expected": {
         "age": [
@@ -49,6 +46,7 @@
   "tags": [
     "consideration",
     "en",
-    "targeting_labeled"
+    "targeting_labeled",
+    "catalog_gap"
   ]
 }

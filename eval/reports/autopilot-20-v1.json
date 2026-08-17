@@ -1,0 +1,426 @@
+{
+  "label": "autopilot-20-v1",
+  "scope": "durable orchestration with deterministic capability fixtures",
+  "summary": {
+    "briefs": 20,
+    "passed": 20,
+    "failed": 0,
+    "order_ready_draft_rate": 1.0,
+    "required_review_pause_rate": 1.0,
+    "launch_without_approval": 0,
+    "failure_drills": 5,
+    "failure_drills_passed": 5,
+    "mean_latency_ms": 194.91,
+    "p95_latency_ms": 252.89
+  },
+  "results": [
+    {
+      "id": "brief_001",
+      "lang": "vi",
+      "policy": "auto_build_draft",
+      "objective": "awareness",
+      "budget": 800,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 0,
+      "latency_ms": 267.03
+    },
+    {
+      "id": "brief_002",
+      "lang": "vi",
+      "policy": "critical_only",
+      "objective": "conversion",
+      "budget": 600,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 4,
+      "latency_ms": 167.13
+    },
+    {
+      "id": "brief_003",
+      "lang": "en",
+      "policy": "review_every_stage",
+      "objective": "awareness",
+      "budget": 900,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 11,
+      "latency_ms": 225.98
+    },
+    {
+      "id": "brief_004",
+      "lang": "vi",
+      "policy": "auto_build_draft",
+      "objective": "consideration",
+      "budget": 450,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 0,
+      "latency_ms": 155.96
+    },
+    {
+      "id": "brief_005",
+      "lang": "vi",
+      "policy": "critical_only",
+      "objective": "conversion",
+      "budget": 30,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 4,
+      "latency_ms": 191.83
+    },
+    {
+      "id": "brief_006",
+      "lang": "vi",
+      "policy": "review_every_stage",
+      "objective": "awareness",
+      "budget": 1200,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 11,
+      "latency_ms": 210.04
+    },
+    {
+      "id": "brief_007",
+      "lang": "vi",
+      "policy": "auto_build_draft",
+      "objective": "retention",
+      "budget": 500,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 0,
+      "latency_ms": 148.89
+    },
+    {
+      "id": "brief_008",
+      "lang": "en",
+      "policy": "critical_only",
+      "objective": "consideration",
+      "budget": 1500,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 4,
+      "latency_ms": 164.01
+    },
+    {
+      "id": "brief_009",
+      "lang": "vi",
+      "policy": "review_every_stage",
+      "objective": "conversion",
+      "budget": 60,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 11,
+      "latency_ms": 200.8
+    },
+    {
+      "id": "brief_010",
+      "lang": "vi",
+      "policy": "auto_build_draft",
+      "objective": "awareness",
+      "budget": 400,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 0,
+      "latency_ms": 169.06
+    },
+    {
+      "id": "brief_011",
+      "lang": "vi",
+      "policy": "critical_only",
+      "objective": "consideration",
+      "budget": 350,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 4,
+      "latency_ms": 205.44
+    },
+    {
+      "id": "brief_012",
+      "lang": "en",
+      "policy": "review_every_stage",
+      "objective": "conversion",
+      "budget": 700,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 11,
+      "latency_ms": 217.42
+    },
+    {
+      "id": "brief_013",
+      "lang": "vi",
+      "policy": "auto_build_draft",
+      "objective": "retention",
+      "budget": 300,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 0,
+      "latency_ms": 152.26
+    },
+    {
+      "id": "brief_014",
+      "lang": "vi",
+      "policy": "critical_only",
+      "objective": "awareness",
+      "budget": 550,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 4,
+      "latency_ms": 224.76
+    },
+    {
+      "id": "brief_015",
+      "lang": "vi",
+      "policy": "review_every_stage",
+      "objective": "consideration",
+      "budget": 400,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 11,
+      "latency_ms": 217.75
+    },
+    {
+      "id": "brief_016",
+      "lang": "vi",
+      "policy": "auto_build_draft",
+      "objective": "conversion",
+      "budget": 500,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 0,
+      "latency_ms": 173.88
+    },
+    {
+      "id": "brief_017",
+      "lang": "en",
+      "policy": "critical_only",
+      "objective": "awareness",
+      "budget": 2000,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 4,
+      "latency_ms": 243.83
+    },
+    {
+      "id": "brief_018",
+      "lang": "vi",
+      "policy": "review_every_stage",
+      "objective": "retention",
+      "budget": 450,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 11,
+      "latency_ms": 252.89
+    },
+    {
+      "id": "brief_019",
+      "lang": "vi",
+      "policy": "auto_build_draft",
+      "objective": "consideration",
+      "budget": 80,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 0,
+      "latency_ms": 149.92
+    },
+    {
+      "id": "brief_020",
+      "lang": "vi",
+      "policy": "critical_only",
+      "objective": "conversion",
+      "budget": 25,
+      "ok": true,
+      "checks": {
+        "waiting_for_launch": true,
+        "order_ready_draft": true,
+        "no_order_created": true,
+        "create_not_released": true,
+        "no_failed_tasks": true,
+        "explicit_launch_required": true
+      },
+      "error": null,
+      "reviews_before_launch": 4,
+      "latency_ms": 159.34
+    }
+  ],
+  "failure_drills": [
+    {
+      "name": "missing_brief",
+      "ok": true
+    },
+    {
+      "name": "duplicate_start",
+      "ok": true
+    },
+    {
+      "name": "expired_worker_lease",
+      "ok": true
+    },
+    {
+      "name": "mid_run_edit",
+      "ok": true
+    },
+    {
+      "name": "duplicate_launch_approval",
+      "ok": true
+    }
+  ],
+  "linked_integration_evidence": [
+    "docs/next-hackathon/10-m4-autopilot-replan-evidence.md",
+    "docs/next-hackathon/11-m4-autopilot-e2e-evidence.md",
+    "eval/reports/rag-qdrant-fallback-v2.json",
+    "eval/reports/creative-safety-gemma-v3.json"
+  ]
+}

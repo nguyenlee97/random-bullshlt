@@ -88,7 +88,6 @@ export function renderPoPTable(rows, utils) {
       </table>
     </div>`;
 
-  const ic = el('ic_ex_pop'), ins = el('ins_ex_pop');
   const el2 = id => document.getElementById(id);
   const icEl = el2('ic_ex_pop'), insEl = el2('ins_ex_pop');
   if (icEl && insEl) {

@@ -41,6 +41,5 @@ export function renderScorecard(rows, utils) {
     <div class="sc-item">
       <div class="sc-label">${k.label}</div>
       <div class="sc-val" style="font-size:${String(k.val).length > 8 ? '18px' : '22px'}">${k.val}</div>
-      ${k.sub ? `<div class="sc-delta ${k.cls || ''}">${k.sub}</div>` : ''}
     </div>`).join('')}</div>`;
 }

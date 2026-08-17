@@ -9,7 +9,10 @@ import time as _time
 from config import config
 from openai import OpenAI
 
-from metrics import LLM_CALLS, LLM_TOKENS, SESSION_COST  # noqa: E402
+from metrics import LLM_CALLS, LLM_PROVIDER_EVENTS, LLM_TOKENS, SESSION_COST  # noqa: E402
+from provider_resilience import CircuitBreaker, execute_with_fallback
+from security import redact_langfuse, redact_pii, redact_text
+from request_context import get_request_id
 
 # ── Langfuse tracing (Phase 0 B3) ─────────────────────────────────────────────
 # NOTE: The langfuse.openai drop-in wrapper only works for the standard OpenAI
@@ -21,8 +24,12 @@ _langfuse = None
 if os.getenv("LANGFUSE_PUBLIC_KEY"):
     try:
         from langfuse import Langfuse
-        _langfuse = Langfuse()  # picks up LANGFUSE_PUBLIC_KEY / SECRET_KEY / HOST
-        print("[llm] Langfuse tracing enabled →", os.getenv("LANGFUSE_HOST"))
+        _langfuse = Langfuse(
+            mask=redact_langfuse,
+        )  # picks up LANGFUSE_PUBLIC_KEY / SECRET_KEY / HOST
+        # Keep startup output ASCII-safe: Windows cp1252 terminals can raise on
+        # the arrow character, which used to be caught as a Langfuse init error.
+        print("[llm] Langfuse tracing enabled ->", os.getenv("LANGFUSE_HOST"))
     except Exception as _lf_err:
         print(f"[llm] Langfuse init failed, tracing disabled: {_lf_err}")
 
@@ -30,7 +37,75 @@ if os.getenv("LANGFUSE_PUBLIC_KEY"):
 _client = OpenAI(
     api_key=config.AI_PLATFORM_API_KEY,
     base_url=config.LLM_BASE_URL,
+    timeout=config.LLM_TIMEOUT_SECONDS,
+    max_retries=config.LLM_MAX_RETRIES,
 )
+_primary_breaker = CircuitBreaker(
+    config.LLM_CIRCUIT_FAILURE_THRESHOLD,
+    config.LLM_CIRCUIT_COOLDOWN_SECONDS,
+)
+
+
+def _fallback_is_allowed() -> bool:
+    return bool(
+        config.ALLOW_OFFSHORE_LLM_FALLBACK
+        and config.DATA_CLASSIFICATION in config.LLM_FALLBACK_ALLOWED_CLASSIFICATIONS
+        and config.LLM_FALLBACK_BASE_URL
+        and config.LLM_FALLBACK_API_KEY
+        and config.LLM_FALLBACK_MODEL
+    )
+
+
+_fallback_client = (
+    OpenAI(
+        api_key=config.LLM_FALLBACK_API_KEY,
+        base_url=config.LLM_FALLBACK_BASE_URL,
+        timeout=config.LLM_TIMEOUT_SECONDS,
+        max_retries=config.LLM_MAX_RETRIES,
+    )
+    if _fallback_is_allowed()
+    else None
+)
+
+
+def _kwargs_for_model(kwargs: dict, model: str) -> dict:
+    """Adapt common generation controls for reasoning-model endpoints."""
+    adapted = dict(kwargs)
+    adapted["model"] = model
+    normalized = model.lower()
+    if normalized.startswith(("gpt-5", "o1", "o3", "o4")):
+        if "max_tokens" in adapted:
+            adapted["max_completion_tokens"] = adapted.pop("max_tokens")
+        adapted.pop("temperature", None)
+    return adapted
+
+
+def _create_completion(kwargs: dict):
+    """Return (response, actual_model, actual_base_url, provider_route)."""
+    fallback = None
+    if _fallback_client is not None:
+        fallback_kwargs = _kwargs_for_model(kwargs, config.LLM_FALLBACK_MODEL)
+        fallback = lambda: _fallback_client.chat.completions.create(**fallback_kwargs)
+    try:
+        response, route = execute_with_fallback(
+            lambda: _client.chat.completions.create(**kwargs),
+            _primary_breaker,
+            fallback,
+        )
+    except Exception:
+        LLM_PROVIDER_EVENTS.labels(provider="primary", outcome="error").inc()
+        raise
+    if route == "fallback":
+        LLM_PROVIDER_EVENTS.labels(provider="primary", outcome="bypassed").inc()
+        LLM_PROVIDER_EVENTS.labels(provider="fallback", outcome="ok").inc()
+        return (
+            response,
+            config.LLM_FALLBACK_MODEL,
+            config.LLM_FALLBACK_BASE_URL,
+            route,
+        )
+    LLM_PROVIDER_EVENTS.labels(provider="primary", outcome="ok").inc()
+    return response, config.LLM_MODEL, config.LLM_BASE_URL, route
 
 
 def _trace_to_langfuse(
@@ -38,6 +113,9 @@ def _trace_to_langfuse(
     messages: list[dict],
     resp,
     duration_ms: int,
+    model: str,
+    base_url: str,
+    provider_route: str,
 ) -> None:
     """Push one LLM call as an independent Langfuse generation (v4 API). No-op if not configured.
 
@@ -45,7 +123,10 @@ def _trace_to_langfuse(
     each LLM call gets its own trace record in Langfuse, rather than nesting all
     calls from one HTTP request under a single shared OTel context/trace.
     """
-    if _langfuse is None:
+    if _langfuse is None or (
+        os.getenv("PYTEST_CURRENT_TEST")
+        and os.getenv("LANGFUSE_TRACE_TESTS", "false").lower() != "true"
+    ):
         return
     try:
         usage = getattr(resp, "usage", None)
@@ -56,15 +137,21 @@ def _trace_to_langfuse(
         obs = _langfuse.start_observation(
             as_type="generation",
             name=handler,
-            model=config.LLM_MODEL,
-            input=messages,
-            output=output,
+            model=model,
+            input=redact_pii(messages),
+            output=redact_text(output),
             usage_details={
                 "input": getattr(usage, "prompt_tokens", None),
                 "output": getattr(usage, "completion_tokens", None),
                 "total": getattr(usage, "total_tokens", None),
             } if usage else None,
-            metadata={"duration_ms": duration_ms, "base_url": config.LLM_BASE_URL},
+            metadata={
+                "duration_ms": duration_ms,
+                "base_url": base_url,
+                "provider_route": provider_route,
+                "data_classification": config.DATA_CLASSIFICATION,
+                "request_id": get_request_id(),
+            },
         )
         obs.end()
         _langfuse.flush()
@@ -72,17 +159,17 @@ def _trace_to_langfuse(
         print(f"[llm] Langfuse trace push failed: {_e}")
 
 
-def _record_metrics(resp, duration_s: float, handler: str) -> None:
+def _record_metrics(resp, duration_s: float, handler: str, model: str) -> None:
     """Prometheus counters for every LLM call (Phase 0 B4)."""
     try:
         content = resp.choices[0].message.content or ""
         outcome = "ok" if (content or resp.choices[0].message.tool_calls) else "empty"
-        LLM_CALLS.labels(model=config.LLM_MODEL, handler=handler, outcome=outcome).inc()
+        LLM_CALLS.labels(model=model, handler=handler, outcome=outcome).inc()
         SESSION_COST.observe(duration_s)
         if getattr(resp, "usage", None):
-            LLM_TOKENS.labels(model=config.LLM_MODEL, direction="prompt").inc(
+            LLM_TOKENS.labels(model=model, direction="prompt").inc(
                 resp.usage.prompt_tokens or 0)
-            LLM_TOKENS.labels(model=config.LLM_MODEL, direction="completion").inc(
+            LLM_TOKENS.labels(model=model, direction="completion").inc(
                 resp.usage.completion_tokens or 0)
     except Exception:
         pass  # metrics must never break the request path
@@ -98,7 +185,7 @@ def _dbg_input(messages: list[dict], call_id: str) -> None:
     print(f"\033[36m[LLM_INPUT] call_id={call_id}  messages={len(messages)}\033[0m", flush=True)
     for i, m in enumerate(messages):
         role = m.get("role", "?")
-        content = m.get("content") or ""
+        content = redact_text(m.get("content") or "")
         tc = m.get("tool_calls")
         if tc:
             print(f"\033[36m  [{i}] {role}: <tool_calls: {[t['function']['name'] for t in tc]}>\033[0m", flush=True)
@@ -115,10 +202,11 @@ def _dbg_output(content: str, tool_calls: list, call_id: str, duration_ms: int) 
     print(f"\033[32m[LLM_OUTPUT] call_id={call_id}  duration={duration_ms}ms\033[0m", flush=True)
     if tool_calls:
         for tc in tool_calls:
-            args_preview = tc.function.arguments[:500] if tc.function.arguments else ""
+            args_preview = redact_text(tc.function.arguments[:500]) if tc.function.arguments else ""
             print(f"\033[32m  TOOL_CALL: {tc.function.name}({args_preview})\033[0m", flush=True)
     if content:
-        preview = content if len(content) <= 3000 else content[:3000] + "\n…[truncated]"
+        safe_content = redact_text(content)
+        preview = safe_content if len(safe_content) <= 3000 else safe_content[:3000] + "\n…[truncated]"
         print(f"\033[32m  CONTENT:\033[0m\n{preview}", flush=True)
     print(f"\033[32m{_SEP}\033[0m\n", flush=True)
 
@@ -168,10 +256,12 @@ def chat_completion(messages: list[dict], tools: list[dict] | None = None) -> ob
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
     t0 = _time.time()
-    resp = _client.chat.completions.create(**kwargs)
+    resp, model, base_url, route = _create_completion(kwargs)
     dur = int((_time.time() - t0) * 1000)
-    _record_metrics(resp, dur / 1000, handler="chat_completion")
-    _trace_to_langfuse("chat_completion", messages, resp, dur)
+    _record_metrics(resp, dur / 1000, handler="chat_completion", model=model)
+    _trace_to_langfuse(
+        "chat_completion", messages, resp, dur, model, base_url, route
+    )
     msg = resp.choices[0].message
     _dbg_output(msg.content or "", msg.tool_calls or [], call_id, dur)
     return resp
@@ -194,10 +284,12 @@ def force_text_completion(messages: list[dict], tools: list[dict] | None = None)
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "none"   # Force text — no tool calls allowed
     t0 = _time.time()
-    resp = _client.chat.completions.create(**kwargs)
+    resp, model, base_url, route = _create_completion(kwargs)
     dur = int((_time.time() - t0) * 1000)
-    _record_metrics(resp, dur / 1000, handler="force_text")
-    _trace_to_langfuse("force_text_completion", messages, resp, dur)
+    _record_metrics(resp, dur / 1000, handler="force_text", model=model)
+    _trace_to_langfuse(
+        "force_text_completion", messages, resp, dur, model, base_url, route
+    )
     msg = resp.choices[0].message
     _dbg_output(msg.content or "", [], call_id, dur)
     return resp

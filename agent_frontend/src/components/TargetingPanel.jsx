@@ -2,8 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { ChevronDown, ChevronUp, Target, MapPin, Users, Smartphone, Tag, GraduationCap, Briefcase, DollarSign, Heart, Baby, Cloud, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+const ADVANCED_TARGETING_KEYS = [
+  'marital', 'parental', 'education', 'income', 'career', 'interest', 'weather',
+]
+
 // ─── Fetch & cache targeting options from the real API ───────────────────────
-const TARGETING_API = 'https://api.pawgrammers.io.vn/api/targeting/options'
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'https://api.pawgrammers.io.vn').replace(/\/$/, '')
+const TARGETING_API = `${BACKEND_URL}/api/targeting/options`
 let _optionsCache = null
 async function fetchTargetingOptions() {
   if (_optionsCache) return _optionsCache
@@ -42,13 +47,13 @@ function SectionHeader({ icon: Icon, label, color = 'slate' }) {
   return (
     <div className={`flex items-center gap-1.5 mb-2 mt-3 first:mt-0`}>
       <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${colors[color] || 'text-slate-500'}`} />
-      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
+      <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">{label}</span>
     </div>
   )
 }
 
 // ─── Multi-toggle chip row ─────────────────────────────────────────────────────
-function ChipRow({ options, selected = [], onChange, compact = false }) {
+function ChipRow({ options, selected = [], onChange, compact = false, dimension = '' }) {
   return (
     <div className="flex flex-wrap gap-1">
       {options.map(opt => {
@@ -57,6 +62,10 @@ function ChipRow({ options, selected = [], onChange, compact = false }) {
           <button
             key={opt}
             onClick={() => onChange(toggleValue(selected, opt))}
+            data-demo="autopilot-targeting-option"
+            data-targeting-dimension={dimension}
+            data-targeting-value={opt}
+            aria-pressed={active}
             className={cn(
               'px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all duration-100',
               active
@@ -114,7 +123,7 @@ function LocationPicker({ geoOptions, selected = [], onChange }) {
       </div>
       {/* Right: selected locations */}
       <div className="w-36 border border-slate-200 rounded-lg flex flex-col">
-        <div className="px-2 py-1 border-b border-slate-100 text-[10px] font-semibold text-slate-500">Đã chọn</div>
+        <div className="px-2 py-1 border-b border-slate-100 text-[10px] font-semibold text-slate-600">Đã chọn</div>
         <div className="overflow-y-auto flex-1 p-1">
           {selected.length === 0 ? (
             <p className="text-[10px] text-slate-400 text-center mt-3">Chưa chọn</p>
@@ -142,10 +151,24 @@ function countSelected(targeting) {
 }
 
 // ─── Main TargetingForm ───────────────────────────────────────────────────────
-export default function TargetingForm({ targeting = {}, onChange }) {
-  const [expanded, setExpanded] = useState(false)
+export default function TargetingForm({ targeting = {}, onChange, autoExpand = false }) {
+  const [expanded, setExpanded] = useState(autoExpand)
   const [opts, setOpts] = useState(null)
-  const [advExpanded, setAdvExpanded] = useState(false)
+  const hasAdvancedSelection = ADVANCED_TARGETING_KEYS.some(
+    key => Array.isArray(targeting[key]) && targeting[key].length > 0
+  )
+  const [advExpanded, setAdvExpanded] = useState(hasAdvancedSelection)
+
+  // Autopilot opens AudienceStep for both audience and targeting repairs.
+  // When the user explicitly chose "Chỉnh targeting", reveal the controls
+  // immediately so they do not have to discover the collapsed panel first.
+  useEffect(() => {
+    if (autoExpand) setExpanded(true)
+  }, [autoExpand])
+
+  useEffect(() => {
+    if (hasAdvancedSelection) setAdvExpanded(true)
+  }, [hasAdvancedSelection])
 
   // Load options once
   useEffect(() => {
@@ -224,19 +247,19 @@ export default function TargetingForm({ targeting = {}, onChange }) {
 
               {/* Age */}
               <SectionHeader icon={Users} label="Độ tuổi" />
-              <ChipRow options={opts.age} selected={get('age')} onChange={v => set('age', v)} />
+              <ChipRow dimension="age" options={opts.age} selected={get('age')} onChange={v => set('age', v)} />
 
               {/* Gender */}
               <SectionHeader icon={Users} label="Giới tính" />
-              <ChipRow options={opts.gender} selected={get('gender')} onChange={v => set('gender', v)} />
+              <ChipRow dimension="gender" options={opts.gender} selected={get('gender')} onChange={v => set('gender', v)} />
 
               {/* Device OS */}
               <SectionHeader icon={Smartphone} label="Device OS" />
-              <ChipRow options={opts.deviceOS} selected={get('deviceOS')} onChange={v => set('deviceOS', v)} />
+              <ChipRow dimension="deviceOS" options={opts.deviceOS} selected={get('deviceOS')} onChange={v => set('deviceOS', v)} />
 
               {/* Device Brand */}
               <SectionHeader icon={Smartphone} label="Device Brand" />
-              <ChipRow options={opts.deviceBrand} selected={get('deviceBrand')} onChange={v => set('deviceBrand', v)} compact />
+              <ChipRow dimension="deviceBrand" options={opts.deviceBrand} selected={get('deviceBrand')} onChange={v => set('deviceBrand', v)} compact />
 
               {/* ── ADVANCED TARGETING ───────────────────────────── */}
               <button
@@ -253,25 +276,25 @@ export default function TargetingForm({ targeting = {}, onChange }) {
               {advExpanded && (
                 <>
                   <SectionHeader icon={Heart} label="Tình trạng hôn nhân" />
-                  <ChipRow options={opts.marital} selected={get('marital')} onChange={v => set('marital', v)} />
+                  <ChipRow dimension="marital" options={opts.marital} selected={get('marital')} onChange={v => set('marital', v)} />
 
                   <SectionHeader icon={Baby} label="Tình trạng con cái" />
-                  <ChipRow options={opts.parental} selected={get('parental')} onChange={v => set('parental', v)} compact />
+                  <ChipRow dimension="parental" options={opts.parental} selected={get('parental')} onChange={v => set('parental', v)} compact />
 
                   <SectionHeader icon={GraduationCap} label="Học vấn" />
-                  <ChipRow options={opts.education} selected={get('education')} onChange={v => set('education', v)} />
+                  <ChipRow dimension="education" options={opts.education} selected={get('education')} onChange={v => set('education', v)} />
 
                   <SectionHeader icon={DollarSign} label="Thu nhập" />
-                  <ChipRow options={opts.income} selected={get('income')} onChange={v => set('income', v)} compact />
+                  <ChipRow dimension="income" options={opts.income} selected={get('income')} onChange={v => set('income', v)} compact />
 
                   <SectionHeader icon={Briefcase} label="Nghề nghiệp" />
-                  <ChipRow options={opts.career} selected={get('career')} onChange={v => set('career', v)} compact />
+                  <ChipRow dimension="career" options={opts.career} selected={get('career')} onChange={v => set('career', v)} compact />
 
                   <SectionHeader icon={Tag} label="Sở thích" />
-                  <ChipRow options={opts.interest} selected={get('interest')} onChange={v => set('interest', v)} compact />
+                  <ChipRow dimension="interest" options={opts.interest} selected={get('interest')} onChange={v => set('interest', v)} compact />
 
                   <SectionHeader icon={Cloud} label="Thời tiết" />
-                  <ChipRow options={opts.weather} selected={get('weather')} onChange={v => set('weather', v)} />
+                  <ChipRow dimension="weather" options={opts.weather} selected={get('weather')} onChange={v => set('weather', v)} />
                 </>
               )}
             </>

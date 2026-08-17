@@ -1,0 +1,12 @@
+[
+  {"id":"family-synonym","brief":{"brand":"FirstSteps","notes":"Sản phẩm hỗ trợ giấc ngủ và phát triển giai đoạn đầu đời cho em bé"},"audience":[],"expected_topic":"family_parenting","expect_semantic":true},
+  {"id":"automotive-synonym","brief":{"brand":"ChargeFlow","notes":"Giải pháp sạc pin và phương tiện không phát thải cho đô thị"},"audience":[],"expected_topic":"automotive_mobility","expect_semantic":true},
+  {"id":"travel-synonym","brief":{"brand":"WeekendAway","notes":"Kỳ nghỉ ven biển và nơi ở cuối tuần cho các cặp đôi"},"audience":[],"expected_topic":"travel_hospitality","expect_semantic":true},
+  {"id":"pets-synonym","brief":{"brand":"CompanionCare","notes":"Dinh dưỡng cao cấp cho người bạn bốn chân trong gia đình"},"audience":[],"expected_topic":"pets_animals","expect_semantic":true},
+  {"id":"books-synonym","brief":{"brand":"LongRead","notes":"Thiết bị đọc nội dung dài và kho truyện chữ cho người ham học"},"audience":[],"expected_topic":"books_reading","expect_semantic":true},
+  {"id":"shopping-synonym","brief":{"brand":"DealDay","notes":"Ngày hội săn deal, nhận hàng tận cửa và thanh toán tiện lợi"},"audience":[],"expected_topic":"shopping_ecommerce","expect_semantic":true},
+  {"id":"music-synonym","brief":{"brand":"Backstage","notes":"Trải nghiệm sân khấu trực tiếp cùng nghệ sĩ và cộng đồng người hâm mộ"},"audience":[],"expected_topic":"music_live_events","expect_semantic":true},
+  {"id":"property-synonym","brief":{"brand":"SmartSpace","notes":"Không gian sống thông minh và thiết kế căn hộ cho gia đình trẻ"},"audience":[],"expected_topic":"home_property_architecture","expect_semantic":true},
+  {"id":"business-synonym","brief":{"brand":"CashPilot","notes":"Công cụ quản lý dòng tiền và vận hành dành cho chủ cửa hàng"},"audience":[],"expected_topic":"business_finance","expect_semantic":true},
+  {"id":"arts-synonym","brief":{"brand":"MakeStory","notes":"Bộ dụng cụ ghi lại khoảnh khắc và tạo tác phẩm thủ công"},"audience":[],"expected_topic":"arts_crafts_photography","expect_semantic":true}
+]

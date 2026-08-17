@@ -1,0 +1,45 @@
+groups:
+  - name: advertising-agent-slos
+    rules:
+      - alert: AgentAvailabilityBelowSLO
+        expr: |
+          (
+            (sum(rate(http_requests_total{status=~"5.."}[15m])) or vector(0))
+            /
+            clamp_min((sum(rate(http_requests_total[15m])) or vector(0)), 0.001)
+          ) > 0.005
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: Advertising Agent non-5xx availability is below 99.5%
+      - alert: AgentChatP95High
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (
+              rate(http_request_duration_seconds_bucket{handler=~".*chat.*"}[10m])
+            )
+          ) > 8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Advertising Agent chat p95 exceeds 8 seconds
+      - alert: AgentHardFallbackRateHigh
+        expr: |
+          (sum(rate(agent_fallback_level_total{level="3"}[15m])) or vector(0))
+          /
+          clamp_min((sum(rate(agent_tool_calls_total[15m])) or vector(0)), 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hardcoded fallback rate exceeds 2%
+      - alert: AgentPrimaryModelUnavailable
+        expr: sum(increase(agent_llm_provider_events_total{provider=~"primary|openai|openai_zalo",outcome=~"error|bypassed"}[10m])) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Primary model provider is failing or bypassed

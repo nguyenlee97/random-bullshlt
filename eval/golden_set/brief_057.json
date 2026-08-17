@@ -18,19 +18,17 @@
         "6a2df27adda0ba67f14c70e3"
       ],
       "acceptable": [
-        "6a2df27adda0ba67f14c716a",
-        "6a48cc2381574c48dbd22c78"
+        "6a48cc2381574c48dbd22be1",
+        "6a48cc2381574c48dbd22be6"
       ],
-      "must_exclude": [
-        "6a2df27adda0ba67f14c70da"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Classic alcohol-ad must_not_set=Under 18 case per the guide's own example; age/gender expected follow the stated 25-45 male audience. must_exclude=Parenting mirrors brief_001's brand-safety reasoning (keep alcohol ads away from family/kids content).",
+    "labeler_note": "Classic alcohol-ad must_not_set=Under 18 case per the guide's own example; age/gender expected follow the stated 25-45 male audience. must_exclude=Parenting mirrors brief_001's brand-safety reasoning (keep alcohol ads away from family/kids content).\n\nHuman review 2026-07-16: accepted and applied the independent audit. Alcohol and beer fit. Sports/soccer are not in this summer brief, and Parenting targets adults rather than minors; age safety belongs in targeting.must_not_set.",
     "targeting": {
       "expected": {
         "age": [

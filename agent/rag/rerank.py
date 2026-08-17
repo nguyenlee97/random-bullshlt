@@ -10,6 +10,7 @@ Audience step ⛔). Configure RERANK_URL + RERANK_MODEL in .env.
 import httpx
 
 from config import config
+from metrics import RAG_RERANK
 
 _client = httpx.AsyncClient(timeout=15.0)
 
@@ -17,6 +18,7 @@ _client = httpx.AsyncClient(timeout=15.0)
 async def rerank(query: str, documents: list[str]) -> list[int] | None:
     """Returns document indices sorted best-first, or None to skip reranking."""
     if not config.RERANK_URL or not config.RERANK_MODEL or not documents:
+        RAG_RERANK.labels(outcome="disabled").inc()
         return None
     try:
         resp = await _client.post(
@@ -37,6 +39,8 @@ async def rerank(query: str, documents: list[str]) -> list[int] | None:
                      for i, r in enumerate(data["data"])]
         else:
             return None
+        RAG_RERANK.labels(outcome="ok").inc()
         return [i for i, _ in sorted(pairs, key=lambda p: -p[1])]
     except Exception:
+        RAG_RERANK.labels(outcome="error").inc()
         return None

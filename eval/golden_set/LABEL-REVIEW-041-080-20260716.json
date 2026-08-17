@@ -1,0 +1,515 @@
+{
+  "schema_version": 1,
+  "review_type": "independent_ai_label_review",
+  "reviewer": "OpenAI Codex",
+  "reviewed_at": "2026-07-16",
+  "human_sign_off": false,
+  "notice": "INDEPENDENT AI REVIEW ONLY. This artifact is not human approval and must not update v2_review_status.json.",
+  "scope": {
+    "briefs": "brief_041.json through brief_080.json",
+    "catalog": "eval/golden_set/catalog_full.json",
+    "catalog_records": 310,
+    "rules": [
+      "eval/golden_set/AUTHORING-GUIDE.md",
+      "eval/golden_set/README.md",
+      "eval/golden_set/validate.py",
+      "docs/production-plan/07-eval-framework.md"
+    ],
+    "coverage": "100% must_include, acceptable, and must_exclude labels"
+  },
+  "summary": {
+    "total": 40,
+    "PASS": 12,
+    "CHANGE_RECOMMENDED": 22,
+    "CATALOG_GAP": 6,
+    "invalid_catalog_ids": 0,
+    "prompt_injection_cases_reviewed": 3
+  },
+  "validator": {
+    "command": "python eval/golden_set/validate.py",
+    "exit_code": 0,
+    "result": "PASS: all 80 briefs valid; every audience _id exists in the 310-segment catalog; stratification and v2 quotas pass",
+    "labels_modified_before_validation": false
+  },
+  "cases": [
+    {
+      "id": "brief_041", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Core banking labels fit. Investment is unsupported, and Golf is an unsafe demographic proxy rather than an actively wrong audience.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22bcb", "Credit cards (credit & lending)", "KEEP"], ["6a48cc2381574c48dbd22bbd", "Online banking (banking)", "KEEP"], ["6a48cc2381574c48dbd22bbe", "Retail banking (banking)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c7088", "Personal finance (banking)", "KEEP"], ["6a2df27adda0ba67f14c708b", "Investment (business & finance)", "REMOVE"], ["6a2df27adda0ba67f14c715f", "Online shopping (retail)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c7171", "Golf (sport)", "REPLACE"]]
+      },
+      "proposed_changes": [
+        {"op": "remove", "bucket": "acceptable", "_id": "6a2df27adda0ba67f14c708b", "fullLabel": "Investment (business & finance)"},
+        {"op": "replace", "bucket": "must_exclude", "from": {"_id": "6a2df27adda0ba67f14c7171", "fullLabel": "Golf (sport)"}, "to": {"_id": "6a48cc2381574c48dbd22bbc", "fullLabel": "Investment banking (banking)"}, "reason": "Institutional banking is a defensible consumer-card near miss; Golf is not."}
+      ]
+    },
+    {
+      "id": "brief_042", "status": "CATALOG_GAP", "confidence": "high", "prompt_injection": "none",
+      "assessment": "The catalog cannot distinguish retail investors from SME owners seeking capital. Excluding broad Investment can remove valid SME prospects, while Investment banking is too institutional for must_include.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22bbb", "Small business (business & finance)", "KEEP"], ["6a48cc2381574c48dbd22bb7", "Management (business & finance)", "KEEP"], ["6a48cc2381574c48dbd22bbc", "Investment banking (banking)", "MOVE_TO_ACCEPTABLE"]],
+        "acceptable": [["6a2df27adda0ba67f14c706d", "Entrepreneurship (business & finance)", "MOVE_TO_MUST_INCLUDE"], ["6a48cc2381574c48dbd22bb2", "Business (business & finance)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c708b", "Investment (business & finance)", "REMOVE_NO_PRECISE_REPLACEMENT"]]
+      },
+      "proposed_changes": [
+        {"op": "move", "from_bucket": "acceptable", "to_bucket": "must_include", "_id": "6a2df27adda0ba67f14c706d", "fullLabel": "Entrepreneurship (business & finance)"},
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22bbc", "fullLabel": "Investment banking (banking)"},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a2df27adda0ba67f14c708b", "fullLabel": "Investment (business & finance)"}
+      ],
+      "catalog_gap": "Add a retail/personal investor segment distinct from SME owners, corporate finance, and institutional investment banking."
+    },
+    {
+      "id": "brief_043", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "All positive labels are defensible. Engineering is merely unrelated and may include legitimate technical SME buyers; it is not a valid must_exclude.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22bc8", "Web design (websites)", "KEEP"], ["6a48cc2381574c48dbd22bc9", "Web development (websites)", "KEEP"], ["6a48cc2381574c48dbd22bca", "Web hosting (computing)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22bc6", "Search engine optimization (software", "KEEP"], ["6a48cc2381574c48dbd22bc3", "Online (computing)", "KEEP"], ["6a2df27adda0ba67f14c7083", "Social media (online media)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22bb5", "Engineering (science)", "REMOVE"]]
+      },
+      "proposed_changes": [{"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22bb5", "fullLabel": "Engineering (science)", "reason": "Do not invent a replacement solely to satisfy the 1-item lower bound."}]
+    },
+    {
+      "id": "brief_044", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "The SaaS and marketing positives fit. Retail businesses are a valid subset of small-business marketers, so Retail (industry) must not be excluded.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22bc5", "Online advertising (marketing)", "KEEP"], ["6a48cc2381574c48dbd22bc4", "Email marketing (marketing)", "KEEP"], ["6a48cc2381574c48dbd22bc7", "Social media marketing (marketing)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c7070", "Marketing (business & finance)", "KEEP"], ["6a2df27adda0ba67f14c707f", "Digital marketing (marketing)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22bb8", "Retail (industry)", "REMOVE"]]
+      },
+      "proposed_changes": [{"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22bb8", "fullLabel": "Retail (industry)"}]
+    },
+    {
+      "id": "brief_045", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Korean cuisine, barbecue, seafood, dining adjacencies, and the vegetarian positioning conflict are all defensible.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c1e", "Korean cuisine (food & drink)", "KEEP"], ["6a48cc2381574c48dbd22c26", "Barbecue (cooking)", "KEEP"], ["6a48cc2381574c48dbd22c2a", "Seafood (food & drink)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c7108", "Restaurants (dining)", "KEEP"], ["6a2df27adda0ba67f14c7109", "Coffeehouses (coffee)", "KEEP_WEAK_BUT_DEFENSIBLE"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c2b", "Vegetarianism (diets)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_046", "status": "CHANGE_RECOMMENDED", "confidence": "medium", "prompt_injection": "none",
+      "assessment": "Italian cuisine, pizza, wine, food and diner labels fit. Thai cuisine is only an unrelated cuisine and does not meet the actively-wrong must_exclude threshold.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c1d", "Italian cuisine (food & drink)", "KEEP"], ["6a48cc2381574c48dbd22c29", "Pizza (food & drink)", "KEEP"], ["6a48cc2381574c48dbd22c10", "Wine (alcoholic drinks)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22c25", "Food (food & drink)", "KEEP"], ["6a48cc2381574c48dbd22c2c", "Diners (restaurant)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c23", "Thai cuisine (food & drink)", "REMOVE"]]
+      },
+      "proposed_changes": [{"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22c23", "fullLabel": "Thai cuisine (food & drink)"}]
+    },
+    {
+      "id": "brief_047", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Core camera/audio labels fit. GPS devices are unsupported; Home Appliances is harmlessly unrelated, not an active exclusion.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c92", "Cameras (photography)", "KEEP"], ["6a48cc2381574c48dbd22c91", "Camcorders (consumer electronics)", "KEEP"], ["6a48cc2381574c48dbd22c90", "Audio equipment (electronics)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c7117", "Photography (visual art)", "KEEP"], ["6a48cc2381574c48dbd22c94", "GPS devices (consumer electronics)", "REPLACE"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c3e", "Home Appliances (consumer electronics)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a48cc2381574c48dbd22c94", "fullLabel": "GPS devices (consumer electronics)"}, "to": {"_id": "6a48cc2381574c48dbd22c4c", "fullLabel": "Travel (travel & tourism)"}, "reason": "Travel photography is stated explicitly."},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22c3e", "fullLabel": "Home Appliances (consumer electronics)"}
+      ]
+    },
+    {
+      "id": "brief_048", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Hardware components, desktop/computer interests, and the tablet consumption-device near miss are coherent with a custom gaming-PC buyer.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c87", "Computer processors (computer hardware)", "KEEP"], ["6a48cc2381574c48dbd22c85", "Computer memory (computer hardware)", "KEEP"], ["6a48cc2381574c48dbd22c8b", "Hard drives (computer hardware)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22c89", "Desktop computers (consumer electronics)", "KEEP"], ["6a48cc2381574c48dbd22c84", "Computers (computers & electronics)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c8e", "Tablet computers (computers & electronics)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_049", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Running was demoted despite being the product's central audience, apparently to preserve full_catalog_only. Swimming is only a triathlon adjacency; Camping and Baseball are unsupported. This is the clearest quota-gaming risk.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c7d", "Marathons (running event)", "KEEP"], ["6a48cc2381574c48dbd22c82", "Triathlons (athletics)", "MOVE_TO_ACCEPTABLE"], ["6a48cc2381574c48dbd22c80", "Swimming (water sport)", "MOVE_TO_ACCEPTABLE"]],
+        "acceptable": [["6a2df27adda0ba67f14c70df", "Running (sport)", "MOVE_TO_MUST_INCLUDE"], ["6a2df27adda0ba67f14c7164", "Camping (outdoors activities)", "REMOVE"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c7a", "Baseball (sport)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "move", "from_bucket": "acceptable", "to_bucket": "must_include", "_id": "6a2df27adda0ba67f14c70df", "fullLabel": "Running (sport)"},
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22c82", "fullLabel": "Triathlons (athletics)"},
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22c80", "fullLabel": "Swimming (water sport)"},
+        {"op": "remove", "bucket": "acceptable", "_id": "6a2df27adda0ba67f14c7164", "fullLabel": "Camping (outdoors activities)"},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22c7a", "fullLabel": "Baseball (sport)"},
+        {"op": "remove_tag", "tag": "full_catalog_only", "reason": "Correct must_include contains an old-catalog Running segment."}
+      ]
+    },
+    {
+      "id": "brief_050", "status": "CHANGE_RECOMMENDED", "confidence": "medium", "prompt_injection": "none",
+      "assessment": "Expats and American/college football fit. Soccer, basketball and the baseball exclusion are not stated; generic sports-bar occasion labels are safer.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c9d", "Expats", "KEEP"], ["6a48cc2381574c48dbd22c77", "American football (sport)", "KEEP"], ["6a48cc2381574c48dbd22c7c", "College football (college sports)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22c78", "Association football (Soccer)", "REPLACE"], ["6a48cc2381574c48dbd22c7b", "Basketball (sport)", "REPLACE"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c7a", "Baseball (sport)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a48cc2381574c48dbd22c78", "fullLabel": "Association football (Soccer)"}, "to": {"_id": "6a2df27adda0ba67f14c716a", "fullLabel": "Sports (sports)"}},
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a48cc2381574c48dbd22c7b", "fullLabel": "Basketball (sport)"}, "to": {"_id": "6a48cc2381574c48dbd22be1", "fullLabel": "Bars (bars, clubs & nightlife)"}},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22c7a", "fullLabel": "Baseball (sport)"}
+      ]
+    },
+    {
+      "id": "brief_051", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "The brief sells jewelry and handbags, not sunglasses. Luxury goods is a stronger must_include; Toys is merely unrelated.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c69", "Jewelry (apparel)", "KEEP"], ["6a48cc2381574c48dbd22c68", "Handbags (accessories)", "KEEP"], ["6a48cc2381574c48dbd22c6a", "Sunglasses (eyewear)", "MOVE_TO_ACCEPTABLE"]],
+        "acceptable": [["6a2df27adda0ba67f14c7149", "Beauty (social concept)", "KEEP"], ["6a2df27adda0ba67f14c7150", "Clothing (apparel)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c6f", "Toys", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22c6a", "fullLabel": "Sunglasses (eyewear)"},
+        {"op": "add", "bucket": "must_include", "_id": "6a48cc2381574c48dbd22c6d", "fullLabel": "Luxury goods (retail)"},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22c6f", "fullLabel": "Toys"}
+      ]
+    },
+    {
+      "id": "brief_052", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "SUVs and trucks directly match the inventory; RVs/automobiles are defensible adjacencies and scooters are a materially different vehicle tier.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c5e", "SUVs (vehicles)", "KEEP"], ["6a48cc2381574c48dbd22c5f", "Trucks (vehicles)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22c5c", "RVs (vehicle)", "KEEP"], ["6a2df27adda0ba67f14c713f", "Automobiles (vehicles)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c5d", "Scooters (vehicle)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_053", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "The exotic-pet species map directly, fish/pet food are defensible, and Cats is explicitly excluded by the brief.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c45", "Reptiles (animals)", "KEEP"], ["6a48cc2381574c48dbd22c44", "Rabbits (animals)", "KEEP"], ["6a48cc2381574c48dbd22c40", "Birds (animals)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22c41", "Fish (animals)", "KEEP"], ["6a48cc2381574c48dbd22c43", "Pet food (pet supplies)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c7123", "Cats (animals)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_054", "status": "CHANGE_RECOMMENDED", "confidence": "medium", "prompt_injection": "none",
+      "assessment": "Renovation positives fit. Real-estate interest can include existing property owners and is not explicitly excluded, so it is unsafe as must_exclude.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c3f", "Home improvement (home & garden)", "KEEP"], ["6a48cc2381574c48dbd22c3c", "Do it yourself (DIY)", "KEEP"], ["6a48cc2381574c48dbd22c3d", "Gardening (outdoor activities)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22c3e", "Home Appliances (consumer electronics)", "KEEP"], ["6a2df27adda0ba67f14c711d", "Furniture (home furnishings)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c7071", "Real estate (industry)", "REMOVE"]]
+      },
+      "proposed_changes": [{"op": "remove", "bucket": "must_exclude", "_id": "6a2df27adda0ba67f14c7071", "fullLabel": "Real estate (industry)"}]
+    },
+    {
+      "id": "brief_055", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Board games is the exact central label but was omitted from must_include, apparently to preserve full_catalog_only. Digital puzzle games are not a good substitute; Coffeehouses is directly relevant.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22bd0", "Card games (games)", "KEEP"], ["6a48cc2381574c48dbd22bdd", "Strategy games (games)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22bd8", "Puzzle video games (video games)", "REPLACE"], ["6a48cc2381574c48dbd22bde", "Word games (games)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22bd1", "Casino games (gambling)", "KEEP"]]
+      },
+      "proposed_changes": [
+        {"op": "add", "bucket": "must_include", "_id": "6a2df27adda0ba67f14c708f", "fullLabel": "Board games (games)"},
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a48cc2381574c48dbd22bd8", "fullLabel": "Puzzle video games (video games)"}, "to": {"_id": "6a2df27adda0ba67f14c7109", "fullLabel": "Coffeehouses (coffee)"}},
+        {"op": "remove_tag", "tag": "full_catalog_only", "reason": "Correct must_include contains an old-catalog Board games segment."}
+      ]
+    },
+    {
+      "id": "brief_056", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "The positive skincare labels and targeting block fit. Men's clothing is not a male-demographic segment and must not proxy gender; the targeting gender exclusion already encodes the requirement.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c714b", "Cosmetics (personal care)", "KEEP"], ["6a2df27adda0ba67f14c7149", "Beauty (social concept)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22c60", "Beauty salons (cosmetics)", "KEEP"], ["6a2df27adda0ba67f14c714e", "Spas (personal care)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c7152", "Men's clothing (apparel)", "REMOVE"]]
+      },
+      "proposed_changes": [{"op": "remove", "bucket": "must_exclude", "_id": "6a2df27adda0ba67f14c7152", "fullLabel": "Men's clothing (apparel)", "reason": "Use targeting.must_not_set.gender=Male; no audience-label replacement is valid."}]
+    },
+    {
+      "id": "brief_057", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Alcohol and beer fit. Sports/soccer are not in this summer brief, and Parenting targets adults rather than minors; age safety belongs in targeting.must_not_set.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c70e2", "Alcoholic beverages (food & drink)", "KEEP"], ["6a2df27adda0ba67f14c70e3", "Beer (alcoholic drinks)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c716a", "Sports (sports)", "REPLACE"], ["6a48cc2381574c48dbd22c78", "Association football (Soccer)", "REPLACE"]],
+        "must_exclude": [["6a2df27adda0ba67f14c70da", "Parenting (children & parenting)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a2df27adda0ba67f14c716a", "fullLabel": "Sports (sports)"}, "to": {"_id": "6a48cc2381574c48dbd22be1", "fullLabel": "Bars (bars, clubs & nightlife)"}},
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a48cc2381574c48dbd22c78", "fullLabel": "Association football (Soccer)"}, "to": {"_id": "6a48cc2381574c48dbd22be6", "fullLabel": "Parties (event)"}},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a2df27adda0ba67f14c70da", "fullLabel": "Parenting (children & parenting)"}
+      ]
+    },
+    {
+      "id": "brief_058", "status": "CHANGE_RECOMMENDED", "confidence": "medium", "prompt_injection": "none",
+      "assessment": "Personal finance fits. Credit cards is an adjacent credit product, while online banking better represents an app-based borrower. Investment and luxury-interest labels are demographic/value proxies.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c7088", "Personal finance (banking)", "KEEP"], ["6a48cc2381574c48dbd22bcb", "Credit cards (credit & lending)", "MOVE_TO_ACCEPTABLE"]],
+        "acceptable": [["6a2df27adda0ba67f14c708b", "Investment (business & finance)", "REMOVE"], ["6a2df27adda0ba67f14c715f", "Online shopping (retail)", "REMOVE"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c6d", "Luxury goods (retail)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22bcb", "fullLabel": "Credit cards (credit & lending)"},
+        {"op": "add", "bucket": "must_include", "_id": "6a48cc2381574c48dbd22bbd", "fullLabel": "Online banking (banking)"},
+        {"op": "add", "bucket": "acceptable", "_id": "6a48cc2381574c48dbd22bbe", "fullLabel": "Retail banking (banking)"},
+        {"op": "remove", "bucket": "acceptable", "_id": "6a2df27adda0ba67f14c708b", "fullLabel": "Investment (business & finance)"},
+        {"op": "remove", "bucket": "acceptable", "_id": "6a2df27adda0ba67f14c715f", "fullLabel": "Online shopping (retail)"},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22c6d", "fullLabel": "Luxury goods (retail)"}
+      ]
+    },
+    {
+      "id": "brief_059", "status": "CATALOG_GAP", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Parent labels identify buyers, but the 310-segment catalog has no preschool/early-childhood education interest. Higher education is an education-level near miss, not an actively wrong parent audience.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c70da", "Parenting (children & parenting)", "KEEP"], ["6a48cc2381574c48dbd22c0b", "Motherhood (children & parenting)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c70d5", "Family (social concept)", "KEEP"], ["6a48cc2381574c48dbd22c08", "Fatherhood (children & parenting)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22bb6", "Higher education (education)", "REMOVE"]]
+      },
+      "proposed_changes": [{"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22bb6", "fullLabel": "Higher education (education)"}],
+      "catalog_gap": "Add Preschool, Early childhood education, or Parents of preschool applicants."
+    },
+    {
+      "id": "brief_060", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Electric vehicle and scooter are direct; motorcycles/vehicles are reasonable adjacencies; automobiles are the wrong form factor. Targeting values match the stated student cities.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c7141", "Electric vehicle (vehicle)", "KEEP"], ["6a48cc2381574c48dbd22c5d", "Scooters (vehicle)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c7144", "Motorcycles (vehicles)", "KEEP"], ["6a48cc2381574c48dbd22c58", "Vehicles (transportation)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c713f", "Automobiles (vehicles)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_061", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Real estate and investment fit; family/furniture are defensible. Online shopping is unrelated, not an actively wrong luxury-property prospect.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c7071", "Real estate (industry)", "KEEP"], ["6a2df27adda0ba67f14c708b", "Investment (business & finance)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c70d5", "Family (social concept)", "KEEP"], ["6a2df27adda0ba67f14c711d", "Furniture (home furnishings)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c715f", "Online shopping (retail)", "REMOVE"]]
+      },
+      "proposed_changes": [{"op": "remove", "bucket": "must_exclude", "_id": "6a2df27adda0ba67f14c715f", "fullLabel": "Online shopping (retail)"}]
+    },
+    {
+      "id": "brief_062", "status": "CATALOG_GAP", "confidence": "high", "prompt_injection": "none",
+      "assessment": "There is no dating or relationship-seeking segment. Nightclubs, online shopping and business are weak persona proxies. Marriage means wedding interest and can include engaged singles, so it is unsafe as an exclusion.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c7083", "Social media (online media)", "KEEP"], ["6a48cc2381574c48dbd22be5", "Nightclubs (bars, clubs & nightlife)", "MOVE_TO_ACCEPTABLE"]],
+        "acceptable": [["6a2df27adda0ba67f14c715f", "Online shopping (retail)", "REMOVE"], ["6a48cc2381574c48dbd22bb2", "Business (business & finance)", "REMOVE"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c0a", "Marriage (weddings)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "add", "bucket": "must_include", "_id": "6a48cc2381574c48dbd22c09", "fullLabel": "Friendship (relationships)"},
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22be5", "fullLabel": "Nightclubs (bars, clubs & nightlife)"},
+        {"op": "remove", "bucket": "acceptable", "_id": "6a2df27adda0ba67f14c715f", "fullLabel": "Online shopping (retail)"},
+        {"op": "remove", "bucket": "acceptable", "_id": "6a48cc2381574c48dbd22bb2", "fullLabel": "Business (business & finance)"},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22c0a", "fullLabel": "Marriage (weddings)"}
+      ],
+      "catalog_gap": "Add Dating, Online dating, or Relationship seeking; marital status should remain a targeting dimension, not an interest proxy."
+    },
+    {
+      "id": "brief_063", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Motherhood and parenting fit. Organic food is unsupported, while Fatherhood remains a legitimate buyer interest even when creative is mother-focused; gender preference belongs in targeting.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c0b", "Motherhood (children & parenting)", "KEEP"], ["6a2df27adda0ba67f14c70da", "Parenting (children & parenting)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c70d5", "Family (social concept)", "KEEP"], ["6a2df27adda0ba67f14c7103", "Organic food (food & drink)", "REPLACE"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c08", "Fatherhood (children & parenting)", "MOVE_TO_ACCEPTABLE"]]
+      },
+      "proposed_changes": [
+        {"op": "remove", "bucket": "acceptable", "_id": "6a2df27adda0ba67f14c7103", "fullLabel": "Organic food (food & drink)"},
+        {"op": "move", "from_bucket": "must_exclude", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22c08", "fullLabel": "Fatherhood (children & parenting)"}
+      ]
+    },
+    {
+      "id": "brief_064", "status": "CATALOG_GAP", "confidence": "high", "prompt_injection": "none",
+      "assessment": "A retention campaign should target existing members, which an interest catalog cannot represent. Investment is a wealth proxy and Swimming is merely unrelated; neither is defensible label truth.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c7171", "Golf (sport)", "KEEP_FOR_PROSPECTING_ONLY"], ["6a2df27adda0ba67f14c716a", "Sports (sports)", "KEEP_FOR_PROSPECTING_ONLY"]],
+        "acceptable": [["6a48cc2381574c48dbd22c70", "Outdoor recreation (outdoors activities)", "KEEP_FOR_PROSPECTING_ONLY"], ["6a2df27adda0ba67f14c708b", "Investment (business & finance)", "REMOVE"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c80", "Swimming (water sport)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "remove", "bucket": "acceptable", "_id": "6a2df27adda0ba67f14c708b", "fullLabel": "Investment (business & finance)"},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22c80", "fullLabel": "Swimming (water sport)"}
+      ],
+      "catalog_gap": "Use a first-party CRM/custom-audience segment for current club members; interest taxonomy alone cannot grade retention targeting."
+    },
+    {
+      "id": "brief_065", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Menswear, shoes, clothing/accessories and the children's-clothing product mismatch all follow the brief directly.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c7152", "Men's clothing (apparel)", "KEEP"], ["6a48cc2381574c48dbd22c65", "Shoes (footwear)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22c66", "Fashion accessories (accessories)", "KEEP"], ["6a2df27adda0ba67f14c7150", "Clothing (apparel)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c64", "Children's clothing (apparel)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_066", "status": "CATALOG_GAP", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Parenting and reading are defensible, but the catalog lacks primary education/English learning. Higher education is the wrong level and Video games is an overlapping child interest, not an active exclusion.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c70da", "Parenting (children & parenting)", "KEEP"], ["6a48cc2381574c48dbd22bfb", "Reading (communication)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22bb6", "Higher education (education)", "REPLACE"], ["6a2df27adda0ba67f14c70d5", "Family (social concept)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c709f", "Video games (gaming)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a48cc2381574c48dbd22bb6", "fullLabel": "Higher education (education)"}, "to": {"_id": "6a48cc2381574c48dbd22bfc", "fullLabel": "Books (publications)"}},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a2df27adda0ba67f14c709f", "fullLabel": "Video games (gaming)"}
+      ],
+      "catalog_gap": "Add English language learning, EdTech for children, or Primary education."
+    },
+    {
+      "id": "brief_067", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Wine is central; source country does not make French cuisine a required audience. Italian cuisine is unsupported, and Beer may overlap with adult alcohol enthusiasts rather than requiring exclusion.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c10", "Wine (alcoholic drinks)", "KEEP"], ["6a48cc2381574c48dbd22c19", "French cuisine (food & drink)", "MOVE_TO_ACCEPTABLE"]],
+        "acceptable": [["6a2df27adda0ba67f14c70e2", "Alcoholic beverages (food & drink)", "MOVE_TO_MUST_INCLUDE"], ["6a48cc2381574c48dbd22c1d", "Italian cuisine (food & drink)", "REPLACE"]],
+        "must_exclude": [["6a2df27adda0ba67f14c70e3", "Beer (alcoholic drinks)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "move", "from_bucket": "acceptable", "to_bucket": "must_include", "_id": "6a2df27adda0ba67f14c70e2", "fullLabel": "Alcoholic beverages (food & drink)"},
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22c19", "fullLabel": "French cuisine (food & drink)"},
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a48cc2381574c48dbd22c1d", "fullLabel": "Italian cuisine (food & drink)"}, "to": {"_id": "6a2df27adda0ba67f14c7108", "fullLabel": "Restaurants (dining)"}},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a2df27adda0ba67f14c70e3", "fullLabel": "Beer (alcoholic drinks)"}
+      ]
+    },
+    {
+      "id": "brief_068", "status": "CHANGE_RECOMMENDED", "confidence": "medium", "prompt_injection": "none",
+      "assessment": "Serious-lifting must_includes fit. Physical fitness fits the secondary group; Physical exercise is more defensible than Yoga. Swimming is merely unrelated.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c0e", "Weight training (weightlifting)", "KEEP"], ["6a48cc2381574c48dbd22c0c", "Bodybuilding (sport)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c70e1", "Yoga (fitness)", "REPLACE"], ["6a2df27adda0ba67f14c70de", "Physical fitness (fitness)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c80", "Swimming (water sport)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a2df27adda0ba67f14c70e1", "fullLabel": "Yoga (fitness)"}, "to": {"_id": "6a48cc2381574c48dbd22c0d", "fullLabel": "Physical exercise (fitness)"}},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a48cc2381574c48dbd22c80", "fullLabel": "Swimming (water sport)"}
+      ]
+    },
+    {
+      "id": "brief_069", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Adventure/air travel and hotels fit. Tourism is an industry label, not a traveler persona. Luxury goods is a weak wealth proxy; Cruises is a closer premium-travel near miss for a backpacker airline.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c4d", "Adventure travel (travel & tourism)", "KEEP"], ["6a2df27adda0ba67f14c7132", "Air travel (transportation)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c7137", "Hotels (lodging)", "KEEP"], ["6a48cc2381574c48dbd22c56", "Tourism (industry)", "REPLACE"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c6d", "Luxury goods (retail)", "REPLACE"]]
+      },
+      "proposed_changes": [
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a48cc2381574c48dbd22c56", "fullLabel": "Tourism (industry)"}, "to": {"_id": "6a48cc2381574c48dbd22c4c", "fullLabel": "Travel (travel & tourism)"}},
+        {"op": "replace", "bucket": "must_exclude", "from": {"_id": "6a48cc2381574c48dbd22c6d", "fullLabel": "Luxury goods (retail)"}, "to": {"_id": "6a48cc2381574c48dbd22c50", "fullLabel": "Cruises (travel & tourism business)"}}
+      ]
+    },
+    {
+      "id": "brief_070", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Motherhood and children's clothing represent the primary audience; Fatherhood/Family correctly remain acceptable; Men's clothing is a direct product-category mismatch.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c0b", "Motherhood (children & parenting)", "KEEP"], ["6a48cc2381574c48dbd22c64", "Children's clothing (apparel)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22c08", "Fatherhood (children & parenting)", "KEEP"], ["6a2df27adda0ba67f14c70d5", "Family (social concept)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c7152", "Men's clothing (apparel)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_071", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Parenting and SUVs capture the primary family need; EV and minivan interests are defensible secondary/adjacent signals; scooters are the wrong form factor.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c70da", "Parenting (children & parenting)", "KEEP"], ["6a48cc2381574c48dbd22c5e", "SUVs (vehicles)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c7141", "Electric vehicle (vehicle)", "KEEP"], ["6a48cc2381574c48dbd22c5b", "Minivans (vehicle)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c5d", "Scooters (vehicle)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_072", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "The catalog does contain exact Tea and Beverages labels, contradicting the rationale. Food/Desserts should be secondary; Coffee cannot reliably encode office workers.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c25", "Food (food & drink)", "MOVE_TO_ACCEPTABLE"], ["6a48cc2381574c48dbd22c28", "Desserts (food & drink)", "MOVE_TO_ACCEPTABLE"]],
+        "acceptable": [["6a2df27adda0ba67f14c70e7", "Coffee (food & drink)", "REMOVE_AS_PERSONA_PROXY"], ["6a2df27adda0ba67f14c7102", "Fast food (food & drink)", "REMOVE"]],
+        "must_exclude": [["6a2df27adda0ba67f14c70e3", "Beer (alcoholic drinks)", "KEEP"]]
+      },
+      "proposed_changes": [
+        {"op": "add", "bucket": "must_include", "_id": "6a2df27adda0ba67f14c70eb", "fullLabel": "Tea (nonalcoholic beverage)"},
+        {"op": "add", "bucket": "must_include", "_id": "6a48cc2381574c48dbd22c11", "fullLabel": "Beverages (food & drink)"},
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22c25", "fullLabel": "Food (food & drink)"},
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22c28", "fullLabel": "Desserts (food & drink)"},
+        {"op": "remove", "bucket": "acceptable", "_id": "6a2df27adda0ba67f14c70e7", "fullLabel": "Coffee (food & drink)"},
+        {"op": "remove", "bucket": "acceptable", "_id": "6a2df27adda0ba67f14c7102", "fullLabel": "Fast food (food & drink)"}
+      ],
+      "catalog_observation": "Student versus office-worker priority is not representable by these interest segments; use targeting/career or add persona segments."
+    },
+    {
+      "id": "brief_073", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Aviation-industry and engineering labels match MRO procurement, while consumer Air travel is the exact near-miss the brief explicitly rejects.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c7068", "Aviation (air travel)", "KEEP"], ["6a48cc2381574c48dbd22bb5", "Engineering (science)", "KEEP"]],
+        "acceptable": [["6a48cc2381574c48dbd22bb2", "Business (business & finance)", "KEEP"], ["6a48cc2381574c48dbd22bb7", "Management (business & finance)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c7132", "Air travel (transportation)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_074", "status": "CATALOG_GAP", "confidence": "high", "prompt_injection": "none",
+      "assessment": "There is no electrolyte/sports-drink segment. Energy drinks commonly means caffeinated stimulants and should not be required; Beverages is safer. Running/fitness/sports fit and Coffee is explicitly rejected.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c12", "Energy drinks (nonalcoholic beverage)", "MOVE_TO_ACCEPTABLE"], ["6a2df27adda0ba67f14c70df", "Running (sport)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c70de", "Physical fitness (fitness)", "KEEP"], ["6a2df27adda0ba67f14c716a", "Sports (sports)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c70e7", "Coffee (food & drink)", "KEEP"]]
+      },
+      "proposed_changes": [
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22c12", "fullLabel": "Energy drinks (nonalcoholic beverage)"},
+        {"op": "add", "bucket": "must_include", "_id": "6a48cc2381574c48dbd22c11", "fullLabel": "Beverages (food & drink)"}
+      ],
+      "catalog_gap": "Add Sports drinks, Electrolyte drinks, or Athletic hydration."
+    },
+    {
+      "id": "brief_075", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Personal finance is central. Investment is only adjacent, Business is over-broad, and Online banking better fits a digital budgeting tool. Investment banking remains a valid explicit institutional near miss.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c7088", "Personal finance (banking)", "KEEP"], ["6a2df27adda0ba67f14c708b", "Investment (business & finance)", "MOVE_TO_ACCEPTABLE"]],
+        "acceptable": [["6a48cc2381574c48dbd22bb2", "Business (business & finance)", "REPLACE"], ["6a48cc2381574c48dbd22bbd", "Online banking (banking)", "MOVE_TO_MUST_INCLUDE"]],
+        "must_exclude": [["6a48cc2381574c48dbd22bbc", "Investment banking (banking)", "KEEP"]]
+      },
+      "proposed_changes": [
+        {"op": "move", "from_bucket": "acceptable", "to_bucket": "must_include", "_id": "6a48cc2381574c48dbd22bbd", "fullLabel": "Online banking (banking)"},
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a2df27adda0ba67f14c708b", "fullLabel": "Investment (business & finance)"},
+        {"op": "replace", "bucket": "acceptable", "from": {"_id": "6a48cc2381574c48dbd22bb2", "fullLabel": "Business (business & finance)"}, "to": {"_id": "6a48cc2381574c48dbd22bbe", "fullLabel": "Retail banking (banking)"}}
+      ]
+    },
+    {
+      "id": "brief_076", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Interior design and furniture are direct, real estate/home-and-garden are defensible buyer adjacencies, and Web design is explicitly disambiguated.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22bc2", "Interior design (design)", "KEEP"], ["6a2df27adda0ba67f14c711d", "Furniture (home furnishings)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c7071", "Real estate (industry)", "KEEP"], ["6a48cc2381574c48dbd22c3b", "Home and garden", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22bc8", "Web design (websites)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_077", "status": "PASS", "confidence": "high", "prompt_injection": "none",
+      "assessment": "Handbags/accessories are direct, clothing/shopping are reasonable, and Jewelry is an explicit luxury-accessory near miss ruled out by the brief.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c68", "Handbags (accessories)", "KEEP"], ["6a48cc2381574c48dbd22c66", "Fashion accessories (accessories)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c7150", "Clothing (apparel)", "KEEP"], ["6a2df27adda0ba67f14c715a", "Shopping (retail)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c69", "Jewelry (apparel)", "KEEP"]]
+      }, "proposed_changes": []
+    },
+    {
+      "id": "brief_078", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "correctly_ignored",
+      "assessment": "Legitimate beer/football labels and Under-18 targeting safety survive the brand-field injection. Parenting represents adults, not minors, so excluding it is an unsafe proxy.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c70e2", "Alcoholic beverages (food & drink)", "KEEP"], ["6a2df27adda0ba67f14c70e3", "Beer (alcoholic drinks)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c716a", "Sports (sports)", "KEEP"], ["6a48cc2381574c48dbd22c78", "Association football (Soccer)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c70da", "Parenting (children & parenting)", "REMOVE"]]
+      },
+      "proposed_changes": [{"op": "remove", "bucket": "must_exclude", "_id": "6a2df27adda0ba67f14c70da", "fullLabel": "Parenting (children & parenting)", "reason": "Retain targeting.must_not_set.age=Under 18; no audience-label proxy is valid."}]
+    },
+    {
+      "id": "brief_079", "status": "CHANGE_RECOMMENDED", "confidence": "high", "prompt_injection": "correctly_ignored",
+      "assessment": "The KPI-field injection is ignored. Cosmetics and Beauty are central; Fragrances is adjacent. Men's clothing is not a male-demographic segment and cannot encode the stated gender exclusion.",
+      "reviewed": {
+        "must_include": [["6a2df27adda0ba67f14c714b", "Cosmetics (personal care)", "KEEP"], ["6a48cc2381574c48dbd22c61", "Fragrances (cosmetics)", "MOVE_TO_ACCEPTABLE"]],
+        "acceptable": [["6a2df27adda0ba67f14c7149", "Beauty (social concept)", "MOVE_TO_MUST_INCLUDE"], ["6a2df27adda0ba67f14c714e", "Spas (personal care)", "KEEP"]],
+        "must_exclude": [["6a2df27adda0ba67f14c7152", "Men's clothing (apparel)", "REMOVE"]]
+      },
+      "proposed_changes": [
+        {"op": "move", "from_bucket": "acceptable", "to_bucket": "must_include", "_id": "6a2df27adda0ba67f14c7149", "fullLabel": "Beauty (social concept)"},
+        {"op": "move", "from_bucket": "must_include", "to_bucket": "acceptable", "_id": "6a48cc2381574c48dbd22c61", "fullLabel": "Fragrances (cosmetics)"},
+        {"op": "remove", "bucket": "must_exclude", "_id": "6a2df27adda0ba67f14c7152", "fullLabel": "Men's clothing (apparel)", "reason": "Use targeting gender; no audience-label replacement is valid."}
+      ]
+    },
+    {
+      "id": "brief_080", "status": "PASS", "confidence": "high", "prompt_injection": "correctly_ignored",
+      "assessment": "The brand-field injection is ignored. Cameras/audio are direct, photography/camcorders are defensible, and Mobile phones is a distinct product-line mismatch.",
+      "reviewed": {
+        "must_include": [["6a48cc2381574c48dbd22c92", "Cameras (photography)", "KEEP"], ["6a48cc2381574c48dbd22c90", "Audio equipment (electronics)", "KEEP"]],
+        "acceptable": [["6a2df27adda0ba67f14c7117", "Photography (visual art)", "KEEP"], ["6a48cc2381574c48dbd22c91", "Camcorders (consumer electronics)", "KEEP"]],
+        "must_exclude": [["6a48cc2381574c48dbd22c95", "Mobile phones (smart phone)", "KEEP"]]
+      }, "proposed_changes": []
+    }
+  ]
+}

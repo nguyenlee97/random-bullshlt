@@ -11,12 +11,13 @@
 
 // ── Config ──────────────────────────────────────────────────────────────────
 const _isVPS  = !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1');
-const AD_API_BASE = _isVPS
+const AD_API_BASE = window.__ADSTACK_CONFIG__?.apiBase || (_isVPS
     ? 'https://api.pawgrammers.io.vn/api'
-    : 'http://localhost:3000/api';
+    : 'http://localhost:3000/api');
 
 const AD_SITE_ID  = 'baomoi.com';
 const AD_TIMEOUT  = 4000;
+const ALLOW_FALLBACK_ADS = window.__ADSTACK_CONFIG__?.allowFallbackAds ?? _isVPS;
 
 // ── Impression / Click Tracking ──────────────────────────────────────────────
 function trackImpression(campaignId, placementId) {
@@ -62,6 +63,16 @@ async function checkImageExists(url) {
  * Builds BaoMoi-style ad HTML from a backend creative object.
  * Mirrors the structure in getFallbackMockAd but uses live data.
  */
+function canonicalBaoMoiZone(zoneId) {
+    if (zoneId === 'BaoMoi_Background' || zoneId.endsWith('_Background')) return 'BaoMoi_Background';
+    if (zoneId === 'BaoMoi_Masthead' || zoneId.endsWith('_Masthead')) return 'BaoMoi_Masthead';
+    if (zoneId === 'BaoMoi_StickyLeft' || zoneId.endsWith('_SideLeft')) return 'BaoMoi_StickyLeft';
+    if (zoneId === 'BaoMoi_StickyRight' || zoneId.endsWith('_SideRight')) return 'BaoMoi_StickyRight';
+    if (zoneId === 'BaoMoi_Box1' || zoneId.endsWith('_SidebarBox')) return 'BaoMoi_Box1';
+    if (zoneId === 'BaoMoi_Box2') return 'BaoMoi_Box2';
+    return zoneId;
+}
+
 async function buildCreativeHtml(ad, zoneId) {
     const campaignId  = ad.campaignId;
     const placementId = ad.placementId || zoneId;
@@ -75,7 +86,7 @@ async function buildCreativeHtml(ad, zoneId) {
     const imageUrl  = (remoteImg && remoteImg.startsWith('http')) ? remoteImg : fallbackImg;
     const hasImage  = imageUrl ? await checkImageExists(imageUrl) : false;
 
-    switch (zoneId) {
+    switch (canonicalBaoMoiZone(zoneId)) {
         case 'BaoMoi_Background':
             return {
                 html: hasImage
@@ -193,12 +204,14 @@ async function buildCreativeHtml(ad, zoneId) {
 }
 
 function getFallbackImageForZone(zoneId) {
-    if (zoneId === 'BaoMoi_Background')   return 'ad-pic/background-ad.jpg';
-    if (zoneId === 'BaoMoi_StickyLeft')   return 'ad-pic/Left.png';
-    if (zoneId === 'BaoMoi_StickyRight')  return 'ad-pic/Right.png';
-    if (zoneId === 'BaoMoi_Box1')         return 'ad-pic/sidebar-ad1.jpg';
-    if (zoneId === 'BaoMoi_Box2')         return 'ad-pic/sidebar-ad2.jpg';
-    return 'ad-pic/top-banner.jpg';
+    const canonical = canonicalBaoMoiZone(zoneId);
+    if (canonical === 'BaoMoi_Background')  return 'ad-pic/background-ad.jpg';
+    if (canonical === 'BaoMoi_StickyLeft')  return 'ad-pic/Left.png';
+    if (canonical === 'BaoMoi_StickyRight') return 'ad-pic/Right.png';
+    if (canonical === 'BaoMoi_Box1')        return 'ad-pic/sidebar-ad1.jpg';
+    if (canonical === 'BaoMoi_Box2')        return 'ad-pic/sidebar-ad2.jpg';
+    if (canonical === 'BaoMoi_Masthead')    return 'ad-pic/background-ad.jpg';
+    return 'ad-pic/background-ad.jpg';
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -230,6 +243,7 @@ async function fetchAdForZone(zoneId) {
             console.log(`[AdAgent] Live ad loaded for ${zoneId} → campaign ${ad.campaignId}`);
             return {
                 hasAd:      true,
+                isFallback:  false,
                 campaignId: ad.campaignId,
                 placementId: ad.placementId || zoneId,
                 brand:      ad.brand,
@@ -239,22 +253,24 @@ async function fetchAdForZone(zoneId) {
             };
         }
 
-        console.log(`[AdAgent] No live campaign for ${zoneId}. Using fallback.`);
-        return getFallbackMockAd(zoneId);
+        console.log(`[AdAgent] No live campaign for ${zoneId}.`);
+        return ALLOW_FALLBACK_ADS
+            ? getFallbackMockAd(zoneId)
+            : { hasAd: false, zoneId, reason: 'no_active_campaign' };
 
     } catch (error) {
-        console.warn(`[AdAgent] Backend unreachable for zone ${zoneId}: ${error.message}. Using fallback.`);
-        return new Promise(resolve =>
-            setTimeout(() => resolve(getFallbackMockAd(zoneId)), 200 + Math.random() * 300)
-        );
+        console.warn(`[AdAgent] Backend unreachable for zone ${zoneId}: ${error.message}.`);
+        return ALLOW_FALLBACK_ADS
+            ? getFallbackMockAd(zoneId)
+            : { hasAd: false, zoneId, reason: 'backend_unreachable' };
     }
 }
 
 // ── Fallback Mock Database ───────────────────────────────────────────────────
 async function getFallbackMockAd(zoneId) {
-    let ad = { hasAd: true };
+    let ad = { hasAd: true, isFallback: true };
 
-    switch (zoneId) {
+    switch (canonicalBaoMoiZone(zoneId)) {
         case 'BaoMoi_Background':
             ad.brand = 'Mastercard';
             ad.targetUrl = 'https://mastercard.com.vn';
@@ -266,7 +282,7 @@ async function getFallbackMockAd(zoneId) {
         case 'BaoMoi_Masthead':
             ad.brand = 'Mazda CX-5';
             ad.targetUrl = 'https://mazda.com.vn';
-            ad.imageUrl = 'ad-pic/top-banner.jpg';
+            ad.imageUrl = 'ad-pic/background-ad.jpg';
             ad.hasImage = await checkImageExists(ad.imageUrl);
             ad.html = ad.hasImage
                 ? `<div class="ad-wrapper" style="height:280px;">

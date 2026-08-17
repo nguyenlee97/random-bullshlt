@@ -1,0 +1,208 @@
+name: Deploy frontend production
+
+on:
+  push:
+    branches:
+      - revamp/next-hackathon
+    paths:
+      - agent_frontend/**
+      - .github/workflows/deploy-frontend-production.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-frontend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Test, build, and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://agent.pawgrammers.io.vn/
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || 'agent.pawgrammers.io.vn' }}
+      VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+      VPS_USER: ${{ vars.VPS_USER || 'root' }}
+      VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH || '/var/www/agent' }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out the merged revision
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: agent_frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: agent_frontend
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: agent_frontend
+        run: npm test
+
+      - name: Build production bundle
+        working-directory: agent_frontend
+        run: npm run build
+
+      - name: Audit production dependencies
+        working-directory: agent_frontend
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Validate deployment configuration
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          if [[ -z "$VPS_SSH_KEY" ]]; then
+            echo "::error::Missing production environment secret VPS_SSH_KEY"
+            exit 1
+          fi
+          if [[ -z "$VPS_KNOWN_HOSTS" ]]; then
+            echo "::error::Missing production environment secret VPS_KNOWN_HOSTS"
+            exit 1
+          fi
+          if [[ ! "$VPS_PORT" =~ ^[0-9]+$ ]]; then
+            echo "::error::VPS_PORT must be numeric"
+            exit 1
+          fi
+          case "$VPS_DEPLOY_PATH" in
+            /var/www/*) ;;
+            *)
+              echo "::error::VPS_DEPLOY_PATH must stay under /var/www"
+              exit 1
+              ;;
+          esac
+          test -s agent_frontend/dist/index.html
+
+      - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/production_key"
+          chmod 600 "$HOME/.ssh/production_key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Upload immutable release
+        id: release
+        run: |
+          archive="$RUNNER_TEMP/agent-frontend-${GITHUB_SHA}.tar.gz"
+          remote_archive="/tmp/agent-frontend-${GITHUB_SHA}.tar.gz"
+          tar -C agent_frontend/dist -czf "$archive" .
+
+          ssh_options=(
+            -i "$HOME/.ssh/production_key"
+            -p "$VPS_PORT"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+          )
+
+          scp \
+            -i "$HOME/.ssh/production_key" \
+            -P "$VPS_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$archive" \
+            "$VPS_USER@$VPS_HOST:$remote_archive"
+
+          ssh "${ssh_options[@]}" "$VPS_USER@$VPS_HOST" \
+            "bash -s -- '$VPS_DEPLOY_PATH' '$GITHUB_SHA' '$remote_archive'" <<'REMOTE'
+          set -euo pipefail
+
+          deploy_path="$1"
+          revision="$2"
+          archive="$3"
+          releases_path="${deploy_path}-releases"
+          release_path="${releases_path}/${revision}"
+
+          case "$deploy_path" in
+            /var/www/*) ;;
+            *) echo "Refusing unsafe deployment path: $deploy_path" >&2; exit 1 ;;
+          esac
+
+          install -d "$releases_path" "$release_path"
+          tar -xzf "$archive" -C "$release_path"
+          # Manual deployments may run with umask 077. Normalize the extracted
+          # static tree so the nginx worker can traverse directories and read
+          # every asset regardless of the deploy user's umask.
+          find "$release_path" -type d -exec chmod 0755 {} +
+          find "$release_path" -type f -exec chmod 0644 {} +
+          test -s "$release_path/index.html"
+
+          next_link="${deploy_path}.next"
+          rm -f "$next_link"
+          ln -s "$release_path" "$next_link"
+
+          if [[ -d "$deploy_path" && ! -L "$deploy_path" ]]; then
+            backup_path="${releases_path}/pre-cd-$(date -u +%Y%m%dT%H%M%SZ)"
+            mv "$deploy_path" "$backup_path"
+          fi
+
+          mv -Tf "$next_link" "$deploy_path"
+          rm -f "$archive"
+          REMOTE
+
+          echo "index_sha256=$(sha256sum agent_frontend/dist/index.html | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify production
+        env:
+          EXPECTED_INDEX_SHA256: ${{ steps.release.outputs.index_sha256 }}
+        run: |
+          production_index="$RUNNER_TEMP/production-index.html"
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 5 \
+            --retry-all-errors \
+            --output "$production_index" \
+            "https://agent.pawgrammers.io.vn/?revision=${GITHUB_SHA}"
+
+          actual_index_sha256="$(sha256sum "$production_index" | cut -d ' ' -f 1)"
+          if [[ "$actual_index_sha256" != "$EXPECTED_INDEX_SHA256" ]]; then
+            echo "::error::Production index does not match the deployed revision"
+            exit 1
+          fi
+
+          mapfile -t asset_paths < <(
+            grep -oE '(src|href)="[^"]+"' "$production_index" \
+              | sed -E 's/^(src|href)="([^"]+)"$/\2/' \
+              | grep '^/assets/' \
+              | sort -u
+          )
+          if [[ "${#asset_paths[@]}" -eq 0 ]]; then
+            echo "::error::Production index does not reference any versioned assets"
+            exit 1
+          fi
+
+          for asset_path in "${asset_paths[@]}"; do
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --retry 5 \
+              --retry-all-errors \
+              --output /dev/null \
+              "https://agent.pawgrammers.io.vn${asset_path}?revision=${GITHUB_SHA}"
+          done
+
+      - name: Remove local SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/production_key" "$HOME/.ssh/known_hosts"

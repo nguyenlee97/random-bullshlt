@@ -14,16 +14,15 @@
  * On the VPS the default localhost URI works:  node seed/seed-audience-missing.js
  */
 const path = require('path');
-const xlsx = require('xlsx');
+const { readWorksheetRows } = require('./workbook-rows');
 const mongoose = require('mongoose');
 const AudienceLibrary = require('../models/AudienceLibrary');
 
 const AUDIENCE_FILE = path.join(__dirname, 'data', 'Audience Library.xlsx');
 const URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/adspilot';
 
-function readAudienceFromExcel() {
-  const wb = xlsx.readFile(AUDIENCE_FILE);
-  const rows = xlsx.utils.sheet_to_json(wb.Sheets['Sheet1'], { defval: null });
+async function readAudienceFromExcel() {
+  const rows = await readWorksheetRows(AUDIENCE_FILE, 'Sheet1');
   return rows
     .filter((r) => r['ID'] && r['Name'])
     .map((r) => ({
@@ -44,7 +43,7 @@ function readAudienceFromExcel() {
   await mongoose.connect(URI);
   console.log(`connected: ${URI.replace(/\/\/.*@/, '//***@')}`);
 
-  const sheet = readAudienceFromExcel();
+  const sheet = await readAudienceFromExcel();
   const existing = new Set(
     (await AudienceLibrary.find({}, { segmentId: 1 }).lean()).map((d) => d.segmentId)
   );

@@ -10,9 +10,12 @@ function zoneNameFromId(id) { return id.replace(/_/g, ' ') }
 function platformFromId(id) { return id.split('_')[0] || id }
 function placementFromId(id) { return id.split('_').slice(1).join(' ') || id }
 
-export default function SetupStep({ data, onChange, brief, creative, segment, isDone }) {
+export default function SetupStep({
+  data, onChange, brief, creative, segment, isDone,
+  assignmentRepair = false, onOpenCreativeReview, openaiCampaignFlow = false,
+}) {
   const files = creative?.files || []
-  const phase = data.phase || 'zones'
+  const phase = assignmentRepair ? 'assign' : (data.phase || 'zones')
   const isInitialized = data.initialized || false
   const allZones = data.allZones || ALL_ZONES
   const recoZones = data.recoZones || []
@@ -38,6 +41,7 @@ export default function SetupStep({ data, onChange, brief, creative, segment, is
             const staticZone = staticMap[z.id] || {}
             return {
               ...staticZone,
+              ...z,
               id: z.id,
               reach: z.reach, vi: z.vi, ctr: z.ctr, cpm: z.cpm,
               format: z.format || staticZone.format,
@@ -53,9 +57,13 @@ export default function SetupStep({ data, onChange, brief, creative, segment, is
             }
           })
           const recoZones = mappedZones.filter(z => result.recommended_ids.includes(z.id))
+          const recoIds = new Set(recoZones.map(zone => zone.id))
+          const relatedZones = openaiCampaignFlow
+            ? mappedZones.filter(zone => !recoIds.has(zone.id) && !zone.conflict).slice(0, 6)
+            : []
           onChange({
             ...data,
-            recoZones, allZones: mappedZones,
+            recoZones, relatedZones, allZones: mappedZones,
             selectedZoneIds: recoZones.map(z => z.id),
             initialized: true, created: false, phase: 'zones', assignments: {}, submitted: false,
           })
@@ -67,9 +75,13 @@ export default function SetupStep({ data, onChange, brief, creative, segment, is
       }
       // Static fallback
       const zones = getRecommendedZones(brief?.objective || 'awareness', brief?.budget || 100)
+      const zoneIds = new Set(zones.map(zone => zone.id))
+      const relatedZones = openaiCampaignFlow
+        ? ALL_ZONES.filter(zone => !zoneIds.has(zone.id)).slice(0, 6)
+        : []
       onChange({
         ...data,
-        recoZones: zones, allZones: ALL_ZONES,
+        recoZones: zones, relatedZones, allZones: ALL_ZONES,
         selectedZoneIds: zones.map(z => z.id),
         initialized: true, created: false, phase: 'zones', assignments: {}, submitted: false,
       })
@@ -160,6 +172,8 @@ export default function SetupStep({ data, onChange, brief, creative, segment, is
         files={files}
         allZones={allZones}
         recoZones={recoZones}
+        repairMode={assignmentRepair}
+        openaiCampaignFlow={openaiCampaignFlow}
       />
     )
   }
@@ -174,6 +188,7 @@ export default function SetupStep({ data, onChange, brief, creative, segment, is
         files={files}
         allZones={allZones}
         recoZones={recoZones}
+        onOpenCreativeReview={onOpenCreativeReview}
       />
     )
   }

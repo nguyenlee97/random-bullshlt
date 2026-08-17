@@ -14,12 +14,12 @@
   "labels": {
     "audience": {
       "must_include": [
-        "6a48cc2381574c48dbd22c25",
-        "6a48cc2381574c48dbd22c28"
+        "6a2df27adda0ba67f14c70eb",
+        "6a48cc2381574c48dbd22c11"
       ],
       "acceptable": [
-        "6a2df27adda0ba67f14c70e7",
-        "6a2df27adda0ba67f14c7102"
+        "6a48cc2381574c48dbd22c25",
+        "6a48cc2381574c48dbd22c28"
       ],
       "must_exclude": [
         "6a2df27adda0ba67f14c70e3"
@@ -30,7 +30,7 @@
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "No dedicated 'bubble tea' segment exists in the catalog, so the closest general F&B interest is must_include for the stated-primary student audience; Coffee (a more office-worker-coded beverage habit) stands in for the secondary office-worker audience at acceptable only."
+    "labeler_note": "No dedicated 'bubble tea' segment exists in the catalog, so the closest general F&B interest is must_include for the stated-primary student audience; Coffee (a more office-worker-coded beverage habit) stands in for the secondary office-worker audience at acceptable only.\n\nHuman review 2026-07-16: accepted and applied the independent audit. The catalog does contain exact Tea and Beverages labels, contradicting the rationale. Food/Desserts should be secondary; Coffee cannot reliably encode office workers."
   },
   "tags": [
     "retention",

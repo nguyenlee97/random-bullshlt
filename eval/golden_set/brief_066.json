@@ -18,19 +18,17 @@
         "6a48cc2381574c48dbd22bfb"
       ],
       "acceptable": [
-        "6a48cc2381574c48dbd22bb6",
+        "6a48cc2381574c48dbd22bfc",
         "6a2df27adda0ba67f14c70d5"
       ],
-      "must_exclude": [
-        "6a2df27adda0ba67f14c709f"
-      ]
+      "must_exclude": []
     },
     "zones": {
       "expected_top": [],
       "forbidden": []
     },
     "expected_warnings": [],
-    "labeler_note": "Deliberately picked a non-alcohol/gambling must_not_set example (kids' edtech) to test that the safety rule isn't only pattern-matched to drinking/betting brands.",
+    "labeler_note": "Deliberately picked a non-alcohol/gambling must_not_set example (kids' edtech) to test that the safety rule isn't only pattern-matched to drinking/betting brands.\n\nHuman review 2026-07-16: accepted and applied the independent audit. Parenting and reading are defensible, but the catalog lacks primary education/English learning. Higher education is the wrong level and Video games is an overlapping child interest, not an active exclusion. Remaining catalog gap is intentional; no substitute label was invented.",
     "targeting": {
       "expected": {
         "parental": [
@@ -52,6 +50,7 @@
   "tags": [
     "awareness",
     "en",
-    "targeting_labeled"
+    "targeting_labeled",
+    "catalog_gap"
   ]
 }
