@@ -626,6 +626,11 @@ async function generateReports(campaign) {
     console.log(`[reportGen] Loaded ${records.length} existing records for ${campaignId}`);
   }
 
+  // Keep an immutable baseline before scenario revisions start replacing the
+  // active analytics projection. Existing report readers remain unchanged.
+  const { ensureBaselineDataset } = require('./reportDatasets');
+  await ensureBaselineDataset(input, records);
+
   // Step 2: Generate analyses for each report type (parallel)
   const analysisPromises = REPORT_TYPES.map(async (reportType) => {
     // Create placeholder
@@ -664,6 +669,7 @@ async function generateReports(campaign) {
               schema: 'report-evidence-v2', source: 'scenario_simulation',
               inputHash: input.inputHash,
               fallbackReason: result.analysisProvenance?.reason || null,
+              reportInput: input,
             },
             generatedAt: new Date(),
             error: '',

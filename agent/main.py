@@ -21,6 +21,7 @@ async def _lifespan(_app):
     from image_quota import ensure_indexes as ensure_image_quota_indexes
     from creative_assets import ensure_indexes as ensure_creative_asset_indexes
     from quality.store import ensure_quality_indexes
+    from evaluation.store import ensure_evaluation_indexes
     await ensure_account_indexes()
     await ensure_autopilot_indexes()
     await ensure_campaign_ownership_indexes()
@@ -30,6 +31,7 @@ async def _lifespan(_app):
     await ensure_image_quota_indexes()
     await ensure_creative_asset_indexes()
     await ensure_quality_indexes()
+    await ensure_evaluation_indexes()
     if config.USE_RAG_AUDIENCE:
         from rag.runtime import start_prewarm
         await start_prewarm()
@@ -42,9 +44,15 @@ async def _lifespan(_app):
     if config.ZALO_AGENT_WORKER_ENABLED:
         from zalo_worker import start_worker as start_zalo_worker
         await start_zalo_worker()
+    if config.EVALUATION_WORKER_ENABLED:
+        from evaluation.worker import start_worker as start_evaluation_worker
+        await start_evaluation_worker()
     try:
         yield
     finally:
+        if config.EVALUATION_WORKER_ENABLED:
+            from evaluation.worker import stop_worker as stop_evaluation_worker
+            await stop_evaluation_worker()
         if config.ZALO_AGENT_WORKER_ENABLED:
             from zalo_worker import stop_worker as stop_zalo_worker
             await stop_zalo_worker()
@@ -213,9 +221,11 @@ async def version():
 
 # Import router after app is created to avoid circular imports
 from router import agent_router  # noqa: E402
+from evaluation.routes import evaluation_router  # noqa: E402
 from zalo_routes import zalo_router  # noqa: E402
 from public_observability import public_observability_router  # noqa: E402
 app.include_router(agent_router, prefix="/api/agent")
+app.include_router(evaluation_router, prefix="/api/agent")
 app.include_router(zalo_router, prefix="/api/agent")
 app.include_router(public_observability_router, prefix="/api/public/observability")
 

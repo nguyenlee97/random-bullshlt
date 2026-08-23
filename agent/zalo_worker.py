@@ -29,6 +29,7 @@ async def _collections():
 async def enqueue_text(
     *, thread: dict, text: str, idempotency_key: str,
     event_id: str | None = None, run_id: str | None = None,
+    category: str | None = None, incident_id: str | None = None,
 ) -> dict:
     now = _now()
     doc = {
@@ -38,8 +39,8 @@ async def enqueue_text(
         "thread_id": thread["thread_id"],
         "external_uid": thread["external_uid"],
         "kind": "text", "text": str(text)[:2000],
-        "event_id": event_id, "run_id": run_id,
-        "category": "live_reply" if event_id else "campaign_progress",
+        "event_id": event_id, "run_id": run_id, "incident_id": incident_id,
+        "category": category or ("live_reply" if event_id else "campaign_progress"),
         "status": "queued", "attempts": 0,
         "next_attempt_at": now, "lease_owner": None,
         "lease_expires_at": None, "created_at": now, "updated_at": now,
@@ -235,10 +236,14 @@ async def _send_outbound_once() -> bool:
             receipt = await send_image(item["external_uid"], item["image_url"])
         else:
             receipt = await send_text(item["external_uid"], item["text"])
+        provider_message_id = str(
+            receipt.get("message_id") or receipt.get("msg_id") or receipt.get("messageId") or ""
+        ).strip() or None
         await collections["outbound"].update_one(
             {"_id": item["_id"], "lease_owner": _worker_id},
             {"$set": {
                 "status": "sent", "sent_at": _now(), "provider_receipt": receipt,
+                "provider_message_id": provider_message_id,
                 "lease_owner": None, "lease_expires_at": None,
             }},
         )

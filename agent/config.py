@@ -145,6 +145,13 @@ class Config:
 
     # ── VPS Backend API ───────────────────────────────────────────────────────
     BACKEND_URL: str = os.getenv("BACKEND_URL", "https://api.pawgrammers.io.vn")
+    REPORT_INTERNAL_API_KEY: str = os.getenv("REPORT_INTERNAL_API_KEY", "")
+    EVALUATION_WORKER_ENABLED: bool = (
+        os.getenv("EVALUATION_WORKER_ENABLED", "false").lower() == "true"
+    )
+    EVALUATION_WORKER_POLL_SECONDS: float = float(
+        os.getenv("EVALUATION_WORKER_POLL_SECONDS", "30")
+    )
     ADSPILOT_URL: str = os.getenv(
         "ADSPILOT_URL", "https://adspilot.pawgrammers.io.vn"
     )

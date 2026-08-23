@@ -1412,6 +1412,58 @@ export const AgentAPI = {
     }
   },
 
+  async getCampaignEvaluation(campaignId) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}`, { signal: AbortSignal.timeout(15000) })
+    if (!response.ok) throw await responseError(response, 'Không thể tải Live Evaluation.')
+    return response.json()
+  },
+
+  async updateCampaignEvaluationPolicy(campaignId, updates) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/policy`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates), signal: AbortSignal.timeout(15000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể cập nhật evaluation policy.')
+    return response.json()
+  },
+
+  async runCampaignEvaluation(campaignId, force = true) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/runs`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force }), signal: AbortSignal.timeout(120000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể chạy evaluation.')
+    return response.json()
+  },
+
+  async getCampaignScenarios(campaignId) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/scenarios`, { signal: AbortSignal.timeout(15000) })
+    if (!response.ok) throw await responseError(response, 'Không thể tải Scenario Lab.')
+    return response.json()
+  },
+
+  async previewCampaignScenario(campaignId, scenario) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/scenarios/preview`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scenario), signal: AbortSignal.timeout(30000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể preview scenario.')
+    return response.json()
+  },
+
+  async applyCampaignScenario(campaignId, scenario) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/scenarios/apply`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scenario), signal: AbortSignal.timeout(180000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể apply scenario.')
+    return response.json()
+  },
+
+  async actOnEvaluationIncident(campaignId, incidentId, action, note = '') {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}/actions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, note }), signal: AbortSignal.timeout(15000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể cập nhật incident.')
+    return response.json()
+  },
+
   async listConversationModels() {
     const response = await agentFetch(`${AGENT_URL}/api/agent/conversation-models`, {
       signal: AbortSignal.timeout(5000),

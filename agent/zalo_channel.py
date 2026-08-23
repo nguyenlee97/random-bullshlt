@@ -215,6 +215,8 @@ def normalize_event(body: dict, raw_body: bytes) -> dict:
     follower = body.get("follower") if isinstance(body.get("follower"), dict) else {}
     recipient = body.get("recipient") if isinstance(body.get("recipient"), dict) else {}
     message = body.get("message") if isinstance(body.get("message"), dict) else {}
+    reply = message.get("reply") if isinstance(message.get("reply"), dict) else {}
+    quote = message.get("quote") if isinstance(message.get("quote"), dict) else {}
     # Message webhooks identify the OA user as sender.id. Follow/unfollow
     # webhooks use a different provider schema and identify that user as
     # follower.id instead. Prefer the event-specific field but retain the
@@ -259,6 +261,10 @@ def normalize_event(body: dict, raw_body: bytes) -> dict:
         # but only while that account has an explicit pending link attempt.
         "app_scoped_uid": str(body.get("user_id_by_app") or "").strip()[:200] or None,
         "text": text,
+        "reply_to_message_id": str(
+            reply.get("msg_id") or reply.get("message_id")
+            or quote.get("msg_id") or quote.get("message_id") or ""
+        ).strip()[:300] or None,
         "images": images,
         "provider_timestamp": str(body.get("timestamp") or ""),
         "payload_hash": payload_hash,

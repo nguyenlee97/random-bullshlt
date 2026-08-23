@@ -1003,11 +1003,22 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
     await add_message(thread["session_id"], "user", message)
     chat_session = await append_chat_message(chat_session["chat_session_id"], "user", message)
 
+    # Explicit incident codes have their own correlation namespace and never
+    # rely on or mutate the active campaign selection.
+    from zalo_incidents import handle_incident_reply
+    incident_text, thread = await handle_incident_reply(
+        thread, message, reply_to_message_id=event.get("reply_to_message_id"),
+    )
+    if incident_text:
+        await add_message(thread["session_id"], "assistant", incident_text)
+        await append_chat_message(chat_session["chat_session_id"], "assistant", incident_text)
+        return [incident_text]
+
     # Only deterministic confirmation/rejection gates run ahead of the model.
     # Language understanding and normal workflow progression stay in the tool loop.
     pending_kind = (thread.get("pending_action") or {}).get("kind")
     explicit_decision = _fold(message) in _CONFIRM.union(_REJECT)
-    if (pending_kind in {"campaign_lifecycle", "confirm_autopilot_brief"} and explicit_decision) or pending_kind == "campaign_selection":
+    if (pending_kind in {"campaign_lifecycle", "confirm_autopilot_brief", "incident_recovery"} and explicit_decision) or pending_kind == "campaign_selection":
         campaigns = await owned_campaigns(thread)
         pending_text, thread = await _handle_pending(thread, message, campaigns)
         if pending_text:

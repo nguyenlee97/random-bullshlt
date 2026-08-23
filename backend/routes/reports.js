@@ -4,6 +4,63 @@ const { getReportStatus } = require('../services/reportGenerator');
 const ReportAnalysis = require('../models/ReportAnalysis');
 const AnalyticsRecord = require('../models/AnalyticsRecord');
 const { launchReportGeneration } = require('../services/reportLauncher');
+const {
+  getScenarioWorkspace, previewScenario, applyScenarioRevision,
+} = require('../services/reportDatasets');
+
+function requireInternalReportAccess(req, res, next) {
+  const expected = process.env.REPORT_INTERNAL_API_KEY || '';
+  if (!expected) return res.status(503).json({ error: 'report internal API is not configured' });
+  if (req.get('x-report-internal-key') !== expected) {
+    return res.status(401).json({ error: 'report internal API access denied' });
+  }
+  next();
+}
+
+router.get('/internal/scenarios/:campaignId', requireInternalReportAccess, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    res.json(await getScenarioWorkspace(req.params.campaignId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/internal/datasets/:campaignId', requireInternalReportAccess, async (req, res) => {
+  try {
+    const ReportDataset = require('../models/ReportDataset');
+    const CampaignReportState = require('../models/CampaignReportState');
+    const state = await CampaignReportState.findOne({ campaignId: req.params.campaignId }).lean();
+    if (!state) return res.status(404).json({ error: 'report dataset not found' });
+    const [baseline, active] = await Promise.all([
+      ReportDataset.findOne({ campaignId: req.params.campaignId, revision: state.baselineRevision }).lean(),
+      ReportDataset.findOne({ campaignId: req.params.campaignId, revision: state.activeRevision }).lean(),
+    ]);
+    res.set('Cache-Control', 'no-store');
+    res.json({ campaignId: req.params.campaignId, state, baseline, active });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/internal/scenarios/:campaignId/preview', requireInternalReportAccess, async (req, res) => {
+  try {
+    res.json(await previewScenario(req.params.campaignId, req.body || {}));
+  } catch (err) {
+    res.status(err.code === 'REPORT_BASELINE_NOT_READY' ? 409 : 400).json({ error: err.message });
+  }
+});
+
+router.post('/internal/scenarios/:campaignId/apply', requireInternalReportAccess, async (req, res) => {
+  try {
+    const result = await applyScenarioRevision(
+      req.params.campaignId, req.body || {}, req.get('x-report-actor') || 'agent_ui',
+    );
+    res.json(result);
+  } catch (err) {
+    res.status(err.code === 'REPORT_BASELINE_NOT_READY' ? 409 : 400).json({ error: err.message });
+  }
+});
 
 // ── POST /api/reports/generate ───────────────────────────────────────────────
 // Trigger report generation for a campaign. Idempotent — skips if already generating/ready.
