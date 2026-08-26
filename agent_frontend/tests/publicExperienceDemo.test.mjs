@@ -210,6 +210,13 @@ test('campaign management surfaces own vertical scrolling inside the fixed app r
   }
 })
 
+test('read-only Autopilot histories retain scrolling while blocking mutation controls', () => {
+  assert.doesNotMatch(app, /pointer-events-none select-none opacity-80/)
+  assert.match(app, /readOnly=\{historyReadOnly\}/)
+  assert.match(autopilot, /touch-pan-y overflow-y-auto overscroll-contain/)
+  assert.match(autopilot, /onClickCapture=\{preventReadOnlyMutation\}/)
+})
+
 test('Copilot demo is restored as a spotlight tour over the real interface', () => {
   assert.match(engine, /DemoOverlay/)
   assert.match(engine, /STAGE1_STEPS/)

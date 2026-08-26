@@ -2406,12 +2406,12 @@ export default function App() {
         {/* Autopilot is a sibling canvas, not a banner above the workspace.
             It stays mounted while hidden so run state and the event stream survive mode switches. */}
         <div id="autopilot-canvas" role="tabpanel" aria-label="Campaign Autopilot" data-mode-canvas="autopilot" className={`
-          md:order-2 min-w-0 overflow-hidden bg-slate-50 md:flex-1 md:h-full
+          md:order-2 min-h-0 min-w-0 overflow-hidden bg-slate-50 md:flex-1 md:h-full
           ${experienceMode === 'autopilot' && activeTab === 'autopilot' ? 'flex flex-1' : 'hidden'}
           ${experienceMode === 'autopilot' && activeTab !== 'workspace' ? 'md:flex' : 'md:hidden'}
         `}>
           {experienceMode === 'autopilot' && (
-            <div className={historyReadOnly ? 'pointer-events-none select-none opacity-80' : ''}>
+            <div className={`h-full min-h-0 w-full ${historyReadOnly ? 'opacity-80' : ''}`}>
             <AutopilotPanel
               key={currentConversationId || 'autopilot'}
               brief={formState.brief}
@@ -2430,6 +2430,7 @@ export default function App() {
               onReportActivate={initializeReport}
               onReportExit={exitAutopilotReport}
               openaiCampaignFlow={currentConversationModel === 'openai_gpt_5_4_mini'}
+              readOnly={historyReadOnly}
             />
             </div>
           )}
