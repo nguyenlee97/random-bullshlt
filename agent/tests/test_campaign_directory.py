@@ -120,6 +120,13 @@ async def test_directory_unifies_drafts_reviews_and_owned_orders(monkeypatch):
         "end_date": None,
         "placement_count": 2,
         "creative_count": 1,
+        "placement_preview": [
+            {"id": "zone-a", "label": "zone-a", "detail": "", "kind": "placement"},
+            {"id": "zone-b", "label": "zone-b", "detail": "", "kind": "placement"},
+        ],
+        "creative_preview": [
+            {"id": "creative-a", "label": "creative-a", "detail": "", "kind": "creative"},
+        ],
         "warning_count": 0,
         "order_count": 1,
     }

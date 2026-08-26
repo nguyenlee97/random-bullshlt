@@ -61,6 +61,33 @@ def _order_lifecycle(order: dict) -> str:
     } else "operational"
 
 
+def _order_preview(values: object, *, kind: str, limit: int = 6) -> list[dict]:
+    """Expose a small, presentation-safe owned-order preview for Management."""
+    if not isinstance(values, list):
+        return []
+    previews: list[dict] = []
+    for index, value in enumerate(values[:limit]):
+        if isinstance(value, dict):
+            identity = str(
+                value.get("id") or value.get("_id") or value.get("zone_id")
+                or value.get("creative_id") or value.get("name") or index + 1
+            )
+            label = str(
+                value.get("name") or value.get("label") or value.get("zone_name")
+                or value.get("title") or value.get("file_name") or identity
+            )
+            detail = str(
+                value.get("format") or value.get("size") or value.get("dimensions")
+                or value.get("publisher") or ""
+            )
+        else:
+            identity = str(value)
+            label = identity
+            detail = ""
+        previews.append({"id": identity, "label": label, "detail": detail, "kind": kind})
+    return previews
+
+
 def _order_summary(order_id: str, order: dict, *, order_count: int = 1) -> dict:
     placements = order.get("placements") or []
     creatives = order.get("creatives") or order.get("creative") or []
@@ -75,6 +102,8 @@ def _order_summary(order_id: str, order: dict, *, order_count: int = 1) -> dict:
         "end_date": order.get("endDate") or order.get("end_date"),
         "placement_count": len(placements) if isinstance(placements, list) else 0,
         "creative_count": len(creatives) if isinstance(creatives, list) else 0,
+        "placement_preview": _order_preview(placements, kind="placement"),
+        "creative_preview": _order_preview(creatives, kind="creative"),
         "warning_count": len(warnings) if isinstance(warnings, list) else 0,
         "order_count": order_count,
     }
