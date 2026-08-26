@@ -1404,3 +1404,30 @@ body:has(.public-landing-v3) {
   }
   .public-landing-v3 .scroll-reveal { opacity:1 !important; filter:none !important; transform:none !important; }
 }
+
+@keyframes campaignPageFromRight {
+  from { opacity:.88; transform:translateX(72px); }
+  to { opacity:1; transform:translateX(0); }
+}
+@keyframes campaignPageFromLeft {
+  from { opacity:.88; transform:translateX(-72px); }
+  to { opacity:1; transform:translateX(0); }
+}
+@keyframes campaignZaloNudgeIn {
+  from { opacity:0; transform:translateY(18px) scale(.96); }
+  to { opacity:1; transform:translateY(0) scale(1); }
+}
+.campaign-page-slide-next {
+  animation:campaignPageFromRight .38s cubic-bezier(.2,.72,.18,1);
+  will-change:transform,opacity;
+}
+.campaign-page-slide-prev {
+  animation:campaignPageFromLeft .38s cubic-bezier(.2,.72,.18,1);
+  will-change:transform,opacity;
+}
+.campaign-zalo-nudge { animation:campaignZaloNudgeIn .34s cubic-bezier(.16,.8,.24,1); }
+@media (prefers-reduced-motion:reduce) {
+  .campaign-page-slide-next,
+  .campaign-page-slide-prev,
+  .campaign-zalo-nudge { animation:none !important; }
+}

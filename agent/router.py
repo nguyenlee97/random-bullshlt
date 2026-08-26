@@ -315,6 +315,27 @@ async def conversations_list(request: Request, include_archived: bool = False):
     }
 
 
+@agent_router.get("/campaigns")
+async def campaigns_list(
+    request: Request,
+    response: Response,
+    include_archived: bool = False,
+    limit: int = 50,
+):
+    """Owner-scoped directory for the campaign-centric Agent homepage."""
+    from campaign_directory import list_campaign_directory
+
+    actor = await _request_actor(request)
+    response.headers["Cache-Control"] = "no-store"
+    return {
+        "campaigns": await list_campaign_directory(
+            actor,
+            include_archived=include_archived,
+            limit=max(1, min(limit, 100)),
+        )
+    }
+
+
 @agent_router.get("/conversation-models")
 async def conversation_models_list():
     from campaign_models import conversation_model_catalog

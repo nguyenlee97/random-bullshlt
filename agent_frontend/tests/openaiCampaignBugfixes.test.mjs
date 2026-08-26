@@ -111,7 +111,7 @@ test('Audience review exposes a real rerun action in Copilot and Autopilot', () 
 })
 
 test('Copilot does not mount the hidden Autopilot poller', () => {
-  assert.match(app, /experienceMode === 'autopilot' && \(\s*<AutopilotPanel/)
+  assert.match(app, /experienceMode === 'autopilot' && \([\s\S]{0,180}<AutopilotPanel/)
   assert.match(autopilot, /setInterval\(loadPrerequisites, 3000\)/)
 })
 

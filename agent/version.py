@@ -3,9 +3,13 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-08-17.1"
+BUILD_VERSION = "2026-08-26.1"
 
 BUILD_FEATURES = [
+    "campaign-centric-management-home",  # drafts, reviews and operational campaigns share one owner-scoped directory
+    "operational-campaign-management",   # completed campaign entry opens setup, reports, evidence and FAQ management
+    "completed-workspace-readonly",      # finished Copilot/Autopilot conversations remain navigable without mutation
+    "zalo-continuity-nudge",             # delayed homepage guidance reuses the existing Login and OA-link contracts
     "hackathon-doc-links-and-diagram-zoom",
     "langfuse-session-badge-navigation",
     "langfuse-session-trace-navigation",

@@ -25,7 +25,7 @@ const STEP_DESCS = [
 ]
 
 const WorkspacePane = forwardRef(function WorkspacePane(
-  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false, autopilotEditorArtifact = null, onAutopilotSave, onReturnToAutopilot, openaiCampaignFlow = false },
+  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false, autopilotEditorArtifact = null, onAutopilotSave, onReturnToAutopilot, openaiCampaignFlow = false, readOnly = false },
   ref
 ) {
   const bodyRef = useRef(null)
@@ -45,23 +45,25 @@ const WorkspacePane = forwardRef(function WorkspacePane(
   const step = steps[currentStep]
   const isDone = stepStatuses[currentStep] === 'done'
   const isStale = stepStatuses[currentStep] === 'stale'
-  const isReadOnly = isDone && !autopilotMode
+  const isReadOnly = readOnly || (isDone && !autopilotMode)
 
   const updateFormSlice = useCallback((slice, val) => {
+    if (readOnly) return
     setFormState(prev => ({
       ...prev,
       [slice]: typeof val === 'function' ? val(prev[slice]) : val,
     }))
-  }, [setFormState])
+  }, [readOnly, setFormState])
 
   // For CreativeStep: onChange may be a value OR a functional updater
   const updateCreative = useCallback((updater) => {
+    if (readOnly) return
     if (typeof updater === 'function') {
       setFormState(prev => ({ ...prev, creative: updater(prev.creative) }))
     } else {
       setFormState(prev => ({ ...prev, creative: updater }))
     }
-  }, [setFormState])
+  }, [readOnly, setFormState])
 
   const renderStep = () => {
     switch (currentStep) {
@@ -103,7 +105,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           }}
         />
       )
-      case 5: return <ReportStep data={formState.report} onChange={v => updateFormSlice('report', v)} isDone={isDone} formState={formState} onSendChat={onSendChat} />
+      case 5: return <ReportStep data={formState.report} onChange={v => updateFormSlice('report', v)} isDone={isReadOnly} formState={formState} onSendChat={onSendChat} />
       case 6: return (
         <EmailStep
           brief={formState.brief}
@@ -112,7 +114,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           audiences={formState.segment}
           data={formState.email || {}}
           onChange={v => updateFormSlice('email', v)}
-          isDone={isDone}
+          isDone={isReadOnly}
           formState={formState}
         />
       )
@@ -190,13 +192,13 @@ const WorkspacePane = forwardRef(function WorkspacePane(
               Tái sử dụng {recomputePlan.reuse_count || 0} phần không bị ảnh hưởng · Thứ tự: {(recomputePlan.recompute_order || []).join(' → ')}
             </p>
           </div>
-          <button
+          {!readOnly && <button
             type="button"
             onClick={onOpenRecompute}
             className="text-[10px] font-bold text-amber-900 border border-amber-300 bg-white hover:bg-amber-100 rounded-lg px-2.5 py-1.5 flex-shrink-0"
           >
             Xử lý
-          </button>
+          </button>}
         </div>
       )}
 
@@ -226,7 +228,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           {renderStep()}
 
           {/* Re-edit banner for completed input steps (brief, creative, audience) */}
-          {!autopilotMode && (isDone || isStale) && currentStep <= 3 && onPartialReset && (
+          {!readOnly && !autopilotMode && (isDone || isStale) && currentStep <= 3 && onPartialReset && (
             <div className="mt-4 flex items-center gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50">
               <div className="flex-1">
                 <p className="text-xs font-semibold text-amber-800">
@@ -253,7 +255,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
         stepIndex={currentStep}
         stepStatus={stepStatuses[currentStep]}
         totalSteps={steps.length}
-        canApprove={canApprove}
+        canApprove={!readOnly && canApprove}
         busy={busy}
         onApprove={onApprove}
         onBack={() => onStepJump(currentStep - 1)}
@@ -264,7 +266,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
             : 'Phân tích creative')
           : ''}
       />}
-      {autopilotMode && (
+      {autopilotMode && !readOnly && (
         <div className="flex-shrink-0 border-t border-brand-100 bg-white px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.05)] sm:px-5">
           {autopilotSaveMessage && (
             <div role="alert" className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">

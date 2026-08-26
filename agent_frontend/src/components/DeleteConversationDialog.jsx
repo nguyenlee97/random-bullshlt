@@ -9,6 +9,7 @@ export default function DeleteConversationDialog({
   const [phrase, setPhrase] = useState('')
   const deleteAll = target?.type === 'all'
   const autopilotActive = target?.type === 'autopilot-active'
+  const operational = target?.conversation?.phase === 'operational'
 
   useEffect(() => setPhrase(''), [target])
   if (!target) return null
@@ -33,7 +34,7 @@ export default function DeleteConversationDialog({
         <h2 id="delete-dialog-title" className="mt-4 pr-10 text-xl font-black text-slate-900">
           {autopilotActive
             ? 'Chưa thể xóa toàn bộ lịch sử'
-            : deleteAll ? 'Xóa toàn bộ lịch sử?' : 'Xóa cuộc trò chuyện này?'}
+            : deleteAll ? 'Xóa toàn bộ lịch sử?' : operational ? 'Xóa lịch sử làm việc?' : 'Xóa bản nháp này?'}
         </h2>
         <div id="delete-dialog-description" className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
           {autopilotActive ? (
@@ -54,7 +55,7 @@ export default function DeleteConversationDialog({
           ) : deleteAll ? (
             <p>Bạn sắp xóa vĩnh viễn <strong className="text-slate-900">{target.count} cuộc trò chuyện đang hiển thị</strong> và mọi cuộc trò chuyện đã lưu trữ, gồm chat, workspace và dữ liệu Autopilot liên quan.</p>
           ) : (
-            <p>“<strong className="text-slate-900">{title}</strong>” sẽ bị xóa vĩnh viễn cùng chat, workspace và dữ liệu Autopilot liên quan.</p>
+            <p>“<strong className="text-slate-900">{title}</strong>” sẽ bị xóa vĩnh viễn cùng chat, workspace và dữ liệu Agent liên quan.</p>
           )}
           {!autopilotActive && <p>Campaign/order đã tạo trong AdsPilot vẫn được giữ lại như hồ sơ kinh doanh. Thao tác này không thể hoàn tác.</p>}
         </div>
