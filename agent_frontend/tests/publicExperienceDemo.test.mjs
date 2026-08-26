@@ -28,6 +28,7 @@ const engine = read('../src/demo/DemoEngine.jsx')
 const scripts = read('../src/demo/demoScripts.js')
 const app = read('../src/App.jsx')
 const home = read('../src/components/CampaignHome.jsx')
+const campaignManagement = read('../src/components/CampaignManagement.jsx')
 const overlay = read('../src/demo/DemoOverlay.jsx')
 const autopilot = read('../src/components/AutopilotPanel.jsx')
 const autopilotReview = read('../src/components/AutopilotReview.jsx')
@@ -201,6 +202,12 @@ test('agent homepage exposes campaign-centric creation and progress controls', (
   assert.match(home, /Campaign Autopilot/)
   assert.match(home, /BẢN NHÁP/)
   assert.match(home, /clampProgress\(item\.progress\?\.percent\)/)
+})
+
+test('campaign management surfaces own vertical scrolling inside the fixed app root', () => {
+  for (const surface of [home, campaignManagement]) {
+    assert.match(surface, /h-full overflow-x-hidden overflow-y-auto overscroll-contain/)
+  }
 })
 
 test('Copilot demo is restored as a spotlight tour over the real interface', () => {

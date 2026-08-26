@@ -71,7 +71,7 @@ test('core mode controls keep mobile layout and accessible names', async () => {
   const composer = await source('agent_frontend/src/components/ChatPane/ChatComposer.jsx')
   const autopilot = await source('agent_frontend/src/components/AutopilotPanel.jsx')
 
-  assert.match(selector, /min-h-screen/)
+  assert.match(selector, /h-full overflow-x-hidden overflow-y-auto overscroll-contain/)
   assert.match(selector, /sm:grid-cols-2/)
   assert.match(app, /md:hidden/)
   assert.match(app, /flex-col md:flex-row/)
