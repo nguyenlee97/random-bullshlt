@@ -20,6 +20,7 @@ from evaluation.evidence_tools import EvidenceTools
 from evaluation.multi_agent import orchestrate
 from evaluation.probes import InvestigationContext
 from evaluation.investigation_jobs import VERSION, MAX_MODEL_CALLS
+from evaluation.evidence_relations import VERSION as RELATION_VERSION
 from config import config
 
 
@@ -91,7 +92,7 @@ async def main():
                 checks['role_execution'] = all(t.get('status') in {'completed', 'partial'} and t.get('result')
                                                for t in bundle['tasks'].values())
                 cards = {h['hypothesis_id']: h for h in bundle.get('hypotheses', [])}
-                checks['typed_relations'] = bundle.get('relationship_version') == 'evidence-relations-v1' and bool(cards)
+                checks['typed_relations'] = bundle.get('relationship_version') == RELATION_VERSION and bool(cards)
                 if label == 'metadata':
                     checks['independent_hypotheses'] = (cards.get('click_obstruction', {}).get('status') == 'contradicted'
                         and cards.get('creative_contract_mismatch', {}).get('status') == 'supported')

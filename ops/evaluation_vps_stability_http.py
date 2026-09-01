@@ -16,6 +16,7 @@ sys.path.insert(0, '/tmp')
 from evaluation_vps_smoke import ARTIFACT, CAMPAIGN, BASE, agent_db, client, call
 from config import config
 from evaluation.investigation_jobs import VERSION
+from evaluation.evidence_relations import VERSION as RELATION_VERSION
 
 OUTPUT = Path('/var/backups/advertising-agent/evaluation/20260831-evaluation-m2-4/http-stability.json')
 
@@ -93,7 +94,7 @@ def main():
             incident = next(i for i in current['incidents'] if i['incident_id'] == result['incident_id'])
             bundle = incident['investigation']
             assert bundle['job_id'] == result['job_id'] and bundle['bundle_version'] == VERSION
-            assert bundle.get('snapshot_signature') and bundle.get('relationship_version') == 'evidence-relations-v1'
+            assert bundle.get('snapshot_signature') and bundle.get('relationship_version') == RELATION_VERSION
             assert bundle['limitations'] and not bundle['mutations']
             path = prefix+'/incidents/'+result['incident_id']
             replay = call(c, 'POST', path+'/actions', {'action': 'investigate'}, expected=202)['investigation_job']

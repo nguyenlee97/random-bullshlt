@@ -122,7 +122,7 @@ def main():
     for item in manifest['files']:
         dest = target(item['path'])
         actual = digest(dest) if dest.is_file() else None
-        if 'expected_previous' in item:
+        if item.get('expected_previous'):
             assert actual == item['expected_previous'], 'Runtime drift: ' + item['path']
         else:
             assert actual is None or actual in item['known_previous'] + [item['sha256']], 'Unknown runtime: ' + item['path']
