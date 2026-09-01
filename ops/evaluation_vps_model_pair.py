@@ -24,6 +24,20 @@ from evaluation.evidence_relations import VERSION as RELATION_VERSION
 from config import config
 
 
+def cause_scope_matches(label, bundle, expected_cause, expected_scope):
+    observed = (bundle.get('cause_code'), bundle.get('claim_scope'))
+    if label == 'unavailable':
+        # Missing browser/render evidence must remain partial and ambiguous, but
+        # independent report measurements may still support the narrower claim
+        # that impressions were recorded while clicks were not.  This is not a
+        # claim that the click handler or telemetry service failed.
+        return observed in {
+            ('none', 'unknown'),
+            ('click_measurement_gap', 'measured_click_gap'),
+        }
+    return observed == (expected_cause, expected_scope)
+
+
 async def main():
     assert socket.gethostname() == 'momolita'
     parser=argparse.ArgumentParser()
@@ -80,7 +94,7 @@ async def main():
                     {'incident_id':'INC-QAPAIR','issue_type':'ctr_regression'},ctx,fixture,
                     progress=progress,guard=guard),timeout=240)
                 # Explicit limits and selected evidence required, not just expected words.
-                cause_ok=bundle.get('cause_code')==expected_cause and bundle.get('claim_scope')==expected_scope
+                cause_ok=cause_scope_matches(label, bundle, expected_cause, expected_scope)
                 render_collected=any(p['probe_id']=='inspect_render' for p in bundle['probes'])
                 assessment_ok=(bundle['assessment']=='supported_hypothesis' if expected_cause!='none'
                                else bundle['assessment']!='supported_hypothesis')

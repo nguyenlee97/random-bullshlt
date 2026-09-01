@@ -1,4 +1,4 @@
-"""Release-4 public HTTP acceptance using the existing isolated QA account.
+"""Release-5 public HTTP acceptance using the existing isolated QA account.
 
 Only one explicit incident investigation, one Q&A request and replays. No
 scenario apply/order mutation/OA send. Credentials stay in the old server file.
@@ -90,12 +90,20 @@ def main():
         assert mode == 'finish'
         assert job['status'] not in {'queued', 'running'}, 'Not finished; use poll'
         try:
-            assert job['status'] == 'completed', 'Investigation did not complete'
+            # A previous interrupted finish always disables the policy in its
+            # finally block. Re-enable only for this bounded acceptance phase;
+            # the finally below restores the safe disabled state.
+            call(c, 'PUT', prefix+'/policy', {'enabled': True, 'level': 'L2'})
+            assert job['status'] in {'completed', 'partial'}, 'Investigation did not produce a usable bundle'
+            assert not job.get('error')
+            assert all(task.get('status') in {'completed', 'partial'} and task.get('result')
+                       for task in job['tasks'].values())
             incident = next(i for i in current['incidents'] if i['incident_id'] == result['incident_id'])
             bundle = incident['investigation']
             assert bundle['job_id'] == result['job_id'] and bundle['bundle_version'] == VERSION
             assert bundle.get('snapshot_signature') and bundle.get('relationship_version') == RELATION_VERSION
             assert bundle['limitations'] and not bundle['mutations']
+            assert bool(bundle.get('partial')) == (job['status'] == 'partial')
             path = prefix+'/incidents/'+result['incident_id']
             replay = call(c, 'POST', path+'/actions', {'action': 'investigate'}, expected=202)['investigation_job']
             assert replay['job_id'] == job['job_id'] and replay['model_calls'] == job['model_calls']
@@ -115,6 +123,7 @@ def main():
             assert len(rows) == len(analytics) == 20 and len(analyses) == 6
             assert len({row['inputHash'] for row in rows+analytics+analyses}) == 1
             assert sum(row['clicks'] for row in rows) == 700
+            result.pop('error_type', None)
             result.update(status='passed', job=summary,
                           investigation={k:bundle.get(k) for k in ['cause_code','claim_scope','assessment','limitations','summary']},
                           completion=bundle.get('completion'), hypotheses=bundle.get('hypotheses'),
