@@ -18,7 +18,7 @@ def test_campaign_identifiers_do_not_enter_incident_namespace():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('message', ['2', 'Xác nhận', 'Xem report', 'Tạo campaign mới', 'FAQ'])
+@pytest.mark.parametrize('message', ['Xác nhận', 'Xem report', 'Tạo campaign mới', 'FAQ'])
 async def test_unrelated_chat_never_consumes_incident_context(message):
     from zalo_incidents import handle_incident_reply
     thread = {'thread_id': 'thread-a', 'active_campaign_id': 'ORD-OTHER',
@@ -26,6 +26,45 @@ async def test_unrelated_chat_never_consumes_incident_context(message):
     before = deepcopy(thread)
     reply, after = await handle_incident_reply(thread, message)
     assert reply is None and after == before
+
+
+@pytest.mark.asyncio
+async def test_bare_number_with_pending_campaign_and_incident_fails_closed():
+    from zalo_incidents import handle_incident_reply
+    thread = {'thread_id': 'thread-a', 'active_campaign_id': 'ORD-OTHER',
+              'pending_action': {'kind': 'choose_autopilot_mode'},
+              'recent_incident_refs': [{'incident_id': 'INC-A12F90'}]}
+    before = deepcopy(thread)
+    reply, after = await handle_incident_reply(thread, '2')
+    assert 'có thể trả lời' in reply
+    assert '2 INC-A12F90' in reply
+    assert 'Chưa thực hiện thao tác nào' in reply
+    assert after == before
+
+
+@pytest.mark.asyncio
+async def test_bare_number_without_pending_campaign_does_not_inherit_alert():
+    from zalo_incidents import handle_incident_reply
+    thread = {'thread_id': 'thread-a', 'pending_action': None,
+              'recent_incident_refs': [{'incident_id': 'INC-A12F90'}]}
+    before = deepcopy(thread)
+    reply, after = await handle_incident_reply(thread, '2')
+    assert reply is None and after == before
+
+
+@pytest.mark.asyncio
+async def test_unmapped_provider_reply_with_bare_number_fails_closed(monkeypatch):
+    import zalo_incidents
+    monkeypatch.setattr(zalo_incidents, '_incident_from_reply', AsyncMock(return_value=None))
+    thread = {'thread_id': 'thread-a', 'pending_action': None,
+              'recent_incident_refs': [{'incident_id': 'INC-A12F90'}]}
+    before = deepcopy(thread)
+    reply, after = await zalo_incidents.handle_incident_reply(
+        thread, '1', reply_to_message_id='provider-message-unknown',
+    )
+    assert 'provider chưa map được alert' in reply
+    assert '1 INC-A12F90' in reply
+    assert after == before
 
 
 @pytest.mark.asyncio
@@ -51,6 +90,23 @@ async def test_alert_only_updates_incident_namespace_and_uses_stable_outbox_key(
     assert send.call_args_list[0].kwargs['idempotency_key'] == send.call_args_list[1].kwargs['idempotency_key']
     assert '80%' not in send.call_args.kwargs['text']
     assert 'chưa kết luận' in send.call_args.kwargs['text']
+
+
+def test_l2_alert_exposes_completion_partial_roles_and_evidence_ids():
+    from zalo_incidents import _alert_text
+    incident = {'incident_id': 'INC-A12F90', 'title': 'CTR thấp', 'scope': 'zone-a',
+                'investigation': {'mode': 'multi_agent', 'cause_status': 'unresolved',
+                                  'summary': 'Còn nhiều giả thuyết.',
+                                  'completion': {'completed_roles': 2, 'total_roles': 4, 'unavailable_probes': 1},
+                                  'tasks': {'performance': {'role': 'performance', 'status': 'completed'},
+                                            'placement': {'role': 'placement', 'status': 'partial'}},
+                                  'review': {'evidence_ids': ['EVD-001', 'EVD-002']},
+                                  'limitations': ['Thiếu publisher probe.']}}
+    text = _alert_text('ORD-1', incident)
+    assert '2/4 vai trò hoàn tất' in text
+    assert '1 probe không có dữ liệu' in text
+    assert 'placement: partial' in text
+    assert 'EVD-001, EVD-002' in text
 
 
 @pytest.mark.asyncio

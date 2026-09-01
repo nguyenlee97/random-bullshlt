@@ -209,14 +209,73 @@ def verify_webhook(raw_body: bytes, body: dict, signature_header: str | None) ->
         raise ZaloSignatureError("Zalo webhook app does not match")
 
 
+_REPLY_ID_KEYS = (
+    "msg_id", "message_id", "id", "reply_msg_id", "quote_msg_id",
+    "reply_to_message_id", "source_msg_id",
+)
+_REPLY_CONTAINERS = (
+    "reply", "quote", "reply_to", "replyTo", "replied_message",
+    "quoted_message",
+)
+
+
+def _reply_reference(body: dict, message: dict) -> tuple[str | None, dict]:
+    """Extract a provider reply reference without retaining quoted content.
+
+    Zalo has emitted more than one reply/quote envelope over time. We accept a
+    bounded allow-list of known container and identifier names, and persist only
+    the matched path plus field names. Quoted text, sender data and the raw
+    provider payload never enter the durable event document.
+    """
+    candidates: list[tuple[str, object]] = []
+    for key in _REPLY_CONTAINERS:
+        if key in message:
+            candidates.append((f"message.{key}", message.get(key)))
+    for key in _REPLY_CONTAINERS:
+        if key in body:
+            candidates.append((key, body.get(key)))
+    for key in _REPLY_ID_KEYS[3:]:
+        if key in message:
+            candidates.append((f"message.{key}", message.get(key)))
+        if key in body:
+            candidates.append((key, body.get(key)))
+
+    observed_keys: set[str] = set()
+    reference = None
+    source = None
+    for path, value in candidates:
+        if isinstance(value, dict):
+            observed_keys.update(str(key)[:80] for key in value.keys())
+            for key in _REPLY_ID_KEYS:
+                clean = str(value.get(key) or "").strip()[:300]
+                if clean:
+                    reference, source = clean, f"{path}.{key}"
+                    break
+        else:
+            observed_keys.add(path.rsplit(".", 1)[-1][:80])
+            clean = str(value or "").strip()[:300]
+            if clean:
+                reference, source = clean, path
+        if reference:
+            break
+
+    return reference, {
+        "present": bool(candidates),
+        "reference_found": bool(reference),
+        "source": source,
+        "candidate_keys": sorted(observed_keys)[:24],
+        "message_keys": sorted(str(key)[:80] for key in message.keys())[:32],
+        "body_keys": sorted(str(key)[:80] for key in body.keys())[:32],
+    }
+
+
 def normalize_event(body: dict, raw_body: bytes) -> dict:
     event_name = str(body.get("event_name") or "").strip()[:100]
     sender = body.get("sender") if isinstance(body.get("sender"), dict) else {}
     follower = body.get("follower") if isinstance(body.get("follower"), dict) else {}
     recipient = body.get("recipient") if isinstance(body.get("recipient"), dict) else {}
     message = body.get("message") if isinstance(body.get("message"), dict) else {}
-    reply = message.get("reply") if isinstance(message.get("reply"), dict) else {}
-    quote = message.get("quote") if isinstance(message.get("quote"), dict) else {}
+    reply_to_message_id, reply_context = _reply_reference(body, message)
     # Message webhooks identify the OA user as sender.id. Follow/unfollow
     # webhooks use a different provider schema and identify that user as
     # follower.id instead. Prefer the event-specific field but retain the
@@ -261,10 +320,8 @@ def normalize_event(body: dict, raw_body: bytes) -> dict:
         # but only while that account has an explicit pending link attempt.
         "app_scoped_uid": str(body.get("user_id_by_app") or "").strip()[:200] or None,
         "text": text,
-        "reply_to_message_id": str(
-            reply.get("msg_id") or reply.get("message_id")
-            or quote.get("msg_id") or quote.get("message_id") or ""
-        ).strip()[:300] or None,
+        "reply_to_message_id": reply_to_message_id,
+        "reply_context": reply_context,
         "images": images,
         "provider_timestamp": str(body.get("timestamp") or ""),
         "payload_hash": payload_hash,

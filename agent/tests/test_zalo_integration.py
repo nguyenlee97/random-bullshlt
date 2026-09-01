@@ -31,7 +31,7 @@ def _enable_oa(monkeypatch):
 
 def _signed_event(
     *, text="hello", message_id="msg-1", uid="oa-user-1",
-    event_name="user_send_text", user_id_by_app=None,
+    event_name="user_send_text", user_id_by_app=None, message_extra=None,
 ):
     from config import config
 
@@ -50,7 +50,7 @@ def _signed_event(
         body.update({
             "sender": {"id": uid},
             "recipient": {"id": config.ZALO_OA_ID},
-            "message": {"text": text, "msg_id": message_id},
+            "message": {"text": text, "msg_id": message_id, **(message_extra or {})},
         })
     if user_id_by_app:
         body["user_id_by_app"] = user_id_by_app
@@ -254,6 +254,46 @@ def test_follow_payload_uses_follower_id_and_top_level_oa_id(monkeypatch):
     body["oa_id"] = "another-oa"
     with pytest.raises(zalo_channel.ZaloSignatureError, match="OA does not match"):
         zalo_channel.normalize_event(body, raw)
+
+
+@pytest.mark.parametrize('message_extra,expected_id,expected_source', [
+    ({'reply': {'msg_id': 'alert-1', 'text': 'quoted secret'}}, 'alert-1', 'message.reply.msg_id'),
+    ({'quote': {'message_id': 'alert-2', 'sender': {'id': 'secret'}}}, 'alert-2', 'message.quote.message_id'),
+    ({'reply_to': {'id': 'alert-3', 'text': 'quoted secret'}}, 'alert-3', 'message.reply_to.id'),
+    ({'quoted_message': {'source_msg_id': 'alert-4'}}, 'alert-4', 'message.quoted_message.source_msg_id'),
+    ({'reply_msg_id': 'alert-5'}, 'alert-5', 'message.reply_msg_id'),
+])
+def test_reply_shapes_are_correlated_with_redacted_metadata(
+    monkeypatch, message_extra, expected_id, expected_source,
+):
+    _enable_oa(monkeypatch)
+    import zalo_channel
+    body, raw, _ = _signed_event(message_extra=message_extra)
+    event = zalo_channel.normalize_event(body, raw)
+    assert event['reply_to_message_id'] == expected_id
+    assert event['reply_context']['present'] is True
+    assert event['reply_context']['reference_found'] is True
+    assert event['reply_context']['source'] == expected_source
+    assert 'quoted secret' not in repr(event)
+    assert "'secret'" not in repr(event)
+
+
+def test_unknown_reply_shape_records_only_safe_shape_metadata(monkeypatch):
+    _enable_oa(monkeypatch)
+    import zalo_channel
+    body, raw, _ = _signed_event(message_extra={
+        'reply': {'unknown_reference': 'provider-secret', 'text': 'quoted secret'},
+    })
+    event = zalo_channel.normalize_event(body, raw)
+    assert event['reply_to_message_id'] is None
+    assert event['reply_context'] == {
+        'present': True, 'reference_found': False, 'source': None,
+        'candidate_keys': ['text', 'unknown_reference'],
+        'message_keys': ['msg_id', 'reply', 'text'],
+        'body_keys': ['app_id', 'event_name', 'message', 'recipient', 'sender', 'timestamp'],
+    }
+    assert 'provider-secret' not in repr(event)
+    assert 'quoted secret' not in repr(event)
 
 
 @pytest.mark.asyncio
@@ -469,6 +509,32 @@ def test_webhook_http_acknowledges_invalid_signature_without_creating_event(monk
 
     import zalo_channel
     assert zalo_channel._mem_events == {}
+
+
+def test_webhook_log_exposes_only_redacted_reply_shape(monkeypatch, capsys):
+    _enable_oa(monkeypatch)
+    from config import config
+    from main import app
+
+    body, raw, signature = _signed_event(
+        message_id='incoming-reply-1',
+        message_extra={'reply_to': {'id': 'outbound-alert-1', 'text': 'quoted secret'}},
+    )
+    headers = {
+        'Content-Type': 'application/json',
+        'X-ZEvent-Signature': signature,
+        **({'X-API-Key': config.AGENT_API_KEY} if config.AGENT_API_KEY else {}),
+    }
+    response = TestClient(app).post('/api/agent/zalo/webhook', content=raw, headers=headers)
+    assert response.status_code == 200 and response.json()['accepted'] is True
+    output = capsys.readouterr().out
+    payload = json.loads(next(line for line in output.splitlines() if '"event":"zalo_webhook"' in line))
+    assert payload['reply_context_present'] is True
+    assert payload['reply_reference_found'] is True
+    assert payload['reply_reference_source'] == 'message.reply_to.id'
+    assert payload['reply_candidate_keys'] == ['id', 'text']
+    assert 'quoted secret' not in output
+    assert 'outbound-alert-1' not in output
 
 
 def test_zalo_http_callback_sets_only_existing_opaque_account_cookie(monkeypatch):

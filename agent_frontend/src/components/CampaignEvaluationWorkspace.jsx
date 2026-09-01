@@ -116,14 +116,20 @@ export function InvestigationProgress({ job }) {
   const roles = { performance: 'Performance Analyst', creative: 'Creative Inspector', setup: 'Setup Auditor', placement: 'Placement Investigator', coordinator: 'Coordinator' }
   const phases = { model: 'Đang phân tích evidence', tool: 'Đang thu thập', reused: 'Dùng lại kết quả hợp lệ', starting: 'Bắt đầu', review: 'Kiểm tra kết luận' }
   const seconds = value => `${(Number(value || 0) / 1000).toFixed(1)}s`
+  const tasks = Object.values(job.tasks || {})
+  const completed = tasks.filter(task => task.status === 'completed').length
+  const evidenceCount = tasks.reduce((sum, task) => sum + Object.keys(task.tool_evidence_ids || {}).length, 0)
   return <section aria-label="Tiến độ investigation" className="space-y-2 rounded-xl border border-violet-200 p-3">
     <div className="flex flex-wrap justify-between gap-2"><h4 className="text-sm font-bold">Nhóm điều tra L2</h4><p role="status" className="text-sm font-semibold">{states[job.status] || job.status}</p></div>
     <p className="break-all text-xs text-slate-500">{job.job_id}</p>
     <p className="text-xs text-slate-500">Revision {job.dataset_revision} · {job.model_calls || 0}/24 lượt model · lần xử lý {job.attempts || 0}/3</p>
-    <div className="grid gap-2 sm:grid-cols-2">{Object.values(job.tasks || {}).map(t => <div key={t.role} className="min-w-0 space-y-1 rounded-lg bg-slate-50 p-3 text-xs">
+    {!!tasks.length && <p className="text-xs font-semibold text-violet-900">{completed}/{tasks.length} vai trò hoàn tất · {evidenceCount} evidence đã gắn vào specialist</p>}
+    <div className="grid gap-2 sm:grid-cols-2">{tasks.map(t => <div key={t.role} className="min-w-0 space-y-1 rounded-lg bg-slate-50 p-3 text-xs">
       <strong>{roles[t.role] || t.role} · {states[t.status] || t.status}</strong>
       <p>{phases[t.phase] || states[t.phase] || 'Chưa có tiến độ chi tiết'}{t.current_tool ? `: ${t.current_tool}` : ''}</p>
       <p className="break-words">Công cụ: {t.tool_calls?.join(', ') || 'Chưa gọi'}</p>
+      {!!Object.keys(t.tool_evidence_ids || {}).length && <details><summary className="cursor-pointer text-slate-600">Evidence của specialist ({Object.keys(t.tool_evidence_ids).length})</summary>
+        <ul className="mt-2 space-y-1">{Object.entries(t.tool_evidence_ids).map(([tool, evidenceId]) => <li className="break-all" key={tool}><strong>{tool}</strong> → {evidenceId}</li>)}</ul></details>}
       {!!t.reused_evidence_count && <p className="text-blue-800">Dùng lại {t.reused_evidence_count} evidence cùng snapshot; không gọi lại probe.</p>}
       {!!t.timings?.length && <details><summary className="cursor-pointer text-slate-600">Thời gian / retry ({t.timings.length})</summary>
         <ul className="mt-2 space-y-1">{t.timings.map((event, index) => <li key={index} className="break-words">{event.kind === 'model' ? 'Model' : event.tool} · {states[event.status] || (event.status === 'unavailable' ? 'Không có evidence' : event.status)} · {event.duration_ms === undefined ? 'Đang chạy' : seconds(event.duration_ms)} · lần {event.attempt}{event.error_code ? ` · ${event.error_code}` : ''}</li>)}</ul></details>}

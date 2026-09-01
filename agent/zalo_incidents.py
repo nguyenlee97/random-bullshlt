@@ -37,6 +37,37 @@ def _fold(value: str) -> str:
     )
 
 
+def _pending_label(pending: dict) -> str:
+    labels = {
+        'choose_campaign': 'chọn campaign',
+        'campaign_lifecycle': 'xác nhận thay đổi campaign',
+        'choose_autopilot_mode': 'chọn chế độ Autopilot',
+        'collect_autopilot_brief': 'nhập brief Autopilot',
+        'confirm_autopilot_brief': 'duyệt brief Autopilot',
+        'autopilot_approval': 'duyệt bước Autopilot',
+    }
+    return labels.get(str(pending.get('kind') or ''), 'campaign đang chờ')
+
+
+def _ambiguous_numeric_reply(
+    thread: dict, choice: int | None, *, reply_reference_present: bool = False,
+) -> str | None:
+    """Fail closed when one bare number could belong to two namespaces."""
+    pending = thread.get('pending_action') or {}
+    refs = [item for item in (thread.get('recent_incident_refs') or [])
+            if item.get('incident_id')]
+    if choice is None or not refs or (not pending and not reply_reference_present):
+        return None
+    incident_id = str(refs[-1]['incident_id']).upper()
+    context = (_pending_label(pending) if pending
+               else 'một tin nhắn được reply nhưng provider chưa map được alert')
+    return (
+        f'Tin nhắn “{choice}” có thể trả lời luồng {context} hoặc alert '
+        f'{incident_id}. Chưa thực hiện thao tác nào. Với incident, gửi “{choice} '
+        f'{incident_id}”. Với campaign, hãy trả lời bằng chữ theo yêu cầu đang chờ.'
+    )
+
+
 async def _threads_for_campaign(campaign_id: str) -> list[dict]:
     from zalo_channel import _collections
     collections = await _collections()
@@ -82,6 +113,24 @@ def _alert_text(campaign_id: str, incident: dict) -> str:
     if investigation.get('mode') == 'multi_agent':
         label = 'chưa chốt nguyên nhân' if investigation.get('cause_status') != 'supported_hypothesis' else 'giả thuyết có evidence, chưa chứng minh nhân quả'
         diagnosis = '\nL2 (' + label + '): ' + str(investigation.get('summary') or 'Chưa có kết luận.')[:500]
+        completion = investigation.get('completion') or {}
+        if completion:
+            diagnosis += (f"\nTiến độ evidence: {int(completion.get('completed_roles') or 0)}/"
+                          f"{int(completion.get('total_roles') or 0)} vai trò hoàn tất; "
+                          f"{int(completion.get('unavailable_probes') or 0)} probe không có dữ liệu.")
+        incomplete = [
+            f"{task.get('role')}: {task.get('status')}"
+            for task in (investigation.get('tasks') or {}).values()
+            if task.get('status') != 'completed'
+        ]
+        if incomplete:
+            diagnosis += '\nChưa hoàn tất: ' + ', '.join(incomplete[:4])
+        cited = list((investigation.get('review') or {}).get('evidence_ids') or [])
+        if not cited:
+            cited = [probe.get('evidence_id') for probe in investigation.get('probes') or []
+                     if probe.get('evidence_id') and probe.get('status') != 'unavailable']
+        if cited:
+            diagnosis += '\nEvidence: ' + ', '.join(str(value) for value in cited[:3])
         if investigation.get('limitations'):
             diagnosis += '\nGiới hạn: ' + str(investigation['limitations'][0])[:220]
     elif investigation.get('assessment') == 'insufficient_evidence':
@@ -158,6 +207,11 @@ async def handle_incident_reply(
         return 'Mã incident và tin nhắn được trả lời không khớp. Hãy gửi lại đúng một mã, không reply tin cũ; chưa thực hiện thao tác nào.', thread
     incident_id = reply_id or incident_id
     if not incident_id:
+        clarification = _ambiguous_numeric_reply(
+            thread, choice, reply_reference_present=bool(reply_to_message_id),
+        )
+        if clarification:
+            return clarification, thread
         return None, thread
     pending = thread.get("pending_action") or {}
     if pending.get("kind") == "incident_recovery":
