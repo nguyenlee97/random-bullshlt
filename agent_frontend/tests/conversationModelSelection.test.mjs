@@ -8,7 +8,7 @@ import {
 
 const api = readFileSync(new URL('../src/api/agentApi.js', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
-const selector = readFileSync(new URL('../src/components/ExperienceSelector.jsx', import.meta.url), 'utf8')
+const selector = readFileSync(new URL('../src/components/CampaignHome.jsx', import.meta.url), 'utf8')
 const workspace = readFileSync(new URL('../src/components/WorkspacePane/index.jsx', import.meta.url), 'utf8')
 const workFoot = readFileSync(new URL('../src/components/WorkspacePane/WorkFoot.jsx', import.meta.url), 'utf8')
 const landing = readFileSync(new URL('../src/components/PublicLanding.jsx', import.meta.url), 'utf8')
@@ -40,8 +40,8 @@ test('homepage hides model choice and only exposes Copilot or Autopilot', () => 
   assert.doesNotMatch(selector, /conversation-model-selector|conversation-model/)
   assert.doesNotMatch(selector, /model\.label|model\.description|selectedModel/)
   assert.doesNotMatch(selector, /Model cho campaign|trạng thái model/)
-  assert.match(selector, /campaignEngineReady/)
-  assert.match(selector, /onSelect\(mode\.id\)/)
+  assert.match(selector, /createDisabled/)
+  assert.match(selector, /onCreate\('autopilot'\)/)
 })
 
 test('landing, direct entry, and both tours share the hidden engine policy', () => {

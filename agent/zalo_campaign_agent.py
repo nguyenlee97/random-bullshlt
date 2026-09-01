@@ -195,37 +195,9 @@ async def _update_thread(thread: dict, updates: dict) -> dict:
 
 async def owned_campaigns(thread: dict) -> list[dict]:
     """Return orders from the durable registry owned by this channel actor."""
-    from campaign_ownership import (
-        list_owned_campaign_references,
-        preserve_session_campaigns,
-    )
-    from identity import list_conversations
-    from tools.order_api import fetch_order
+    from campaign_directory import list_owned_order_campaigns
 
-    actor = _thread_actor(thread)
-    # Additive migration: every surviving legacy conversation self-backfills on
-    # read. Future conversation deletion also preserves these references first.
-    conversations = await list_conversations(actor, include_archived=True)
-    for conversation in conversations:
-        session_id = conversation.get("session_id")
-        if session_id:
-            await preserve_session_campaigns(session_id)
-    references = {
-        item["order_id"]: item
-        for item in await list_owned_campaign_references(actor)
-    }
-
-    async def fetch(item: tuple[str, dict]) -> dict | None:
-        order_id, reference = item
-        try:
-            order = await fetch_order(order_id)
-        except Exception:
-            return None
-        return {**reference, "campaign_id": order_id, "order": order}
-
-    campaigns = [item for item in await asyncio.gather(*(fetch(item) for item in references.items())) if item]
-    campaigns.sort(key=lambda item: str(item["order"].get("updatedAt") or item["order"].get("createdAt") or ""), reverse=True)
-    return campaigns
+    return await list_owned_order_campaigns(_thread_actor(thread))
 
 
 def resolve_campaign(

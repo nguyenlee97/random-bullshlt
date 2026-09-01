@@ -2,6 +2,7 @@ const HOME_PATH = '/home'
 const MANAGE_PATH = '/manage'
 const LEGACY_WORKSPACE_PATH = '/workspace'
 const AGENT_PATH = '/agent'
+const CAMPAIGN_MANAGE_PREFIX = `${MANAGE_PATH}/campaigns`
 
 const publicMode = mode => mode === 'autopilot' ? 'autopilot' : 'copilot'
 
@@ -16,6 +17,13 @@ export function agentPath(mode = 'copilot', conversationId = '') {
   return `${historyModePath}/history/${encodeURIComponent(normalizedId)}`
 }
 
+export function campaignManagePath(campaignId = '') {
+  const normalizedId = String(campaignId || '').trim()
+  return normalizedId
+    ? `${CAMPAIGN_MANAGE_PREFIX}/${encodeURIComponent(normalizedId)}`
+    : MANAGE_PATH
+}
+
 export function parseAppRoute(locationLike) {
   const pathname = locationLike?.pathname || '/'
   const params = new URLSearchParams(locationLike?.search || '')
@@ -23,6 +31,12 @@ export function parseAppRoute(locationLike) {
   const legacyMode = params.get('mode')
   const queryRequiresAgent = params.has('conversation') || params.has('auth') || params.has('auth_error')
   const isAgentPath = segments[0] === 'agent'
+
+  if (segments[0] === 'manage' && segments[1] === 'campaigns' && segments[2]) {
+    let campaignId = segments[2]
+    try { campaignId = decodeURIComponent(campaignId) } catch { /* API handles malformed IDs */ }
+    return { surface: 'campaign', mode: '', conversationId: '', campaignId }
+  }
 
   if (
     (pathname === MANAGE_PATH || pathname === LEGACY_WORKSPACE_PATH)
@@ -54,7 +68,12 @@ export function parseAppRoute(locationLike) {
     // Keep malformed legacy IDs intact so the API can return the normal error.
   }
 
-  return { surface: 'agent', mode, conversationId }
+  return {
+    surface: 'agent',
+    mode,
+    conversationId,
+    readOnly: params.get('readonly') === '1',
+  }
 }
 
 export function hasAgentIntent(locationLike) {
@@ -76,6 +95,7 @@ export function agentEntryUrl(locationLike, requestedMode = 'copilot', conversat
   params.delete('tour')
   params.delete('mode')
   params.delete('conversation')
+  params.delete('readonly')
   const query = params.toString()
   return `${agentPath(requestedMode, conversationId)}${query ? `?${query}` : ''}${locationLike?.hash || ''}`
 }
@@ -88,4 +108,4 @@ export function authReturnTo(locationLike) {
   return `${locationLike?.pathname || AGENT_PATH}${query ? `?${query}` : ''}${locationLike?.hash || ''}`
 }
 
-export { AGENT_PATH, HOME_PATH, MANAGE_PATH }
+export { AGENT_PATH, CAMPAIGN_MANAGE_PREFIX, HOME_PATH, MANAGE_PATH }

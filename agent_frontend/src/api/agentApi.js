@@ -1464,6 +1464,17 @@ export const AgentAPI = {
     return response.json()
   },
 
+  async listCampaigns(includeArchived = true) {
+    await bootstrapIdentity()
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/campaigns?include_archived=${includeArchived ? 'true' : 'false'}`,
+      { signal: AbortSignal.timeout(10000) },
+    )
+    if (!response.ok) throw await responseError(response, 'Không thể tải danh sách campaign.')
+    const data = await response.json()
+    return Array.isArray(data.campaigns) ? data.campaigns : []
+  },
+
   async listConversationModels() {
     const response = await agentFetch(`${AGENT_URL}/api/agent/conversation-models`, {
       signal: AbortSignal.timeout(5000),
