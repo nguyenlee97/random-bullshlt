@@ -60,9 +60,18 @@ def main():
             if previous and previous_files.get(name) == digest(data):
                 continue
             old = []
-            for ref in ['HEAD', 'MERGE_HEAD']:
+            # A file may predate the cumulative deployment manifest (for
+            # example, a route first changed by this delta). Include the exact
+            # previous release Git head so inspect/apply can still verify the
+            # deployed baseline instead of treating it as unknown drift.
+            for ref in ['HEAD', base_ref, 'MERGE_HEAD']:
+                if not ref:
+                    continue
                 value = subprocess.run(['git','show',f'{ref}:{name}'],cwd=ROOT,capture_output=True)
-                if value.returncode == 0: old.append(digest(value.stdout))
+                if value.returncode == 0:
+                    old_hash = digest(value.stdout)
+                    if old_hash not in old:
+                        old.append(old_hash)
             item = {'path':name, 'sha256':digest(data), 'known_previous':old}
             if previous:
                 item['expected_previous'] = previous_files.get(name)
