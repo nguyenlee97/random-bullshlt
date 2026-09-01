@@ -659,11 +659,13 @@ function buildPDF({ campaignId, campaign = {}, records = [], analyses = [], comp
   });
 }
 
-async function generatePDF(campaignId) {
+async function generatePDF(campaignId, suppliedSnapshot) {
+  const { activeSnapshot } = require('./reportDatasets');
+  const snapshot = suppliedSnapshot === undefined ? await activeSnapshot(campaignId) : suppliedSnapshot;
   const [campaign, records, analyses] = await Promise.all([
     Campaign.findOne({ orderId: campaignId }).lean(),
-    AnalyticsRecord.find({ campaignId }).sort({ date: 1 }).lean(),
-    ReportAnalysis.find({ campaignId, status: 'ready' }).lean(),
+    snapshot ? snapshot.records : AnalyticsRecord.find({ campaignId }).sort({ date: 1 }).lean(),
+    snapshot ? snapshot.analyses : ReportAnalysis.find({ campaignId, status: 'ready' }).lean(),
   ]);
   return buildPDF({ campaignId, campaign: campaign || {}, records, analyses });
 }

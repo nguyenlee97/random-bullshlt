@@ -28,8 +28,7 @@ async function ensureBaselineDataset(input, recordsValue) {
   const records = cleanRecords(recordsValue);
   const campaignId = String(input.campaignId);
   const existing = await ReportDataset.findOne({ campaignId, kind: 'baseline' }).lean();
-  if (existing) return existing;
-  const baseline = await ReportDataset.findOneAndUpdate(
+  const baseline = existing || await ReportDataset.findOneAndUpdate(
     { campaignId, revision: 1 },
     { $setOnInsert: {
       campaignId, revision: 1, kind: 'baseline', input,
@@ -50,17 +49,26 @@ async function ensureBaselineDataset(input, recordsValue) {
 
 async function getScenarioWorkspace(campaignId) {
   const [state, revisions] = await Promise.all([
-    CampaignReportState.findOne({ campaignId }, { _id: 0, __v: 0 }).lean(),
+    CampaignReportState.findOne({ campaignId }, { _id: 0, __v: 0, leaseToken: 0 }).lean(),
     ReportDataset.find({ campaignId }, {
-      _id: 0, __v: 0, records: 0, input: 0,
+      _id: 0, __v: 0, records: 0, input: 0, analyses: 0, runtimeFixture: 0,
     }).sort({ revision: -1 }).limit(30).lean(),
   ]);
-  return { campaignId, presets: PRESETS, state, revisions };
+  const baseline = await ReportDataset.findOne({ campaignId, kind: 'baseline' }).lean();
+  return { campaignId, presets: PRESETS, state, revisions,
+    placements: [...new Set((baseline?.records || []).map(row => row.placementId))] };
 }
 
 async function baselineFor(campaignId) {
   let baseline = await ReportDataset.findOne({ campaignId, kind: 'baseline' }).lean();
-  if (baseline) return baseline;
+  if (baseline) {
+    // Repair a baseline insert whose following state insert was interrupted.
+    await CampaignReportState.updateOne({ campaignId }, { $setOnInsert: {
+      campaignId, baselineRevision: 1, activeRevision: 1, nextRevision: 1,
+      activeInputHash: baseline.inputHash, activeScenario: null,
+    } }, { upsert: true });
+    return baseline;
+  }
   const analysis = await ReportAnalysis.findOne({ campaignId, inputHash: { $ne: '' } }).lean();
   const records = await AnalyticsRecord.find({ campaignId }).sort({ date: 1 }).lean();
   let input = analysis?.provenance?.reportInput || analysis?.pendingInput;
@@ -90,20 +98,24 @@ async function baselineFor(campaignId) {
 async function previewScenario(campaignId, config) {
   const baseline = await baselineFor(campaignId);
   const result = applyScenario(baseline.records, config);
+  const state = await CampaignReportState.findOne({ campaignId }).lean();
+  const active = await ReportDataset.findOne({ campaignId, revision: state.activeRevision }).lean();
   return {
     campaignId,
     baselineRevision: baseline.revision,
     scenario: result.config,
     records: result.records,
+    beforeRecords: active?.records || baseline.records,
+    activeRevision: state.activeRevision,
   };
 }
 
-async function rebuildAnalyses(input, records) {
+async function buildAnalyses(input, records) {
   // Lazy import prevents a report-generator/model cycle during process boot.
   const {
     REPORT_TYPES, generateAnalysis, questionsForReport,
   } = require('./reportGenerator');
-  await Promise.all(REPORT_TYPES.map(async reportType => {
+  return Promise.all(REPORT_TYPES.map(async reportType => {
     const result = await generateAnalysis(input, records, reportType);
     const questions = questionsForReport(reportType, result.dataContract).map(question => {
       const answered = (result.questions || []).find(item => item.id === question.id);
@@ -115,9 +127,8 @@ async function rebuildAnalyses(input, records) {
         },
       };
     });
-    await ReportAnalysis.findOneAndUpdate(
-      { campaignId: input.campaignId, reportType },
-      { $set: {
+    return {
+        campaignId: input.campaignId, reportType,
         status: 'ready', overall: result.overall || '', questions,
         dataContract: result.dataContract, inputHash: input.inputHash,
         schemaVersion: result.dataContract.contractVersion,
@@ -131,62 +142,98 @@ async function rebuildAnalyses(input, records) {
           fallbackReason: result.analysisProvenance?.reason || null,
         },
         generatedAt: new Date(), error: '', pendingInput: null,
-      } },
-      { upsert: true },
-    );
+    };
   }));
 }
 
 async function applyScenarioRevision(campaignId, config, createdBy = 'agent_ui') {
+  const { requestId, expectedRevision } = config;
+  if (!/^[A-Za-z0-9_-]{8,100}$/.test(requestId || '') || !Number.isInteger(expectedRevision)) {
+    throw new Error('requestId and expectedRevision are required');
+  }
   const baseline = await baselineFor(campaignId);
   const transformed = applyScenario(baseline.records, config);
-  const state = await CampaignReportState.findOneAndUpdate(
-    { campaignId },
-    { $inc: { nextRevision: 1 } },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
-  ).lean();
-  const revision = state.nextRevision;
-  const inputHash = datasetHash(baseline.input.inputHash, revision, transformed.config);
-  const input = { ...baseline.input, inputHash };
-  const records = transformed.records.map(row => ({
-    ...row, campaignId, inputHash,
-    scenario: { ...(row.scenario || {}), revision },
-  }));
-  await ReportDataset.create({
-    campaignId, revision, kind: 'scenario', input, inputHash,
-    scenario: transformed.config, records, createdBy,
-  });
-
-  const previous = await ReportDataset.findOne({
-    campaignId, revision: state.activeRevision,
-  }).lean();
+  const requestHash = datasetHash(baseline.inputHash, expectedRevision, transformed.config);
+  let previousRequest = await ReportDataset.findOne({ campaignId, requestId }).lean();
+  if (previousRequest && previousRequest.requestHash !== requestHash) throw conflict('requestId reused with different parameters');
+  const now = new Date(), leaseToken = crypto.randomUUID();
+  const state = await CampaignReportState.findOneAndUpdate({ campaignId,
+    $or: [{ leaseUntil: { $exists: false } }, { leaseUntil: { $lte: now } }],
+  }, { $set: { leaseToken, leaseUntil: new Date(Date.now() + 10 * 60_000) } }, { new: true }).lean();
+  if (!state) throw conflict('Another scenario is being applied; retry with the same requestId');
   try {
-    await AnalyticsRecord.deleteMany({ campaignId });
-    await AnalyticsRecord.insertMany(records);
-    await rebuildAnalyses(input, records);
-    await CampaignReportState.updateOne({ campaignId }, { $set: {
-      activeRevision: revision, activeInputHash: inputHash,
-      activeScenario: transformed.config,
-    } });
-  } catch (error) {
-    if (previous?.records?.length) {
-      await AnalyticsRecord.deleteMany({ campaignId });
-      await AnalyticsRecord.insertMany(cleanRecords(previous.records));
-      await rebuildAnalyses(previous.input, cleanRecords(previous.records));
+    // A competing request may have finished between the first lookup and lease acquisition.
+    previousRequest = await ReportDataset.findOne({ campaignId, requestId }).lean();
+    if (previousRequest && previousRequest.requestHash !== requestHash) throw conflict('requestId reused with different parameters');
+    // A completed retry returns its original result even if a newer scenario exists.
+    if (previousRequest && (previousRequest.status === 'published' || state.appliedRequests?.[requestId] === previousRequest.revision)) return scenarioResult(previousRequest, true);
+    if (state.activeRevision !== expectedRevision) throw conflict('Dataset revision changed; preview again');
+    let dataset = previousRequest;
+    if (!dataset) {
+      const allocation = await CampaignReportState.findOneAndUpdate({ campaignId, leaseToken }, { $inc: { nextRevision: 1 } }, { new: true }).lean();
+      const revision = allocation.nextRevision;
+      const inputHash = datasetHash(baseline.input.inputHash, revision, transformed.config);
+      dataset = await ReportDataset.create({
+        campaignId, revision, kind: 'scenario', input: { ...baseline.input, inputHash }, inputHash,
+        scenario: transformed.config, requestId, requestHash, status: 'building', createdBy,
+        runtimeFixture: transformed.runtimeFixture,
+        records: transformed.records.map(row => ({ ...row, campaignId, inputHash, scenario: { ...row.scenario, revision } })),
+      });
+      dataset = dataset.toObject();
     }
-    await ReportDataset.updateOne(
-      { campaignId, revision },
-      { $set: { 'scenario.applyError': error.message } },
-    );
-    throw error;
+    const analyses = dataset.analyses?.length === 6 ? dataset.analyses : await buildAnalyses(dataset.input, dataset.records);
+    await ReportDataset.updateOne({ campaignId, revision: dataset.revision }, { $set: { analyses, status: 'ready' } });
+    const published = await CampaignReportState.updateOne({ campaignId, leaseToken,
+      leaseUntil: { $gt: new Date() }, activeRevision: expectedRevision,
+    }, { $set: { activeRevision: dataset.revision, activeInputHash: dataset.inputHash, activeScenario: dataset.scenario,
+      [`appliedRequests.${requestId}`]: dataset.revision } });
+    if (published.modifiedCount !== 1) throw conflict('Scenario lease or dataset revision changed; retry');
+    await ReportDataset.updateOne({ campaignId, revision: dataset.revision }, { $set: { status: 'published' } });
+    return scenarioResult(dataset, false);
+  } finally {
+    await CampaignReportState.updateOne({ campaignId, leaseToken }, { $unset: { leaseToken: '', leaseUntil: '' } });
   }
-  return {
-    campaignId, revision, inputHash, scenario: transformed.config,
-    recordCount: records.length,
-  };
+}
+
+function conflict(message) { const error = new Error(message); error.status = 409; return error; }
+function scenarioResult(dataset, replayed) {
+  return { campaignId: dataset.campaignId, revision: dataset.revision, inputHash: dataset.inputHash,
+    scenario: dataset.scenario, recordCount: dataset.records.length, replayed };
+}
+
+// The pointer is read once and the referenced records + analyses never mutate
+// after publication. In-progress builds are invisible to report readers.
+async function activeSnapshot(campaignId) {
+  const state = await CampaignReportState.findOne({ campaignId }).lean();
+  if (!state || state.activeRevision <= 1) return null;
+  const dataset = await ReportDataset.findOne({ campaignId, revision: state.activeRevision }).lean();
+  if (!dataset) throw conflict('Active report snapshot is missing; repair the dataset before reading reports');
+  if (dataset.analyses?.length === 6) return dataset;
+  // The first Evaluation release stored scenario prose only in the legacy
+  // collection. Migrate it only when all six analyses match the pinned hash.
+  if (!dataset.requestId) {
+    const analyses = await ReportAnalysis.find({ campaignId, status: 'ready', inputHash: dataset.inputHash }).lean();
+    if (analyses.length === 6) {
+      await ReportDataset.updateOne({ campaignId, revision: dataset.revision, requestId: { $exists: false } },
+        { $set: { analyses, status: 'published' } });
+      return { ...dataset, analyses, status: 'published' };
+    }
+  }
+  throw conflict('Active scenario analyses are incomplete; restore a complete dataset before reading reports');
+}
+
+async function activeRecords(campaignId) {
+  const snapshot = await activeSnapshot(campaignId);
+  return snapshot ? snapshot.records : AnalyticsRecord.find({ campaignId }).sort({ date: 1 }).lean();
+}
+
+async function activeAnalyses(campaignId) {
+  const snapshot = await activeSnapshot(campaignId);
+  return snapshot ? snapshot.analyses : ReportAnalysis.find({ campaignId }).lean();
 }
 
 module.exports = {
   ensureBaselineDataset, getScenarioWorkspace, previewScenario,
   applyScenarioRevision, cleanRecords, datasetHash,
+  activeSnapshot, activeRecords, activeAnalyses, baselineFor, buildAnalyses,
 };

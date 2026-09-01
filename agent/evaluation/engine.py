@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from math import sqrt
+from math import sqrt, isfinite
 from statistics import median
 
 
@@ -21,10 +21,13 @@ DEFAULT_POLICY = {
 
 
 def _group(records: list[dict]) -> dict[tuple[str, str], dict]:
-    return {
-        (str(row.get("placementId") or "unknown"), str(row.get("date") or "")): row
-        for row in records
-    }
+    grouped = {}
+    for row in records:
+        key = (str(row.get('placementId') or 'unknown'), str(row.get('date') or ''))
+        value = grouped.setdefault(key, {'impressions': 0, 'clicks': 0, 'spend': 0})
+        for field in value:
+            value[field] += float(row.get(field) or 0)
+    return grouped
 
 
 def _issue(issue_type: str, scope: str, severity: str, title: str,
@@ -39,14 +42,25 @@ def _issue(issue_type: str, scope: str, severity: str, title: str,
     }
 
 
+# Some signals describe the campaign, not one placement, and are written onto
+# every record. Scoping them per placement would fan one fault out into a
+# duplicate incident for each placement in the campaign.
+CAMPAIGN_WIDE_SIGNALS = {"configDrift"}
+
+
 def _signal_issues(active: list[dict]) -> list[dict]:
     issues: list[dict] = []
     by_scope: dict[str, set[str]] = defaultdict(set)
     for row in active:
         signals = (row.get("scenario") or {}).get("signals") or {}
         for key, enabled in signals.items():
-            if enabled:
-                by_scope[str(row.get("placementId") or "campaign")].add(key)
+            if not enabled:
+                continue
+            scope = (
+                "campaign" if key in CAMPAIGN_WIDE_SIGNALS
+                else str(row.get("placementId") or "campaign")
+            )
+            by_scope[scope].add(key)
     mapping = {
         "creativeRenderFailure": (
             "creative_failure", "critical", "Creative không render đúng",
@@ -85,9 +99,24 @@ def evaluate_records(baseline: list[dict], active: list[dict],
             "data_quality", "campaign", "critical", "Không có dữ liệu report",
             {"active_record_count": 0}, "Kiểm tra report pipeline trước khi đánh giá.",
         )]
+    issues = _signal_issues(active)
+    def valid_metrics(row):
+        try:
+            values = [float(row.get(k) or 0) for k in ('impressions', 'clicks', 'spend')]
+            return all(isfinite(v) and v >= 0 for v in values) and values[1] <= values[0]
+        except (ValueError, TypeError):
+            return False
+    invalid = [row for row in baseline + active if not valid_metrics(row)]
+    if invalid:
+        return issues + [_issue('data_quality', 'campaign', 'high', 'Chỉ số report không hợp lệ',
+            {'invalid_rows': len(invalid)}, 'Sửa chất lượng dữ liệu trước khi đánh giá hiệu suất.')]
     base = _group(baseline)
     current = _group(active)
-    issues = _signal_issues(active)
+    missing = set(base) - set(current)
+    if not baseline or missing or invalid:
+        return issues + [_issue('data_quality', 'campaign', 'high', 'Dữ liệu chưa đủ hoặc không hợp lệ',
+            {'missing_rows': len(missing), 'invalid_rows': len(invalid), 'baseline_record_count': len(baseline)},
+            'Kiểm tra dữ liệu trước khi kết luận performance hoặc recovery.')]
     placements = sorted({scope for scope, _date in set(base) | set(current)})
 
     for placement in placements:
@@ -123,11 +152,14 @@ def evaluate_records(baseline: list[dict], active: list[dict],
                 "Kiểm tra creative/config và cân nhắc chuyển phân bổ sang zone khỏe hơn.",
             ))
 
-        expected_impressions = sum(float(base.get((placement, date), {}).get("impressions") or 0) for date in dates)
-        expected_clicks = sum(float(base.get((placement, date), {}).get("clicks") or 0) for date in dates)
-        actual_impressions = sum(float(current.get((placement, date), {}).get("impressions") or 0) for date in dates)
-        actual_clicks = sum(float(current.get((placement, date), {}).get("clicks") or 0) for date in dates)
-        if expected_impressions and actual_impressions >= float(policy["ctr_min_impressions"]):
+        # Compare like-for-like recent windows; healthy early-flight rows must
+        # not dilute a new regression (notably the multiple_issues preset).
+        ctr_dates = dates[-persistence:]
+        expected_impressions = sum(float(base.get((placement, date), {}).get("impressions") or 0) for date in ctr_dates)
+        expected_clicks = sum(float(base.get((placement, date), {}).get("clicks") or 0) for date in ctr_dates)
+        actual_impressions = sum(float(current.get((placement, date), {}).get("impressions") or 0) for date in ctr_dates)
+        actual_clicks = sum(float(current.get((placement, date), {}).get("clicks") or 0) for date in ctr_dates)
+        if expected_impressions and actual_impressions > 0 and actual_impressions >= float(policy["ctr_min_impressions"]):
             p0 = expected_clicks / expected_impressions
             observed_ctr = actual_clicks / actual_impressions
             standard_error = sqrt(p0 * (1 - p0) / actual_impressions) if 0 < p0 < 1 else 0
@@ -140,6 +172,7 @@ def evaluate_records(baseline: list[dict], active: list[dict],
                         "baseline_ctr": round(p0, 6), "observed_ctr": round(observed_ctr, 6),
                         "relative_drop": round(relative_drop, 4), "z_score": round(z_score, 3),
                         "impressions": int(actual_impressions),
+                        "dates": ctr_dates,
                     },
                     "Kiểm tra click telemetry; nếu tracking tốt, thử creative hoặc placement thay thế.",
                 ))

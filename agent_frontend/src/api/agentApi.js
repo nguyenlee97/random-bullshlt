@@ -1413,6 +1413,7 @@ export const AgentAPI = {
   },
 
   async getCampaignEvaluation(campaignId) {
+    await bootstrapIdentity()
     const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}`, { signal: AbortSignal.timeout(15000) })
     if (!response.ok) throw await responseError(response, 'Không thể tải Live Evaluation.')
     return response.json()
@@ -1435,6 +1436,7 @@ export const AgentAPI = {
   },
 
   async getCampaignScenarios(campaignId) {
+    await bootstrapIdentity()
     const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/scenarios`, { signal: AbortSignal.timeout(15000) })
     if (!response.ok) throw await responseError(response, 'Không thể tải Scenario Lab.')
     return response.json()
@@ -1458,7 +1460,7 @@ export const AgentAPI = {
 
   async actOnEvaluationIncident(campaignId, incidentId, action, note = '') {
     const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}/actions`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, note }), signal: AbortSignal.timeout(15000),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, note }), signal: AbortSignal.timeout(120000),
     })
     if (!response.ok) throw await responseError(response, 'Không thể cập nhật incident.')
     return response.json()
@@ -1473,6 +1475,26 @@ export const AgentAPI = {
     if (!response.ok) throw await responseError(response, 'Không thể tải danh sách campaign.')
     const data = await response.json()
     return Array.isArray(data.campaigns) ? data.campaigns : []
+  },
+
+  async getEvaluationIncident(campaignId, incidentId) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}`, { signal: AbortSignal.timeout(15000) })
+    if (!response.ok) throw await responseError(response, 'Không tải được lịch sử điều tra.')
+    return response.json()
+  },
+
+  async askEvaluationIncident(campaignId, incidentId, question) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}/questions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(question), signal: AbortSignal.timeout(60000),
+    })
+    if (!response.ok) throw await responseError(response, 'Chưa trả lời được câu hỏi incident.')
+    return response.json()
+  },
+
+  async getIncidentQuestions(campaignId, incidentId) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}/questions`, { signal: AbortSignal.timeout(15000) })
+    if (!response.ok) throw await responseError(response, 'Chưa tải được lịch sử hỏi đáp.')
+    return response.json()
   },
 
   async listConversationModels() {

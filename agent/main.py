@@ -47,9 +47,15 @@ async def _lifespan(_app):
     if config.EVALUATION_WORKER_ENABLED:
         from evaluation.worker import start_worker as start_evaluation_worker
         await start_evaluation_worker()
+    if config.EVALUATION_MULTI_AGENT_ENABLED:
+        from evaluation.investigation_worker import start_worker as start_investigation_worker
+        await start_investigation_worker()
     try:
         yield
     finally:
+        if config.EVALUATION_MULTI_AGENT_ENABLED:
+            from evaluation.investigation_worker import stop_worker as stop_investigation_worker
+            await stop_investigation_worker()
         if config.EVALUATION_WORKER_ENABLED:
             from evaluation.worker import stop_worker as stop_evaluation_worker
             await stop_evaluation_worker()

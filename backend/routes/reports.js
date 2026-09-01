@@ -5,7 +5,7 @@ const ReportAnalysis = require('../models/ReportAnalysis');
 const AnalyticsRecord = require('../models/AnalyticsRecord');
 const { launchReportGeneration } = require('../services/reportLauncher');
 const {
-  getScenarioWorkspace, previewScenario, applyScenarioRevision,
+  getScenarioWorkspace, previewScenario, applyScenarioRevision, activeSnapshot, activeRecords, activeAnalyses, baselineFor,
 } = require('../services/reportDatasets');
 
 function requireInternalReportAccess(req, res, next) {
@@ -19,6 +19,7 @@ function requireInternalReportAccess(req, res, next) {
 
 router.get('/internal/scenarios/:campaignId', requireInternalReportAccess, async (req, res) => {
   try {
+    await baselineFor(req.params.campaignId);
     res.set('Cache-Control', 'no-store');
     res.json(await getScenarioWorkspace(req.params.campaignId));
   } catch (err) {
@@ -28,6 +29,7 @@ router.get('/internal/scenarios/:campaignId', requireInternalReportAccess, async
 
 router.get('/internal/datasets/:campaignId', requireInternalReportAccess, async (req, res) => {
   try {
+    await baselineFor(req.params.campaignId);
     const ReportDataset = require('../models/ReportDataset');
     const CampaignReportState = require('../models/CampaignReportState');
     const state = await CampaignReportState.findOne({ campaignId: req.params.campaignId }).lean();
@@ -37,7 +39,8 @@ router.get('/internal/datasets/:campaignId', requireInternalReportAccess, async 
       ReportDataset.findOne({ campaignId: req.params.campaignId, revision: state.activeRevision }).lean(),
     ]);
     res.set('Cache-Control', 'no-store');
-    res.json({ campaignId: req.params.campaignId, state, baseline, active });
+    const { leaseToken, appliedRequests, ...publicState } = state;
+    res.json({ campaignId: req.params.campaignId, state: publicState, baseline, active });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -47,18 +50,18 @@ router.post('/internal/scenarios/:campaignId/preview', requireInternalReportAcce
   try {
     res.json(await previewScenario(req.params.campaignId, req.body || {}));
   } catch (err) {
-    res.status(err.code === 'REPORT_BASELINE_NOT_READY' ? 409 : 400).json({ error: err.message });
+    res.status(err.status || (err.code === 'REPORT_BASELINE_NOT_READY' ? 409 : 400)).json({ error: err.message });
   }
 });
 
 router.post('/internal/scenarios/:campaignId/apply', requireInternalReportAccess, async (req, res) => {
   try {
     const result = await applyScenarioRevision(
-      req.params.campaignId, req.body || {}, req.get('x-report-actor') || 'agent_ui',
+      req.params.campaignId, req.body || {}, req.body?.createdBy || 'agent_ui',
     );
     res.json(result);
   } catch (err) {
-    res.status(err.code === 'REPORT_BASELINE_NOT_READY' ? 409 : 400).json({ error: err.message });
+    res.status(err.status || (err.code === 'REPORT_BASELINE_NOT_READY' ? 409 : 400)).json({ error: err.message });
   }
 });
 
@@ -82,7 +85,12 @@ router.get('/status/:campaignId', async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.set('Pragma', 'no-cache');
-    const status = await getReportStatus(req.params.campaignId);
+    const snapshot = await activeSnapshot(req.params.campaignId);
+    const status = snapshot ? {
+      campaignId: req.params.campaignId, total: 6, ready: 6, errors: 0, contractReady: 6,
+      revision: snapshot.revision, inputHash: snapshot.inputHash,
+      types: Object.fromEntries(snapshot.analyses.map(doc => [doc.reportType, 'ready'])),
+    } : await getReportStatus(req.params.campaignId);
     res.json(status);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -93,10 +101,7 @@ router.get('/status/:campaignId', async (req, res) => {
 // Fetch all analyses for a campaign
 router.get('/analysis/:campaignId', async (req, res) => {
   try {
-    const docs = await ReportAnalysis.find(
-      { campaignId: req.params.campaignId, status: 'ready' },
-      { _id: 0, __v: 0 }
-    ).lean();
+    const docs = (await activeAnalyses(req.params.campaignId)).filter(doc => doc.status === 'ready');
     res.json(docs);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -107,10 +112,7 @@ router.get('/analysis/:campaignId', async (req, res) => {
 // Fetch single report type analysis
 router.get('/analysis/:campaignId/:reportType', async (req, res) => {
   try {
-    const doc = await ReportAnalysis.findOne(
-      { campaignId: req.params.campaignId, reportType: req.params.reportType },
-      { _id: 0, __v: 0 }
-    ).lean();
+    const doc = (await activeAnalyses(req.params.campaignId)).find(doc => doc.reportType === req.params.reportType);
     if (!doc) return res.status(404).json({ error: 'not found' });
     res.json(doc);
   } catch (err) {
@@ -122,9 +124,7 @@ router.get('/analysis/:campaignId/:reportType', async (req, res) => {
 // Fetch raw analytics records for a campaign (convenience wrapper)
 router.get('/data/:campaignId', async (req, res) => {
   try {
-    const records = await AnalyticsRecord.find(
-      { campaignId: req.params.campaignId }
-    ).sort({ date: 1 }).lean();
+    const records = await activeRecords(req.params.campaignId);
     res.json(records);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -209,8 +209,9 @@ router.post('/send-email/:campaignId', async (req, res) => {
     const { generatePDF } = require('../services/reportPDFGenerator');
     const { sendCampaignReport } = require('../services/emailService');
 
-    // Fetch raw records for CSV/JSON (and totals)
-    const records = await AnalyticsRecord.find({ campaignId }).lean();
+    // Pin one snapshot for the whole email/PDF package.
+    const snapshot = await activeSnapshot(campaignId);
+    const records = snapshot ? snapshot.records : await activeRecords(campaignId);
     const totals = records.reduce((acc, r) => {
       acc.impressions  += r.impressions  || 0;
       acc.clicks       += r.clicks       || 0;
@@ -221,14 +222,14 @@ router.post('/send-email/:campaignId', async (req, res) => {
     }, { impressions: 0, clicks: 0, spend: 0, conversions: 0, reach: 0 });
 
     // Fetch executive summary text for email body
-    const execAnalysis = await ReportAnalysis.findOne({ campaignId, reportType: 'executive', status: 'ready' }).lean();
+    const execAnalysis = (snapshot ? snapshot.analyses : await activeAnalyses(campaignId)).find(doc => doc.reportType === 'executive' && doc.status === 'ready');
     const overallText = execAnalysis?.overall || '';
     const brand     = execAnalysis?.brand     || campaignId;
     const objective = execAnalysis?.objective || 'awareness';
 
     // Generate PDF
     console.log(`[send-email] Generating PDF for ${campaignId}...`);
-    const pdfBuffer = await generatePDF(campaignId);
+    const pdfBuffer = await generatePDF(campaignId, snapshot);
 
     // Send email
     const result = await sendCampaignReport({
@@ -273,7 +274,7 @@ router.get('/export/:campaignId/pdf', async (req, res) => {
 router.get('/export/:campaignId/csv', async (req, res) => {
   try {
     const { campaignId } = req.params;
-    const records = await AnalyticsRecord.find({ campaignId }).lean();
+    const records = await activeRecords(campaignId);
     const cols = ['campaignId','placementId','channel','format','date',
       'impressions','clicks','reach','spend','conversions','vi','ctr','cpm'];
     const rows = records.map(r => cols.map(h => {
@@ -293,7 +294,7 @@ router.get('/export/:campaignId/csv', async (req, res) => {
 router.get('/export/:campaignId/json', async (req, res) => {
   try {
     const { campaignId } = req.params;
-    const records = await AnalyticsRecord.find({ campaignId }).lean();
+    const records = await activeRecords(campaignId);
     res.setHeader('Content-Disposition', `attachment; filename="analytics_${campaignId}.json"`);
     res.json(records);
   } catch (err) {

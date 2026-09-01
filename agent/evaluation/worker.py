@@ -24,7 +24,11 @@ async def process_due_once() -> bool:
 
 async def _loop() -> None:
     while not _stop.is_set():
-        handled = await process_due_once()
+        try:
+            handled = await process_due_once()
+        except Exception as exc:
+            print(f'[evaluation] worker will retry: {str(exc)[:160]}')
+            handled = False
         if handled:
             continue
         try:

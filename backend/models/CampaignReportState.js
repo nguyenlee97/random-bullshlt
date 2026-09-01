@@ -7,6 +7,9 @@ const campaignReportStateSchema = new mongoose.Schema({
   nextRevision: { type: Number, default: 1 },
   activeInputHash: { type: String, default: '' },
   activeScenario: { type: mongoose.Schema.Types.Mixed, default: null },
+  leaseToken: { type: String },
+  leaseUntil: { type: Date },
+  appliedRequests: { type: mongoose.Schema.Types.Mixed, default: {} },
 }, {
   collection: 'campaign_report_states',
   timestamps: true,

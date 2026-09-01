@@ -42,3 +42,20 @@ def test_empty_active_dataset_fails_data_quality_gate():
         "title": "Không có dữ liệu report", "evidence": {"active_record_count": 0},
         "recommended_action": "Kiểm tra report pipeline trước khi đánh giá.",
     }]
+
+
+def test_zero_sample_and_invalid_numbers_fail_without_dividing_by_zero():
+    baseline = [row('2026-08-01')]
+    assert not any(i['issue_type'] == 'ctr_regression' for i in evaluate_records(
+        baseline, [row('2026-08-01', impressions=0, clicks=0)], {'ctr_min_impressions': 0}))
+    for invalid in [float('nan'), float('inf'), 'bad-metric', -1]:
+        active = [row('2026-08-01')]
+        active[0]['impressions'] = invalid
+        assert {i['issue_type'] for i in evaluate_records(baseline, active)} == {'data_quality'}
+
+
+def test_duplicate_dimensions_are_aggregated_without_false_delivery_drop():
+    baseline = [row('2026-08-01'), row('2026-08-02')]
+    active = [row(date, impressions=500, clicks=15, spend=50000)
+              for date in ('2026-08-01', '2026-08-02') for _ in range(2)]
+    assert evaluate_records(baseline, active) == []

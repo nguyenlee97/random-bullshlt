@@ -951,6 +951,16 @@ async def _render_openai_tool_result(
 async def handle_channel_event(event: dict) -> list[str | dict]:
     """Process a Zalo turn with bounded context and model-selected tools."""
     if not config.ZALO_OPENAI_ENABLED:
+        # Add the incident namespace without changing legacy image/empty-event handling.
+        if event.get('external_uid') and event.get('event_name') == 'user_send_text' and event.get('text'):
+            from zalo_incidents import handle_incident_reply
+            legacy_thread = await get_or_create_thread(event['external_uid'])
+            incident_text, _ = await handle_incident_reply(
+                legacy_thread, str(event['text']).strip(), reply_to_message_id=event.get('reply_to_message_id'),
+                external_event_id=event.get('external_event_id'),
+            )
+            if incident_text:
+                return [incident_text]
         return await _handle_channel_event_legacy(event)
     external_uid = event.get("external_uid")
     if not external_uid or event.get("event_name") not in {"user_send_text", "user_send_image"}:
@@ -968,23 +978,21 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
     from zalo_sessions import append_chat_message, build_context, get_or_roll_chat_session
 
     thread = await get_or_create_thread(external_uid)
+    # Keep incident traffic out of BOTH campaign histories and their summaries.
+    # An incident question must not roll/clear an unrelated campaign approval.
+    from zalo_incidents import handle_incident_reply
+    incident_text, thread = await handle_incident_reply(
+        thread, message, reply_to_message_id=event.get("reply_to_message_id"),
+        external_event_id=event.get("external_event_id"),
+    )
+    if incident_text:
+        return [incident_text]
     chat_session, rolled, _previous = await get_or_roll_chat_session(thread)
     if rolled and thread.get("pending_action"):
         # A confirmation cannot be carried into a different time-bounded chat.
         thread = await _update_thread(thread, {"pending_action": None})
     await add_message(thread["session_id"], "user", message)
     chat_session = await append_chat_message(chat_session["chat_session_id"], "user", message)
-
-    # Explicit incident codes have their own correlation namespace and never
-    # rely on or mutate the active campaign selection.
-    from zalo_incidents import handle_incident_reply
-    incident_text, thread = await handle_incident_reply(
-        thread, message, reply_to_message_id=event.get("reply_to_message_id"),
-    )
-    if incident_text:
-        await add_message(thread["session_id"], "assistant", incident_text)
-        await append_chat_message(chat_session["chat_session_id"], "assistant", incident_text)
-        return [incident_text]
 
     # Only deterministic confirmation/rejection gates run ahead of the model.
     # Language understanding and normal workflow progression stay in the tool loop.

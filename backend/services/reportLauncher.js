@@ -45,6 +45,13 @@ function inspectReportGeneration(docs, inputHash, allowLegacyUpgrade = false) {
 async function launchReportGeneration(input) {
   const campaignId = String(input.campaignId || '').trim();
   if (!campaignId) throw new Error('campaignId required');
+  const snapshot = await require('./reportDatasets').activeSnapshot(campaignId);
+  if (snapshot) {
+    // Scenario facts and prose are a pinned revision. A normal report retry
+    // must not silently regenerate a different, invisible legacy projection.
+    return { status: 'already_ready', campaignId, reportVersion: 2,
+      inputHash: snapshot.inputHash, revision: snapshot.revision, scenarioManaged: true };
+  }
   const zones = (input.zones || []).map(zone => (
     typeof zone === 'string' ? inferReportZone(zone) : zone
   ));

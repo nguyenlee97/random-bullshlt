@@ -11,7 +11,7 @@ const rows = [
 ];
 
 test('scenario catalog exposes the complete evaluation set', () => {
-  assert.equal(PRESETS.length, 11);
+  assert.equal(PRESETS.length, 12);
   assert.ok(PRESETS.some(item => item.id === 'multiple_issues'));
   assert.ok(PRESETS.some(item => item.id === 'recovery_ineffective'));
 });
@@ -47,4 +47,18 @@ test('scenario validation rejects unknown presets and bounds custom controls', (
   const config = scenarioConfig({ presetId: 'low_ctr', impact: 2, windowDays: 999 });
   assert.equal(config.impact, 1);
   assert.equal(config.windowDays, 30);
+});
+
+test('click overlay changes metrics without revealing a technical answer flag', () => {
+  const input = structuredClone(rows);
+  const result = applyScenario(input, { presetId: 'click_overlay', targetPlacementId: 'zone-a' });
+  assert.deepEqual(input, rows);
+  assert.ok(result.records.filter(r => r.placementId === 'zone-a').every(r => r.clicks === 0));
+  assert.ok(result.records.every(r => !Object.values(r.scenario.signals).some(Boolean)));
+  assert.equal(result.runtimeFixture.version, 'isolated-page-v1');
+  assert.match(result.runtimeFixture.pages['zone-a'], /pointer-events:auto/);
+  assert.match(result.runtimeFixture.pages['zone-b'], /pointer-events:none/);
+  assert.doesNotMatch(JSON.stringify(result.runtimeFixture), /click_overlay|presetId|groundTruth/);
+  const healthy = applyScenario(input, { presetId: 'healthy_baseline' });
+  assert.ok(Object.values(healthy.runtimeFixture.pages).every(page => page.includes('pointer-events:none')));
 });

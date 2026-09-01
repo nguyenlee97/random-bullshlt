@@ -3,9 +3,18 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-08-26.1"
+BUILD_VERSION = "2026-09-01.3"
 
 BUILD_FEATURES = [
+    "evaluation-creative-minimum-evidence-coverage",
+    "evaluation-typed-evidence-relations",
+    "evaluation-snapshot-safe-resume",
+    "evaluation-responsive-investigation-ui",
+    "evaluation-bounded-completion-and-causal-scope",
+    "live-evaluation-scenario-lab",
+    "evaluation-l2-multi-agent",
+    "incident-evidence-qa",
+    "zalo-incident-context-isolation",
     "campaign-centric-management-home",  # drafts, reviews and operational campaigns share one owner-scoped directory
     "operational-campaign-management",   # completed campaign entry opens setup, reports, evidence and FAQ management
     "completed-workspace-readonly",      # finished Copilot/Autopilot conversations remain navigable without mutation

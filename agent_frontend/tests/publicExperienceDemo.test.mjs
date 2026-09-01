@@ -210,13 +210,14 @@ test('campaign management surfaces own vertical scrolling inside the fixed app r
   }
 })
 
-test('campaign management uses the real report workflow and declares prototype-only evaluation', () => {
+test('campaign management uses the real report and evaluation workflows', () => {
   assert.match(campaignManagement, /lg:grid-cols-\[210px_minmax\(0,1fr\)_340px\]/)
   assert.match(campaignManagement, /<ReportStep/)
   assert.match(campaignManagement, /<EmailStep/)
   assert.match(campaignManagement, /placement_preview/)
   assert.match(campaignManagement, /creative_preview/)
-  assert.match(campaignManagement, /scheduler và API thực thi evaluation chưa được nối/)
+  assert.match(campaignManagement, /<LiveEvaluationPanel/)
+  assert.doesNotMatch(campaignManagement, /scheduler và API thực thi evaluation chưa được nối/)
   assert.doesNotMatch(campaignManagement, /function PlaceholderNotice/)
 })
 

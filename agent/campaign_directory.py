@@ -304,4 +304,13 @@ async def list_campaign_directory(
         group = [item for item in items if priority.get(item.get("lifecycle"), 4) == value]
         group.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
         grouped.extend(group)
-    return grouped[:max(1, min(int(limit), 100))]
+    result = grouped[:max(1, min(int(limit), 100))]
+    from evaluation.store import campaign_health_summaries
+    try:
+        health = await campaign_health_summaries([item['campaign_id'] for item in result if item.get('campaign_id')])
+    except Exception:
+        health = {}  # A monitoring outage must not hide the campaign directory.
+    for item in result:
+        if item.get('campaign_id'):
+            item['evaluation_summary'] = health.get(item['campaign_id'], {'status': 'unavailable', 'open_count': None})
+    return result

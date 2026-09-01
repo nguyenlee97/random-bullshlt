@@ -5,7 +5,7 @@ campaign and never replace an existing campaign ``pending_action``.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import re
 import unicodedata
 
@@ -13,7 +13,7 @@ from config import config
 
 
 _INCIDENT_RE = re.compile(r"\b(INC-[A-Z0-9]{4,12})\b", re.IGNORECASE)
-_CHOICE_RE = re.compile(r"^\s*([1-4])(?:\s+|\s*[-:]|\s*$)", re.IGNORECASE)
+_CHOICE_RE = re.compile(r"^\s*([1-4])(?:\s*(?:[-:]\s*)?INC-[A-Z0-9]{4,12})?\s*$", re.IGNORECASE)
 
 
 def _now() -> datetime:
@@ -76,13 +76,27 @@ def _alert_text(campaign_id: str, incident: dict) -> str:
         ratio = evidence["windows"][-1].get("ratio")
         if ratio is not None:
             metric = f" Tỷ lệ gần nhất {round(float(ratio) * 100)}% so với baseline."
+    diagnosis = ""
+    investigation = incident.get("investigation") or {}
+    top = investigation.get("top_hypothesis") or {}
+    if investigation.get('mode') == 'multi_agent':
+        label = 'chưa chốt nguyên nhân' if investigation.get('cause_status') != 'supported_hypothesis' else 'giả thuyết có evidence, chưa chứng minh nhân quả'
+        diagnosis = '\nL2 (' + label + '): ' + str(investigation.get('summary') or 'Chưa có kết luận.')[:500]
+        if investigation.get('limitations'):
+            diagnosis += '\nGiới hạn: ' + str(investigation['limitations'][0])[:220]
+    elif investigation.get('assessment') == 'insufficient_evidence':
+        diagnosis = '\nL2: chưa đủ bằng chứng để chọn nguyên nhân.'
+    elif top:
+        diagnosis = f"\nGiả thuyết cần kiểm tra: {top['label']}."
+        if investigation.get('ambiguous'):
+            diagnosis += ' Còn nhiều khả năng; chưa kết luận nguyên nhân.'
     return (
         f"⚠️ {incident['incident_id']} · {campaign_id}\n"
-        f"{incident['title']} tại {incident['scope']}.{metric}\n\n"
+        f"{incident['title']} tại {incident['scope']}.{metric}{diagnosis}\n\n"
         "Trả lời kèm mã incident:\n"
         f"1 {incident['incident_id']} — xem evidence\n"
         f"2 {incident['incident_id']} — điều tra\n"
-        f"3 {incident['incident_id']} — chuẩn bị recovery\n"
+        f"3 {incident['incident_id']} — trạng thái recovery (chưa mở)\n"
         f"4 {incident['incident_id']} — dismiss"
     )
 
@@ -103,7 +117,7 @@ async def notify_incidents(campaign_id: str, incidents: list[dict], dataset_revi
             refs.append(ref)
             await enqueue_text(
                 thread=thread, text=_alert_text(campaign_id, incident),
-                idempotency_key=f"evaluation-alert:{incident['incident_id']}:{dataset_revision}",
+                idempotency_key=f"evaluation-alert:{incident['incident_id']}:{dataset_revision}:{(incident.get('investigation') or {}).get('bundle_id', 'l1')}",
                 category="evaluation_alert", incident_id=incident["incident_id"],
             )
             sent += 1
@@ -129,43 +143,27 @@ async def _incident_from_reply(thread: dict, reply_to_message_id: str | None) ->
 
 async def handle_incident_reply(
     thread: dict, message: str, *, reply_to_message_id: str | None = None,
+    external_event_id: str | None = None,
 ) -> tuple[str | None, dict]:
     incident_id, choice = parse_incident_reply(message)
-    # Provider reply relation is stronger than free-text correlation.
-    incident_id = await _incident_from_reply(thread, reply_to_message_id) or incident_id
+    explicit_ids = {value.upper() for value in _INCIDENT_RE.findall(message)}
+    if len(explicit_ids) > 1:
+        return 'Tin nhắn có nhiều mã incident. Hãy gửi một mã duy nhất; chưa thực hiện thao tác nào.', thread
+    # Explicit switching back to common campaign flows never inherits an alert.
+    if not incident_id and (_fold(message) in {'faq', 'xem report', 'xem bao cao', 'xac nhan', 'tao campaign moi'}
+                           or _fold(message).startswith(('tao campaign ', 'tao chien dich '))):
+        return None, thread
+    reply_id = await _incident_from_reply(thread, reply_to_message_id)
+    if reply_id and incident_id and reply_id != incident_id:
+        return 'Mã incident và tin nhắn được trả lời không khớp. Hãy gửi lại đúng một mã, không reply tin cũ; chưa thực hiện thao tác nào.', thread
+    incident_id = reply_id or incident_id
     if not incident_id:
         return None, thread
     pending = thread.get("pending_action") or {}
-    if pending.get("kind") == "incident_recovery" and pending.get("incident_id") == incident_id:
-        expected = f"xac nhan {incident_id.lower()}"
-        if _fold(message) != expected:
-            return (
-                f"Recovery {incident_id} đang chờ duyệt. Trả lời chính xác “Xác nhận {incident_id}” hoặc “Hủy” run.",
-                thread,
-            )
-        from evaluation.service import report_request, run_evaluation
-        from evaluation.store import transition_incident
+    if pending.get("kind") == "incident_recovery":
         from zalo_campaign_agent import _update_thread
-        campaign_id = pending["campaign_id"]
-        await transition_incident(campaign_id, incident_id, "recovering", "Recovery confirmed from Zalo")
-        try:
-            scenario = await report_request(
-                "POST", f"/api/reports/internal/scenarios/{campaign_id}/apply",
-                {"presetId": "healthy_baseline", "seed": f"zalo-{incident_id}"},
-            )
-            await transition_incident(campaign_id, incident_id, "verifying", "Baseline restored; verification started")
-            evaluation = await run_evaluation(campaign_id, trigger="zalo_recovery", force=True)
-        except Exception as exc:
-            await transition_incident(campaign_id, incident_id, "failed", str(exc)[:240])
-            thread = await _update_thread(thread, {"pending_action": None})
-            return f"Recovery {incident_id} thất bại: {str(exc)[:240]}", thread
         thread = await _update_thread(thread, {"pending_action": None})
-        current = next((item for item in evaluation["incidents"] if item["incident_id"] == incident_id), None)
-        state = (current or {}).get("state", "resolved")
-        return (
-            f"Đã chạy recovery {incident_id} bằng dataset revision {scenario['revision']} và verification. "
-            f"Trạng thái hiện tại: {state}.", thread,
-        )
+        return "Recovery cũ đã được hủy: L3 chưa có executor an toàn. Không có dữ liệu nào bị thay đổi.", thread
     from evaluation.store import list_incidents, transition_incident
     from zalo_campaign_agent import _update_thread, owned_campaigns
     campaigns = await owned_campaigns(thread)
@@ -180,6 +178,28 @@ async def handle_incident_reply(
         return f"Không tìm thấy {incident_id} trong các campaign bạn sở hữu.", thread
     incident = matches[0]
     campaign_id = incident["campaign_id"]
+    question = _INCIDENT_RE.sub('', message).strip(' :-')
+    if choice is None and question and _fold(question) not in {'cho toi xem', 'xem', 'xem evidence'}:
+        from evaluation.questions import answer, QuestionError
+        import hashlib
+        bundle = incident.get('investigation') or {}
+        request_id = hashlib.sha256(str(external_event_id or (message + str(bundle.get('bundle_id')))).encode()).hexdigest()
+        try:
+            result = await answer(campaign_id, incident_id, question=question, request_id=request_id,
+                                  expected_revision=incident.get('dataset_revision'),
+                                  expected_bundle_id=bundle.get('bundle_id'),
+                                  channel='zalo:' + thread['thread_id'])
+            citations = '\n'.join(f"• {c['evidence_id']} — {c['probe_id']}" for c in result['citations'][:3])
+            excerpt = result['answer'][:1000]
+            if result.get('limitations'):
+                excerpt += '\nGiới hạn: ' + str(result['limitations'][0])[:220]
+            more = '\nBản đầy đủ và nguồn evidence được lưu trong hỏi đáp trên web.'
+            return (f"{incident_id} · revision {result['dataset_revision']}\n{excerpt}\n"
+                    f"{citations}{more}\n{result['notice']}\nHỏi tiếp: gửi câu hỏi kèm {incident_id}.", thread)
+        except QuestionError as exc:
+            return f'{incident_id}: {exc}', thread
+        except Exception:
+            return f'{incident_id}: Chưa trả lời được câu hỏi. Không có thao tác campaign nào được thực hiện.', thread
     if choice == 1 or choice is None:
         return (
             f"{incident_id}: {incident['title']}\nScope: {incident['scope']}\n"
@@ -187,28 +207,45 @@ async def handle_incident_reply(
             f"Đề xuất: {incident['recommended_action']}", thread,
         )
     if choice == 2:
-        await transition_incident(campaign_id, incident_id, "investigating", "Zalo operator requested investigation")
-        return f"Đã chuyển {incident_id} sang Investigating. Không có cấu hình campaign nào bị thay đổi.", thread
+        from evaluation.investigator import investigate_incident, summarize_bundle
+        from evaluation.store import get_policy
+        try:
+            policy = await get_policy(campaign_id)
+            if config.EVALUATION_MULTI_AGENT_ENABLED:
+                from evaluation.investigation_jobs import enqueue
+                job = await enqueue(campaign_id, incident, policy, trigger='zalo')
+                return (f"🔍 {incident_id} — investigation {job['job_id']}: {job['status']}. "
+                        "Specialist chạy nền; kết quả sẽ được cập nhật qua Zalo. "
+                        "Không thay đổi campaign hoặc yêu cầu duyệt hiện tại.", thread)
+            bundle = await investigate_incident(
+                campaign_id, incident, trigger="zalo", policy=policy,
+            )
+        except Exception as exc:
+            # Investigation is read-only, so a failure leaves the incident
+            # exactly as it was rather than parking it in a misleading state.
+            return (
+                f"Chưa chạy được điều tra cho {incident_id}: {str(exc)[:160]}. "
+                "Không có cấu hình campaign nào bị thay đổi.", thread,
+            )
+        if not bundle.get("supported"):
+            return (
+                f"{incident_id}: {bundle.get('note') or 'Chưa có playbook điều tra.'} "
+                "Chưa chạy điều tra. Không có cấu hình campaign nào bị thay đổi.",
+                thread,
+            )
+        return (
+            f"🔍 {incident_id} — kết quả điều tra (chỉ đọc)\n"
+            f"{summarize_bundle(bundle)}\n\n"
+             "L3 chưa mở; kết quả này không thực thi recovery. "
+            "Không có cấu hình campaign nào bị thay đổi.", thread,
+        )
     if choice == 4:
         await transition_incident(campaign_id, incident_id, "dismissed", "Dismissed from Zalo")
         return f"Đã dismiss {incident_id}. Không có cấu hình campaign nào bị thay đổi.", thread
     if choice == 3:
-        if thread.get("pending_action"):
-            return (
-                f"{incident_id} chưa tạo recovery vì đang có một thao tác khác chờ xác nhận. "
-                "Hãy hoàn tất hoặc hủy thao tác đó trước.", thread,
-            )
-        nonce = incident_id.split("-", 1)[-1]
-        pending = {
-            "kind": "incident_recovery", "incident_id": incident_id,
-            "campaign_id": campaign_id, "action": "restore_baseline",
-            "nonce": nonce, "expires_at": _now() + timedelta(minutes=15),
-        }
-        thread = await _update_thread(thread, {"pending_action": pending})
-        await transition_incident(campaign_id, incident_id, "awaiting_approval", "Recovery prepared from Zalo")
         return (
-            f"Đã chuẩn bị recovery cho {incident_id}: khôi phục baseline report rồi chạy verification. "
-            f"Trả lời chính xác “Xác nhận {incident_id}” để thực hiện, hoặc “Hủy”.",
+            f"{incident_id}: L3 chưa được mở. Hãy xem kết quả L2; "
+            "khôi phục dữ liệu test được thực hiện riêng trong Scenario Lab. Không có dữ liệu nào bị thay đổi.",
             thread,
         )
     return f"Lựa chọn cho {incident_id} chưa hợp lệ. Dùng 1, 2, 3 hoặc 4 kèm mã incident.", thread

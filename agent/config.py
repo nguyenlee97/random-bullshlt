@@ -152,6 +152,10 @@ class Config:
     EVALUATION_WORKER_POLL_SECONDS: float = float(
         os.getenv("EVALUATION_WORKER_POLL_SECONDS", "30")
     )
+    # Independent from campaign creation mode. Explicit opt-in to model cost
+    # and sending bounded investigation evidence to this provider.
+    EVALUATION_MULTI_AGENT_ENABLED: bool = os.getenv("EVALUATION_MULTI_AGENT_ENABLED", "false").lower() == "true"
+    EVALUATION_AGENT_MODEL: str = os.getenv("EVALUATION_AGENT_MODEL", OPENAI_CAMPAIGN_MODEL)
     ADSPILOT_URL: str = os.getenv(
         "ADSPILOT_URL", "https://adspilot.pawgrammers.io.vn"
     )

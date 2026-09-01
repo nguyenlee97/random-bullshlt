@@ -6,6 +6,7 @@ const PRESETS = Object.freeze([
   { id: 'low_ctr', label: 'Normal impressions, low CTR', issueType: 'ctr_regression' },
   { id: 'creative_failure', label: 'Creative render or format failure', issueType: 'creative_failure' },
   { id: 'click_tracking_failure', label: 'Click area or event failure', issueType: 'click_tracking_failure' },
+  { id: 'click_overlay', label: 'Click area covered — investigate rendered page', issueType: 'ctr_regression' },
   { id: 'config_drift', label: 'Campaign configuration drift', issueType: 'config_drift' },
   { id: 'poor_placement', label: 'Poor placement with a better alternative', issueType: 'placement_underperformance' },
   { id: 'tracking_delay', label: 'Tracking delay or insufficient data', issueType: 'data_quality' },
@@ -85,6 +86,9 @@ function applyScenario(recordsValue, configValue) {
   const records = (recordsValue || []).map(row => ({ ...row, outcomes: { ...(row.outcomes || {}) } }));
   if (!records.length) throw new Error('scenario requires report records');
   const config = scenarioConfig(configValue);
+  if (config.targetPlacementId && !records.some(row => row.placementId === config.targetPlacementId)) {
+    throw new Error('target placement is not in this campaign dataset');
+  }
   const targetPlacementId = resolveTarget(records, config.targetPlacementId);
   const dates = recentDates(records, config.windowDays * config.persistenceWindows);
   const targetRows = row => row.placementId === targetPlacementId && dates.has(row.date);
@@ -112,7 +116,7 @@ function applyScenario(recordsValue, configValue) {
       row.spend *= 0.08;
       row.conversions = 0;
       row.outcomes = scaleOutcomes(row.outcomes, 0);
-    } else if (config.presetId === 'click_tracking_failure' && targetRows(row)) {
+    } else if (['click_tracking_failure', 'click_overlay'].includes(config.presetId) && targetRows(row)) {
       row.clicks = 0;
       row.conversions = 0;
       row.outcomes = scaleOutcomes(row.outcomes, 0);
@@ -159,7 +163,10 @@ function applyScenario(recordsValue, configValue) {
     });
   });
 
-  return { config: { ...config, targetPlacementId }, records: transformed };
+  const resolved = { ...config, targetPlacementId };
+  const { buildRuntimeFixture } = require('./investigationFixtures');
+  return { config: resolved, records: transformed,
+    runtimeFixture: buildRuntimeFixture(resolved, [...new Set(records.map(row => row.placementId))]) };
 }
 
 module.exports = { PRESETS, scenarioConfig, applyScenario };

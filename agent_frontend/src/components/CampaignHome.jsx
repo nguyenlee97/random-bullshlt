@@ -92,6 +92,11 @@ function CampaignCard({ item, onOpen, onOpenHistory, onArchive, onDelete, onClai
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
+        {live && item.evaluation_summary && <span className="rounded-full border border-current px-2.5 py-1 text-[10px] font-bold">
+          Evaluation: {item.evaluation_summary.open_count > 0 ? item.evaluation_summary.open_count + ' incident'
+            : item.evaluation_summary.status === 'healthy' ? 'Ổn định'
+            : item.evaluation_summary.status === 'unavailable' ? 'Chưa tải được' : 'Chưa đánh giá'}
+        </span>}
         <span className={`inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-black ${statusTone}`}><span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />{statusLabel}</span>
         <span className={`inline-flex h-6 items-center rounded-full px-2.5 text-[10px] font-black ${live ? 'bg-white/12 text-blue-50' : item.experience_mode === 'autopilot' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}>{item.experience_mode === 'autopilot' ? 'AUTOPILOT' : 'COPILOT'}</span>
         <span className={`inline-flex h-6 items-center rounded-full border px-2.5 text-[10px] font-bold ${live ? 'border-white/15 bg-white/10 text-blue-100' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>{item.ownership === 'account' ? 'Tài khoản' : item.ownership === 'device' ? 'Thiết bị này' : 'Workspace'}</span>
