@@ -25,8 +25,16 @@ def main():
         previous_files.update(entry.get('runtime_snapshot', {}))
         previous_files.update({item['path']: item['sha256'] for item in entry['files']})
     output.mkdir(parents=True, exist_ok=True)
-    # VPS runs the merged V4 base, not the evaluation feature's own HEAD.
-    changed = subprocess.check_output(['git', 'diff', 'MERGE_HEAD', '--name-only'], cwd=ROOT).decode().splitlines()
+    # Compare with the prior release's recorded Git head. Older releases were
+    # packaged mid-merge, but a clean checkpoint no longer has MERGE_HEAD.
+    # Snapshot hashes below still decide whether a candidate needs shipping.
+    base_ref = previous.get('head') if previous else None
+    if not base_ref:
+        merge_head = subprocess.run(['git', 'rev-parse', '--verify', 'MERGE_HEAD'], cwd=ROOT,
+                                    capture_output=True, text=True)
+        base_ref = merge_head.stdout.strip() if merge_head.returncode == 0 else 'HEAD^'
+    changed = subprocess.check_output(['git', 'diff', '--name-only', base_ref, 'HEAD'], cwd=ROOT).decode().splitlines()
+    changed += subprocess.check_output(['git', 'diff', '--name-only', 'HEAD'], cwd=ROOT).decode().splitlines()
     changed += subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard'], cwd=ROOT).decode().splitlines()
     paths = sorted({p for p in changed if (
         p.startswith('agent/') and p.endswith('.py') and '/tests/' not in p

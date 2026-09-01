@@ -3,9 +3,11 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-09-01.3"
+BUILD_VERSION = "2026-09-01.4"
 
 BUILD_FEATURES = [
+    "evaluation-scenario-acceptance-contract",
+    "evaluation-placement-and-measurement-evidence",
     "evaluation-creative-minimum-evidence-coverage",
     "evaluation-typed-evidence-relations",
     "evaluation-snapshot-safe-resume",
