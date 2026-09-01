@@ -205,6 +205,10 @@ def test_placement_benchmark_finds_better_alternative():
     result = probe_placement_benchmark(context_for("poor_placement"))
     assert result["status"] == ANOMALY
     assert result["evidence"]["alternatives"][0]["id"] == "Znews_Family_Masthead"
+    assert result["finding"] == "below_benchmark_with_compatible_alternatives"
+    assert result["evidence"]["alternatives"][0]["creative_compatibility"] == "compatible"
+    assert result["evidence"]["alternatives"][0]["availability"] == "catalog_active_booking_unknown"
+    assert result["evidence"]["booking_availability_verified"] is False
 
 
 def test_placement_benchmark_unavailable_for_campaign_scope():
@@ -399,6 +403,35 @@ def test_every_preset_produces_a_bundle_without_error():
             assert bundle["hypotheses"]
             assert bundle["mutations"] == []
             assert summarize_bundle(bundle)
+
+
+def test_every_preset_meets_its_declared_minimum_l1_contract():
+    source = """
+const fs = require('node:fs');
+const { PRESETS, applyScenario } = require('./lib/reportScenarios');
+const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+process.stdout.write(JSON.stringify(PRESETS.map(preset => ({
+  preset, result: applyScenario(input.records, {
+    presetId: preset.id, targetPlacementId: input.targetPlacementId,
+  }),
+}))));
+"""
+    result = subprocess.run(
+        ['node', '-e', source], input=json.dumps({
+            'records': baseline_records(), 'targetPlacementId': PLACEMENT,
+        }), text=True, encoding='utf-8', capture_output=True, check=True, timeout=10,
+        cwd=Path(__file__).resolve().parents[2] / 'backend',
+    )
+    for item in json.loads(result.stdout):
+        expected = set(item['preset']['expectation']['l1IssueTypes'])
+        observed = {
+            issue['issue_type'] for issue in evaluate_records(
+                baseline_records(), item['result']['records'],
+            )
+        }
+        assert expected <= observed, (
+            item['preset']['id'], sorted(expected), sorted(observed)
+        )
 
 
 # ---------------------------------------------------------------------------

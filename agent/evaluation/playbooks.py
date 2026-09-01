@@ -245,7 +245,8 @@ PLAYBOOKS: dict[str, dict] = {
                 ("click_telemetry", OK): 6,
             }},
             {"id": "placement_underperformance", "prior": 10, "weights": {
-                ("placement_benchmark", ANOMALY, "below_benchmark_with_alternatives"): 30,
+                ("placement_benchmark", ANOMALY, "below_benchmark_with_compatible_alternatives"): 38,
+                ("placement_benchmark", ANOMALY, "below_benchmark_with_unverified_alternatives"): 18,
                 # Rising cost per result is the placement's signature.
                 ("spend_pacing", ANOMALY, "spend_up_output_down"): 40,
                 ("creative_fatigue", ANOMALY): -8,

@@ -13,7 +13,7 @@ ERROR_MESSAGES = {
     'unauthorized_tool': 'Tool is not authorized for this specialist.',
     'duplicate_tool': 'Tool was already collected; use existing evidence.',
     'finish_required': 'Collection budget reached; a final answer is required.',
-    'required_evidence': 'Creative investigation must collect inspect_render and creative_compatibility before finishing; unavailable is an acceptable observation, not healthy evidence.',
+    'required_evidence': 'This specialist must collect its minimum read-only evidence before finishing; unavailable is an acceptable observation, not healthy evidence.',
     'unknown_evidence': 'Citation was not in the evidence supplied to this role.',
     'invalid_finish_target': 'A final answer must have an empty target.',
     'missing_summary': 'A final answer must contain a finding or explicit uncertainty.',
@@ -73,6 +73,15 @@ def _cause_scope(code, cited):
         if code == 'configuration_drift' and probe == 'config_drift' and item.get('source') == 'derived':
             if finding == 'field_changed':
                 return 'baseline_order_comparison'
+        if code == 'placement_benchmark_gap' and probe == 'placement_benchmark' and item.get('source') == 'zone_catalog':
+            if finding == 'below_benchmark_with_compatible_alternatives':
+                return 'catalog_benchmark'
+        if code == 'report_measurement_gap' and probe == 'data_completeness' and item.get('source') == 'report_dataset':
+            if finding in {'no_records', 'missing_days'}:
+                return 'report_measurement'
+        if code == 'click_measurement_gap' and probe == 'click_telemetry' and item.get('source') == 'derived':
+            if finding == 'zero_clicks_while_serving':
+                return 'measured_click_gap'
     return 'unknown'
 
 
@@ -81,6 +90,9 @@ SCOPE_LIMITS = {
     'isolated_document': 'Chỉ quan sát tài liệu thử nghiệm cô lập; chưa kiểm chứng publisher hoặc quan hệ nhân quả với CTR thực tế.',
     'creative_metadata': 'Chỉ đối chiếu metadata creative/catalog; chưa chứng minh lỗi này gây ra CTR giảm.',
     'baseline_order_comparison': 'So với snapshot report baseline, không phải cấu hình đã ký duyệt; chưa chứng minh tác động lên KPI.',
+    'catalog_benchmark': 'Chỉ so với benchmark catalog và creative metadata; inventory/booking và tác động KPI chưa được xác minh.',
+    'report_measurement': 'Chỉ xác nhận report thiếu dữ liệu trong scope; chưa xác định lỗi nằm ở publisher, attribution hay pipeline.',
+    'measured_click_gap': 'Chỉ xác nhận có impression nhưng không ghi nhận click; chưa chứng minh click handler hoặc telemetry service bị lỗi.',
 }
 
 

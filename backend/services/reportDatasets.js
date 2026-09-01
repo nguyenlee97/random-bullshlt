@@ -5,7 +5,7 @@ const AnalyticsRecord = require('../models/AnalyticsRecord');
 const ReportAnalysis = require('../models/ReportAnalysis');
 const ReportDataset = require('../models/ReportDataset');
 const CampaignReportState = require('../models/CampaignReportState');
-const { PRESETS, applyScenario } = require('../lib/reportScenarios');
+const { PRESETS, applyScenario, expectationFor } = require('../lib/reportScenarios');
 
 function cleanRecords(records) {
   return (records || []).map(value => {
@@ -107,6 +107,7 @@ async function previewScenario(campaignId, config) {
     records: result.records,
     beforeRecords: active?.records || baseline.records,
     activeRevision: state.activeRevision,
+    expectation: expectationFor(result.config.presetId),
   };
 }
 
@@ -198,7 +199,8 @@ async function applyScenarioRevision(campaignId, config, createdBy = 'agent_ui')
 function conflict(message) { const error = new Error(message); error.status = 409; return error; }
 function scenarioResult(dataset, replayed) {
   return { campaignId: dataset.campaignId, revision: dataset.revision, inputHash: dataset.inputHash,
-    scenario: dataset.scenario, recordCount: dataset.records.length, replayed };
+    scenario: dataset.scenario, expectation: expectationFor(dataset.scenario?.presetId),
+    recordCount: dataset.records.length, replayed };
 }
 
 // The pointer is read once and the referenced records + analyses never mutate

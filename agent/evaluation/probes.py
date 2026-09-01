@@ -455,6 +455,32 @@ def probe_delivery_pattern(ctx: InvestigationContext) -> dict:
 
 def probe_placement_benchmark(ctx: InvestigationContext) -> dict:
     """Compare observed CTR to the catalog benchmark and find real alternatives."""
+    from tools.creative_match import _parse_dims
+
+    def creative_contract(candidate: dict) -> tuple[str, list[str]]:
+        """Check reusable order assets only; never claim publisher availability."""
+        if not ctx.order:
+            return "unknown", []
+        values = [item for item in (ctx.order.get("creatives") or []) if item]
+        if ctx.order.get("creative"):
+            values.append(ctx.order["creative"])
+        zone_dims = _parse_dims(str(candidate.get("size") or ""))
+        zone_format = str(candidate.get("format") or "").lower()
+        if not values or not zone_dims:
+            return "unknown", []
+        known = False
+        compatible: list[str] = []
+        for index, creative in enumerate(values):
+            dims = _parse_dims(str(creative.get("size") or ""))
+            creative_format = str(creative.get("format") or "").lower()
+            if not dims:
+                continue
+            known = True
+            format_matches = not zone_format or not creative_format or zone_format == creative_format
+            if dims == zone_dims and format_matches:
+                compatible.append(str(creative.get("id") or creative.get("name") or f"creative-{index + 1}"))
+        return ("compatible" if compatible else "incompatible" if known else "unknown"), compatible
+
     if ctx.scope in ("", "campaign"):
         return _result(
             "placement_benchmark", UNAVAILABLE, "campaign_scope",
@@ -489,6 +515,7 @@ def probe_placement_benchmark(ctx: InvestigationContext) -> dict:
             continue
         if float(candidate.get("ctr") or 0) <= max(observed_ctr, benchmark_ctr):
             continue
+        compatibility, compatible_creatives = creative_contract(candidate)
         alternatives.append({
             "id": candidate_id,
             "ctr": candidate.get("ctr"),
@@ -496,9 +523,19 @@ def probe_placement_benchmark(ctx: InvestigationContext) -> dict:
             "reach": candidate.get("reach"),
             "vi": candidate.get("vi"),
             "match": "comparison_group" if same_group else "topic",
-            'availability': 'not_checked', 'creative_compatibility': 'not_checked',
+            # Catalog lifecycle is known; inventory/booking availability is not.
+            'availability': 'catalog_active_booking_unknown',
+            'creative_compatibility': compatibility,
+            'compatible_creatives': compatible_creatives,
         })
-    alternatives.sort(key=lambda item: float(item.get("ctr") or 0), reverse=True)
+    alternatives.sort(key=lambda item: (
+        item.get('creative_compatibility') != 'compatible',
+        -float(item.get("ctr") or 0),
+        item['id'],
+    ))
+    compatible_alternatives = [
+        item for item in alternatives if item['creative_compatibility'] == 'compatible'
+    ]
     evidence = {
         "placement": ctx.scope,
         "observed_ctr_pct": round(observed_ctr, 4),
@@ -507,16 +544,29 @@ def probe_placement_benchmark(ctx: InvestigationContext) -> dict:
         "comparison_group": group,
         "topic": topic,
         "alternatives": alternatives[:5],
+        "compatible_alternative_count": len(compatible_alternatives),
+        "booking_availability_verified": False,
     }
     below_benchmark = benchmark_ctr > 0 and observed_ctr < benchmark_ctr * 0.7
-    if below_benchmark and alternatives:
+    if below_benchmark and compatible_alternatives:
         return _result(
-            "placement_benchmark", ANOMALY, "below_benchmark_with_alternatives",
-            "Placement dưới benchmark; có ứng viên catalog cần kiểm tra booking và creative.",
+            "placement_benchmark", ANOMALY, "below_benchmark_with_compatible_alternatives",
+            "Placement dưới benchmark; có ứng viên catalog khớp creative metadata, booking chưa được kiểm tra.",
             SOURCE_CATALOG,
             [
                 f"CTR quan sát {round(observed_ctr, 3)}% so với benchmark {benchmark_ctr}%.",
-                f"Có {len(alternatives)} placement tương đương tốt hơn.",
+                f"Có {len(compatible_alternatives)} placement tốt hơn và dùng được creative hiện có theo metadata.",
+            ],
+            evidence,
+        )
+    if below_benchmark and alternatives:
+        return _result(
+            "placement_benchmark", ANOMALY, "below_benchmark_with_unverified_alternatives",
+            "Placement dưới benchmark; catalog có ứng viên nhưng chưa có creative tương thích được xác minh.",
+            SOURCE_CATALOG,
+            [
+                f"CTR quan sát {round(observed_ctr, 3)}% so với benchmark {benchmark_ctr}%.",
+                f"Có {len(alternatives)} ứng viên catalog nhưng creative compatibility còn thiếu.",
             ],
             evidence,
         )

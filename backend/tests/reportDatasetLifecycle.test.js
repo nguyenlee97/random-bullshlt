@@ -100,6 +100,8 @@ test('apply publishes six analyses and facts together; replay does not rebuild',
   const first = await h.service.applyScenarioRevision('ORD-TEST', h.config);
   const snapshot = await h.service.activeSnapshot('ORD-TEST');
   assert.equal(first.revision, 2);
+  assert.deepEqual(first.expectation.l1IssueTypes, ['ctr_regression']);
+  assert.ok(first.expectation.requiredEvidence.includes('metrics_window'));
   assert.equal(snapshot.analyses.length, 6);
   assert.ok(snapshot.analyses.every(a => a.inputHash === snapshot.inputHash));
   assert.deepEqual(snapshot.records.map(r => r.clicks), applyScenario(h.rows, h.config).records.map(r => r.clicks));

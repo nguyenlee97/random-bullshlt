@@ -5,11 +5,14 @@ not a source of contradictions or a public causal verdict.
 """
 from evaluation.decision_contract import DecisionError, SCOPE_LIMITS, _cause_scope
 
-VERSION = 'evidence-relations-v1'
+VERSION = 'evidence-relations-v3'
 HYPOTHESES = {
     'click_obstruction': ('Vùng click bị che', 'isolated_document', 'inspect_render'),
     'creative_contract_mismatch': ('Creative không khớp placement', 'creative_metadata', 'creative_compatibility'),
     'configuration_drift': ('Cấu hình khác baseline', 'baseline_order_comparison', 'config_drift'),
+    'placement_benchmark_gap': ('Placement thấp hơn benchmark có lựa chọn tương thích', 'catalog_benchmark', 'placement_benchmark'),
+    'report_measurement_gap': ('Report thiếu dữ liệu trong phạm vi đánh giá', 'report_measurement', 'data_completeness'),
+    'click_measurement_gap': ('Vẫn serving nhưng không ghi nhận click', 'measured_click_gap', 'click_telemetry'),
 }
 RELATION_LABELS = {'supports': 'Hỗ trợ', 'contradicts': 'Phản bác trong phạm vi kiểm tra',
                    'context': 'Chỉ cung cấp bối cảnh', 'unavailable': 'Chưa kiểm chứng'}
@@ -35,6 +38,15 @@ def relation(code, item):
         if (code == 'configuration_drift' and probe == 'config_drift' and finding == 'matches_baseline'
                 and (item.get('evidence') or {}).get('compared_fields')):
             return 'contradicts'
+    if (code == 'placement_benchmark_gap' and probe == 'placement_benchmark'
+            and item.get('source') == 'zone_catalog' and finding == 'at_benchmark'):
+        return 'contradicts'
+    if (code == 'report_measurement_gap' and probe == 'data_completeness'
+            and item.get('source') == 'report_dataset' and finding == 'complete'):
+        return 'contradicts'
+    if (code == 'click_measurement_gap' and probe == 'click_telemetry'
+            and item.get('source') == 'derived' and finding == 'clicks_recorded'):
+        return 'contradicts'
     return 'context'
 
 

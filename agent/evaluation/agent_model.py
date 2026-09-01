@@ -13,7 +13,7 @@ from evaluation.decision_contract import DecisionError, ModelResponseError
 
 class EvidenceLink(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    hypothesis_id: Literal['click_obstruction', 'creative_contract_mismatch', 'configuration_drift']
+    hypothesis_id: Literal['click_obstruction', 'creative_contract_mismatch', 'configuration_drift', 'placement_benchmark_gap', 'report_measurement_gap', 'click_measurement_gap']
     evidence_id: str = Field(max_length=100)
     relation: Literal['supports', 'contradicts', 'context', 'unavailable']
 
@@ -26,7 +26,7 @@ class Decision(BaseModel):
     assessment: Literal['supported_hypothesis', 'ambiguous', 'insufficient_evidence']
     evidence_ids: list[str] = Field(max_length=20)
     contradictions: list[str] = Field(max_length=8)
-    cause_code: Literal['none', 'click_obstruction', 'creative_contract_mismatch', 'configuration_drift'] = 'none'
+    cause_code: Literal['none', 'click_obstruction', 'creative_contract_mismatch', 'configuration_drift', 'placement_benchmark_gap', 'report_measurement_gap', 'click_measurement_gap'] = 'none'
     counter_evidence_ids: list[str] = Field(default_factory=list, max_length=20)
     limitations: list[str] = Field(default_factory=list, max_length=8)
     evidence_links: list[EvidenceLink] = Field(default_factory=list, max_length=12)
@@ -56,13 +56,16 @@ async def decide(role: str, context: dict, *, tools: dict[str, str], image: str 
                     'Coordinator may choose delegate with a remaining specialist name. '
                     'Use evidence IDs actually observed, not invented citations. '
                     'Check measurement uncertainty before attributing causes. A screenshot cannot prove a working click handler. '
-                    'Catalog alternatives have not been availability-checked; baseline input is not signed approved config. '
+                    'Catalog alternatives may have creative metadata checked but publisher booking/inventory is not verified; baseline input is not signed approved config. '
                     'Missing evidence is unknown, not healthy. Never claim recovery or mutate anything. '
                     'No confidence percentages; supported_hypothesis is not proof of causality. '
                     'Distinguish a measured symptom from a cause. If cause is unknown, use cause_code="none" '
                     'and assessment="ambiguous" (or insufficient_evidence), never supported_hypothesis just because CTR dropped. '
                     'Supported causes are limited to: click_obstruction from independently observed hit targets and local clicks; '
-                    'creative_contract_mismatch from metadata comparison; configuration_drift from baseline/order comparison. '
+                    'creative_contract_mismatch from metadata comparison; configuration_drift from baseline/order comparison; '
+                    'placement_benchmark_gap from a catalog benchmark plus a metadata-compatible alternative; '
+                    'report_measurement_gap from actually missing report records; click_measurement_gap from serving rows with zero recorded clicks. '
+                    'The two measurement gaps describe bounded observations, not the component that caused them. '
                     'A local test document is not a publisher; metadata mismatch does not prove an explanation for KPI loss. '
                     'Put explicit limitations and what remains unproven in limitations. '
                     'counter_evidence_ids are observations opposing your proposed cause, not merely healthy unrelated metrics. '

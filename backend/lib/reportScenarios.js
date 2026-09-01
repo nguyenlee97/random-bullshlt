@@ -1,21 +1,44 @@
 'use strict';
 
+const expectation = (l1IssueTypes, l2Hypotheses, requiredEvidence, note) => ({
+  // These are minimum acceptance expectations under the default Evaluation
+  // policy. Custom impact/window controls may intentionally produce less.
+  l1IssueTypes, l2Hypotheses, requiredEvidence, note,
+});
+
 const PRESETS = Object.freeze([
-  { id: 'healthy_baseline', label: 'Healthy baseline', issueType: null },
-  { id: 'low_impression_zone', label: 'Low impression zone', issueType: 'delivery_drop' },
-  { id: 'low_ctr', label: 'Normal impressions, low CTR', issueType: 'ctr_regression' },
-  { id: 'creative_failure', label: 'Creative render or format failure', issueType: 'creative_failure' },
-  { id: 'click_tracking_failure', label: 'Click area or event failure', issueType: 'click_tracking_failure' },
-  { id: 'click_overlay', label: 'Click area covered — investigate rendered page', issueType: 'ctr_regression' },
-  { id: 'config_drift', label: 'Campaign configuration drift', issueType: 'config_drift' },
-  { id: 'poor_placement', label: 'Poor placement with a better alternative', issueType: 'placement_underperformance' },
-  { id: 'tracking_delay', label: 'Tracking delay or insufficient data', issueType: 'data_quality' },
-  { id: 'multiple_issues', label: 'Multiple concurrent issues', issueType: 'multiple' },
-  { id: 'recovery_success', label: 'Successful recovery', issueType: 'recovery_verification' },
-  { id: 'recovery_ineffective', label: 'Ineffective recovery', issueType: 'recovery_verification' },
+  { id: 'healthy_baseline', label: 'Healthy baseline', issueType: null,
+    expectation: expectation([], [], ['metrics_window'], 'Không mở incident mới; incident cũ có thể được resolve.') },
+  { id: 'low_impression_zone', label: 'Low impression zone', issueType: 'delivery_drop',
+    expectation: expectation(['delivery_drop', 'pacing_error'], ['inventory_shortfall'], ['delivery_pattern', 'spend_pacing'], 'Delivery và spend cùng giảm tại placement được chọn.') },
+  { id: 'low_ctr', label: 'Normal impressions, low CTR', issueType: 'ctr_regression',
+    expectation: expectation(['ctr_regression'], ['creative_underperformance'], ['metrics_window', 'click_telemetry', 'creative_compatibility'], 'Impression/spend giữ ổn định; response giảm.') },
+  { id: 'creative_failure', label: 'Creative render or format failure', issueType: 'creative_failure',
+    expectation: expectation(['creative_failure', 'delivery_drop', 'ctr_regression', 'pacing_error'], ['creative_render_failure'], ['creative_compatibility', 'delivery_pattern'], 'Tín hiệu kỹ thuật và delivery đều xấu.') },
+  { id: 'click_tracking_failure', label: 'Click area or event failure', issueType: 'click_tracking_failure',
+    expectation: expectation(['click_tracking_failure', 'ctr_regression'], ['click_tracking_failure'], ['click_telemetry', 'metrics_window'], 'Impression còn nhưng click telemetry bằng 0.') },
+  { id: 'click_overlay', label: 'Click area covered — investigate rendered page', issueType: 'ctr_regression',
+    expectation: expectation(['ctr_regression'], ['click_obstruction'], ['inspect_render', 'creative_compatibility'], 'Cần browser evidence; không có answer flag trong metrics.') },
+  { id: 'config_drift', label: 'Campaign configuration drift', issueType: 'config_drift',
+    expectation: expectation(['config_drift'], ['config_drift'], ['config_drift'], 'Preset cung cấp synthetic drift signal; order thật không bị sửa.') },
+  { id: 'poor_placement', label: 'Poor placement with a better alternative', issueType: 'ctr_regression',
+    expectation: expectation(['ctr_regression'], ['placement_underperformance'], ['placement_benchmark', 'creative_compatibility'], 'Alternative phải tồn tại trong catalog; booking availability vẫn chưa được giả định.') },
+  { id: 'tracking_delay', label: 'Tracking delay or insufficient data', issueType: 'data_quality',
+    expectation: expectation(['data_quality'], ['data_quality_incomplete'], ['data_completeness'], 'Không tối ưu performance trước khi attribution đủ dữ liệu.') },
+  { id: 'multiple_issues', label: 'Multiple concurrent issues', issueType: 'multiple',
+    expectation: expectation(['delivery_drop', 'ctr_regression'], ['inventory_shortfall', 'creative_underperformance'], ['delivery_pattern', 'metrics_window', 'spend_pacing'], 'Phải giữ nhiều incident/hypothesis độc lập, không ép thành một root cause.') },
+  { id: 'recovery_success', label: 'Successful recovery', issueType: 'recovery_verification',
+    expectation: expectation([], [], ['metrics_window'], 'Trở về baseline; verification có thể resolve incident cũ.') },
+  { id: 'recovery_ineffective', label: 'Ineffective recovery', issueType: 'recovery_verification',
+    expectation: expectation(['delivery_drop', 'ctr_regression'], ['inventory_shortfall', 'creative_underperformance'], ['delivery_pattern', 'metrics_window'], 'Recovery signal không đủ chứng minh thành công; vấn đề vẫn phải tái hiện.') },
 ]);
 
 const PRESET_IDS = new Set(PRESETS.map(item => item.id));
+
+function expectationFor(presetId) {
+  const preset = PRESETS.find(item => item.id === presetId);
+  return preset ? JSON.parse(JSON.stringify(preset.expectation)) : null;
+}
 
 function numberBetween(value, fallback, min, max) {
   const parsed = Number(value);
@@ -137,11 +160,13 @@ function applyScenario(recordsValue, configValue) {
       row.outcomes = scaleOutcomes(row.outcomes, 0);
     } else if (config.presetId === 'recovery_ineffective' && targetRows(row)) {
       row.impressions *= 0.55;
-      row.clicks *= 0.35;
+      // Keep the failed recovery clearly beyond the default CTR z-threshold
+      // even after integer rounding of daily facts.
+      row.clicks *= 0.30;
       row.reach *= 0.55;
       row.spend *= 0.65;
-      row.conversions *= 0.35;
-      row.outcomes = scaleOutcomes(row.outcomes, 0.35);
+      row.conversions *= 0.30;
+      row.outcomes = scaleOutcomes(row.outcomes, 0.30);
     }
     return derived({
       ...row,
@@ -169,4 +194,4 @@ function applyScenario(recordsValue, configValue) {
     runtimeFixture: buildRuntimeFixture(resolved, [...new Set(records.map(row => row.placementId))]) };
 }
 
-module.exports = { PRESETS, scenarioConfig, applyScenario };
+module.exports = { PRESETS, scenarioConfig, applyScenario, expectationFor };

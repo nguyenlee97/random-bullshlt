@@ -75,7 +75,7 @@ class ScriptedModel:
             return decision('tool', 'metrics_window')
         if role == 'creative' and not evidence:
             return decision('tool', 'inspect_render')
-        if role == 'creative' and payload.get('required_tools_remaining'):
+        if role != 'coordinator' and payload.get('required_tools_remaining'):
             return decision('tool', payload['required_tools_remaining'][0])
         refs = [e['evidence_id'] for e in evidence]
         render = next((e for e in evidence if e['probe_id'] == 'inspect_render'), None)
@@ -118,10 +118,10 @@ async def test_multi_agent_collects_independent_evidence_and_coordinator_cites_i
     assert bundle['cause_code'] == 'click_obstruction' and bundle['claim_scope'] == 'isolated_document'
     assert bundle['hypotheses'][0]['status'] == 'supported'
     assert 'chưa chứng minh nguyên nhân KPI' in bundle['summary']
-    assert set(bundle['tasks']) == {'performance', 'creative', 'coordinator'}
+    assert set(bundle['tasks']) == {'performance', 'creative', 'placement', 'coordinator'}
     assert all(t['status'] == 'completed' for t in bundle['tasks'].values())
-    assert {e['probe_id'] for e in bundle['probes']} == {'metrics_window', 'inspect_render', 'creative_compatibility'}
-    assert journal.value['model_calls'] == 6
+    assert {e['probe_id'] for e in bundle['probes']} == {'metrics_window', 'inspect_render', 'creative_compatibility', 'placement_benchmark'}
+    assert journal.value['model_calls'] == 8
     assert bundle['mutations'] == [] and bundle['recovery_options'] == []
     assert any(v['tasks'].get('performance', {}).get('status') == 'running' for v in journal.snapshots)
     model_input = json.dumps(model.inputs)

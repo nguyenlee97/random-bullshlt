@@ -26,7 +26,7 @@ TOOL_DESCRIPTIONS = {
     'click_telemetry': 'Inspect click metrics; absence of clicks does not prove a broken handler.',
     'inspect_render': 'Render the isolated test document, inspect hit targets, capture screenshot, and test local clicks. Unavailable without a fixture.',
     'config_drift': 'Compare current order with report baseline input, not a signed approval snapshot.',
-    'placement_benchmark': 'Compare catalog candidates. Availability/compatibility are NOT verified.',
+    'placement_benchmark': 'Compare catalog candidates and order creative metadata. Publisher inventory/booking availability is NOT verified.',
     'creative_fatigue': 'Inspect repeat-delivery patterns; correlation only.',
 }
 

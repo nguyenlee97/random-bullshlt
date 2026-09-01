@@ -19,6 +19,12 @@ def metadata():
     return {'probe_id': 'creative_compatibility', 'finding': 'size_mismatch', 'source': 'derived', 'status': 'anomaly'}
 
 
+def placement_gap(finding='below_benchmark_with_compatible_alternatives'):
+    return {'probe_id': 'placement_benchmark', 'finding': finding, 'source': 'zone_catalog',
+            'status': 'ok' if finding == 'at_benchmark' else 'anomaly',
+            'evidence': {'booking_availability_verified': False}}
+
+
 def test_policy_runtime_timestamps_do_not_invalidate_evidence_but_thresholds_do():
     ctx = context(scenario())
     ctx.policy = {'updated_at': 'first', 'next_run_at': 'first', 'lease_token': 'first'}
@@ -77,6 +83,39 @@ def test_config_comparison_exposes_missing_fields_instead_of_claiming_all_match(
     assert card['status'] == 'contradicted' and card['missing_evidence']
 
 
+def test_catalog_gap_is_scoped_support_and_never_claims_booking_availability():
+    result = validated_finish(finish(['placement'], cause_code='placement_benchmark_gap'),
+                              {'placement': placement_gap()}, typed=True)
+    card = next(h for h in result['hypotheses'] if h['hypothesis_id'] == 'placement_benchmark_gap')
+    assert result['assessment'] == 'supported_hypothesis'
+    assert result['claim_scope'] == 'catalog_benchmark'
+    assert card['status'] == 'supported'
+    assert 'booking' in result['limitations'][0]
+    counter = next(h for h in build_hypotheses({'placement': placement_gap('at_benchmark')})
+                   if h['hypothesis_id'] == 'placement_benchmark_gap')
+    assert counter['status'] == 'contradicted'
+
+
+def test_measurement_cards_describe_observed_gaps_without_claiming_failed_component():
+    missing = {'probe_id': 'data_completeness', 'finding': 'missing_days',
+               'source': 'report_dataset', 'status': 'anomaly'}
+    no_clicks = {'probe_id': 'click_telemetry', 'finding': 'zero_clicks_while_serving',
+                 'source': 'derived', 'status': 'anomaly'}
+    report = validated_finish(finish(['missing'], cause_code='report_measurement_gap'),
+                              {'missing': missing}, typed=True)
+    clicks = validated_finish(finish(['clicks'], cause_code='click_measurement_gap'),
+                              {'clicks': no_clicks}, typed=True)
+    assert report['claim_scope'] == 'report_measurement'
+    assert clicks['claim_scope'] == 'measured_click_gap'
+    assert 'chưa xác định lỗi' in report['limitations'][0]
+    assert 'chưa chứng minh' in clicks['limitations'][0]
+
+    synthetic = {**missing, 'finding': 'tracking_delay_signal', 'source': 'scenario_fact'}
+    card = next(h for h in build_hypotheses({'synthetic': synthetic})
+                if h['hypothesis_id'] == 'report_measurement_gap')
+    assert card['status'] == 'unknown'
+
+
 @pytest.mark.asyncio
 async def test_resume_after_provider_timeouts_retains_observation_and_global_budget(monkeypatch):
     data, journal, normal = scenario(), Journal(), ScriptedModel()
@@ -113,7 +152,7 @@ async def test_resume_invalidates_old_evidence_when_catalog_changes():
     model = ScriptedModel()
     result = await orchestrate(journal.value, incident(), changed, data['runtimeFixture'], progress=journal,
         guard=AsyncMock(), model=model, renderer=AsyncMock(return_value=render_evidence()))
-    assert {'performance', 'creative', 'coordinator'} == {r for r, _ in model.inputs}
+    assert {'performance', 'creative', 'placement', 'coordinator'} == {r for r, _ in model.inputs}
     assert result['completion']['reused_evidence'] == 0
 
 

@@ -47,3 +47,12 @@ test('investigation distinguishes symptom, scoped cause, limitations and protoco
   assert.match(source, /Điều tra chưa đầy đủ/)
   assert.match(source, /a\.limitations/)
 })
+
+test('Scenario Lab exposes expected L1, L2 and evidence then compares the observed revision', () => {
+  assert.match(source, /Kỳ vọng kiểm thử/)
+  assert.match(source, /expectation\.l1IssueTypes/)
+  assert.match(source, /expectation\.l2Hypotheses/)
+  assert.match(source, /expectation\.requiredEvidence/)
+  assert.match(source, /receipt\.acceptance\.observed_issue_types/)
+  assert.match(source, /receipt\.acceptance\.missing_issue_types/)
+})

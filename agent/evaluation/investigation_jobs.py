@@ -7,7 +7,7 @@ import uuid
 
 from config import config
 
-VERSION = 'multi-agent-v5'
+VERSION = 'multi-agent-v6'
 ACTIVE = {'queued', 'running'}
 MAX_ATTEMPTS = 3
 MAX_MODEL_CALLS = 24  # persisted BEFORE a call, includes crash/restart attempts

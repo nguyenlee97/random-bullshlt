@@ -20,15 +20,22 @@ from evaluation.investigation_resume import snapshot_signature, restore
 MAX_SPECIALIST_TOOLS = 3
 MAX_REPAIRS_PER_ROLE = 1
 MAX_COORDINATOR_DELEGATIONS = 2
-REQUIRED_TOOLS = {'creative': ('inspect_render', 'creative_compatibility')}
+REQUIRED_TOOLS = {
+    'performance': ('metrics_window',),
+    'creative': ('inspect_render', 'creative_compatibility'),
+    'setup': ('config_drift',),
+    'placement': ('placement_benchmark',),
+}
 
 
 def initial_roles(issue: str) -> list[str]:
     if issue == 'config_drift':
         return ['performance', 'setup']
     if issue in {'ctr_regression', 'creative_failure', 'click_tracking_failure', 'robust_trend_drop'}:
-        return ['performance', 'creative']
-    return ['performance', 'placement']
+        return ['performance', 'creative', 'placement']
+    if issue in {'delivery_drop', 'pacing_error'}:
+        return ['performance', 'placement', 'setup']
+    return ['performance']
 
 
 def _validated_finish(result: dict, evidence: dict) -> dict:

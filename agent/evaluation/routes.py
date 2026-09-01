@@ -18,6 +18,34 @@ from config import config
 evaluation_router = APIRouter(tags=["live-evaluation"])
 
 
+def _scenario_acceptance(scenario: dict, evaluation: dict) -> dict:
+    """Compare the preset's minimum L1 contract with the observed revision.
+
+    Expectations are returned to the UI only after Evaluation. They never enter
+    the investigation context or a model prompt, so the test answer cannot leak
+    into L2 evidence collection.
+    """
+    contract = scenario.get('expectation') or {}
+    expected = sorted({str(value) for value in contract.get('l1IssueTypes') or []})
+    revision = scenario.get('revision')
+    closed = {'resolved', 'dismissed', 'false_positive', 'expired'}
+    observed = sorted({
+        str(item.get('issue_type')) for item in evaluation.get('incidents') or []
+        if item.get('dataset_revision') == revision and item.get('state') not in closed
+    })
+    missing = sorted(set(expected) - set(observed))
+    status = str(evaluation.get('status') or 'unknown')
+    comparable = status in {'completed', 'retryable'}
+    return {
+        'status': 'matched' if comparable and not missing else 'not_matched' if comparable else 'not_evaluated',
+        'expected_minimum_issue_types': expected,
+        'observed_issue_types': observed,
+        'missing_issue_types': missing,
+        'additional_issue_types': sorted(set(observed) - set(expected)),
+        'note': contract.get('note') or '',
+    }
+
+
 class PolicyUpdate(BaseModel):
     enabled: bool | None = None
     level: str | None = None
@@ -154,7 +182,8 @@ async def apply_and_evaluate(request: Request, campaign_id: str, body: ScenarioR
         except Exception as exc:
             # The report already committed. A retry must reuse the same scenario request.
             evaluation = {'status': 'retryable', 'error': str(exc)[:240], 'dataset_revision': scenario['revision']}
-        return {"scenario": scenario, "evaluation": evaluation}
+        return {"scenario": scenario, "evaluation": evaluation,
+                "acceptance": _scenario_acceptance(scenario, evaluation)}
     except RuntimeError as exc:
         raise HTTPException(status_code=getattr(exc, 'status', 502), detail=str(exc)) from exc
 

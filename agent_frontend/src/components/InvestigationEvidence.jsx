@@ -9,6 +9,9 @@ const relationLabels = {
 const scopeLabels = {
   isolated_document: 'Tài liệu thử nghiệm cô lập', creative_metadata: 'Metadata creative / catalog',
   baseline_order_comparison: 'Các trường order so với report baseline',
+  catalog_benchmark: 'Benchmark catalog và creative metadata',
+  report_measurement: 'Độ đầy đủ của report trong scope',
+  measured_click_gap: 'Impression và click được ghi nhận trong report',
 }
 const palette = {
   supported: 'border-sky-200 bg-sky-50 text-sky-900',

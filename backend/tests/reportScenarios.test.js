@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { PRESETS, scenarioConfig, applyScenario } = require('../lib/reportScenarios');
+const { PRESETS, scenarioConfig, applyScenario, expectationFor } = require('../lib/reportScenarios');
 
 const rows = [
   { campaignId: 'ORD-1', placementId: 'zone-a', date: '2026-08-01', impressions: 1000, clicks: 20, spend: 50000, reach: 800, conversions: 5, outcomes: { lead: 5 }, vi: 80 },
@@ -14,6 +14,11 @@ test('scenario catalog exposes the complete evaluation set', () => {
   assert.equal(PRESETS.length, 12);
   assert.ok(PRESETS.some(item => item.id === 'multiple_issues'));
   assert.ok(PRESETS.some(item => item.id === 'recovery_ineffective'));
+  assert.ok(PRESETS.every(item => item.expectation && Array.isArray(item.expectation.l1IssueTypes)));
+  assert.equal(PRESETS.find(item => item.id === 'poor_placement').issueType, 'ctr_regression');
+  assert.deepEqual(expectationFor('multiple_issues').l1IssueTypes, ['delivery_drop', 'ctr_regression']);
+  const copy = expectationFor('low_ctr'); copy.l1IssueTypes.push('forged');
+  assert.deepEqual(expectationFor('low_ctr').l1IssueTypes, ['ctr_regression']);
 });
 
 test('low impression scenario changes only the selected recent scope and recomputes ratios', () => {

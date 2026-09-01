@@ -15,7 +15,7 @@ const assessmentLabel = {
 }
 const healthLabel = { healthy: 'Ổn định', bad: 'Cần xử lý', watch: 'Cần theo dõi', not_evaluated: 'Chưa đánh giá' }
 const causeLabel = { supported_hypothesis: 'Có bằng chứng hỗ trợ giả thuyết nguyên nhân', unresolved: 'Chưa chốt nguyên nhân', insufficient_evidence: 'Thiếu bằng chứng về nguyên nhân' }
-const scopeLabel = { isolated_document: 'Tài liệu thử nghiệm cô lập', creative_metadata: 'Metadata creative/catalog', baseline_order_comparison: 'Order so với report baseline', unknown: 'Chưa xác định' }
+const scopeLabel = { isolated_document: 'Tài liệu thử nghiệm cô lập', creative_metadata: 'Metadata creative/catalog', baseline_order_comparison: 'Order so với report baseline', catalog_benchmark: 'Benchmark catalog và creative metadata', report_measurement: 'Độ đầy đủ report', measured_click_gap: 'Khoảng trống click đo được', unknown: 'Chưa xác định' }
 export const analyticsUrl = campaignId => {
   const base = import.meta.env.VITE_ANALYTICS_URL || (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
     ? 'http://localhost:5174/' : 'https://analytics.pawgrammers.io.vn/')
@@ -57,6 +57,8 @@ export function ScenarioLab({ campaignId, onApplied, onBusy }) {
     } finally { setBusy(false); onBusy?.(false) }
   }
   const before = totals(preview?.beforeRecords), after = totals(preview?.records)
+  const selectedPreset = workspace?.presets?.find(item => item.id === form.presetId)
+  const expectation = selectedPreset?.expectation
   return <section className="space-y-5 bg-white p-5 text-slate-900">
     <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-600">Report Scenario Lab</p>
       <h1 className="mt-1 text-xl font-bold">Giả lập tình huống campaign</h1>
@@ -75,6 +77,15 @@ export function ScenarioLab({ campaignId, onApplied, onBusy }) {
       <label className="text-sm font-medium">Seed / mã thử nghiệm<input className={inputClass} maxLength="100" value={form.seed} onChange={e => change({ seed: e.target.value })} /></label>
     </fieldset>
     <p className="text-xs text-slate-500">Mỗi lần preview đều bắt đầu từ baseline; không cộng dồn scenario. Một số preset kỹ thuật dùng mức ảnh hưởng cố định.</p>
+    {expectation && <section aria-label="Kỳ vọng kiểm thử scenario" className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-4 text-sm">
+      <div><h2 className="font-bold text-violet-950">Kỳ vọng kiểm thử</h2><p className="mt-1 text-xs text-violet-900">Minimum contract theo policy mặc định; thay đổi impact/window có thể làm tín hiệu không đủ threshold.</p></div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="min-w-0"><p className="text-xs font-semibold uppercase text-slate-500">L1 incidents</p><p className="break-words">{expectation.l1IssueTypes?.join(', ') || 'Không mở incident mới'}</p></div>
+        <div className="min-w-0"><p className="text-xs font-semibold uppercase text-slate-500">L2 hypotheses</p><p className="break-words">{expectation.l2Hypotheses?.join(', ') || 'Không cần chẩn đoán mới'}</p></div>
+        <div className="min-w-0"><p className="text-xs font-semibold uppercase text-slate-500">Evidence cần có</p><p className="break-words">{expectation.requiredEvidence?.join(', ') || '—'}</p></div>
+      </div>
+      <p className="text-xs text-slate-600">{expectation.note}</p>
+    </section>}
     {preview && <div className="overflow-auto rounded-xl border"><table className="w-full text-left text-sm">
       <caption className="p-2 text-left font-semibold">Trước / sau · đang xem revision {preview.activeRevision}</caption>
       <thead className="bg-slate-50"><tr><th className="p-2">Chỉ số</th><th>Hiện tại</th><th>Sau apply</th></tr></thead>
@@ -86,6 +97,12 @@ export function ScenarioLab({ campaignId, onApplied, onBusy }) {
       <button className={buttonClass} disabled={busy || !workspace} onClick={() => change({ presetId: 'healthy_baseline' })}>Chọn khôi phục baseline</button>
     </div>
     <p role="status" aria-live="polite" className="text-sm text-slate-600">{busy ? 'Đang xử lý; vui lòng giữ cửa sổ này mở…' : receipt ? 'Đã áp dụng revision ' + receipt.scenario.revision + '. Evaluation: ' + receipt.evaluation.status : ''}</p>
+    {receipt?.acceptance && <div className={`rounded-lg p-3 text-sm ${receipt.acceptance.status === 'matched' ? 'bg-emerald-50 text-emerald-900' : receipt.acceptance.status === 'not_matched' ? 'bg-amber-50 text-amber-900' : 'bg-slate-100 text-slate-700'}`}>
+      <strong>{receipt.acceptance.status === 'matched' ? 'L1 khớp minimum contract.' : receipt.acceptance.status === 'not_matched' ? 'L1 chưa khớp minimum contract.' : 'Chưa thể đối chiếu L1.'}</strong>
+      <p className="mt-1 break-words">Quan sát: {receipt.acceptance.observed_issue_types?.join(', ') || 'không có incident mới'}.</p>
+      {!!receipt.acceptance.missing_issue_types?.length && <p className="mt-1 break-words">Còn thiếu: {receipt.acceptance.missing_issue_types.join(', ')}.</p>}
+      {!!receipt.acceptance.additional_issue_types?.length && <p className="mt-1 break-words">Tín hiệu bổ sung: {receipt.acceptance.additional_issue_types.join(', ')}.</p>}
+    </div>}
     {receipt?.evaluation?.status === 'retryable' && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm">Dữ liệu đã được lưu. Evaluation cần chạy lại; không cần tạo lại scenario.</p>}
     <a className="inline-block text-sm font-semibold text-blue-700 underline" href={'/manage/campaigns/' + encodeURIComponent(campaignId)} target="_blank" rel="noreferrer">Xem incident và điều tra trong Agent</a>
     <details><summary className="cursor-pointer text-sm font-semibold">Lịch sử revision ({workspace?.revisions?.length || 0})</summary>

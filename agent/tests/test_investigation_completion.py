@@ -35,7 +35,7 @@ async def test_three_tools_then_server_removes_tools_for_reserved_final_turn():
     task = bundle['tasks']['performance']
     assert len(task['tool_calls']) == 3 and task['status'] == 'completed'
     assert [s for s in seen if s[0]=='performance'][-1][1:] == ([], 0)
-    assert journal.value['model_calls'] == 9 and not bundle['partial']
+    assert journal.value['model_calls'] == 12 and not bundle['partial']
     assert bundle['assessment'] == 'ambiguous'  # Symptom-only findings are not causal.
 
 
@@ -57,7 +57,7 @@ async def test_one_invalid_citation_repair_preserves_evidence_without_repeating_
     task = bundle['tasks']['performance']
     assert task['status'] == 'completed' and task['tool_calls'] == ['metrics_window']
     assert task['repairs_used'] == 1 and task['validation_errors'][0]['code'] == 'unknown_evidence'
-    assert journal.value['model_calls'] == 7 and 'secret-invented' not in str(bundle)
+    assert journal.value['model_calls'] == 9 and 'secret-invented' not in str(bundle)
 
 
 @pytest.mark.asyncio
@@ -162,7 +162,8 @@ async def test_coordinator_has_one_repair_and_cannot_exceed_two_delegations():
         elif tools:
             return decision('tool',next(iter(tools)))
         return finish([e['evidence_id'] for e in payload['evidence']])
-    bundle=await orchestrate(job(), incident(), context(data), data['runtimeFixture'],
+    limited = {**incident(), 'issue_type': 'data_quality'}
+    bundle=await orchestrate(job(), limited, context(data), data['runtimeFixture'],
         progress=journal, guard=AsyncMock(), model=model, renderer=AsyncMock(return_value=render_evidence()))
     task=bundle['tasks']['coordinator']
     assert task['status']=='completed' and len(task['tool_calls'])==2 and task['repairs_used']==1
@@ -184,7 +185,7 @@ async def test_transient_timeout_retries_decision_once_without_repeating_collect
     task = bundle['tasks']['performance']
     assert task['status'] == 'completed' and task['tool_calls'] == ['metrics_window']
     assert task['repairs_used'] == 1 and task['validation_errors'][0]['kind'] == 'provider'
-    assert journal.value['model_calls'] == 7
+    assert journal.value['model_calls'] == 9
 
 
 @pytest.mark.asyncio
@@ -199,7 +200,7 @@ async def test_timeout_and_protocol_failure_share_one_retry_budget():
     bundle = await orchestrate(job(), incident(), context(data), None,
         progress=Journal(), guard=AsyncMock(), model=model)
     task = bundle['tasks']['performance']
-    assert task['status'] == 'failed' and task['error_code'] == 'unknown_evidence'
+    assert task['status'] == 'failed' and task['error_code'] == 'required_evidence'
     assert task['repairs_used'] == 1
     assert [e['repair_requested'] for e in task['validation_errors']] == [True, False]
 
