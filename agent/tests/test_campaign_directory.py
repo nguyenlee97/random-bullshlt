@@ -160,6 +160,36 @@ async def test_directory_never_fetches_a_foreign_order(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_deep_link_lookup_is_independent_of_directory_limit(monkeypatch):
+    import campaign_directory
+    import campaign_ownership
+    import identity
+    from tools import order_api
+
+    references = [
+        {"order_id": f"ORD-{index:03d}", "conversation_id": None}
+        for index in range(125)
+    ]
+    monkeypatch.setattr(identity, "list_conversations", AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        campaign_ownership, "list_owned_campaign_references",
+        AsyncMock(return_value=references),
+    )
+    fetch = AsyncMock(return_value={
+        "id": "ORD-124", "brand": "Deep link QA", "status": "paused",
+    })
+    monkeypatch.setattr(order_api, "fetch_order", fetch)
+
+    entry = await campaign_directory.get_campaign_directory_entry(
+        {"user_id": "owner", "anonymous_id": None}, "ORD-124",
+    )
+
+    assert entry["campaign_id"] == "ORD-124"
+    assert entry["routes"]["manage"] == "/manage/campaigns/ORD-124"
+    fetch.assert_awaited_once_with("ORD-124")
+
+
+@pytest.mark.asyncio
 async def test_directory_retains_owned_campaign_after_conversation_deletion(monkeypatch):
     from campaign_directory import list_campaign_directory
     from identity import bootstrap_anonymous, create_conversation, delete_conversation
@@ -221,3 +251,21 @@ def test_campaign_directory_http_endpoint_requires_an_identity():
     api_headers = {"X-API-Key": config.AGENT_API_KEY} if config.AGENT_API_KEY else {}
     response = client.get("/api/agent/campaigns", headers=api_headers)
     assert response.status_code == 401
+
+
+def test_campaign_deep_link_http_endpoint_is_owner_scoped(monkeypatch):
+    import campaign_directory
+    from config import config
+    from main import app
+
+    lookup = AsyncMock(return_value={"campaign_id": "ORD-DEEP"})
+    monkeypatch.setattr(campaign_directory, "get_campaign_directory_entry", lookup)
+    client = TestClient(app)
+    api_headers = {"X-API-Key": config.AGENT_API_KEY} if config.AGENT_API_KEY else {}
+    assert client.post("/api/agent/auth/anonymous", headers=api_headers).status_code == 200
+    response = client.get("/api/agent/campaigns/ORD-DEEP", headers=api_headers)
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == {"campaign": {"campaign_id": "ORD-DEEP"}}
+    assert lookup.await_count == 1
+    assert lookup.call_args.args[1] == "ORD-DEEP"

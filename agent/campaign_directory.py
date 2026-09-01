@@ -196,11 +196,25 @@ async def list_owned_order_campaigns(actor: dict) -> list[dict]:
 
 async def list_campaign_directory(
     actor: dict, *, include_archived: bool = False, limit: int = 50,
+    campaign_id: str | None = None,
 ) -> list[dict]:
     """Return one campaign-centric card per conversation plus retained orders."""
     from session import get_session_progress_summaries
 
     conversations, references = await _owned_conversations_and_references(actor)
+    if campaign_id:
+        references = [
+            item for item in references
+            if str(item.get("order_id") or "") == campaign_id
+        ]
+        conversation_ids = {
+            str(item.get("conversation_id") or "") for item in references
+            if item.get("conversation_id")
+        }
+        conversations = [
+            item for item in conversations
+            if str(item.get("conversation_id") or "") in conversation_ids
+        ]
     session_progress = await get_session_progress_summaries([
         item.get("session_id") for item in conversations if item.get("session_id")
     ])
@@ -314,3 +328,14 @@ async def list_campaign_directory(
         if item.get('campaign_id'):
             item['evaluation_summary'] = health.get(item['campaign_id'], {'status': 'unavailable', 'open_count': None})
     return result
+
+
+async def get_campaign_directory_entry(actor: dict, campaign_id: str) -> dict | None:
+    """Resolve one owned campaign independently of homepage pagination."""
+    clean_id = str(campaign_id or "").strip()
+    if not clean_id:
+        return None
+    items = await list_campaign_directory(
+        actor, include_archived=True, limit=1, campaign_id=clean_id,
+    )
+    return items[0] if items else None

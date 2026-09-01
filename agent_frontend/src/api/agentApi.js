@@ -1477,6 +1477,16 @@ export const AgentAPI = {
     return Array.isArray(data.campaigns) ? data.campaigns : []
   },
 
+  async getCampaign(campaignId) {
+    await bootstrapIdentity()
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/campaigns/${encodeURIComponent(campaignId)}`,
+      { signal: AbortSignal.timeout(10000) },
+    )
+    if (!response.ok) throw await responseError(response, 'Không thể tải campaign.')
+    return (await response.json()).campaign
+  },
+
   async getEvaluationIncident(campaignId, incidentId) {
     const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}`, { signal: AbortSignal.timeout(15000) })
     if (!response.ok) throw await responseError(response, 'Không tải được lịch sử điều tra.')

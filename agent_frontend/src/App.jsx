@@ -674,7 +674,7 @@ export default function App() {
         setHistoryLoading(true)
         setCampaignDirectoryLoading(true)
         setCampaignDirectoryError('')
-        const [history, campaigns, modelCatalog] = await Promise.all([
+        const [history, directoryCampaigns, modelCatalog, deepLinkedCampaign] = await Promise.all([
           AgentAPI.listConversations(true),
           AgentAPI.listCampaigns(true).catch(error => {
             setCampaignDirectoryError(error.message || 'Không thể tải campaign.')
@@ -683,7 +683,13 @@ export default function App() {
           AgentAPI.listConversationModels().catch(() => ({
             models: [], default_model: null,
           })),
+          initialRoute.surface === 'campaign' && initialRoute.campaignId
+            ? AgentAPI.getCampaign(initialRoute.campaignId).catch(() => null)
+            : Promise.resolve(null),
         ])
+        const campaigns = deepLinkedCampaign && !directoryCampaigns.some(
+          item => item.campaign_id === deepLinkedCampaign.campaign_id
+        ) ? [deepLinkedCampaign, ...directoryCampaigns] : directoryCampaigns
         setConversationHistory(history)
         setCampaignDirectory(campaigns)
         setConversationModelCatalog(modelCatalog)

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const source = await readFile(new URL('../src/components/CampaignEvaluationWorkspace.jsx', import.meta.url), 'utf8')
+const appSource = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8')
+const apiSource = await readFile(new URL('../src/api/agentApi.js', import.meta.url), 'utf8')
 
 test('evaluation exposes persisted specialist progress and honest execution mode', () => {
   assert.match(source, /function InvestigationProgress/)
@@ -58,4 +60,11 @@ test('Scenario Lab exposes expected L1, L2 and evidence then compares the observ
   assert.match(source, /expectation\.requiredEvidence/)
   assert.match(source, /receipt\.acceptance\.observed_issue_types/)
   assert.match(source, /receipt\.acceptance\.missing_issue_types/)
+})
+
+test('campaign deep links resolve independently of the paginated homepage directory', () => {
+  assert.match(apiSource, /async getCampaign\(campaignId\)/)
+  assert.match(apiSource, /\/api\/agent\/campaigns\/\$\{encodeURIComponent\(campaignId\)\}/)
+  assert.match(appSource, /AgentAPI\.getCampaign\(initialRoute\.campaignId\)/)
+  assert.match(appSource, /deepLinkedCampaign/)
 })

@@ -336,6 +336,19 @@ async def campaigns_list(
     }
 
 
+@agent_router.get("/campaigns/{campaign_id}")
+async def campaign_detail(campaign_id: str, request: Request, response: Response):
+    """Owner-scoped deep-link lookup, independent of directory page size."""
+    from campaign_directory import get_campaign_directory_entry
+
+    actor = await _request_actor(request)
+    response.headers["Cache-Control"] = "no-store"
+    entry = await get_campaign_directory_entry(actor, campaign_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="campaign not found")
+    return {"campaign": entry}
+
+
 @agent_router.get("/conversation-models")
 async def conversation_models_list():
     from campaign_models import conversation_model_catalog
