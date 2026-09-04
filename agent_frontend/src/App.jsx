@@ -22,6 +22,7 @@ import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { scoreFile } from '@/steps/setup/setupUtils'
 import { canApproveWorkflowStep, isBriefReady } from '@/lib/workflowValidation'
 import { normalizeAudienceSelection } from '@/lib/audience'
+import { loadCampaignDirectory } from '@/lib/campaignDirectoryRefresh'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
 import { ongoingAutopilotConversations } from '@/lib/conversationDeletion'
 import {
@@ -1372,13 +1373,13 @@ export default function App() {
     setCampaignDirectoryLoading(true)
     setCampaignDirectoryError('')
     try {
-      setCampaignDirectory(await AgentAPI.listCampaigns(true))
+      setCampaignDirectory(await loadCampaignDirectory(AgentAPI, selectedCampaignId))
     } catch (error) {
       setCampaignDirectoryError(error.message || 'Không thể tải campaign.')
     } finally {
       setCampaignDirectoryLoading(false)
     }
-  }, [])
+  }, [selectedCampaignId])
 
   const returnToCampaignManager = useCallback((historyAction = 'push') => {
     landingEntryAttemptRef.current += 1
@@ -1623,7 +1624,7 @@ export default function App() {
       try {
         const [items, campaigns] = await Promise.all([
           AgentAPI.listConversations(true),
-          experienceMode ? Promise.resolve(null) : AgentAPI.listCampaigns(true),
+          experienceMode ? Promise.resolve(null) : loadCampaignDirectory(AgentAPI, selectedCampaignId),
         ])
         if (!cancelled) {
           setConversationHistory(items)
@@ -1644,7 +1645,7 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [experienceMode, historyOpen, identityReady])
+  }, [experienceMode, historyOpen, identityReady, selectedCampaignId])
 
   const resumeConversation = useCallback(async (conversationId, options = {}) => {
     const directoryEntry = campaignDirectory.find(
