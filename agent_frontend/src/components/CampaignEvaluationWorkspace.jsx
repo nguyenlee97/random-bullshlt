@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AgentAPI } from '@/api/agentApi'
-import { HypothesisEvidence, investigationControl } from './InvestigationEvidence'
+import { HypothesisEvidence, investigationControl, hasTypedEvidence } from './InvestigationEvidence'
 
 const fmt = value => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(Number(value || 0))
 const totals = rows => (rows || []).reduce((sum, row) => {
@@ -156,7 +156,7 @@ function Investigation({ bundle }) {
     {!!bundle.limitations?.length && <div className="text-xs text-amber-900"><strong>Giới hạn / chưa kiểm chứng</strong><ul className="mt-1 list-disc pl-4">{bundle.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul></div>}
     {!!bundle.review?.evidence_ids?.length && <p className="text-xs">Dẫn chứng: {bundle.review.evidence_ids.join(', ')}</p>}
     {!!bundle.review?.contradictions?.length && <p className="text-xs text-amber-800">Cần làm rõ: {bundle.review.contradictions.join('; ')}</p>}
-    {bundle.relationship_version === 'evidence-relations-v1' ? <HypothesisEvidence bundle={bundle} /> : <ol className="space-y-2">{bundle.hypotheses?.slice(0, 3).map(h => <li key={h.hypothesis_id} className="text-sm"><strong>{h.label}</strong> · {fmt(h.score_share)} điểm<p className="mt-1 text-xs text-slate-500">{h.explanation}</p></li>)}</ol>}
+    {hasTypedEvidence(bundle) ? <HypothesisEvidence bundle={bundle} /> : <ol className="space-y-2">{bundle.hypotheses?.slice(0, 3).map(h => <li key={h.hypothesis_id} className="text-sm"><strong>{h.label}</strong>{bundle.mode !== 'multi_agent' && typeof h.score_share === 'number' ? ` · ${fmt(h.score_share)} điểm` : ''}<p className="mt-1 text-xs text-slate-500">{h.explanation}</p></li>)}</ol>}
     <details><summary className="cursor-pointer text-sm">Bằng chứng và nguồn dữ liệu</summary>
       <ul className="mt-2 space-y-2">{bundle.probes?.map(p => <li className="text-xs" key={p.evidence_id || p.probe_id}><strong>{p.probe_id} · {p.status}</strong><p>{p.summary}</p><p className="text-slate-500">Nguồn: {p.source} · {p.evidence_id} · {p.observed_at}</p>
         {p.screenshot_base64 && <img className="mt-2 max-w-full rounded border" alt="Ảnh trang thử nghiệm được Chromium chụp khi điều tra" src={'data:image/png;base64,' + p.screenshot_base64} />}

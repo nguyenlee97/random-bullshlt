@@ -2,6 +2,11 @@ const statusLabels = {
   supported: 'Có quan sát hỗ trợ', contradicted: 'Có quan sát phản bác',
   conflicting: 'Bằng chứng mâu thuẫn', unknown: 'Chưa đủ bằng chứng',
 }
+
+export function hasTypedEvidence(bundle) {
+  return ['evidence-relations-v1', 'evidence-relations-v2', 'evidence-relations-v3']
+    .includes(bundle?.relationship_version)
+}
 const relationLabels = {
   supports: 'Hỗ trợ', contradicts: 'Phản bác trong phạm vi kiểm tra',
   context: 'Bối cảnh — không kết luận nguyên nhân', unavailable: 'Chưa kiểm chứng',

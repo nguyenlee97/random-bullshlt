@@ -10,7 +10,7 @@ const source = await readFile(new URL('../src/components/InvestigationEvidence.j
 const { code } = await transform(source, { loader: 'jsx', jsx: 'automatic', format: 'cjs' })
 const module = { exports: {} }
 new Function('require', 'module', 'exports', code)(createRequire(import.meta.url), module, module.exports)
-const { HypothesisEvidence, EvidenceObservation, investigationControl } = module.exports
+const { HypothesisEvidence, EvidenceObservation, investigationControl, hasTypedEvidence } = module.exports
 const observation = { evidence_id: 'EVD-size', probe_id: 'creative_compatibility', source: 'derived', status: 'anomaly',
   observed_at: '2026-09-01T02:00:00Z', summary: 'Metadata mismatch', evidence: { actual: '600x180', expected: '1160x250' } }
 const bundle = { probes: [observation], hypotheses: [{ hypothesis_id: 'creative_contract_mismatch', label: 'Creative không khớp placement',
@@ -18,6 +18,17 @@ const bundle = { probes: [observation], hypotheses: [{ hypothesis_id: 'creative_
   evidence_links: [{ evidence_id: 'EVD-size', relation: 'supports' }], explanation: 'Only metadata checked', limitations: ['Not CTR causality'], missing_evidence: [] },
   { hypothesis_id: 'configuration_drift', label: 'Cấu hình khác baseline', status: 'unknown',
     evidence_links: [{ evidence_id: 'EVD-size', relation: 'context' }], missing_evidence: ['Cần kiểm tra config'] }] }
+
+test('workspace routes current backend v3 and legacy typed versions to evidence cards', async () => {
+  for (const version of ['evidence-relations-v1', 'evidence-relations-v2', 'evidence-relations-v3']) {
+    assert.equal(hasTypedEvidence({ relationship_version: version }), true)
+  }
+  assert.equal(hasTypedEvidence({}), false)
+  assert.equal(hasTypedEvidence({ relationship_version: 'unknown' }), false)
+  const workspace = await readFile(new URL('../src/components/CampaignEvaluationWorkspace.jsx', import.meta.url), 'utf8')
+  assert.match(workspace, /hasTypedEvidence\(bundle\) \? <HypothesisEvidence/)
+  assert.match(workspace, /bundle.mode !== 'multi_agent' && typeof h.score_share === 'number'/)
+})
 
 test('renders actual hypothesis cards with separate direct/context evidence and no invented confidence', () => {
   const html = renderToStaticMarkup(React.createElement(HypothesisEvidence, { bundle }))
