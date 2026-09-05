@@ -279,6 +279,12 @@ async def test_zalo_autopilot_modes_map_to_existing_policies(monkeypatch):
     assert "gửi brief" in text
     assert updated["pending_action"]["mode"] == "fully_automatic"
 
+    second = await agent.get_or_create_thread("oa-user-autopilot-semi")
+    second = await agent._update_thread(second, {"pending_action": pending})
+    text, selected = await agent._handle_pending(second, "2", [])
+    assert "gửi brief" in text
+    assert selected["pending_action"]["mode"] == "semi_automatic"
+
     monkeypatch.setattr(agent, "_start_autopilot", AsyncMock(return_value={
         "thread": updated, "text": "started",
     }))

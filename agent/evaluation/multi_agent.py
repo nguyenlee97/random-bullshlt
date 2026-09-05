@@ -42,6 +42,49 @@ def _validated_finish(result: dict, evidence: dict) -> dict:
     return validated_finish(result, evidence)
 
 
+def _evidence_status(collected: dict) -> str:
+    """Describe evidence availability independently from worker execution."""
+    if not collected:
+        return 'unavailable'
+    unavailable = sum(item.get('status') == 'unavailable' for item in collected.values())
+    if unavailable == len(collected):
+        return 'unavailable'
+    return 'insufficient' if unavailable else 'sufficient'
+
+
+def _fallback_review(evidence: dict, error_code: str) -> dict:
+    """Close a protocol-invalid coordinator turn without inventing causality."""
+    usable = [item['evidence_id'] for item in evidence.values()
+              if item.get('evidence_id') and item.get('status') != 'unavailable']
+    unavailable = [item.get('probe_id') for item in evidence.values()
+                   if item.get('status') == 'unavailable']
+    limits = [f'Coordinator model không vượt qua contract ({error_code}); server dùng tổng hợp an toàn.']
+    if unavailable:
+        limits.append('Evidence chưa có: ' + ', '.join(str(item) for item in unavailable) + '.')
+    return {
+        'assessment': 'ambiguous' if usable else 'insufficient_evidence',
+        'summary': ('Đã thu thập evidence nhưng chưa thể chốt nguyên nhân.' if usable
+                    else 'Chưa có evidence đủ dùng để chốt nguyên nhân.'),
+        'evidence_ids': usable[:8], 'counter_evidence_ids': [], 'contradictions': [],
+        'cause_code': 'none', 'cause_status': 'unresolved' if usable else 'insufficient_evidence',
+        'claim_scope': 'unknown', 'limitations': limits,
+        'fallback': {'kind': 'deterministic_safe_summary', 'reason': error_code},
+    }
+
+
+def _recovery_eligibility(partial: bool, review: dict) -> dict:
+    reasons = []
+    if partial:
+        reasons.append('investigation_execution_incomplete')
+    if review.get('assessment') != 'supported_hypothesis':
+        reasons.append('cause_not_supported')
+    # Current L2 scopes are observations, metadata or catalog comparisons. None
+    # grants mutation authority until an L3 action registry defines a matching
+    # signed precondition and verification plan.
+    reasons.append('no_authorized_recovery_action')
+    return {'eligible': False, 'reasons': list(dict.fromkeys(reasons))}
+
+
 async def orchestrate(job: dict, incident: dict, ctx, fixture, *, progress, guard, model=None, renderer=None) -> dict:
     model = model or decide
     tools = EvidenceTools(ctx, job['dataset_revision'], fixture, renderer=renderer)
@@ -142,6 +185,7 @@ async def orchestrate(job: dict, incident: dict, ctx, fixture, *, progress, guar
             return
         previous = tasks.get(role, {})
         task = {**previous, 'role': role, 'status': 'running', 'phase': 'starting',
+                'execution_status': 'running', 'evidence_status': previous.get('evidence_status', 'unavailable'),
                 'started_at': datetime.now(timezone.utc).isoformat(),
                 'tool_calls': previous.get('tool_calls', []), 'tool_evidence_ids': previous.get('tool_evidence_ids', {}),
                 'result': None, 'repairs_used': 0, 'validation_errors': previous.get('validation_errors', []),
@@ -210,15 +254,18 @@ async def orchestrate(job: dict, incident: dict, ctx, fixture, *, progress, guar
                 if result['action'] == 'finish':
                     # A specialist may cite only evidence it actually received.
                     task['result'] = result
-                    task['status'] = 'partial' if not collected or any(
-                        e.get('status') == 'unavailable' for e in collected.values()) else 'completed'
+                    task['status'] = 'completed'
+                    task['execution_status'] = 'completed'
+                    task['evidence_status'] = _evidence_status(collected)
                     break
                 await collect(result['target'])
         except asyncio.CancelledError:
             task['status'] = 'interrupted'
+            task['execution_status'] = 'interrupted'
             raise
         except Exception as exc:
-            task.update(status='failed', **failure(exc))
+            task.update(status='failed', execution_status='failed',
+                        evidence_status=_evidence_status(collected), **failure(exc))
         finally:
             task.update(phase=task['status'], current_tool=None)
             task['completed_at'] = datetime.now(timezone.utc).isoformat()
@@ -240,7 +287,8 @@ async def orchestrate(job: dict, incident: dict, ctx, fixture, *, progress, guar
     resume_roles = [role for role in ROLE_TOOLS if role in tasks and tasks[role].get('status') != 'completed']
     await batch(list(dict.fromkeys(initial_roles(incident['issue_type']) + resume_roles)))
     review = None
-    tasks['coordinator'] = {'role': 'coordinator', 'status': 'running', 'phase': 'review', 'tool_calls': [],
+    tasks['coordinator'] = {'role': 'coordinator', 'status': 'running', 'execution_status': 'running',
+                            'evidence_status': 'unavailable', 'phase': 'review', 'tool_calls': [],
                             'repairs_used': 0, 'validation_errors': [],
                             'started_at': datetime.now(timezone.utc).isoformat()}
     await save()
@@ -263,6 +311,10 @@ async def orchestrate(job: dict, incident: dict, ctx, fixture, *, progress, guar
             break
         except asyncio.CancelledError:
             raise
+        except DecisionError as exc:
+            review = _fallback_review(evidence, exc.code)
+            tasks['coordinator']['fallback'] = review['fallback']
+            break
         except Exception as exc:
             tasks['coordinator'].update(**failure(exc))
             break
@@ -271,9 +323,12 @@ async def orchestrate(job: dict, incident: dict, ctx, fixture, *, progress, guar
         review = {'assessment': 'insufficient_evidence', 'summary': 'Coordinator chưa hoàn tất kiểm tra bằng chứng.',
                   'evidence_ids': [], 'contradictions': [], 'cause_code': 'none', 'cause_status': 'insufficient_evidence',
                   'claim_scope': 'unknown', 'limitations': ['Chưa có kết luận coordinator đã kiểm tra.']}
-    tasks['coordinator'].update(status='completed' if review_succeeded else 'failed')
+    tasks['coordinator'].update(status='completed' if review_succeeded else 'failed',
+                                execution_status='completed' if review_succeeded else 'failed',
+                                evidence_status=('sufficient' if review.get('assessment') == 'supported_hypothesis'
+                                                 else 'insufficient' if evidence else 'unavailable'))
     # A missing review remains a partial run even when every specialist finished.
-    partial = any(t['status'] != 'completed' for t in tasks.values())
+    partial = any(t.get('execution_status', t.get('status')) != 'completed' for t in tasks.values())
     if partial and review['assessment'] == 'supported_hypothesis':
         review['assessment'] = 'ambiguous'
         review['cause_status'] = 'unresolved'
@@ -296,10 +351,13 @@ async def orchestrate(job: dict, incident: dict, ctx, fixture, *, progress, guar
               'summary': review['summary'], 'review': review, 'tasks': tasks,
               'probes': list(evidence.values()), 'hypotheses': build_hypotheses(evidence), 'top_hypothesis': None,
               'relationship_version': RELATION_VERSION, 'evidence_links': allowed_links(evidence),
-              'completion': {'completed_roles': sum(t['status'] == 'completed' for t in tasks.values()),
+              'completion': {'completed_roles': sum(t.get('execution_status', t.get('status')) == 'completed' for t in tasks.values()),
                              'total_roles': len(tasks), 'unavailable_probes': sum(e.get('status') == 'unavailable' for e in evidence.values()),
+                             'roles_with_insufficient_evidence': sum(t.get('evidence_status') != 'sufficient' for t in tasks.values()),
+                             'execution_complete': not partial,
                              'reused_evidence': sum(t.get('reused_evidence_count', 0) for t in tasks.values())},
               'score_semantics': 'evidence_referenced_not_causal_probability',
-              'recovery_options': [], 'mutations': [], 'partial': partial}
+              'recovery_options': [], 'mutations': [], 'partial': partial,
+              'recovery_eligibility': _recovery_eligibility(partial, review)}
     await progress({'tasks': tasks, 'evidence': evidence, 'review': review})
     return bundle

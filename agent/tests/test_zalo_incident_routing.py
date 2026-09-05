@@ -98,14 +98,17 @@ def test_l2_alert_exposes_completion_partial_roles_and_evidence_ids():
                 'investigation': {'mode': 'multi_agent', 'cause_status': 'unresolved',
                                   'summary': 'Còn nhiều giả thuyết.',
                                   'completion': {'completed_roles': 2, 'total_roles': 4, 'unavailable_probes': 1},
-                                  'tasks': {'performance': {'role': 'performance', 'status': 'completed'},
-                                            'placement': {'role': 'placement', 'status': 'partial'}},
+                                  'tasks': {'performance': {'role': 'performance', 'status': 'completed',
+                                                            'execution_status': 'completed', 'evidence_status': 'sufficient'},
+                                            'placement': {'role': 'placement', 'status': 'completed',
+                                                          'execution_status': 'completed', 'evidence_status': 'unavailable'}},
                                   'review': {'evidence_ids': ['EVD-001', 'EVD-002']},
                                   'limitations': ['Thiếu publisher probe.']}}
     text = _alert_text('ORD-1', incident)
     assert '2/4 vai trò hoàn tất' in text
     assert '1 probe không có dữ liệu' in text
-    assert 'placement: partial' in text
+    assert 'Chưa hoàn tất' not in text
+    assert 'Evidence chưa đủ: placement: unavailable' in text
     assert 'EVD-001, EVD-002' in text
 
 

@@ -119,12 +119,20 @@ def _alert_text(campaign_id: str, incident: dict) -> str:
                           f"{int(completion.get('total_roles') or 0)} vai trò hoàn tất; "
                           f"{int(completion.get('unavailable_probes') or 0)} probe không có dữ liệu.")
         incomplete = [
-            f"{task.get('role')}: {task.get('status')}"
+            f"{task.get('role')}: {task.get('execution_status', task.get('status'))}"
             for task in (investigation.get('tasks') or {}).values()
-            if task.get('status') != 'completed'
+            if task.get('execution_status', task.get('status')) != 'completed'
         ]
         if incomplete:
             diagnosis += '\nChưa hoàn tất: ' + ', '.join(incomplete[:4])
+        evidence_gaps = [
+            f"{task.get('role')}: {task.get('evidence_status')}"
+            for task in (investigation.get('tasks') or {}).values()
+            if task.get('execution_status', task.get('status')) == 'completed'
+            and task.get('evidence_status') in {'insufficient', 'unavailable'}
+        ]
+        if evidence_gaps:
+            diagnosis += '\nEvidence chưa đủ: ' + ', '.join(evidence_gaps[:4])
         cited = list((investigation.get('review') or {}).get('evidence_ids') or [])
         if not cited:
             cited = [probe.get('evidence_id') for probe in investigation.get('probes') or []

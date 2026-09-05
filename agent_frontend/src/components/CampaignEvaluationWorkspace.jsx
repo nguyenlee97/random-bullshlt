@@ -113,11 +113,12 @@ export function ScenarioLab({ campaignId, onApplied, onBusy }) {
 
 export function InvestigationProgress({ job }) {
   const states = { queued: 'Chờ xử lý', running: 'Đang xử lý', completed: 'Hoàn tất', partial: 'Chưa đầy đủ', failed: 'Thất bại', interrupted: 'Bị gián đoạn', stale: 'Dữ liệu đã thay đổi' }
+  const evidenceStates = { sufficient: 'Evidence đủ cho kết luận hiện tại', insufficient: 'Evidence còn thiếu', unavailable: 'Không có evidence ở probe bắt buộc' }
   const roles = { performance: 'Performance Analyst', creative: 'Creative Inspector', setup: 'Setup Auditor', placement: 'Placement Investigator', coordinator: 'Coordinator' }
   const phases = { model: 'Đang phân tích evidence', tool: 'Đang thu thập', reused: 'Dùng lại kết quả hợp lệ', starting: 'Bắt đầu', review: 'Kiểm tra kết luận' }
   const seconds = value => `${(Number(value || 0) / 1000).toFixed(1)}s`
   const tasks = Object.values(job.tasks || {})
-  const completed = tasks.filter(task => task.status === 'completed').length
+  const completed = tasks.filter(task => (task.execution_status || task.status) === 'completed').length
   const evidenceCount = tasks.reduce((sum, task) => sum + Object.keys(task.tool_evidence_ids || {}).length, 0)
   return <section aria-label="Tiến độ investigation" className="space-y-2 rounded-xl border border-violet-200 p-3">
     <div className="flex flex-wrap justify-between gap-2"><h4 className="text-sm font-bold">Nhóm điều tra L2</h4><p role="status" className="text-sm font-semibold">{states[job.status] || job.status}</p></div>
@@ -125,7 +126,8 @@ export function InvestigationProgress({ job }) {
     <p className="text-xs text-slate-500">Revision {job.dataset_revision} · {job.model_calls || 0}/24 lượt model · lần xử lý {job.attempts || 0}/3</p>
     {!!tasks.length && <p className="text-xs font-semibold text-violet-900">{completed}/{tasks.length} vai trò hoàn tất · {evidenceCount} evidence đã gắn vào specialist</p>}
     <div className="grid gap-2 sm:grid-cols-2">{tasks.map(t => <div key={t.role} className="min-w-0 space-y-1 rounded-lg bg-slate-50 p-3 text-xs">
-      <strong>{roles[t.role] || t.role} · {states[t.status] || t.status}</strong>
+      <strong>{roles[t.role] || t.role} · {states[t.execution_status || t.status] || t.execution_status || t.status}</strong>
+      {t.evidence_status && <p className={t.evidence_status === 'sufficient' ? 'text-emerald-700' : 'text-amber-800'}>{evidenceStates[t.evidence_status] || t.evidence_status}</p>}
       <p>{phases[t.phase] || states[t.phase] || 'Chưa có tiến độ chi tiết'}{t.current_tool ? `: ${t.current_tool}` : ''}</p>
       <p className="break-words">Công cụ: {t.tool_calls?.join(', ') || 'Chưa gọi'}</p>
       {!!Object.keys(t.tool_evidence_ids || {}).length && <details><summary className="cursor-pointer text-slate-600">Evidence của specialist ({Object.keys(t.tool_evidence_ids).length})</summary>
@@ -151,6 +153,8 @@ function Investigation({ bundle }) {
     {bundle.cause_status && <p className="text-sm font-semibold">{causeLabel[bundle.cause_status] || bundle.cause_status}</p>}
     {bundle.claim_scope && <p className="text-xs text-slate-600">Phạm vi bằng chứng: {scopeLabel[bundle.claim_scope] || bundle.claim_scope}</p>}
     {bundle.partial && <p role="status" className="text-sm text-amber-800">Điều tra chưa đầy đủ — có specialist hoặc coordinator chưa hoàn tất.</p>}
+    {!bundle.partial && bundle.completion?.unavailable_probes > 0 && <p role="status" className="text-sm text-amber-800">Các specialist đã chạy xong, nhưng {bundle.completion.unavailable_probes} probe không có evidence. Đây là thiếu dữ liệu, không phải lỗi worker.</p>}
+    {bundle.review?.fallback?.kind === 'deterministic_safe_summary' && <p role="status" className="text-sm text-amber-800">Coordinator model không vượt qua contract; server đã đóng lượt bằng tổng hợp an toàn, không chốt nguyên nhân.</p>}
     <p className="text-xs text-slate-500">Revision {bundle.dataset_revision} · {bundle.mode === 'multi_agent' ? 'Specialist + coordinator; giả thuyết dựa trên evidence, chưa chứng minh quan hệ nhân quả.' : 'Playbook deterministic; điểm trọng số luật, không phải xác suất nguyên nhân.'}</p>
     {bundle.summary && <p className="text-sm">{bundle.summary}</p>}
     {!!bundle.limitations?.length && <div className="text-xs text-amber-900"><strong>Giới hạn / chưa kiểm chứng</strong><ul className="mt-1 list-disc pl-4">{bundle.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul></div>}

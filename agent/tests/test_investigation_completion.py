@@ -221,9 +221,84 @@ async def test_early_creative_finish_must_collect_render_even_after_metadata():
     bundle = await orchestrate(job(), incident(), context(data), None,
         progress=Journal(), guard=AsyncMock(), model=model)
     task = bundle['tasks']['creative']
-    assert task['status'] == 'partial'  # No fixture cannot be declared healthy.
+    assert task['status'] == 'completed'
+    assert task['execution_status'] == 'completed'
+    assert task['evidence_status'] == 'insufficient'  # Missing fixture is explicit, never healthy.
     assert task['tool_calls'] == ['creative_compatibility', 'inspect_render']
     assert task['repairs_used'] == 1
+
+
+@pytest.mark.asyncio
+async def test_unavailable_probe_completes_execution_but_keeps_evidence_gap_visible():
+    data = scenario()
+    bundle = await orchestrate(job(), incident(), context(data), None,
+        progress=Journal(), guard=AsyncMock(), model=ScriptedModel())
+    creative = bundle['tasks']['creative']
+    assert creative['execution_status'] == 'completed'
+    assert creative['evidence_status'] == 'insufficient'
+    assert bundle['completion']['execution_complete']
+    assert bundle['completion']['unavailable_probes'] >= 1
+    assert bundle['completion']['roles_with_insufficient_evidence'] >= 1
+    assert not bundle['partial']
+
+
+@pytest.mark.asyncio
+async def test_persistent_coordinator_protocol_error_uses_safe_terminal_fallback():
+    data, normal = scenario(), ScriptedModel()
+    async def invalid_coordinator(role, payload, **kwargs):
+        if role == 'coordinator':
+            result = decision(refs=[e['evidence_id'] for e in payload['evidence']])
+            result['cause_code'] = 'click_obstruction'
+            result['evidence_links'] = [{
+                'hypothesis_id': 'configuration_drift',
+                'evidence_id': payload['evidence'][0]['evidence_id'],
+                'relation': 'supports',
+            }]
+            return result
+        return await normal(role, payload, **kwargs)
+    bundle = await orchestrate(job(), incident(), context(data), data['runtimeFixture'],
+        progress=Journal(), guard=AsyncMock(), model=invalid_coordinator,
+        renderer=AsyncMock(return_value=render_evidence()))
+    coordinator = bundle['tasks']['coordinator']
+    assert coordinator['status'] == coordinator['execution_status'] == 'completed'
+    assert coordinator['fallback']['kind'] == 'deterministic_safe_summary'
+    assert coordinator['fallback']['reason'] == 'invalid_evidence_relation'
+    assert bundle['assessment'] == 'ambiguous'
+    assert bundle['cause_code'] == 'none'
+    assert bundle['recovery_options'] == [] and not bundle['recovery_eligibility']['eligible']
+
+
+@pytest.mark.asyncio
+async def test_no_catalog_alternative_is_completed_observation_not_worker_failure():
+    data = scenario('poor_placement')
+    ctx = context(data)
+    ctx.zone_map = deepcopy(ctx.zone_map)
+    ctx.zone_map.pop('Znews_Family_Masthead')
+    bundle = await orchestrate(job(), incident(), ctx, data['runtimeFixture'],
+        progress=Journal(), guard=AsyncMock(), model=ScriptedModel(),
+        renderer=AsyncMock(return_value=render_evidence(False)))
+    placement = bundle['tasks']['placement']
+    probe = next(item for item in bundle['probes'] if item['probe_id'] == 'placement_benchmark')
+    assert placement['status'] == placement['execution_status'] == 'completed'
+    assert placement['evidence_status'] == 'unavailable'
+    assert probe['status'] == 'unavailable' and probe['finding'] == 'no_alternatives'
+    assert bundle['completion']['execution_complete'] and not bundle['partial']
+    assert not bundle['recovery_eligibility']['eligible']
+
+
+@pytest.mark.asyncio
+async def test_compatible_catalog_alternative_completes_with_sufficient_evidence():
+    data = scenario('poor_placement')
+    bundle = await orchestrate(job(), incident(), context(data), data['runtimeFixture'],
+        progress=Journal(), guard=AsyncMock(), model=ScriptedModel(),
+        renderer=AsyncMock(return_value=render_evidence(False)))
+    placement = bundle['tasks']['placement']
+    probe = next(item for item in bundle['probes'] if item['probe_id'] == 'placement_benchmark')
+    assert placement['execution_status'] == 'completed'
+    assert placement['evidence_status'] == 'sufficient'
+    assert probe['finding'] == 'below_benchmark_with_compatible_alternatives'
+    assert probe['evidence']['booking_availability_verified'] is False
+    assert not bundle['recovery_eligibility']['eligible']
 
 
 @pytest.mark.asyncio

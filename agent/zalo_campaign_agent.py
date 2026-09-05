@@ -753,10 +753,10 @@ async def _handle_pending(
         suffix = " (trạng thái đã đúng từ trước)" if result.get("already_in_state") else ""
         return f"Chiến dịch “{campaign['order'].get('brand')}” {state}{suffix}.", thread
     if pending.get("kind") == "choose_autopilot_mode":
-        if any(word in folded for word in ("tu dong", "fully", "automatic")):
-            mode = "fully_automatic"
-        elif any(word in folded for word in ("ban tu dong", "semi", "quan trong")):
+        if folded == "2" or any(word in folded for word in ("ban tu dong", "semi", "quan trong")):
             mode = "semi_automatic"
+        elif folded == "1" or any(word in folded for word in ("tu dong hoan toan", "fully automatic", "full automatic")):
+            mode = "fully_automatic"
         else:
             mode = ""
             if config.ZALO_OPENAI_ENABLED:
@@ -998,7 +998,8 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
     # Language understanding and normal workflow progression stay in the tool loop.
     pending_kind = (thread.get("pending_action") or {}).get("kind")
     explicit_decision = _fold(message) in _CONFIRM.union(_REJECT)
-    if (pending_kind in {"campaign_lifecycle", "confirm_autopilot_brief", "incident_recovery"} and explicit_decision) or pending_kind == "campaign_selection":
+    if ((pending_kind in {"campaign_lifecycle", "confirm_autopilot_brief", "incident_recovery"} and explicit_decision)
+            or pending_kind in {"campaign_selection", "choose_autopilot_mode"}):
         campaigns = await owned_campaigns(thread)
         pending_text, thread = await _handle_pending(thread, message, campaigns)
         if pending_text:

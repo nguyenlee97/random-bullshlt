@@ -45,11 +45,13 @@ test('incident Q&A binds revision, preserves request id on retry and suppresses 
 })
 
 test('investigation distinguishes symptom, scoped cause, limitations and protocol failures', () => {
-  for (const field of ['symptom_status', 'cause_status', 'claim_scope', 'limitations', 'error_code', 'validation_errors', 'repairs_used']) {
+  for (const field of ['symptom_status', 'cause_status', 'claim_scope', 'limitations', 'error_code', 'validation_errors', 'repairs_used', 'execution_status', 'evidence_status']) {
     assert.ok(source.includes(field), field)
   }
   assert.match(source, /Chưa chốt nguyên nhân/)
   assert.match(source, /Điều tra chưa đầy đủ/)
+  assert.match(source, /Đây là thiếu dữ liệu, không phải lỗi worker/)
+  assert.match(source, /server đã đóng lượt bằng tổng hợp an toàn/)
   assert.match(source, /a\.limitations/)
 })
 
