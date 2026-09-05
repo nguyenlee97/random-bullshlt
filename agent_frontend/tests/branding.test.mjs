@@ -441,4 +441,5 @@ test('campaign homepage exposes delayed Zalo continuity without duplicating the 
   assert.match(home, /Cần bạn xử lý/)
   assert.match(home, /Đang được xây dựng/)
   assert.match(home, /Đang vận hành/)
+  assert.match(home, /Hoàn thành/)
 })

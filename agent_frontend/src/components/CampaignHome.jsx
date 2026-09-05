@@ -5,6 +5,9 @@ import {
   Sparkles, Trash2, TriangleAlert, X, Zap,
 } from 'lucide-react'
 import AccountMenu from '@/components/AccountMenu'
+import {
+  campaignPageSize, isCompletedCampaign, isLiveCampaign, isOperationalCampaign,
+} from '@/lib/campaignHomeLayout'
 
 const ZALO_OA_ID = import.meta.env.VITE_ZALO_OA_ID || '2224936774907333597'
 const ZALO_OA_URL = `https://zalo.me/${ZALO_OA_ID}`
@@ -39,28 +42,28 @@ const activityLabel = value => ({
   completed: 'Flow đã hoàn tất', editing: 'Đang chỉnh sửa', none: '',
 }[value] || '')
 
-const isOperational = item => item.phase === 'operational'
-  || ['operational', 'active', 'completed'].includes(item.lifecycle)
 const clampProgress = value => Math.max(0, Math.min(100, Number(value) || 0))
 
-function useCampaignPageSize() {
-  const read = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 700px)').matches ? 1 : 2
-  const [pageSize, setPageSize] = useState(read)
+function useCompactCampaignPages() {
+  const read = () => Boolean(
+    typeof window !== 'undefined' && window.matchMedia?.('(max-width: 700px)').matches,
+  )
+  const [compact, setCompact] = useState(read)
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return undefined
     const media = window.matchMedia('(max-width: 700px)')
-    const sync = () => setPageSize(media.matches ? 1 : 2)
+    const sync = () => setCompact(media.matches)
     media.addEventListener?.('change', sync)
     return () => media.removeEventListener?.('change', sync)
   }, [])
-  return pageSize
+  return compact
 }
 
 function CampaignCard({ item, onOpen, onOpenHistory, onArchive, onDelete, onClaim }) {
   const [statusLabel, statusTone, statusDot] = lifecycle(item.lifecycle)
   const activity = activityLabel(item.activity)
-  const live = item.lifecycle !== 'archived' && isOperational(item)
+  const live = item.lifecycle !== 'archived' && isOperationalCampaign(item)
   const review = item.lifecycle === 'needs_review'
   const progress = live ? 100 : clampProgress(item.progress?.percent)
   const primary = item.routes?.manage ? 'Quản lý campaign' : review ? 'Duyệt ngay' : item.read_only ? 'Xem kết quả' : 'Tiếp tục campaign'
@@ -223,9 +226,9 @@ export default function CampaignHome({
 }) {
   const [tab, setTab] = useState('active')
   const [query, setQuery] = useState('')
-  const [pages, setPages] = useState({ attention: 0, drafts: 0, live: 0, archive: 0 })
-  const [pageDirections, setPageDirections] = useState({ attention: 'next', drafts: 'next', live: 'next', archive: 'next' })
-  const pageSize = useCampaignPageSize()
+  const [pages, setPages] = useState({ attention: 0, drafts: 0, live: 0, completed: 0, archive: 0 })
+  const [pageDirections, setPageDirections] = useState({ attention: 'next', drafts: 'next', live: 'next', completed: 'next', archive: 'next' })
+  const compactPages = useCompactCampaignPages()
   const archived = campaigns.filter(item => item.lifecycle === 'archived')
   const active = campaigns.filter(item => item.lifecycle !== 'archived')
   const normalized = query.trim().toLocaleLowerCase('vi')
@@ -233,27 +236,36 @@ export default function CampaignHome({
   const visibleActive = active.filter(matchesQuery)
   const visibleArchived = archived.filter(matchesQuery)
   const reviewCount = active.filter(item => item.lifecycle === 'needs_review').length
-  const liveCount = active.filter(isOperational).length
-  const draftCount = active.length - reviewCount - liveCount
+  const liveCount = active.filter(isLiveCampaign).length
+  const completedCount = active.filter(isCompletedCampaign).length
+  const draftCount = active.length - reviewCount - liveCount - completedCount
 
   const groups = useMemo(() => tab === 'archived' ? [{
     id: 'archive', title: 'Campaign đã lưu trữ', eyebrow: 'Archive', description: 'Các campaign đã dọn khỏi workspace chính nhưng vẫn có thể mở lại để xem lịch sử.',
     icon: Archive, iconTone: 'bg-slate-200 text-slate-600', eyebrowTone: 'text-slate-500', rows: visibleArchived,
+    pageSize: campaignPageSize('archive', compactPages),
   }] : [{
     id: 'attention', title: 'Cần bạn xử lý', eyebrow: 'Your decision', description: 'Agent đã chuẩn bị xong ngữ cảnh và đang chờ một quyết định để tiếp tục.',
     icon: TriangleAlert, iconTone: 'bg-amber-100 text-amber-700', eyebrowTone: 'text-amber-700', rows: visibleActive.filter(item => item.lifecycle === 'needs_review'),
+    pageSize: campaignPageSize('attention', compactPages),
   }, {
     id: 'drafts', title: 'Đang được xây dựng', eyebrow: 'In progress', description: 'Những campaign còn dang dở — mở lại đúng bước, không mất chat hay campaign context.',
-    icon: FilePenLine, iconTone: 'bg-blue-50 text-brand-600', eyebrowTone: 'text-brand-600', rows: visibleActive.filter(item => item.lifecycle !== 'needs_review' && !isOperational(item)),
+    icon: FilePenLine, iconTone: 'bg-blue-50 text-brand-600', eyebrowTone: 'text-brand-600', rows: visibleActive.filter(item => item.lifecycle !== 'needs_review' && !isOperationalCampaign(item)),
+    pageSize: campaignPageSize('drafts', compactPages),
   }, {
     id: 'live', title: 'Đang vận hành', eyebrow: 'Campaign operations', description: 'Đi vào trang quản lý riêng để xem setup, báo cáo, bằng chứng và trao đổi với Campaign Agent.',
-    icon: LineChart, iconTone: 'bg-emerald-100 text-emerald-700', eyebrowTone: 'text-emerald-700', rows: visibleActive.filter(isOperational),
-  }], [tab, visibleActive, visibleArchived])
+    icon: LineChart, iconTone: 'bg-emerald-100 text-emerald-700', eyebrowTone: 'text-emerald-700', rows: visibleActive.filter(isLiveCampaign),
+    pageSize: campaignPageSize('live', compactPages),
+  }, {
+    id: 'completed', title: 'Hoàn thành', eyebrow: 'Completed campaigns', description: 'Mở lại campaign đã kết thúc để xem số liệu, báo cáo, Evaluation và toàn bộ lịch sử vận hành.',
+    icon: LineChart, iconTone: 'bg-violet-100 text-violet-700', eyebrowTone: 'text-violet-700', rows: visibleActive.filter(isCompletedCampaign),
+    pageSize: campaignPageSize('completed', compactPages),
+  }], [tab, visibleActive, visibleArchived, compactPages])
 
   useEffect(() => {
-    setPages({ attention: 0, drafts: 0, live: 0, archive: 0 })
-    setPageDirections({ attention: 'next', drafts: 'next', live: 'next', archive: 'next' })
-  }, [tab, query, pageSize])
+    setPages({ attention: 0, drafts: 0, live: 0, completed: 0, archive: 0 })
+    setPageDirections({ attention: 'next', drafts: 'next', live: 'next', completed: 'next', archive: 'next' })
+  }, [tab, query, compactPages])
 
   const changePage = (id, target, direction) => {
     setPageDirections(current => ({ ...current, [id]: direction }))
@@ -280,7 +292,7 @@ export default function CampaignHome({
             </div>
           </div>
           {createError && <p className="relative mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">{createError}</p>}
-          <div className="relative mt-[30px] grid grid-cols-3 gap-2.5 border-t border-slate-200 pt-[22px]" aria-label="Tổng quan campaign"><div className="min-w-0 px-1"><strong className="block text-[21px] font-black tracking-[-.04em] text-[#071226]">{draftCount}</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Bản nháp đang được xây dựng</span></div><div className="min-w-0 px-1"><strong className="block text-[21px] font-black tracking-[-.04em] text-amber-700">{reviewCount}</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Quyết định đang chờ bạn</span></div><div className="min-w-0 px-1"><strong className="block text-[21px] font-black tracking-[-.04em] text-emerald-700">{liveCount}</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Campaign đang vận hành</span></div></div>
+          <div className="relative mt-[30px] grid grid-cols-2 gap-2.5 border-t border-slate-200 pt-[22px] sm:grid-cols-4" aria-label="Tổng quan campaign"><div className="min-w-0 px-1"><strong className="block text-[21px] font-black tracking-[-.04em] text-[#071226]">{draftCount}</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Bản nháp đang được xây dựng</span></div><div className="min-w-0 px-1"><strong className="block text-[21px] font-black tracking-[-.04em] text-amber-700">{reviewCount}</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Quyết định đang chờ bạn</span></div><div className="min-w-0 px-1"><strong className="block text-[21px] font-black tracking-[-.04em] text-emerald-700">{liveCount}</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Campaign đang vận hành</span></div><div className="min-w-0 px-1"><strong className="block text-[21px] font-black tracking-[-.04em] text-violet-700">{completedCount}</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Campaign đã hoàn thành</span></div></div>
         </section>
 
         <section className="mt-7" aria-labelledby="workspace-heading">
@@ -289,7 +301,7 @@ export default function CampaignHome({
           {loading && <div className="mt-6 flex items-center justify-center gap-2 rounded-2xl border border-white/80 bg-white/70 py-20 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Đang tải campaign…</div>}
           {!loading && error && <div className="mt-6 rounded-2xl border border-red-200 bg-white p-6 text-center text-sm text-red-700 shadow-sm"><strong>Không tải được danh sách campaign.</strong><p className="mt-1">{error}</p><button type="button" onClick={onRefresh} className="mt-4 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white">Tải lại danh sách</button></div>}
           {!loading && !error && !hasVisibleRows && <div className="mt-6 rounded-[24px] border border-dashed border-slate-300 bg-white/60 px-6 py-14 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] bg-blue-50 text-brand-600"><Zap className="h-7 w-7" /></div><h2 className="mt-4 text-lg font-black text-slate-900">{query ? 'Không tìm thấy campaign' : tab === 'archived' ? 'Chưa có campaign lưu trữ' : 'Campaign đầu tiên bắt đầu từ đây'}</h2><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">{query ? 'Thử một tên campaign, brand hoặc mã campaign khác.' : 'Chọn Copilot hoặc Autopilot ở phía trên. Campaign sẽ xuất hiện tại workspace ngay từ khi còn là bản nháp.'}</p></div>}
-          {!loading && !error && hasVisibleRows && groups.map(group => <CampaignGroup key={group.id} definition={group} page={pages[group.id] || 0} pageSize={pageSize} direction={pageDirections[group.id] || 'next'} onPageChange={changePage} cardProps={cardProps} />)}
+          {!loading && !error && hasVisibleRows && groups.map(group => <CampaignGroup key={group.id} definition={group} page={pages[group.id] || 0} pageSize={group.pageSize} direction={pageDirections[group.id] || 'next'} onPageChange={changePage} cardProps={cardProps} />)}
           {campaigns.length > 0 && <div className="mt-9 flex flex-wrap items-center gap-2 border-t border-slate-300/80 pt-[18px]"><p className="min-w-[200px] flex-1 text-[11.5px] text-slate-500">Bạn có thể lưu trữ campaign để dọn workspace. Xóa không tác động order đã chạy trên ad server.</p><button type="button" onClick={onDeleteAll} className="h-[34px] rounded-[10px] border border-red-200 bg-white/75 px-3 text-[11.5px] font-black text-red-600 hover:bg-red-50">Xóa toàn bộ lịch sử làm việc…</button></div>}
         </section>
       </div>

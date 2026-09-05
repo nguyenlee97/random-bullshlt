@@ -1469,7 +1469,7 @@ export const AgentAPI = {
   async listCampaigns(includeArchived = true) {
     await bootstrapIdentity()
     const response = await agentFetch(
-      `${AGENT_URL}/api/agent/campaigns?include_archived=${includeArchived ? 'true' : 'false'}`,
+      `${AGENT_URL}/api/agent/campaigns?include_archived=${includeArchived ? 'true' : 'false'}&limit=100`,
       { signal: AbortSignal.timeout(10000) },
     )
     if (!response.ok) throw await responseError(response, 'Không thể tải danh sách campaign.')
