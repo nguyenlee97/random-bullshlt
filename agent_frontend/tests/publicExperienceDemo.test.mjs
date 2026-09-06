@@ -220,6 +220,7 @@ test('campaign management uses the real report and evaluation workflows', () => 
   assert.match(campaignManagement, /<ConfigEditor/)
   assert.match(campaignManagement, /<RevisionHistory/)
   assert.match(campaignManagement, /<CampaignAgentBubble/)
+  assert.match(campaignManagement, /<form onSubmit=\{save\} className="mt-5 grid gap-4">/)
   assert.match(campaignManagement, /askCampaignAssistant/)
   assert.match(campaignManagement, /onPreview/)
   assert.match(campaignManagement, /Tới site/)
