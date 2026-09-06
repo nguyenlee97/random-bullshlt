@@ -9,7 +9,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable
 from copy import deepcopy
+from datetime import date
 from typing import Any
+from urllib.parse import urlparse
 
 _ORDER_FETCH_CONCURRENCY = 8
 _COPILOT_STEPS = (
@@ -54,11 +56,41 @@ def _action_required(summary: dict | None) -> dict | None:
     }
 
 
-def _order_lifecycle(order: dict) -> str:
+def _date_value(value: object) -> date | None:
+    try:
+        return date.fromisoformat(str(value or "")[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _order_lifecycle(order: dict, *, today: date | None = None) -> str:
+    """Return operational truth without rewriting the source order status.
+
+    Several legacy orders remain ``active`` after their booked date range.  The
+    directory treats a campaign whose end date is in the past as completed,
+    while retaining the source status in the order summary for audit/debugging.
+    """
     status = str(order.get("status") or "pending").strip().lower()
+    if status in {"archived", "failed", "cancelled", "deleted"}:
+        return "archived" if status in {"cancelled", "deleted"} else status
+    end_date = _date_value(order.get("endDate") or order.get("end_date"))
+    if end_date and end_date < (today or date.today()):
+        return "completed"
+    start_date = _date_value(order.get("startDate") or order.get("start_date"))
+    if start_date and start_date > (today or date.today()):
+        return "scheduled"
     return status if status in {
         "active", "paused", "completed", "archived", "failed",
     } else "operational"
+
+
+def _safe_http_url(value: object) -> str | None:
+    candidate = str(value or "").strip()
+    try:
+        parsed = urlparse(candidate)
+    except ValueError:
+        return None
+    return candidate if parsed.scheme in {"http", "https"} and parsed.netloc else None
 
 
 def _order_preview(values: object, *, kind: str, limit: int = 6) -> list[dict]:
@@ -76,33 +108,57 @@ def _order_preview(values: object, *, kind: str, limit: int = 6) -> list[dict]:
                 value.get("name") or value.get("label") or value.get("zone_name")
                 or value.get("title") or value.get("file_name") or identity
             )
-            detail = str(
-                value.get("format") or value.get("size") or value.get("dimensions")
-                or value.get("publisher") or ""
+            detail_parts = [
+                str(value.get(key) or "").strip()
+                for key in ("publisher", "format", "size", "dimensions")
+            ]
+            detail = " · ".join(dict.fromkeys(part for part in detail_parts if part))
+            url = _safe_http_url(
+                value.get("siteUrl") if kind == "placement" else value.get("url")
             )
         else:
             identity = str(value)
             label = identity
             detail = ""
-        previews.append({"id": identity, "label": label, "detail": detail, "kind": kind})
+            url = None
+        previews.append({
+            "id": identity, "label": label, "detail": detail, "kind": kind,
+            "url": url,
+        })
     return previews
 
 
 def _order_summary(order_id: str, order: dict, *, order_count: int = 1) -> dict:
     placements = order.get("placements") or []
+    placement_values = order.get("placementSnapshots") or placements
     creatives = order.get("creatives") or order.get("creative") or []
+    if isinstance(creatives, dict):
+        creatives = [creatives] if any(creatives.values()) else []
     warnings = order.get("warnings") or []
+    explicit_daily = order.get("daily") or order.get("daily_budget")
+    daily_budget = explicit_daily
+    daily_budget_source = "explicit" if explicit_daily else None
+    start_date = _date_value(order.get("startDate") or order.get("start_date"))
+    end_date = _date_value(order.get("endDate") or order.get("end_date"))
+    budget = order.get("budget")
+    if not daily_budget and start_date and end_date and end_date >= start_date:
+        try:
+            daily_budget = round(float(budget) / ((end_date - start_date).days + 1))
+            daily_budget_source = "derived"
+        except (TypeError, ValueError, ZeroDivisionError):
+            daily_budget = None
     return {
         "id": str(order.get("id") or order.get("_id") or order_id),
         "status": str(order.get("status") or "pending").lower(),
         "objective": order.get("objective"),
-        "budget": order.get("budget"),
-        "daily_budget": order.get("daily") or order.get("daily_budget"),
+        "budget": budget,
+        "daily_budget": daily_budget,
+        "daily_budget_source": daily_budget_source,
         "start_date": order.get("startDate") or order.get("start_date"),
         "end_date": order.get("endDate") or order.get("end_date"),
         "placement_count": len(placements) if isinstance(placements, list) else 0,
         "creative_count": len(creatives) if isinstance(creatives, list) else 0,
-        "placement_preview": _order_preview(placements, kind="placement"),
+        "placement_preview": _order_preview(placement_values, kind="placement"),
         "creative_preview": _order_preview(creatives, kind="creative"),
         "warning_count": len(warnings) if isinstance(warnings, list) else 0,
         "order_count": order_count,
@@ -312,7 +368,11 @@ async def list_campaign_directory(
 
     if not include_archived:
         items = [item for item in items if item["lifecycle"] != "archived"]
-    priority = {"needs_review": 0, "draft": 1, "active": 2, "operational": 2, "paused": 3}
+    priority = {
+        "active": 0, "operational": 0, "paused": 0,
+        "needs_review": 1, "draft": 2, "scheduled": 2, "failed": 2,
+        "completed": 3, "archived": 5,
+    }
     grouped: list[dict] = []
     for value in sorted({priority.get(item.get("lifecycle"), 4) for item in items}):
         group = [item for item in items if priority.get(item.get("lifecycle"), 4) == value]

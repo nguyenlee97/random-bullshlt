@@ -27,3 +27,9 @@ test('completed campaigns are operational but excluded from the live group', () 
   assert.equal(isCompletedCampaign(active), false)
   assert.equal(isLiveCampaign(active), true)
 })
+
+test('scheduled and failed orders are not counted as currently live', () => {
+  assert.equal(isLiveCampaign({ phase: 'operational', lifecycle: 'scheduled' }), false)
+  assert.equal(isLiveCampaign({ phase: 'operational', lifecycle: 'failed' }), false)
+  assert.equal(isLiveCampaign({ phase: 'operational', lifecycle: 'active' }), true)
+})

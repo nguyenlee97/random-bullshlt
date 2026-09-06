@@ -22,6 +22,7 @@ async def _lifespan(_app):
     from creative_assets import ensure_indexes as ensure_creative_asset_indexes
     from quality.store import ensure_quality_indexes
     from evaluation.store import ensure_evaluation_indexes
+    from campaign_config import ensure_campaign_config_indexes
     await ensure_account_indexes()
     await ensure_autopilot_indexes()
     await ensure_campaign_ownership_indexes()
@@ -32,6 +33,7 @@ async def _lifespan(_app):
     await ensure_creative_asset_indexes()
     await ensure_quality_indexes()
     await ensure_evaluation_indexes()
+    await ensure_campaign_config_indexes()
     if config.USE_RAG_AUDIENCE:
         from rag.runtime import start_prewarm
         await start_prewarm()

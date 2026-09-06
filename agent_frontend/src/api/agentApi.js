@@ -1487,6 +1487,45 @@ export const AgentAPI = {
     return (await response.json()).campaign
   },
 
+  async getCampaignConfig(campaignId) {
+    await bootstrapIdentity()
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/campaigns/${encodeURIComponent(campaignId)}/config`,
+      { signal: AbortSignal.timeout(15000) },
+    )
+    if (!response.ok) throw await responseError(response, 'Không thể tải campaign config.')
+    return response.json()
+  },
+
+  async updateCampaignConfig(campaignId, expectedRevision, patch, note = '', requestId = '') {
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/campaigns/${encodeURIComponent(campaignId)}/config`,
+      {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expected_revision: expectedRevision,
+          request_id: requestId || generateId('campaign-config'),
+          patch, note,
+        }),
+        signal: AbortSignal.timeout(30000),
+      },
+    )
+    if (!response.ok) throw await responseError(response, 'Không thể lưu campaign config.')
+    return response.json()
+  },
+
+  async askCampaignAssistant(campaignId, question) {
+    const response = await agentFetch(
+      `${AGENT_URL}/api/agent/campaigns/${encodeURIComponent(campaignId)}/assistant`,
+      {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }), signal: AbortSignal.timeout(30000),
+      },
+    )
+    if (!response.ok) throw await responseError(response, 'Campaign Agent chưa trả lời được.')
+    return response.json()
+  },
+
   async getEvaluationIncident(campaignId, incidentId) {
     const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}`, { signal: AbortSignal.timeout(15000) })
     if (!response.ok) throw await responseError(response, 'Không tải được lịch sử điều tra.')

@@ -102,6 +102,17 @@ class _LoginRequest(BaseModel):
     password: str
 
 
+class _CampaignConfigUpdateRequest(BaseModel):
+    expected_revision: int
+    request_id: str
+    patch: dict
+    note: str = ""
+
+
+class _CampaignAssistantRequest(BaseModel):
+    question: str
+
+
 def _set_account_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         "aa_account",
@@ -347,6 +358,57 @@ async def campaign_detail(campaign_id: str, request: Request, response: Response
     if not entry:
         raise HTTPException(status_code=404, detail="campaign not found")
     return {"campaign": entry}
+
+
+@agent_router.get("/campaigns/{campaign_id}/config")
+async def campaign_config_get(campaign_id: str, request: Request, response: Response):
+    from campaign_config import get_campaign_config
+    from campaign_directory import get_campaign_directory_entry
+
+    actor = await _request_actor(request)
+    if not await get_campaign_directory_entry(actor, campaign_id):
+        raise HTTPException(status_code=404, detail="campaign not found")
+    response.headers["Cache-Control"] = "no-store"
+    return await get_campaign_config(campaign_id)
+
+
+@agent_router.put("/campaigns/{campaign_id}/config")
+async def campaign_config_update(
+    campaign_id: str, body: _CampaignConfigUpdateRequest, request: Request,
+):
+    from campaign_config import ConfigConflict, ConfigValidationError, update_campaign_config
+    from campaign_directory import get_campaign_directory_entry
+
+    actor = await _request_actor(request)
+    if not await get_campaign_directory_entry(actor, campaign_id):
+        raise HTTPException(status_code=404, detail="campaign not found")
+    try:
+        revision = await update_campaign_config(
+            campaign_id, actor=actor, expected_revision=body.expected_revision,
+            request_id=body.request_id, patch=body.patch, note=body.note,
+        )
+    except ConfigConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ConfigValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"revision": revision}
+
+
+@agent_router.post("/campaigns/{campaign_id}/assistant")
+async def campaign_assistant_answer(
+    campaign_id: str, body: _CampaignAssistantRequest, request: Request,
+):
+    from campaign_assistant import answer_campaign_question
+    from campaign_directory import get_campaign_directory_entry
+
+    actor = await _request_actor(request)
+    entry = await get_campaign_directory_entry(actor, campaign_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="campaign not found")
+    try:
+        return await answer_campaign_question(entry, body.question)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @agent_router.get("/conversation-models")

@@ -1,3 +1,4 @@
+from datetime import date
 from unittest.mock import AsyncMock
 
 import pytest
@@ -92,47 +93,93 @@ async def test_directory_unifies_drafts_reviews_and_owned_orders(monkeypatch):
     )
 
     assert [item["entry_id"] for item in result] == [
-        "conversation:conv-review", "conversation:conv-draft", "conversation:conv-order",
+        "conversation:conv-order", "conversation:conv-review", "conversation:conv-draft",
     ]
-    assert result[0]["action_required"] == {
+    assert result[1]["action_required"] == {
         "kind": "workflow_review",
         "run_id": "run-review",
         "task_key": "forecast_order",
         "label": "Duyệt bước forecast order",
     }
-    assert result[0]["phase"] == "draft"
-    assert result[0]["routes"]["conversation"] == "/agent/autopilot/history/conv-review"
-    assert result[0]["progress"] == {
+    assert result[1]["phase"] == "draft"
+    assert result[1]["routes"]["conversation"] == "/agent/autopilot/history/conv-review"
+    assert result[1]["progress"] == {
         "kind": "tasks", "completed": 11, "total": 18, "percent": 61,
         "current_key": "forecast_order", "current_label": "Forecast Order",
     }
-    assert result[1]["lifecycle"] == "draft"
-    assert result[1]["progress"]["current_label"] == "Audience"
-    assert result[1]["routes"]["conversation"] == "/agent/copilot/history/conv-draft"
-    assert result[2]["phase"] == "operational"
-    assert result[2]["order"] == {
+    assert result[2]["lifecycle"] == "draft"
+    assert result[2]["progress"]["current_label"] == "Audience"
+    assert result[2]["routes"]["conversation"] == "/agent/copilot/history/conv-draft"
+    assert result[0]["phase"] == "operational"
+    assert result[0]["order"] == {
         "id": "ORD-OWNED",
         "status": "active",
         "objective": "Awareness",
         "budget": 120000000,
         "daily_budget": None,
+        "daily_budget_source": None,
         "start_date": None,
         "end_date": None,
         "placement_count": 2,
         "creative_count": 1,
         "placement_preview": [
-            {"id": "zone-a", "label": "zone-a", "detail": "", "kind": "placement"},
-            {"id": "zone-b", "label": "zone-b", "detail": "", "kind": "placement"},
+            {"id": "zone-a", "label": "zone-a", "detail": "", "kind": "placement", "url": None},
+            {"id": "zone-b", "label": "zone-b", "detail": "", "kind": "placement", "url": None},
         ],
         "creative_preview": [
-            {"id": "creative-a", "label": "creative-a", "detail": "", "kind": "creative"},
+            {"id": "creative-a", "label": "creative-a", "detail": "", "kind": "creative", "url": None},
         ],
         "warning_count": 0,
         "order_count": 1,
     }
-    assert result[2]["routes"]["manage"] == "/manage/campaigns/ORD-OWNED"
-    assert result[2]["routes"]["conversation"] == "/agent/copilot/history/conv-order?readonly=1"
+    assert result[0]["routes"]["manage"] == "/manage/campaigns/ORD-OWNED"
+    assert result[0]["routes"]["conversation"] == "/agent/copilot/history/conv-order?readonly=1"
     fetch_order.assert_awaited_once_with("ORD-OWNED")
+
+
+def test_order_lifecycle_uses_end_date_without_rewriting_source_status():
+    from campaign_directory import _order_lifecycle
+
+    assert _order_lifecycle(
+        {"status": "active", "endDate": "2026-08-23"},
+        today=date(2026, 9, 6),
+    ) == "completed"
+    assert _order_lifecycle(
+        {"status": "active", "endDate": "2026-09-06"},
+        today=date(2026, 9, 6),
+    ) == "active"
+    assert _order_lifecycle(
+        {"status": "paused", "endDate": "not-a-date"},
+        today=date(2026, 9, 6),
+    ) == "paused"
+    assert _order_lifecycle(
+        {"status": "active", "startDate": "2026-09-10", "endDate": "2026-09-20"},
+        today=date(2026, 9, 6),
+    ) == "scheduled"
+
+
+def test_order_summary_derives_daily_budget_and_preserves_preview_links():
+    from campaign_directory import _order_summary
+
+    summary = _order_summary("ORD-LINKS", {
+        "id": "ORD-LINKS", "status": "active", "budget": 80_000_000,
+        "daily": 0, "startDate": "2026-08-16", "endDate": "2026-08-23",
+        "placements": ["ZN-1"],
+        "placementSnapshots": [{
+            "id": "ZN-1", "name": "ZNews Masthead", "publisher": "ZNews",
+            "format": "Masthead", "siteUrl": "https://znews.example/gaming",
+        }],
+        "creatives": [{
+            "id": "CR-1", "name": "Hero", "size": "1200x300",
+            "url": "https://cdn.example/hero.png",
+        }],
+    })
+
+    assert summary["daily_budget"] == 10_000_000
+    assert summary["daily_budget_source"] == "derived"
+    assert summary["placement_preview"][0]["url"] == "https://znews.example/gaming"
+    assert summary["placement_preview"][0]["detail"] == "ZNews · Masthead"
+    assert summary["creative_preview"][0]["url"] == "https://cdn.example/hero.png"
 
 
 @pytest.mark.asyncio

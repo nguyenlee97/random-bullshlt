@@ -31,6 +31,7 @@ const lifecycle = value => ({
   operational: ['ĐÃ TẠO', 'border-emerald-200 bg-emerald-50 text-emerald-700', 'bg-emerald-500'],
   active: ['ĐANG VẬN HÀNH', 'border-emerald-200 bg-emerald-50 text-emerald-700', 'bg-emerald-500'],
   paused: ['TẠM DỪNG', 'border-slate-200 bg-slate-100 text-slate-700', 'bg-slate-400'],
+  scheduled: ['SẮP CHẠY', 'border-cyan-200 bg-cyan-50 text-cyan-700', 'bg-cyan-500'],
   completed: ['HOÀN TẤT', 'border-violet-200 bg-violet-50 text-violet-700', 'bg-violet-500'],
   failed: ['CÓ LỖI', 'border-red-200 bg-red-50 text-red-700', 'bg-red-500'],
   archived: ['LƯU TRỮ', 'border-slate-200 bg-slate-100 text-slate-500', 'bg-slate-400'],
@@ -95,7 +96,7 @@ function CampaignCard({ item, onOpen, onOpenHistory, onArchive, onDelete, onClai
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
-        {live && item.evaluation_summary && <span className="rounded-full border border-current px-2.5 py-1 text-[10px] font-bold">
+        {live && item.evaluation_summary && <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-blue-50">
           Evaluation: {item.evaluation_summary.open_count > 0 ? item.evaluation_summary.open_count + ' incident'
             : item.evaluation_summary.status === 'healthy' ? 'Ổn định'
             : item.evaluation_summary.status === 'unavailable' ? 'Chưa tải được' : 'Chưa đánh giá'}
@@ -245,17 +246,17 @@ export default function CampaignHome({
     icon: Archive, iconTone: 'bg-slate-200 text-slate-600', eyebrowTone: 'text-slate-500', rows: visibleArchived,
     pageSize: campaignPageSize('archive', compactPages),
   }] : [{
+    id: 'live', title: 'Đang vận hành', eyebrow: 'Campaign operations', description: 'Đi vào trang quản lý riêng để xem setup, báo cáo, bằng chứng và trao đổi với Campaign Agent.',
+    icon: LineChart, iconTone: 'bg-emerald-100 text-emerald-700', eyebrowTone: 'text-emerald-700', rows: visibleActive.filter(isLiveCampaign),
+    pageSize: campaignPageSize('live', compactPages),
+  }, {
     id: 'attention', title: 'Cần bạn xử lý', eyebrow: 'Your decision', description: 'Agent đã chuẩn bị xong ngữ cảnh và đang chờ một quyết định để tiếp tục.',
     icon: TriangleAlert, iconTone: 'bg-amber-100 text-amber-700', eyebrowTone: 'text-amber-700', rows: visibleActive.filter(item => item.lifecycle === 'needs_review'),
     pageSize: campaignPageSize('attention', compactPages),
   }, {
     id: 'drafts', title: 'Đang được xây dựng', eyebrow: 'In progress', description: 'Những campaign còn dang dở — mở lại đúng bước, không mất chat hay campaign context.',
-    icon: FilePenLine, iconTone: 'bg-blue-50 text-brand-600', eyebrowTone: 'text-brand-600', rows: visibleActive.filter(item => item.lifecycle !== 'needs_review' && !isOperationalCampaign(item)),
+    icon: FilePenLine, iconTone: 'bg-blue-50 text-brand-600', eyebrowTone: 'text-brand-600', rows: visibleActive.filter(item => item.lifecycle !== 'needs_review' && !isLiveCampaign(item) && !isCompletedCampaign(item)),
     pageSize: campaignPageSize('drafts', compactPages),
-  }, {
-    id: 'live', title: 'Đang vận hành', eyebrow: 'Campaign operations', description: 'Đi vào trang quản lý riêng để xem setup, báo cáo, bằng chứng và trao đổi với Campaign Agent.',
-    icon: LineChart, iconTone: 'bg-emerald-100 text-emerald-700', eyebrowTone: 'text-emerald-700', rows: visibleActive.filter(isLiveCampaign),
-    pageSize: campaignPageSize('live', compactPages),
   }, {
     id: 'completed', title: 'Hoàn thành', eyebrow: 'Completed campaigns', description: 'Mở lại campaign đã kết thúc để xem số liệu, báo cáo, Evaluation và toàn bộ lịch sử vận hành.',
     icon: LineChart, iconTone: 'bg-violet-100 text-violet-700', eyebrowTone: 'text-violet-700', rows: visibleActive.filter(isCompletedCampaign),

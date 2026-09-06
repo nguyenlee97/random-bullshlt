@@ -7,11 +7,11 @@ export const DESKTOP_CAMPAIGN_PAGE_SIZES = Object.freeze({
 })
 
 export const isOperationalCampaign = item => item?.phase === 'operational'
-  || ['operational', 'active', 'paused', 'completed', 'failed'].includes(item?.lifecycle)
+  || ['operational', 'active', 'paused', 'scheduled', 'completed', 'failed'].includes(item?.lifecycle)
 
 export const isCompletedCampaign = item => item?.lifecycle === 'completed'
 
-export const isLiveCampaign = item => isOperationalCampaign(item) && !isCompletedCampaign(item)
+export const isLiveCampaign = item => ['operational', 'active', 'paused'].includes(item?.lifecycle)
 
 export const campaignPageSize = (groupId, compact = false) => compact
   ? 1
