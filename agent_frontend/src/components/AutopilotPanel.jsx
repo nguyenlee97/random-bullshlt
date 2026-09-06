@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Activity, AlertTriangle, ArrowRight, Check, Circle, Loader2, Pause, Play, RotateCw,
-  ExternalLink, ImageIcon, ListChecks, ShieldCheck, Sparkles, Square, Upload, X,
+  Activity, AlertTriangle, ArrowRight, Check, ChevronDown, ChevronsLeft, ChevronsRight,
+  Circle, Loader2, MessageSquare, Pause, Play, RotateCw, ExternalLink, ImageIcon,
+  ListChecks, ShieldCheck, Sparkles, Square, Upload, X,
 } from 'lucide-react'
 import { AgentAPI } from '@/api/agentApi'
 import AutopilotReview, {
@@ -98,6 +99,11 @@ const RUN_LABELS = {
   paused: 'Tạm dừng', completed: 'Hoàn tất', cancelled: 'Đã hủy', failed: 'Có lỗi',
 }
 
+const STAGE_STATUS_LABELS = {
+  succeeded: 'Hoàn tất', running: 'Đang chạy', waiting_review: 'Chờ bạn duyệt',
+  failed: 'Có lỗi', pending: 'Chưa tới',
+}
+
 const taskIcon = status => {
   if (status === 'succeeded') return <Check className="h-3 w-3" />
   if (status === 'running') return <Loader2 className="h-3 w-3 animate-spin" />
@@ -155,6 +161,7 @@ export default function AutopilotPanel({
   onReportActivate, onReportExit,
   openaiCampaignFlow = false,
   readOnly = false,
+  chatOpen = true,
 }) {
   const [policy, setPolicy] = useState('critical_only')
   const [creativeSource, setCreativeSource] = useState(null)
@@ -172,6 +179,9 @@ export default function AutopilotPanel({
   })
   const [assetUploading, setAssetUploading] = useState(false)
   const [run, setRun] = useState(initialRun)
+  const [stageSheetOpen, setStageSheetOpen] = useState(false)
+  const [stageRailExpanded, setStageRailExpanded] = useState(() => window.innerWidth >= 1440)
+  const stageSheetCloseRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [workspaceSnapshot, setWorkspaceSnapshot] = useState(canonicalWorkspace)
@@ -597,6 +607,15 @@ export default function AutopilotPanel({
     const done = tasks.filter(task => ['succeeded', 'skipped'].includes(task.status)).length
     return { ...stage, tasks, done, status: stageStatus(tasks) }
   })
+  const completedTaskCount = orderedTasks.filter(task => ['succeeded', 'skipped'].includes(task.status)).length
+  const activeStageIndex = (() => {
+    const active = executionStages.findIndex(stage => ['running', 'waiting_review', 'failed'].includes(stage.status))
+    if (active >= 0) return active
+    const firstPending = executionStages.findIndex(stage => stage.status === 'pending')
+    if (firstPending >= 0) return firstPending
+    return Math.max(0, executionStages.length - 1)
+  })()
+  const activeTask = waiting || orderedTasks.find(task => task.status === 'running') || orderedTasks.find(task => task.status === 'failed')
   const placementLinks = [...new Map(
     (placementResult.zones || []).filter(zone => zone.siteUrl).map(zone => [zone.siteUrl, zone])
   ).values()]
@@ -717,19 +736,83 @@ export default function AutopilotPanel({
     event.stopPropagation()
   }
 
+  useEffect(() => {
+    if (!stageSheetOpen) return undefined
+    const previouslyFocused = document.activeElement
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') setStageSheetOpen(false)
+    }
+    stageSheetCloseRef.current?.focus()
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape)
+      previouslyFocused?.focus?.()
+    }
+  }, [stageSheetOpen])
+
   return (
     <section
       data-demo="autopilot-canvas"
       data-autopilot-status={run?.status || 'not_started'}
       data-autopilot-waiting-task={waiting?.key || ''}
       data-autopilot-waiting-reason={waiting?.result?.reason || ''}
-      className="h-full min-h-0 w-full touch-pan-y overflow-y-auto overscroll-contain bg-slate-50/70 p-3 sm:p-5"
+      className="flex h-full min-h-0 min-w-0 w-full max-w-full touch-pan-y overflow-hidden bg-[#f6f8fc]"
       aria-label="Không gian Campaign Autopilot"
       aria-readonly={readOnly || undefined}
       onClickCapture={preventReadOnlyMutation}
       onChangeCapture={preventReadOnlyMutation}
       onInputCapture={preventReadOnlyMutation}
     >
+      <nav aria-label="Tiến trình 5 stage" className={`hidden h-full shrink-0 flex-col overflow-y-auto bg-[#020817] px-2 py-3 text-slate-200 transition-[width] lg:flex ${stageRailExpanded ? 'w-[208px]' : 'w-16'}`}>
+        <div className="flex min-h-9 items-center gap-2">
+          {!chatOpen && (
+            <button type="button" onClick={onOpenChat} aria-label="Mở chat với Agent" title="Mở chat với Agent"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-white">
+              <MessageSquare className="h-4 w-4" />
+            </button>
+          )}
+          {stageRailExpanded && <span className="min-w-0 flex-1 truncate text-[10px] font-black tracking-[.14em] text-slate-500">AUTOPILOT · 5 STAGE</span>}
+          <span className="shrink-0 rounded-md border border-slate-800 px-1.5 py-1 text-[9px] font-black text-slate-400">{completedTaskCount}/{orderedTasks.length || 18}</span>
+        </div>
+        <ol className="mt-4 space-y-2">
+          {executionStages.map((stage, index) => {
+            const active = index === activeStageIndex
+            const total = stage.tasks.length || stage.keys.length
+            return (
+              <li key={stage.label}>
+                <button type="button" onClick={() => !stageRailExpanded && setStageRailExpanded(true)} title={`${stage.label} — ${stage.done}/${total} task · ${STAGE_STATUS_LABELS[stage.status] || stage.status}`}
+                  className={`flex min-h-12 w-full items-center gap-2 rounded-xl border px-2 py-2 text-left transition-colors ${active ? 'border-violet-500/70 bg-violet-500/15 text-white' : 'border-transparent text-slate-400 hover:border-slate-800 hover:bg-slate-900/70'}`}>
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-black ${stage.status === 'succeeded' ? 'border-emerald-400 bg-emerald-400 text-slate-950' : stage.status === 'waiting_review' ? 'border-amber-300 bg-amber-300 text-slate-950' : stage.status === 'failed' ? 'border-red-400 bg-red-400 text-white' : active ? 'border-violet-400 bg-violet-500 text-white' : 'border-slate-700 bg-slate-900 text-slate-500'}`}>
+                    {stage.status === 'succeeded' ? <Check className="h-3.5 w-3.5" /> : stage.status === 'waiting_review' ? <AlertTriangle className="h-3.5 w-3.5" /> : stage.status === 'running' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : index + 1}
+                  </span>
+                  {stageRailExpanded && <span className="min-w-0 flex-1"><strong className="block truncate text-[11.5px]">{stage.label}</strong><small className={`mt-0.5 block text-[9.5px] ${active ? 'text-violet-200' : 'text-slate-600'}`}>{stage.done}/{total} task · {STAGE_STATUS_LABELS[stage.status] || stage.status}</small></span>}
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+        {stageRailExpanded && (
+          <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+            <p className="text-[9px] font-black tracking-[.14em] text-amber-300">{waiting ? 'CẦN BẠN DUYỆT' : run?.status === 'running' ? 'AGENT ĐANG CHẠY' : 'TRẠNG THÁI RUN'}</p>
+            <p className="mt-1 text-[11px] font-bold leading-4 text-white">{activeTask ? TASK_LABELS[activeTask.key] || activeTask.key : run ? RUN_LABELS[run.status] || run.status : 'Chưa bắt đầu'}</p>
+            <p className="mt-1 text-[9.5px] leading-4 text-slate-500">Rail hiển thị 5 stage; toàn bộ 18 task nằm trong timeline workspace.</p>
+          </div>
+        )}
+        <button type="button" onClick={() => setStageRailExpanded(value => !value)} aria-label={stageRailExpanded ? 'Thu gọn rail tiến trình' : 'Mở rộng rail tiến trình'}
+          className="mt-auto flex min-h-9 w-full items-center justify-center rounded-lg border border-slate-800 text-slate-500 hover:bg-slate-900 hover:text-white">
+          {stageRailExpanded ? <ChevronsLeft className="h-4 w-4" /> : <ChevronsRight className="h-4 w-4" />}
+        </button>
+      </nav>
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <button type="button" onClick={() => setStageSheetOpen(true)} aria-label="Mở tiến trình 5 stage" aria-expanded={stageSheetOpen} aria-controls="autopilot-stage-sheet"
+          className="flex w-full shrink-0 items-center gap-2.5 bg-[#020817] px-3 py-2.5 text-left text-white lg:hidden">
+          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${waiting ? 'bg-amber-300 text-slate-950' : 'bg-violet-500'}`}>{activeStageIndex + 1}</span>
+          <span className="min-w-0 flex-1"><strong className="block truncate text-xs">Stage {activeStageIndex + 1}/5 · {executionStages[activeStageIndex]?.label}</strong><small className="mt-0.5 block truncate text-[10px] text-slate-400">{completedTaskCount}/{orderedTasks.length || 18} task · {waiting ? 'chờ bạn duyệt' : RUN_LABELS[run?.status] || 'chưa bắt đầu'}</small></span>
+          <ChevronDown className="h-4 w-4 text-slate-400" />
+        </button>
+
+        <div data-ws-scroll className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3 sm:p-5">
       {!run ? (
         <div className="mx-auto max-w-5xl space-y-4 pb-6">
           <div data-demo="autopilot-intro" className="overflow-hidden rounded-3xl border border-brand-100 bg-[radial-gradient(circle_at_top_right,_#dcebff_0,_#ffffff_48%)] p-5 shadow-sm sm:p-7">
@@ -976,16 +1059,16 @@ export default function AutopilotPanel({
           </div>
         </div>
       ) : (
-        <div className="mx-auto max-w-6xl space-y-4 pb-24">
+        <div className="mx-auto min-w-0 max-w-6xl space-y-4 pb-24">
           <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur-md sm:p-4">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Sparkles className="h-4 w-4 text-brand-500" />
               <span className="text-sm font-bold text-slate-900">Campaign Autopilot</span>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Plan v{run.plan_revision || 1}</span>
               <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700">{run.creative_source === 'ai_generate' ? 'AI tự tạo creative' : 'Creative tải lên'}</span>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${run.status === 'waiting_review' ? 'bg-amber-100 text-amber-800' : run.status === 'failed' ? 'bg-red-100 text-red-700' : run.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-brand-50 text-brand-700'}`}>{RUN_LABELS[run.status] || run.status}</span>
             </div>
-            <div className="h-1.5 min-w-[130px] flex-1 overflow-hidden rounded-full bg-slate-100">
+            <div className="order-3 h-1.5 min-w-[130px] basis-full flex-1 overflow-hidden rounded-full bg-slate-100 sm:order-none sm:basis-auto">
               <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${progress}%` }} />
             </div>
             <span className="text-xs font-semibold text-slate-600">{progress}%</span>
@@ -1412,6 +1495,24 @@ export default function AutopilotPanel({
         </div>
       )}
       {error && <p className="mx-auto mt-3 max-w-6xl rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">{error}</p>}
+        </div>
+      </div>
+
+      {stageSheetOpen && (
+        <div className="fixed inset-0 z-[90] flex items-end bg-slate-950/60 backdrop-blur-[2px] lg:hidden" onMouseDown={() => setStageSheetOpen(false)}>
+          <section id="autopilot-stage-sheet" role="dialog" aria-modal="true" aria-label="Tiến trình 5 stage" onMouseDown={event => event.stopPropagation()}
+            className="max-h-[78dvh] w-full overflow-y-auto rounded-t-[22px] bg-[#020817] px-4 pb-[calc(20px+env(safe-area-inset-bottom))] pt-4 text-white shadow-2xl">
+            <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-black tracking-[.15em] text-slate-500">AUTOPILOT · 5 STAGE</p><h2 className="mt-1 text-base font-black">{completedTaskCount}/{orderedTasks.length || 18} task</h2></div><button ref={stageSheetCloseRef} type="button" onClick={() => setStageSheetOpen(false)} aria-label="Đóng tiến trình" className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-800"><X className="h-4 w-4" /></button></div>
+            <ol className="space-y-2">
+              {executionStages.map((stage, index) => {
+                const active = index === activeStageIndex
+                const total = stage.tasks.length || stage.keys.length
+                return <li key={stage.label} className={`flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2 ${active ? 'border-violet-500 bg-violet-500/15' : 'border-slate-800 bg-slate-900/60'}`}><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black ${stage.status === 'succeeded' ? 'bg-emerald-400 text-slate-950' : stage.status === 'waiting_review' ? 'bg-amber-300 text-slate-950' : active ? 'bg-violet-500' : 'bg-slate-800 text-slate-400'}`}>{stage.status === 'succeeded' ? <Check className="h-4 w-4" /> : index + 1}</span><span className="min-w-0 flex-1"><strong className="block text-sm">{stage.label}</strong><small className="text-[11px] text-slate-400">{stage.done}/{total} task · {STAGE_STATUS_LABELS[stage.status] || stage.status}</small></span></li>
+              })}
+            </ol>
+          </section>
+        </div>
+      )}
     </section>
   )
 }

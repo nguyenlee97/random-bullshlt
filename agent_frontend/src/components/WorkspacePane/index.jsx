@@ -25,7 +25,7 @@ const STEP_DESCS = [
 ]
 
 const WorkspacePane = forwardRef(function WorkspacePane(
-  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false, autopilotEditorArtifact = null, onAutopilotSave, onReturnToAutopilot, openaiCampaignFlow = false, readOnly = false },
+  { steps, currentStep, stepStatuses, formState, setFormState, onStepJump, onApprove, canApprove, busy, onPartialReset, recoFromChat, onSendChat, recomputePlan, workspaceRevision, creativeFormatPlan, onOpenRecompute, autopilotMode = false, autopilotEditorArtifact = null, onAutopilotSave, onReturnToAutopilot, openaiCampaignFlow = false, readOnly = false, onOpenChat, chatOpen = true },
   ref
 ) {
   const bodyRef = useRef(null)
@@ -134,16 +134,16 @@ const WorkspacePane = forwardRef(function WorkspacePane(
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex h-full min-w-0 w-full flex-col overflow-hidden bg-[#f6f8fc]" data-v4-workspace={autopilotMode ? 'autopilot-editor' : 'copilot'}>
       {/* Pane header */}
-      <div className="flex items-center gap-2 px-3 sm:px-5 py-3 border-b border-border bg-white/80 flex-shrink-0">
+      {autopilotMode && <div className="flex flex-shrink-0 items-center gap-2 border-b border-border bg-white/90 px-3 py-3 sm:px-5">
         <LayoutDashboard className="w-4 h-4 text-violet-500" />
         <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{autopilotMode ? 'Campaign artifacts' : 'Workspace'}</span>
         <span className="ml-1 text-xs text-muted-foreground">{autopilotMode ? '· Dữ liệu để Agent thực thi' : '· Form & kết quả · bước hiện tại'}</span>
         {workspaceRevision != null && (
           <span className="ml-auto text-[10px] font-mono text-muted-foreground">rev {workspaceRevision}</span>
         )}
-      </div>
+      </div>}
 
       {/* Stepper */}
       {autopilotMode ? (
@@ -178,6 +178,8 @@ const WorkspacePane = forwardRef(function WorkspacePane(
           currentStep={currentStep}
           stepStatuses={stepStatuses}
           onStepJump={onStepJump}
+          onOpenChat={onOpenChat}
+          chatOpen={chatOpen}
         />
       )}
 
@@ -203,8 +205,8 @@ const WorkspacePane = forwardRef(function WorkspacePane(
       )}
 
       {/* Step body */}
-      <ScrollArea className="flex-1" ref={bodyRef}>
-        <div data-demo="step-body" className="p-3 sm:p-5">
+      <ScrollArea className="min-w-0 flex-1" ref={bodyRef}>
+        <div data-demo="step-body" data-ws-scroll className="mx-auto min-w-0 w-full max-w-[920px] overflow-x-hidden p-3 sm:p-5 lg:p-6">
           {/* Step heading */}
           <div className={cn('flex items-center gap-3 mb-1', isDone && 'opacity-90')}>
             {!autopilotMode && <div className={cn(
@@ -222,7 +224,7 @@ const WorkspacePane = forwardRef(function WorkspacePane(
               {isStale && <Badge variant="amber" className="text-[10px]">Cần xem lại</Badge>}
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mb-4 ml-11">{STEP_DESCS[currentStep]}</p>
+          <p className={cn('mb-4 text-xs leading-5 text-muted-foreground', !autopilotMode && 'ml-11')}>{STEP_DESCS[currentStep]}</p>
 
           {/* Step content */}
           {renderStep()}

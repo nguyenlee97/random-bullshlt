@@ -31,6 +31,7 @@ const home = read('../src/components/CampaignHome.jsx')
 const campaignManagement = read('../src/components/CampaignManagement.jsx')
 const overlay = read('../src/demo/DemoOverlay.jsx')
 const autopilot = read('../src/components/AutopilotPanel.jsx')
+const copilotStepper = read('../src/components/WorkspacePane/Stepper.jsx')
 const autopilotReview = read('../src/components/AutopilotReview.jsx')
 const audienceStep = read('../src/steps/AudienceStep.jsx')
 const targetingPanel = read('../src/components/TargetingPanel.jsx')
@@ -231,8 +232,23 @@ test('campaign management uses the real report and evaluation workflows', () => 
 test('read-only Autopilot histories retain scrolling while blocking mutation controls', () => {
   assert.doesNotMatch(app, /pointer-events-none select-none opacity-80/)
   assert.match(app, /readOnly=\{historyReadOnly\}/)
-  assert.match(autopilot, /touch-pan-y overflow-y-auto overscroll-contain/)
+  assert.match(autopilot, /data-ws-scroll className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain/)
   assert.match(autopilot, /onClickCapture=\{preventReadOnlyMutation\}/)
+})
+
+test('V4 Copilot and Autopilot workspaces keep their responsive navigation shells', () => {
+  assert.match(app, /const \[desktopChatOpen, setDesktopChatOpen\] = useState\(\(\) => window\.innerWidth >= 1440\)/)
+  assert.match(app, /lg:flex-\[0_0_320px\]/)
+  assert.match(copilotStepper, /COPILOT · 7 BƯỚC/)
+  assert.match(copilotStepper, /hidden xl:inline/)
+  assert.match(copilotStepper, /id="copilot-step-sheet" role="dialog" aria-modal="true"/)
+  assert.match(copilotStepper, /event\.key === 'Escape'/)
+  assert.match(workspacePane, /data-v4-workspace=/)
+  assert.match(autopilot, /AUTOPILOT · 5 STAGE/)
+  assert.match(autopilot, /w-\[208px\]' : 'w-16/)
+  assert.match(autopilot, /id="autopilot-stage-sheet" role="dialog" aria-modal="true"/)
+  assert.match(autopilot, /overflow-x-hidden overflow-y-auto overscroll-contain/)
+  assert.match(styles, /\[data-v4-workspace\] \*/)
 })
 
 test('Copilot demo is restored as a spotlight tour over the real interface', () => {

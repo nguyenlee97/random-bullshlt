@@ -73,8 +73,8 @@ test('core mode controls keep mobile layout and accessible names', async () => {
 
   assert.match(selector, /h-full overflow-x-hidden overflow-y-auto overscroll-contain/)
   assert.match(selector, /sm:grid-cols-2/)
-  assert.match(app, /md:hidden/)
-  assert.match(app, /flex-col md:flex-row/)
+  assert.match(app, /lg:hidden/)
+  assert.match(app, /flex-col overflow-hidden lg:flex-row/)
   assert.match(app, /role="tablist"/)
   assert.match(app, /aria-selected=/)
   assert.match(selector, /Tạo campaign mới/)

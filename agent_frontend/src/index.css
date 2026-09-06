@@ -1405,6 +1405,15 @@ body:has(.public-landing-v3) {
   .public-landing-v3 .scroll-reveal { opacity:1 !important; filter:none !important; transform:none !important; }
 }
 
+@media (prefers-reduced-motion:reduce) {
+  [data-v4-workspace] *,
+  [data-demo="autopilot-canvas"] * {
+    scroll-behavior:auto !important;
+    animation:none !important;
+    transition-duration:.01ms !important;
+  }
+}
+
 @keyframes campaignPageFromRight {
   from { opacity:.88; transform:translateX(72px); }
   to { opacity:1; transform:translateX(0); }

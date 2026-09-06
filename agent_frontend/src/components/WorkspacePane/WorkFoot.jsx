@@ -9,9 +9,9 @@ export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canA
   // No model toggle needed — single backend model
 
   return (
-    <div className="border-t border-border px-5 py-3 bg-white flex-shrink-0 flex items-center gap-3">
+    <div className="min-w-0 border-t border-border bg-white px-3 py-3 flex-shrink-0 flex items-center gap-2 sm:px-5 sm:gap-3">
       {/* Current workflow tool */}
-      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+      <div className="hidden items-center gap-1.5 flex-1 min-w-0 sm:flex">
         <Badge variant="muted" className="gap-1 text-[10px] h-5">
           <Wrench className="w-2.5 h-2.5" />
           <span className="truncate max-w-[140px]">{step.tool}</span>
@@ -19,7 +19,7 @@ export default function WorkFoot({ step, stepIndex, stepStatus, totalSteps, canA
       </div>
 
       {/* Navigation buttons */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
         {stepIndex > 0 && (
           <Button
             variant="outline"

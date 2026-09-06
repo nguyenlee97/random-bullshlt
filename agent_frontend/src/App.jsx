@@ -16,7 +16,7 @@ import AutopilotPanel from '@/components/AutopilotPanel'
 import { AgentAPI, getSetupEntry } from '@/api/agentApi'
 import { generateId } from '@/lib/utils'
 import log from '@/lib/logger'
-import { ArrowLeft, MessageSquare, LayoutDashboard, Sparkles } from 'lucide-react'
+import { ArrowLeft, ChevronsLeft, MessageSquare, LayoutDashboard, Sparkles } from 'lucide-react'
 import { DemoProvider } from '@/demo/DemoEngine'
 import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { scoreFile } from '@/steps/setup/setupUtils'
@@ -207,10 +207,11 @@ export default function App() {
   // ── Demo visibility: hide Demo button once user has interacted ──────────
   const [hasUserStarted, setHasUserStarted] = useState(false)
 
-  // ── Mobile tab state ─────────────────────────────────────────────────────
-  // activeTab controls which pane is visible on mobile (<768px).
-  // Desktop keeps the fixed 42/58 split layout unchanged.
+  // ── V4 responsive workspace state ────────────────────────────────────────
+  // Below 1024px the workspace uses Chat/Workspace tabs. At 1024–1439px Chat
+  // starts collapsed; at 1440px+ it opens as the fixed 320px V4 conversation rail.
   const [activeTab, setActiveTab] = useState('chat')
+  const [desktopChatOpen, setDesktopChatOpen] = useState(() => window.innerWidth >= 1440)
   // Refs allow callbacks to read current values without stale closures
   const activeTabRef = useRef('chat')
   useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
@@ -2170,6 +2171,11 @@ export default function App() {
     ? currentConversation
     : null
 
+  const openWorkspaceChat = () => {
+    if (window.innerWidth >= 1024) setDesktopChatOpen(true)
+    else setActiveTab('chat')
+  }
+
   if (showPublicLanding) {
     return <PublicLanding onEnterAgent={enterAgent} onOpenDemo={enterAgentForDemo} />
   }
@@ -2346,8 +2352,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Mobile-only Tab Bar — hidden on desktop (md:hidden) */}
-      <div className="md:hidden flex-shrink-0">
+      {/* V4 tablet/mobile tabs. Desktop/laptop switches to docked panes. */}
+      <div className="flex-shrink-0 lg:hidden">
         <TabBar
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -2357,21 +2363,15 @@ export default function App() {
         />
       </div>
 
-      {/*
-        Mobile layout: flex-col, one pane visible at a time via activeTab.
-        Desktop layout: flex-row (md:flex-row), Chat on LEFT (42%), Workspace on RIGHT.
-        md:flex on each pane overrides the mobile `hidden` so both show on desktop.
-      */}
-      <main ref={mainRef} className="flex flex-1 min-h-0 overflow-hidden flex-col md:flex-row">
+      <main ref={mainRef} className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
 
         {/* ── Workspace Pane ──────────────────────────────────────────
             Mobile: shown when activeTab==='workspace', hidden otherwise
             Desktop: RIGHT side, flex-1 (always visible)             */}
         <div id="guided-canvas" role="tabpanel" aria-label={experienceMode === 'autopilot' ? 'Chỉnh dữ liệu Campaign Autopilot' : 'Campaign Copilot'} data-mode-canvas="guided" data-demo="workspace-pane" className={`
-          md:order-2 flex flex-col min-w-0 overflow-hidden bg-white
-          md:flex-1 md:h-full
+          flex min-w-0 flex-col overflow-hidden bg-white lg:order-2 lg:h-full lg:flex-1
           ${activeTab === 'workspace' ? 'flex-1' : 'hidden'}
-          ${experienceMode === 'guided' || activeTab === 'workspace' ? 'md:flex' : 'md:hidden'}
+          ${experienceMode === 'guided' || activeTab === 'workspace' ? 'lg:flex' : 'lg:hidden'}
         `}>
           {experienceMode === 'autopilot' && (
             <div className="flex items-center gap-3 border-b border-brand-100 bg-brand-50 px-4 py-2 text-xs text-brand-800">
@@ -2404,6 +2404,8 @@ export default function App() {
             onAutopilotSave={handleAutopilotEditorSave}
             openaiCampaignFlow={currentConversationModel === 'openai_gpt_5_4_mini'}
             readOnly={historyReadOnly}
+            onOpenChat={openWorkspaceChat}
+            chatOpen={desktopChatOpen}
             onReturnToAutopilot={() => {
               autopilotEditorArtifactRef.current = null
               setAutopilotEditorArtifact(null)
@@ -2415,9 +2417,9 @@ export default function App() {
         {/* Autopilot is a sibling canvas, not a banner above the workspace.
             It stays mounted while hidden so run state and the event stream survive mode switches. */}
         <div id="autopilot-canvas" role="tabpanel" aria-label="Campaign Autopilot" data-mode-canvas="autopilot" className={`
-          md:order-2 min-h-0 min-w-0 overflow-hidden bg-slate-50 md:flex-1 md:h-full
+          min-h-0 min-w-0 overflow-hidden bg-slate-50 lg:order-2 lg:h-full lg:flex-1
           ${experienceMode === 'autopilot' && activeTab === 'autopilot' ? 'flex flex-1' : 'hidden'}
-          ${experienceMode === 'autopilot' && activeTab !== 'workspace' ? 'md:flex' : 'md:hidden'}
+          ${experienceMode === 'autopilot' && activeTab !== 'workspace' ? 'lg:flex' : 'lg:hidden'}
         `}>
           {experienceMode === 'autopilot' && (
             <div className={`h-full min-h-0 w-full ${historyReadOnly ? 'opacity-80' : ''}`}>
@@ -2427,7 +2429,8 @@ export default function App() {
               canonicalWorkspace={canonicalWorkspace}
               initialRun={restoredAutopilotRun}
               onWorkspaceRefresh={() => AgentAPI.getWorkspace()}
-              onOpenChat={() => setActiveTab('chat')}
+              onOpenChat={openWorkspaceChat}
+              chatOpen={desktopChatOpen}
               onOpenBrief={() => openAutopilotEditor(0, 'brief')}
               onOpenAudience={openAutopilotAudienceEditor}
               onOpenCreative={() => openAutopilotEditor(2, 'creative')}
@@ -2445,16 +2448,21 @@ export default function App() {
           )}
         </div>
 
-        {/* ── Chat Pane ─────────────────────────────────────────────
-            Mobile: shown when activeTab==='chat', hidden otherwise
-            Desktop: LEFT side, flex-[0_0_42%] (always visible)     */}
+        {/* V4 Chat rail: tabbed below 1024px, collapsible 320px dock above. */}
         <div data-demo="chat-pane" className={`
-          md:order-1 flex flex-col min-w-0 overflow-hidden
-          bg-white/60 backdrop-blur-sm border-border
-          md:border-t-0 md:border-r
-          md:flex-[0_0_42%] md:h-full
-          ${activeTab === 'chat' ? 'flex-1' : 'hidden md:flex'}
+          min-w-0 flex-col overflow-hidden border-border bg-white/80 backdrop-blur-sm
+          lg:order-1 lg:h-full lg:flex-[0_0_320px] lg:border-r lg:border-t-0
+          ${activeTab === 'chat' ? 'flex flex-1' : 'hidden'}
+          ${desktopChatOpen ? 'lg:flex' : 'lg:hidden'}
         `}>
+          <div className="hidden h-11 flex-shrink-0 items-center gap-2 border-b border-slate-100 px-4 lg:flex">
+            <MessageSquare className="h-4 w-4 text-brand-600" />
+            <span className="flex-1 text-xs font-black tracking-[.02em] text-slate-700">Chat với Agent</span>
+            <button type="button" onClick={() => setDesktopChatOpen(false)} aria-label="Thu gọn chat" title="Thu gọn chat"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+              <ChevronsLeft className="h-4 w-4" />
+            </button>
+          </div>
           <ChatPane
             messages={messages}
             busy={busy}
