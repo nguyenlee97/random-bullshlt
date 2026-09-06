@@ -10,7 +10,7 @@ const zaloIcon = readFileSync(new URL('../src/components/ZaloIcon.jsx', import.m
 const accountMenu = readFileSync(new URL('../src/components/AccountMenu.jsx', import.meta.url), 'utf8')
 const zaloLink = readFileSync(new URL('../src/components/ZaloLinkDialog.jsx', import.meta.url), 'utf8')
 const history = readFileSync(new URL('../src/components/ConversationHistory.jsx', import.meta.url), 'utf8')
-const home = readFileSync(new URL('../src/components/ExperienceSelector.jsx', import.meta.url), 'utf8')
+const home = readFileSync(new URL('../src/components/CampaignHome.jsx', import.meta.url), 'utf8')
 
 test('cookie authenticated mutations receive one centralized CSRF header', () => {
   assert.match(api, /cookieGet\('aa_csrf'\)/)
@@ -64,7 +64,7 @@ test('Zalo is the primary login while local auth remains an explicit test fallba
 
 test('account and device histories are labeled and only device campaigns can claim', () => {
   assert.match(home, /Tài khoản/)
-  assert.match(home, /Trên thiết bị/)
+  assert.match(home, /Thiết bị này/)
   assert.match(home, /item\.can_claim/)
   assert.match(history, /item\.can_claim/)
   assert.match(api, /claimConversation\(conversationId\)/)
@@ -81,8 +81,8 @@ test('claim updates ownership in place without recreating the active conversatio
 test('logout drops account-owned open state while anonymous-first entry stays available', () => {
   assert.match(app, /current\?\.ownership === 'account'/)
   assert.match(app, /returnToCampaignManager\('replace'\)/)
-  assert.match(home, /Bạn muốn Agent/)
-  assert.match(home, /đồng hành thế nào/)
+  assert.match(home, /Campaign của bạn/)
+  assert.match(home, /Tạo campaign mới/)
   assert.match(auth, /Bạn vẫn có thể dùng ẩn danh/)
 })
 

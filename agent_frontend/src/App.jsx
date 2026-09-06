@@ -9,7 +9,8 @@ import ZaloLinkDialog from '@/components/ZaloLinkDialog'
 import ClaimConversationDialog from '@/components/ClaimConversationDialog'
 import ChatPane from '@/components/ChatPane'
 import WorkspacePane from '@/components/WorkspacePane'
-import ExperienceSelector from '@/components/ExperienceSelector'
+import CampaignHome from '@/components/CampaignHome'
+import CampaignManagement from '@/components/CampaignManagement'
 import PublicLanding from '@/components/PublicLanding'
 import AutopilotPanel from '@/components/AutopilotPanel'
 import { AgentAPI, getSetupEntry } from '@/api/agentApi'
@@ -21,11 +22,13 @@ import { ZONE_FORMAT_MAP } from '@/demo/demoScripts'
 import { scoreFile } from '@/steps/setup/setupUtils'
 import { canApproveWorkflowStep, isBriefReady } from '@/lib/workflowValidation'
 import { normalizeAudienceSelection } from '@/lib/audience'
+import { loadCampaignDirectory } from '@/lib/campaignDirectoryRefresh'
 import { mergeCreativeVerdicts } from '@/lib/creativeIntel'
 import { ongoingAutopilotConversations } from '@/lib/conversationDeletion'
 import {
   HOME_PATH,
   MANAGE_PATH,
+  campaignManagePath,
   agentConversationId,
   agentEntryMode,
   agentEntryUrl,
@@ -155,9 +158,18 @@ export default function App() {
   const [identityReady, setIdentityReady] = useState(false)
   const [identityError, setIdentityError] = useState('')
   const [currentConversationId, setCurrentConversationId] = useState('')
+  const [historyReadOnly, setHistoryReadOnly] = useState(() => (
+    parseAppRoute(window.location).readOnly === true
+  ))
   const [restoredAutopilotRun, setRestoredAutopilotRun] = useState(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [conversationHistory, setConversationHistory] = useState([])
+  const [campaignDirectory, setCampaignDirectory] = useState([])
+  const [campaignDirectoryLoading, setCampaignDirectoryLoading] = useState(false)
+  const [campaignDirectoryError, setCampaignDirectoryError] = useState('')
+  const [selectedCampaignId, setSelectedCampaignId] = useState(() => (
+    parseAppRoute(window.location).campaignId || ''
+  ))
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -227,13 +239,15 @@ export default function App() {
       setPendingDemoMode('')
       setHistoryOpen(false)
       setShowPublicLanding(route.surface === 'home')
+      setHistoryReadOnly(route.readOnly === true)
+      setSelectedCampaignId(route.surface === 'campaign' ? route.campaignId : '')
       if (route.surface === 'home') {
         setPendingEntryMode('')
         setPendingConversationId('')
         return
       }
       setExperienceMode(null)
-      if (route.surface === 'manage') {
+      if (route.surface === 'manage' || route.surface === 'campaign') {
         setHistoryLoading(true)
         setHistoryError('')
         setPendingConversationId('')
@@ -257,6 +271,7 @@ export default function App() {
     setPendingEntryMode(mode)
     setExperienceMode(null)
     setShowPublicLanding(false)
+    setSelectedCampaignId('')
   }, [])
 
   const enterAgentForDemo = useCallback((mode) => {
@@ -269,6 +284,7 @@ export default function App() {
     setPendingDemoMode(demoMode)
     setExperienceMode(null)
     setShowPublicLanding(false)
+    setSelectedCampaignId('')
   }, [])
 
   const returnToPublicLanding = useCallback(() => {
@@ -279,6 +295,7 @@ export default function App() {
     setPendingEntryMode('')
     setPendingConversationId('')
     setShowPublicLanding(true)
+    setSelectedCampaignId('')
   }, [])
 
   // Visual Viewport API — tracks keyboard height on mobile so the composer
@@ -646,7 +663,9 @@ export default function App() {
         if (initialRoute.surface !== 'home') {
           const returnPath = initialRoute.surface === 'agent'
             ? agentPath(initialRoute.mode, requestedConversation)
-            : MANAGE_PATH
+            : initialRoute.surface === 'campaign'
+              ? campaignManagePath(initialRoute.campaignId)
+              : MANAGE_PATH
           window.history.replaceState(
             {},
             '',
@@ -654,13 +673,26 @@ export default function App() {
           )
         }
         setHistoryLoading(true)
-        const [history, modelCatalog] = await Promise.all([
+        setCampaignDirectoryLoading(true)
+        setCampaignDirectoryError('')
+        const [history, directoryCampaigns, modelCatalog, deepLinkedCampaign] = await Promise.all([
           AgentAPI.listConversations(true),
+          AgentAPI.listCampaigns(true).catch(error => {
+            setCampaignDirectoryError(error.message || 'Không thể tải campaign.')
+            return []
+          }),
           AgentAPI.listConversationModels().catch(() => ({
             models: [], default_model: null,
           })),
+          initialRoute.surface === 'campaign' && initialRoute.campaignId
+            ? AgentAPI.getCampaign(initialRoute.campaignId).catch(() => null)
+            : Promise.resolve(null),
         ])
+        const campaigns = deepLinkedCampaign && !directoryCampaigns.some(
+          item => item.campaign_id === deepLinkedCampaign.campaign_id
+        ) ? [deepLinkedCampaign, ...directoryCampaigns] : directoryCampaigns
         setConversationHistory(history)
+        setCampaignDirectory(campaigns)
         setConversationModelCatalog(modelCatalog)
         if (!resolveActiveCampaignEngine(modelCatalog)) {
           setModeSelectionError(current => current || CAMPAIGN_ENGINE_UNAVAILABLE_MESSAGE)
@@ -673,8 +705,10 @@ export default function App() {
         }
       } catch (error) {
         setIdentityError(error.message || 'Không thể khởi tạo Advertising Agent trên thiết bị này.')
+        setCampaignDirectoryError(error.message || 'Không thể tải campaign.')
       } finally {
         setHistoryLoading(false)
+        setCampaignDirectoryLoading(false)
         setIdentityReady(true)
       }
     }
@@ -723,6 +757,12 @@ export default function App() {
   }, [currentConversationId, experienceMode])
 
   const autopilotChatPolicy = (() => {
+    if (historyReadOnly) {
+      return {
+        mode: 'locked',
+        message: 'Bạn đang xem lại flow đã hoàn tất. Workspace và chat ở chế độ chỉ đọc; hãy quay về trang Campaign để tiếp tục quản lý.',
+      }
+    }
     if (experienceMode !== 'autopilot' || !autopilotSummary?.status) return { mode: 'normal' }
     if (['queued', 'running', 'paused'].includes(autopilotSummary.status)) {
       return {
@@ -744,6 +784,11 @@ export default function App() {
     }
     return { mode: 'normal' }
   })()
+
+  const sendVisibleMessage = useCallback((text, ...args) => {
+    if (historyReadOnly) return undefined
+    return sendMessage(text, ...args)
+  }, [historyReadOnly, sendMessage])
 
   // Audience-entry: when user reaches step 1 with brief done → proactive recommendation in chat
   const audienceEntryFiredRef = useRef(false)
@@ -1028,7 +1073,7 @@ export default function App() {
 
   // Auto-advance when setup Phase 3 confirms
   useEffect(() => {
-    if (currentStep === 3 && formState.setup.submitted && stepStatuses[3] !== 'done') {
+    if (!historyReadOnly && currentStep === 3 && formState.setup.submitted && stepStatuses[3] !== 'done') {
       const data = {
         brief: formState.brief,
         creative: formState.creative,
@@ -1040,9 +1085,10 @@ export default function App() {
       }
       approveStep(3, data)
     }
-  }, [formState.setup.submitted])
+  }, [formState.setup.submitted, historyReadOnly])
 
   const handleApprove = useCallback(async () => {
+    if (historyReadOnly) return { shouldAdvance: false, readOnly: true }
     const approvedStep = currentStep
     const data = {
       brief: formState.brief,
@@ -1058,9 +1104,10 @@ export default function App() {
     if (experienceMode === 'autopilot' && result?.shouldAdvance && approvedStep <= 2) {
       setActiveTab('autopilot')
     }
-  }, [currentStep, formState, approveStep, experienceMode])
+  }, [currentStep, formState, approveStep, experienceMode, historyReadOnly])
 
   const handleAutopilotEditorSave = useCallback(async (creativeOverride = null) => {
+    if (historyReadOnly) return { shouldAdvance: false, readOnly: true }
     const editingStep = currentStep
     const hasCreativeOverride = Boolean(
       creativeOverride
@@ -1153,7 +1200,7 @@ export default function App() {
       setActiveTab('autopilot')
     }
     return result
-  }, [approveStep, autopilotEditorArtifact, currentStep, formState])
+  }, [approveStep, autopilotEditorArtifact, currentStep, formState, historyReadOnly])
 
   const handleStepJump = useCallback((i) => {
     if (busy) return
@@ -1167,6 +1214,7 @@ export default function App() {
   // Non-linear edit: preserve every artifact. The canonical mutation will mark
   // only real dependents stale; unaffected work stays reusable.
   const handlePartialReset = useCallback((fromStep) => {
+    if (historyReadOnly) return
     log.step(`openNonLinearEdit at step ${fromStep} (${STEP_NAMES_VI[fromStep]})`)
     if (fromStep <= 1) audienceEntryFiredRef.current = false
     if (fromStep <= 3) setupEntryFiredRef.current = false
@@ -1179,7 +1227,7 @@ export default function App() {
       index === fromStep ? 'pending' : status
     )))
     setCurrentStep(fromStep)
-  }, [pushWorkspaceEvent])
+  }, [historyReadOnly, pushWorkspaceEvent])
 
   const resetLocalCampaign = useCallback(() => {
     // Invalidate slow proactive requests before clearing state. A response from
@@ -1264,6 +1312,7 @@ export default function App() {
   }, [applyConversationContext, identityReady, pendingConversationId])
 
   const handleReset = useCallback(async () => {
+    setHistoryReadOnly(false)
     const routeMode = experienceMode === 'autopilot' ? 'autopilot' : 'copilot'
     const nextPath = agentPath(routeMode)
     if (window.location.pathname !== nextPath) {
@@ -1320,6 +1369,18 @@ export default function App() {
     )))
   }, [hydrateMessages, resetLocalCampaign])
 
+  const refreshCampaignDirectory = useCallback(async () => {
+    setCampaignDirectoryLoading(true)
+    setCampaignDirectoryError('')
+    try {
+      setCampaignDirectory(await loadCampaignDirectory(AgentAPI, selectedCampaignId))
+    } catch (error) {
+      setCampaignDirectoryError(error.message || 'Không thể tải campaign.')
+    } finally {
+      setCampaignDirectoryLoading(false)
+    }
+  }, [selectedCampaignId])
+
   const returnToCampaignManager = useCallback((historyAction = 'push') => {
     landingEntryAttemptRef.current += 1
     pendingEntryStartRef.current = ''
@@ -1328,11 +1389,14 @@ export default function App() {
     clearActiveConversation()
     setPendingEntryMode('')
     setShowPublicLanding(false)
+    setSelectedCampaignId('')
     const method = historyAction === 'replace' ? 'replaceState' : 'pushState'
     window.history[method]({}, '', MANAGE_PATH)
-  }, [clearActiveConversation])
+    refreshCampaignDirectory()
+  }, [clearActiveConversation, refreshCampaignDirectory])
 
   const handleNewChat = useCallback(() => {
+    setHistoryReadOnly(false)
     const routeMode = experienceMode === 'autopilot' ? 'autopilot' : 'copilot'
     landingEntryAttemptRef.current += 1
     pendingEntryStartRef.current = ''
@@ -1360,7 +1424,11 @@ export default function App() {
         await account.login({ email, password })
       }
       setAuthDialogOpen(false)
-      setConversationHistory(await AgentAPI.listConversations(true))
+      const [history, campaigns] = await Promise.all([
+        AgentAPI.listConversations(true), AgentAPI.listCampaigns(true),
+      ])
+      setConversationHistory(history)
+      setCampaignDirectory(campaigns)
     } catch {
       // useIdentity owns the rendered error and preserves the current workspace.
     }
@@ -1446,6 +1514,7 @@ export default function App() {
     setModeSelectionBusy(true)
     setModeSelectionError('')
     try {
+      setHistoryReadOnly(false)
       const routeMode = mode === 'autopilot' ? 'autopilot' : 'copilot'
       if (window.location.pathname !== agentPath(routeMode)) {
         window.history.replaceState({}, '', agentPath(routeMode))
@@ -1553,9 +1622,13 @@ export default function App() {
     let cancelled = false
     const refresh = async (settleLoading = false) => {
       try {
-        const items = await AgentAPI.listConversations(true)
+        const [items, campaigns] = await Promise.all([
+          AgentAPI.listConversations(true),
+          experienceMode ? Promise.resolve(null) : loadCampaignDirectory(AgentAPI, selectedCampaignId),
+        ])
         if (!cancelled) {
           setConversationHistory(items)
+          if (campaigns) setCampaignDirectory(campaigns)
           setHistoryError('')
         }
       } catch (error) {
@@ -1572,10 +1645,16 @@ export default function App() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [experienceMode, historyOpen, identityReady])
+  }, [experienceMode, historyOpen, identityReady, selectedCampaignId])
 
-  const resumeConversation = useCallback(async (conversationId) => {
-    if (experienceMode && conversationId === currentConversationId) {
+  const resumeConversation = useCallback(async (conversationId, options = {}) => {
+    const directoryEntry = campaignDirectory.find(
+      item => item.conversation_id === conversationId
+    )
+    const readOnly = options.readOnly === undefined
+      ? directoryEntry?.read_only === true
+      : options.readOnly === true
+    if (experienceMode && conversationId === currentConversationId && historyReadOnly === readOnly) {
       setHistoryOpen(false)
       return
     }
@@ -1584,10 +1663,11 @@ export default function App() {
     try {
       const context = await AgentAPI.resumeConversation(conversationId)
       applyConversationContext(context)
+      setHistoryReadOnly(readOnly)
       window.history.pushState(
         {},
         '',
-        agentPath(context.experience_mode, context.conversation_id || conversationId),
+        `${agentPath(context.experience_mode, context.conversation_id || conversationId)}${readOnly ? '?readonly=1' : ''}`,
       )
       setHistoryOpen(false)
     } catch (error) {
@@ -1595,7 +1675,7 @@ export default function App() {
     } finally {
       setHistoryLoading(false)
     }
-  }, [applyConversationContext, currentConversationId, experienceMode])
+  }, [applyConversationContext, campaignDirectory, currentConversationId, experienceMode, historyReadOnly])
 
   const archiveConversation = useCallback(async (conversationId) => {
     const ok = await AgentAPI.archiveConversation(conversationId)
@@ -1608,7 +1688,8 @@ export default function App() {
         ? { ...item, archived_at: new Date().toISOString() }
         : item
     )))
-  }, [])
+    await refreshCampaignDirectory()
+  }, [refreshCampaignDirectory])
 
   const requestDeleteConversation = useCallback((conversation) => {
     setDeleteError('')
@@ -1645,6 +1726,7 @@ export default function App() {
       if (deleteTarget.type === 'all') {
         await AgentAPI.deleteAllConversations()
         setConversationHistory([])
+        await refreshCampaignDirectory()
         setDeleteTarget(null)
         if (currentConversationId || experienceMode) returnToCampaignManager('replace')
         return
@@ -1654,6 +1736,7 @@ export default function App() {
       if (!conversationId) throw new Error('Không xác định được cuộc trò chuyện cần xóa.')
       await AgentAPI.deleteConversation(conversationId)
       setConversationHistory(prev => prev.filter(item => item.conversation_id !== conversationId))
+      await refreshCampaignDirectory()
       setDeleteTarget(null)
       if (conversationId === currentConversationId) returnToCampaignManager('replace')
     } catch (error) {
@@ -1661,7 +1744,7 @@ export default function App() {
     } finally {
       setDeleteBusy(false)
     }
-  }, [currentConversationId, deleteBusy, deleteTarget, experienceMode, returnToCampaignManager])
+  }, [currentConversationId, deleteBusy, deleteTarget, experienceMode, refreshCampaignDirectory, returnToCampaignManager])
 
   // Listen for agent:reset event from BlockRenderer ActionResetBlock
   useEffect(() => {
@@ -2059,6 +2142,27 @@ export default function App() {
   // Read at render-time. Tailwind md: breakpoints handle the class-based
   // layout switching automatically on resize.
 
+  const selectedCampaign = campaignDirectory.find(
+    item => item.campaign_id === selectedCampaignId
+  )
+
+  const openCampaignEntry = item => {
+    if (item?.routes?.manage && item.campaign_id) {
+      clearActiveConversation()
+      setSelectedCampaignId(item.campaign_id)
+      window.history.pushState({}, '', campaignManagePath(item.campaign_id))
+      return
+    }
+    if (item?.conversation_id) {
+      resumeConversation(item.conversation_id, { readOnly: item.read_only === true })
+    }
+  }
+
+  const openCampaignHistory = item => {
+    if (!item?.conversation_id) return
+    resumeConversation(item.conversation_id, { readOnly: item.read_only === true })
+  }
+
   const currentConversation = conversationHistory.find(
     item => item.conversation_id === currentConversationId
   )
@@ -2094,17 +2198,28 @@ export default function App() {
   }
 
   if (!experienceMode) {
+    if (selectedCampaignId) {
+      return (
+        <CampaignManagement
+          campaign={selectedCampaign}
+          loading={campaignDirectoryLoading}
+          onBack={returnToCampaignManager}
+          onOpenHistory={openCampaignHistory}
+        />
+      )
+    }
     return (
       <>
-        <ExperienceSelector
-          onSelect={startCampaign}
-          campaignEngineReady={Boolean(activeCampaignEngine)}
-          busy={modeSelectionBusy}
-          error={modeSelectionError}
-          conversations={conversationHistory}
-          historyLoading={historyLoading}
-          historyError={historyError}
-          onResume={resumeConversation}
+        <CampaignHome
+          campaigns={campaignDirectory}
+          loading={campaignDirectoryLoading}
+          error={campaignDirectoryError}
+          createDisabled={modeSelectionBusy || !activeCampaignEngine}
+          createError={modeSelectionError}
+          onRefresh={refreshCampaignDirectory}
+          onCreate={startCampaign}
+          onOpen={openCampaignEntry}
+          onOpenHistory={openCampaignHistory}
           onArchive={archiveConversation}
           onDelete={requestDeleteConversation}
           onDeleteAll={requestDeleteAllConversations}
@@ -2222,6 +2337,15 @@ export default function App() {
         </div>
       )}
 
+      {historyReadOnly && (
+        <div className="flex items-center justify-between gap-3 border-b border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-900">
+          <span>Đang xem lịch sử campaign ở chế độ chỉ đọc. Bạn vẫn có thể xem các bước và kết quả.</span>
+          <button type="button" onClick={returnToCampaignManager} className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 font-bold text-blue-800 hover:bg-blue-100">
+            Về Campaign
+          </button>
+        </div>
+      )}
+
       {/* Mobile-only Tab Bar — hidden on desktop (md:hidden) */}
       <div className="md:hidden flex-shrink-0">
         <TabBar
@@ -2270,7 +2394,7 @@ export default function App() {
             busy={busy}
             onPartialReset={handlePartialReset}
             recoFromChat={audienceRecommendation}
-            onSendChat={sendMessage}
+            onSendChat={sendVisibleMessage}
             recomputePlan={recomputePlan}
             workspaceRevision={canonicalWorkspace?.revision}
             creativeFormatPlan={canonicalWorkspace?.artifacts?.creative_format_plan?.value}
@@ -2279,6 +2403,7 @@ export default function App() {
             autopilotEditorArtifact={autopilotEditorArtifact}
             onAutopilotSave={handleAutopilotEditorSave}
             openaiCampaignFlow={currentConversationModel === 'openai_gpt_5_4_mini'}
+            readOnly={historyReadOnly}
             onReturnToAutopilot={() => {
               autopilotEditorArtifactRef.current = null
               setAutopilotEditorArtifact(null)
@@ -2290,11 +2415,12 @@ export default function App() {
         {/* Autopilot is a sibling canvas, not a banner above the workspace.
             It stays mounted while hidden so run state and the event stream survive mode switches. */}
         <div id="autopilot-canvas" role="tabpanel" aria-label="Campaign Autopilot" data-mode-canvas="autopilot" className={`
-          md:order-2 min-w-0 overflow-hidden bg-slate-50 md:flex-1 md:h-full
+          md:order-2 min-h-0 min-w-0 overflow-hidden bg-slate-50 md:flex-1 md:h-full
           ${experienceMode === 'autopilot' && activeTab === 'autopilot' ? 'flex flex-1' : 'hidden'}
           ${experienceMode === 'autopilot' && activeTab !== 'workspace' ? 'md:flex' : 'md:hidden'}
         `}>
           {experienceMode === 'autopilot' && (
+            <div className={`h-full min-h-0 w-full ${historyReadOnly ? 'opacity-80' : ''}`}>
             <AutopilotPanel
               key={currentConversationId || 'autopilot'}
               brief={formState.brief}
@@ -2309,11 +2435,13 @@ export default function App() {
               onStatusChange={setAutopilotSummary}
               reportState={formState.report}
               onReportChange={updateAutopilotReport}
-              onSendReportQuestion={sendMessage}
+              onSendReportQuestion={sendVisibleMessage}
               onReportActivate={initializeReport}
               onReportExit={exitAutopilotReport}
               openaiCampaignFlow={currentConversationModel === 'openai_gpt_5_4_mini'}
+              readOnly={historyReadOnly}
             />
+            </div>
           )}
         </div>
 
@@ -2331,10 +2459,10 @@ export default function App() {
             messages={messages}
             busy={busy}
             currentStep={currentStep}
-            onSend={sendMessage}
+            onSend={sendVisibleMessage}
             onBack={() => !busy && currentStep > 0 && setCurrentStep(prev => prev - 1)}
-            onRetry={retryLastMessage}
-            canRetry={canRetry && !busy}
+            onRetry={historyReadOnly ? undefined : retryLastMessage}
+            canRetry={canRetry && !busy && !historyReadOnly}
             policy={autopilotChatPolicy}
             debugContext={{
               experience_mode: experienceMode,

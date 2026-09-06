@@ -7,7 +7,7 @@ import { partitionConversationHistory } from '../src/lib/conversationHistory.js'
 const api = readFileSync(new URL('../src/api/agentApi.js', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const history = readFileSync(new URL('../src/components/ConversationHistory.jsx', import.meta.url), 'utf8')
-const homepage = readFileSync(new URL('../src/components/ExperienceSelector.jsx', import.meta.url), 'utf8')
+const homepage = readFileSync(new URL('../src/components/CampaignHome.jsx', import.meta.url), 'utf8')
 const deleteDialog = readFileSync(new URL('../src/components/DeleteConversationDialog.jsx', import.meta.url), 'utf8')
 
 test('anonymous device credential uses an HttpOnly cookie with legacy migration only', () => {
@@ -33,9 +33,9 @@ test('campaign resume hydrates transcript, workspace, pending proposals and auto
 test('fresh loads stay on the homepage until a campaign is explicitly opened', () => {
   assert.match(app, /initializeIdentity\(\{ restoreCurrent: false \}\)/)
   assert.match(app, /setConversationHistory\(await AgentAPI\.listConversations\(true\)\)/)
-  assert.match(homepage, /Bạn muốn Agent/)
-  assert.match(homepage, /đồng hành thế nào/)
-  assert.match(homepage, /Tiếp nối những campaign đang viết dở/)
+  assert.match(homepage, /Campaign của bạn/)
+  assert.match(homepage, /Bản nháp, tiến độ Agent/)
+  assert.match(homepage, /Tạo campaign mới/)
   assert.match(homepage, /Campaign Copilot/)
   assert.doesNotMatch(homepage, /Quy trình từng bước/)
 })
@@ -47,8 +47,8 @@ test('history UI exposes resume, archive and new campaign actions', () => {
   assert.match(history, /onNew/)
   assert.match(history, /latest_run_summary/)
   assert.match(history, /Tiến độ Autopilot/)
-  assert.match(homepage, /latest_run_summary/)
-  assert.match(homepage, /Tiến độ Autopilot/)
+  assert.match(homepage, /item\.progress/)
+  assert.match(homepage, /activityLabel/)
   assert.match(app, /if \(!identityReady \|\| \(experienceMode && !historyOpen\)\) return undefined/)
   assert.match(app, /refresh\(true\)/)
   assert.match(app, /setInterval\(\(\) => refresh\(false\), 4000\)/)
@@ -82,18 +82,18 @@ test('archived campaigns remain discoverable in management and workspace history
   assert.deepEqual(partitioned.archived.map(item => item.conversation_id), ['archived'])
   assert.match(app, /AgentAPI\.listConversations\(true\)/)
   assert.match(app, /archived_at: new Date\(\)\.toISOString\(\)/)
-  for (const surface of [homepage, history]) {
-    assert.match(surface, /Đang hoạt động/)
-    assert.match(surface, /Đã lưu trữ/)
-    assert.match(surface, /partitionConversationHistory/)
-  }
+  assert.match(homepage, /Đang hoạt động/)
+  assert.match(homepage, /Lưu trữ/)
+  assert.match(history, /Đang hoạt động/)
+  assert.match(history, /Đã lưu trữ/)
+  assert.match(history, /partitionConversationHistory/)
 })
 
 test('conversation deletion is available individually and in bulk with safety confirmation', () => {
   assert.match(api, /deleteConversation\(conversationId\)/)
   assert.match(api, /deleteAllConversations\(\)/)
   assert.match(api, /confirmation: 'DELETE_ALL'/)
-  assert.match(homepage, /Xóa tất cả/)
+  assert.match(homepage, /Xóa toàn bộ lịch sử làm việc/)
   assert.match(history, /Xóa toàn bộ lịch sử/)
   assert.match(deleteDialog, /role="alertdialog"/)
   assert.match(deleteDialog, /XÓA TẤT CẢ/)

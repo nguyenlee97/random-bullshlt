@@ -86,6 +86,13 @@ def reset_session_col(monkeypatch):
     except ImportError:
         pass
     try:
+        import campaign_config
+        monkeypatch.setattr(campaign_config, "_mem_revisions", {}, raising=False)
+        monkeypatch.setattr(campaign_config, "_mem_requests", {}, raising=False)
+        monkeypatch.setattr(campaign_config, "_locks", {}, raising=False)
+    except ImportError:
+        pass
+    try:
         import accounts
         monkeypatch.setattr(accounts, "_mem_users", {}, raising=False)
         monkeypatch.setattr(accounts, "_mem_auth_identities", {}, raising=False)

@@ -83,6 +83,40 @@ async def get_or_create_session(session_id: str) -> dict:
         return _mem[session_id]
 
 
+async def get_session_progress_summaries(session_ids: list[str]) -> dict[str, dict]:
+    """Read compact Copilot progress for a campaign directory without N+1 calls."""
+    wanted = list(dict.fromkeys(str(value) for value in session_ids if value))
+    if not wanted:
+        return {}
+    if await _ensure_mongo():
+        docs = await _sessions_col.find(
+            {"_id": {"$in": wanted}},
+            {
+                "current_step": 1,
+                "confirmed_steps": 1,
+                "created_order_ids": 1,
+                "updated_at": 1,
+            },
+        ).to_list(None)
+    else:
+        docs = [
+            {**value, "_id": session_id}
+            for session_id, value in _mem.items()
+            if session_id in wanted
+        ]
+    return {
+        str(doc["_id"]): {
+            "current_step": int(doc.get("current_step", -1)),
+            "confirmed_steps": sorted(set(doc.get("confirmed_steps") or [])),
+            "created_order_ids": [
+                str(value) for value in (doc.get("created_order_ids") or []) if value
+            ],
+            "updated_at": doc.get("updated_at"),
+        }
+        for doc in docs
+    }
+
+
 async def update_form_state(
     session_id: str, key: str, data, *, sync_workspace: bool = True
 ) -> None:

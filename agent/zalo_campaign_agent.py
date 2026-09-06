@@ -195,37 +195,9 @@ async def _update_thread(thread: dict, updates: dict) -> dict:
 
 async def owned_campaigns(thread: dict) -> list[dict]:
     """Return orders from the durable registry owned by this channel actor."""
-    from campaign_ownership import (
-        list_owned_campaign_references,
-        preserve_session_campaigns,
-    )
-    from identity import list_conversations
-    from tools.order_api import fetch_order
+    from campaign_directory import list_owned_order_campaigns
 
-    actor = _thread_actor(thread)
-    # Additive migration: every surviving legacy conversation self-backfills on
-    # read. Future conversation deletion also preserves these references first.
-    conversations = await list_conversations(actor, include_archived=True)
-    for conversation in conversations:
-        session_id = conversation.get("session_id")
-        if session_id:
-            await preserve_session_campaigns(session_id)
-    references = {
-        item["order_id"]: item
-        for item in await list_owned_campaign_references(actor)
-    }
-
-    async def fetch(item: tuple[str, dict]) -> dict | None:
-        order_id, reference = item
-        try:
-            order = await fetch_order(order_id)
-        except Exception:
-            return None
-        return {**reference, "campaign_id": order_id, "order": order}
-
-    campaigns = [item for item in await asyncio.gather(*(fetch(item) for item in references.items())) if item]
-    campaigns.sort(key=lambda item: str(item["order"].get("updatedAt") or item["order"].get("createdAt") or ""), reverse=True)
-    return campaigns
+    return await list_owned_order_campaigns(_thread_actor(thread))
 
 
 def resolve_campaign(
@@ -781,10 +753,10 @@ async def _handle_pending(
         suffix = " (trạng thái đã đúng từ trước)" if result.get("already_in_state") else ""
         return f"Chiến dịch “{campaign['order'].get('brand')}” {state}{suffix}.", thread
     if pending.get("kind") == "choose_autopilot_mode":
-        if any(word in folded for word in ("tu dong", "fully", "automatic")):
-            mode = "fully_automatic"
-        elif any(word in folded for word in ("ban tu dong", "semi", "quan trong")):
+        if folded == "2" or any(word in folded for word in ("ban tu dong", "semi", "quan trong")):
             mode = "semi_automatic"
+        elif folded == "1" or any(word in folded for word in ("tu dong hoan toan", "fully automatic", "full automatic")):
+            mode = "fully_automatic"
         else:
             mode = ""
             if config.ZALO_OPENAI_ENABLED:
@@ -979,6 +951,16 @@ async def _render_openai_tool_result(
 async def handle_channel_event(event: dict) -> list[str | dict]:
     """Process a Zalo turn with bounded context and model-selected tools."""
     if not config.ZALO_OPENAI_ENABLED:
+        # Add the incident namespace without changing legacy image/empty-event handling.
+        if event.get('external_uid') and event.get('event_name') == 'user_send_text' and event.get('text'):
+            from zalo_incidents import handle_incident_reply
+            legacy_thread = await get_or_create_thread(event['external_uid'])
+            incident_text, _ = await handle_incident_reply(
+                legacy_thread, str(event['text']).strip(), reply_to_message_id=event.get('reply_to_message_id'),
+                external_event_id=event.get('external_event_id'),
+            )
+            if incident_text:
+                return [incident_text]
         return await _handle_channel_event_legacy(event)
     external_uid = event.get("external_uid")
     if not external_uid or event.get("event_name") not in {"user_send_text", "user_send_image"}:
@@ -996,6 +978,15 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
     from zalo_sessions import append_chat_message, build_context, get_or_roll_chat_session
 
     thread = await get_or_create_thread(external_uid)
+    # Keep incident traffic out of BOTH campaign histories and their summaries.
+    # An incident question must not roll/clear an unrelated campaign approval.
+    from zalo_incidents import handle_incident_reply
+    incident_text, thread = await handle_incident_reply(
+        thread, message, reply_to_message_id=event.get("reply_to_message_id"),
+        external_event_id=event.get("external_event_id"),
+    )
+    if incident_text:
+        return [incident_text]
     chat_session, rolled, _previous = await get_or_roll_chat_session(thread)
     if rolled and thread.get("pending_action"):
         # A confirmation cannot be carried into a different time-bounded chat.
@@ -1007,7 +998,8 @@ async def handle_channel_event(event: dict) -> list[str | dict]:
     # Language understanding and normal workflow progression stay in the tool loop.
     pending_kind = (thread.get("pending_action") or {}).get("kind")
     explicit_decision = _fold(message) in _CONFIRM.union(_REJECT)
-    if (pending_kind in {"campaign_lifecycle", "confirm_autopilot_brief"} and explicit_decision) or pending_kind == "campaign_selection":
+    if ((pending_kind in {"campaign_lifecycle", "confirm_autopilot_brief", "incident_recovery"} and explicit_decision)
+            or pending_kind in {"campaign_selection", "choose_autopilot_mode"}):
         campaigns = await owned_campaigns(thread)
         pending_text, thread = await _handle_pending(thread, message, campaigns)
         if pending_text:

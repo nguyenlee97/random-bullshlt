@@ -80,9 +80,9 @@ ZALO_TOOLS = [
          "campaign_reference": {"type": "string"},
      }, ["campaign_reference"])},
     {"type": "function", "name": "begin_autopilot",
-     "description": "Begin intake for a new campaign through existing Campaign Autopilot. Existing campaigns cannot be modified by this tool.",
+     "description": "Begin intake for a new campaign through existing Campaign Autopilot. Existing campaigns cannot be modified by this tool. Mode must be explicit in the latest user message; use unspecified otherwise.",
      "strict": True, "parameters": _schema({
-         "mode": {"type": "string", "enum": ["fully_automatic", "semi_automatic"]},
+         "mode": {"type": "string", "enum": ["unspecified", "fully_automatic", "semi_automatic"]},
      }, ["mode"])},
     {"type": "function", "name": "submit_autopilot_brief",
      "description": "Validate a new-campaign brief and prepare it for explicit confirmation. Use only after the user chose an Autopilot mode.",
@@ -143,6 +143,16 @@ async def _campaign_for_reference(
 def _fold(value: str) -> str:
     normalized = unicodedata.normalize("NFD", str(value or "").lower())
     return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn").replace("đ", "d")
+
+
+def _explicit_autopilot_mode(message: str) -> str:
+    """Read mode only from the current user turn, never conversation memory."""
+    folded = _fold(message)
+    if any(phrase in folded for phrase in ('ban tu dong', 'semi automatic', 'semi-automatic')):
+        return 'semi_automatic'
+    if any(phrase in folded for phrase in ('tu dong hoan toan', 'fully automatic', 'full automatic')):
+        return 'fully_automatic'
+    return ''
 
 
 def _explicit_campaign_signal(message: str, campaigns: list[dict], active_campaign_id: str | None) -> tuple[bool, bool]:
@@ -284,9 +294,16 @@ async def execute_zalo_tool(ctx: ToolExecutionContext, name: str, arguments: dic
         }
 
     if name == "begin_autopilot":
-        mode = arguments.get("mode")
-        if mode not in {"fully_automatic", "semi_automatic"}:
-            return {"ok": False, "error": "invalid_autopilot_mode"}
+        # A model argument cannot carry a preference from old history into a
+        # new intake. Only an explicit mode in the current message is accepted.
+        mode = _explicit_autopilot_mode(ctx.current_message)
+        if not mode:
+            ctx.thread = await _update_thread(ctx.thread, {"pending_action": {
+                "kind": "choose_autopilot_mode",
+                "expires_at": _now() + timedelta(minutes=15),
+            }})
+            return {"ok": False, "error": "autopilot_mode_required",
+                    "message": "Ask the user to choose 1) fully automatic or 2) semi automatic. Do not reuse a mode from prior campaigns."}
         ctx.thread = await _update_thread(ctx.thread, {"pending_action": {
             "kind": "collect_autopilot_brief", "mode": mode,
             "expires_at": _now() + timedelta(minutes=30),

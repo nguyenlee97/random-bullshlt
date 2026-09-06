@@ -53,6 +53,15 @@ async def fetch_order(order_id: str) -> dict:
     return resp.json()
 
 
+async def update_order(order_id: str, patch: dict) -> dict:
+    """Update an ownership-resolved order through the backend whitelist."""
+    resp = await _client.put(
+        f"/api/orders/{order_id}", json=patch, headers=_correlation_headers()
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
 async def fetch_all_orders() -> list[dict]:
     """GET /api/orders"""
     resp = await _client.get("/api/orders", headers=_correlation_headers())

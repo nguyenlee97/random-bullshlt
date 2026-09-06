@@ -467,7 +467,9 @@ async def test_nano_reranker_retries_mismatched_index_and_segment_id(monkeypatch
     monkeypatch.setattr(
         "rag.nano_rerank.config.OPENAI_CAMPAIGN_MODEL", "gpt-5.4-mini"
     )
-    monkeypatch.setenv("AUDIENCE_NANO_RERANK_MODEL", "gpt-5.4-nano")
+    monkeypatch.setattr(
+        "rag.nano_rerank.config.AUDIENCE_NANO_RERANK_MODEL", "gpt-5.6-luna"
+    )
     monkeypatch.setenv(
         "AUDIENCE_NANO_RERANK_MAX_OUTPUT_TOKENS", "3500"
     )
@@ -483,12 +485,12 @@ async def test_nano_reranker_retries_mismatched_index_and_segment_id(monkeypatch
     assert Client.responses.calls == 2
     assert Client.responses.request_shapes == [
         {
-            "model": "gpt-5.4-mini",
+            "model": "gpt-5.6-luna",
             "max_output_tokens": 70000,
             "text_format": "AudienceRerankResult",
         },
         {
-            "model": "gpt-5.4-mini",
+            "model": "gpt-5.6-luna",
             "max_output_tokens": 70000,
             "text_format": "CompactAudienceRerankResult",
         },

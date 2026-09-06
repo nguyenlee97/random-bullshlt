@@ -82,7 +82,7 @@ class Config:
         os.getenv("PLACEMENT_RERANK_ENABLED", "false").lower() == "true"
     )
     PLACEMENT_RERANK_MODEL: str = os.getenv(
-        "PLACEMENT_RERANK_MODEL", "gpt-5.4-nano"
+        "PLACEMENT_RERANK_MODEL", "gpt-5.6-luna"
     )
     PLACEMENT_RERANK_REASONING_EFFORT: str = os.getenv(
         "PLACEMENT_RERANK_REASONING_EFFORT", "low"
@@ -135,13 +135,27 @@ class Config:
     OPENAI_IMAGE_TIMEOUT_SECONDS: float = float(
         os.getenv("OPENAI_IMAGE_TIMEOUT_SECONDS", "180")
     )
-    OPENAI_VLM_MODEL: str = os.getenv("OPENAI_VLM_MODEL", "gpt-5.4-mini")
+    # Creative review is a bounded vision specialist. Luna has stronger
+    # cost-efficiency and multimodal benchmark coverage than the prior model;
+    # deterministic image checks and the manual-review policy remain binding.
+    OPENAI_VLM_MODEL: str = os.getenv("OPENAI_VLM_MODEL", "gpt-5.6-luna")
     DEFAULT_CONVERSATION_MODEL: str = os.getenv(
         "DEFAULT_CONVERSATION_MODEL", "greennode_minimax"
     )
 
     # ── VPS Backend API ───────────────────────────────────────────────────────
     BACKEND_URL: str = os.getenv("BACKEND_URL", "https://api.pawgrammers.io.vn")
+    REPORT_INTERNAL_API_KEY: str = os.getenv("REPORT_INTERNAL_API_KEY", "")
+    EVALUATION_WORKER_ENABLED: bool = (
+        os.getenv("EVALUATION_WORKER_ENABLED", "false").lower() == "true"
+    )
+    EVALUATION_WORKER_POLL_SECONDS: float = float(
+        os.getenv("EVALUATION_WORKER_POLL_SECONDS", "30")
+    )
+    # Independent from campaign creation mode. Explicit opt-in to model cost
+    # and sending bounded investigation evidence to this provider.
+    EVALUATION_MULTI_AGENT_ENABLED: bool = os.getenv("EVALUATION_MULTI_AGENT_ENABLED", "false").lower() == "true"
+    EVALUATION_AGENT_MODEL: str = os.getenv("EVALUATION_AGENT_MODEL", OPENAI_CAMPAIGN_MODEL)
     ADSPILOT_URL: str = os.getenv(
         "ADSPILOT_URL", "https://adspilot.pawgrammers.io.vn"
     )
@@ -479,7 +493,7 @@ class Config:
         os.getenv("AUDIENCE_QUERY_PLANNER_TIMEOUT_SECONDS", "30")
     )
     AUDIENCE_NANO_RERANK_MODEL: str = os.getenv(
-        "AUDIENCE_NANO_RERANK_MODEL", "gpt-5.4-nano"
+        "AUDIENCE_NANO_RERANK_MODEL", "gpt-5.6-luna"
     )
     AUDIENCE_NANO_RERANK_REASONING_EFFORT: str = os.getenv(
         "AUDIENCE_NANO_RERANK_REASONING_EFFORT", "low"

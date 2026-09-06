@@ -154,6 +154,7 @@ export default function AutopilotPanel({
   reportState, onReportChange, onSendReportQuestion,
   onReportActivate, onReportExit,
   openaiCampaignFlow = false,
+  readOnly = false,
 }) {
   const [policy, setPolicy] = useState('critical_only')
   const [creativeSource, setCreativeSource] = useState(null)
@@ -710,14 +711,24 @@ export default function AutopilotPanel({
     run?.milestones, waiting?.task_id, waiting?.key, waitingMessage,
   ])
 
+  const preventReadOnlyMutation = event => {
+    if (!readOnly || !event.target.closest('button, input, select, textarea, label')) return
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
   return (
     <section
       data-demo="autopilot-canvas"
       data-autopilot-status={run?.status || 'not_started'}
       data-autopilot-waiting-task={waiting?.key || ''}
       data-autopilot-waiting-reason={waiting?.result?.reason || ''}
-      className="h-full w-full overflow-y-auto bg-slate-50/70 p-3 sm:p-5"
+      className="h-full min-h-0 w-full touch-pan-y overflow-y-auto overscroll-contain bg-slate-50/70 p-3 sm:p-5"
       aria-label="Không gian Campaign Autopilot"
+      aria-readonly={readOnly || undefined}
+      onClickCapture={preventReadOnlyMutation}
+      onChangeCapture={preventReadOnlyMutation}
+      onInputCapture={preventReadOnlyMutation}
     >
       {!run ? (
         <div className="mx-auto max-w-5xl space-y-4 pb-6">

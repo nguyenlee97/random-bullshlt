@@ -785,6 +785,11 @@ table.tbl td.ctr  { text-align: center; }
   .grid { grid-template-columns: 1fr; }
   .topbar { flex-wrap: wrap; }
   .stat { display: none; }
+  .filter-group { width: 100%; min-width: 0; }
+  .filter-group label { flex: 0 0 64px; }
+  .filterbar select,
+  .filterbar input[type="date"] { flex: 1 1 0; width: auto; min-width: 0; max-width: 100%; }
+  .filter-count { width: 100%; margin-left: 0; }
   main { padding: 12px 12px 40px; }
 }
 
@@ -850,3 +855,13 @@ table.tbl td.ctr  { text-align: center; }
 
 /* ── sc-delta.watch variant ──────────────────────────────────────── */
 .sc-delta.watch { color: var(--amber); }
+:root { --scenario-border: #dbe3ee; }
+#scenarioDialog { padding: 0; width: min(800px, 96vw); max-width: 96vw; height: 90dvh; border: 1px solid var(--scenario-border); border-radius: 16px; box-shadow: 0 24px 80px #10284f40; }
+#scenarioDialog::backdrop { background: #0f172a99; }
+.scenario-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--scenario-border); }
+.scenario-header h2 { margin: 0; font-size: 16px; }
+.scenario-header button { background: white; border: 1px solid var(--scenario-border); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+#scenarioStatus { padding: 0 18px; font-size: 12px; color: #475569; }
+#scenarioStatus:empty { display: none; }
+#scenarioFrame { width: 100%; height: calc(100% - 85px); border: 0; display: block; }
+#btnScenarioLab:disabled { opacity: .5; cursor: not-allowed; }

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   MANAGE_PATH,
+  campaignManagePath,
   agentConversationId,
   agentEntryMode,
   agentEntryUrl,
@@ -26,7 +27,8 @@ const landing = read('../src/components/PublicLanding.jsx')
 const engine = read('../src/demo/DemoEngine.jsx')
 const scripts = read('../src/demo/demoScripts.js')
 const app = read('../src/App.jsx')
-const home = read('../src/components/ExperienceSelector.jsx')
+const home = read('../src/components/CampaignHome.jsx')
+const campaignManagement = read('../src/components/CampaignManagement.jsx')
 const overlay = read('../src/demo/DemoOverlay.jsx')
 const autopilot = read('../src/components/AutopilotPanel.jsx')
 const autopilotReview = read('../src/components/AutopilotReview.jsx')
@@ -73,13 +75,22 @@ test('public landing and agent modes have canonical SPA routes', () => {
     { surface: 'manage', mode: '', conversationId: '' },
   )
   assert.equal(MANAGE_PATH, '/manage')
+  assert.equal(campaignManagePath('ORD / 1'), '/manage/campaigns/ORD%20%2F%201')
+  assert.deepEqual(
+    parseAppRoute({ pathname: '/manage/campaigns/ORD%201', search: '' }),
+    { surface: 'campaign', mode: '', conversationId: '', campaignId: 'ORD 1' },
+  )
   assert.deepEqual(
     parseAppRoute({ pathname: '/agent/copilot/history/conv%20123', search: '' }),
-    { surface: 'agent', mode: 'copilot', conversationId: 'conv 123' },
+    { surface: 'agent', mode: 'copilot', conversationId: 'conv 123', readOnly: false },
   )
   assert.deepEqual(
     parseAppRoute({ pathname: '/agent/copilot/history/conv_123', search: '?mode=autopilot' }),
-    { surface: 'agent', mode: 'copilot', conversationId: 'conv_123' },
+    { surface: 'agent', mode: 'copilot', conversationId: 'conv_123', readOnly: false },
+  )
+  assert.equal(
+    parseAppRoute({ pathname: '/agent/autopilot/history/conv_456', search: '?readonly=1' }).readOnly,
+    true,
   )
   assert.equal(
     agentEntryUrl({ pathname: '/', search: '?tour=copilot', hash: '' }, 'autopilot'),
@@ -87,6 +98,10 @@ test('public landing and agent modes have canonical SPA routes', () => {
   )
   assert.equal(
     agentEntryUrl({ pathname: '/', search: '?mode=copilot&tour=copilot', hash: '' }),
+    '/agent',
+  )
+  assert.equal(
+    agentEntryUrl({ pathname: '/agent/copilot/history/conv_123', search: '?readonly=1', hash: '' }, 'copilot'),
     '/agent',
   )
   assert.match(app, /<PublicLanding/)
@@ -103,6 +118,7 @@ test('public landing and agent modes have canonical SPA routes', () => {
   assert.match(app, /archiveIfStale/)
   assert.match(app, /AgentAPI\.archiveConversation\(context\.conversation_id\)/)
   assert.match(app, /pendingConversationId/)
+  assert.match(app, /historyReadOnly/)
   assert.match(app, /window\.history\.replaceState\(\{\}, '', `\$\{HOME_PATH\}/)
   assert.match(app, /const handleReset[\s\S]*agentPath\(routeMode\)[\s\S]*newChat\(/)
   assert.match(nginx, /location = \/agent\/autopilot/)
@@ -180,12 +196,43 @@ test('technical docs keep judge evidence on the current host and enlarge diagram
   assert.match(docs, /svg\.setAttribute\('width',width\)/)
 })
 
-test('agent homepage exposes unmistakable workspace CTAs and ordered guided tours', () => {
-  assert.match(home, /Mở .*workspace/)
-  assert.match(home, /min-h-14/)
-  assert.match(home, /Guided tour/)
-  assert.match(home, /Workspace entrance/)
-  assert.match(home, /Bắt đầu ẩn danh — không cần đăng nhập/)
+test('agent homepage exposes campaign-centric creation and progress controls', () => {
+  assert.match(home, /Tạo campaign mới/)
+  assert.match(home, /Campaign Copilot/)
+  assert.match(home, /Campaign Autopilot/)
+  assert.match(home, /BẢN NHÁP/)
+  assert.match(home, /clampProgress\(item\.progress\?\.percent\)/)
+})
+
+test('campaign management surfaces own vertical scrolling inside the fixed app root', () => {
+  for (const surface of [home, campaignManagement]) {
+    assert.match(surface, /h-full overflow-x-hidden overflow-y-auto overscroll-contain/)
+  }
+})
+
+test('campaign management uses the real report and evaluation workflows', () => {
+  assert.match(campaignManagement, /lg:grid-cols-\[210px_minmax\(0,1fr\)\]/)
+  assert.match(campaignManagement, /<ReportStep/)
+  assert.match(campaignManagement, /<EmailStep/)
+  assert.match(campaignManagement, /placement_preview/)
+  assert.match(campaignManagement, /creative_preview/)
+  assert.match(campaignManagement, /<LiveEvaluationPanel/)
+  assert.match(campaignManagement, /<ConfigEditor/)
+  assert.match(campaignManagement, /<RevisionHistory/)
+  assert.match(campaignManagement, /<CampaignAgentBubble/)
+  assert.match(campaignManagement, /<form onSubmit=\{save\} className="mt-5 grid gap-4">/)
+  assert.match(campaignManagement, /askCampaignAssistant/)
+  assert.match(campaignManagement, /onPreview/)
+  assert.match(campaignManagement, /Tới site/)
+  assert.doesNotMatch(campaignManagement, /scheduler và API thực thi evaluation chưa được nối/)
+  assert.doesNotMatch(campaignManagement, /function PlaceholderNotice/)
+})
+
+test('read-only Autopilot histories retain scrolling while blocking mutation controls', () => {
+  assert.doesNotMatch(app, /pointer-events-none select-none opacity-80/)
+  assert.match(app, /readOnly=\{historyReadOnly\}/)
+  assert.match(autopilot, /touch-pan-y overflow-y-auto overscroll-contain/)
+  assert.match(autopilot, /onClickCapture=\{preventReadOnlyMutation\}/)
 })
 
 test('Copilot demo is restored as a spotlight tour over the real interface', () => {

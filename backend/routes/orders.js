@@ -158,8 +158,11 @@ async function ensureOrderReports(order) {
       objective: order.objective,
       budget: order.budget,
       startDate: order.startDate,
+      endDate: order.endDate,
       zones: order.placements || [],
       audience: [],
+      targeting: order.targeting || {},
+      creative: { primary: order.creative || {}, files: order.creatives || [] },
     });
   } catch (reportError) {
     // The order is already committed. Reporting can be retried idempotently

@@ -23,6 +23,7 @@ const REPORT_TABS = [
   { id: 'consideration', label: 'Consideration',  icon: MousePointerClick,  color: '#f59e0b' },
   { id: 'conversion',    label: 'Conversion',     icon: Target,             color: '#10b981' },
   { id: 'retention',     label: 'Retention',      icon: RefreshCw,          color: '#ec4899' },
+  { id: 'executive',     label: 'Executive',      icon: DollarSign,         color: '#6366f1' },
 ]
 
 // ─── Number formatters ───────────────────────────────────────────────────────
@@ -843,11 +844,11 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
   const [retrying, setRetrying] = useState(false)
   const pollRef = useRef(null)
   const campaignId = data?.campaignId || formState?.report?.campaignId || ''
-
-  // Determine objective to highlight the primary report tab
   const objective = formState?.brief?.objective || 'awareness'
-  const objectiveTab = REPORT_TABS.find(t => t.id === objective)
-  const visibleTabs = [REPORT_TABS[0], ...(objectiveTab ? [objectiveTab] : [])]
+
+  // All six generated report perspectives remain available. The campaign
+  // objective is used inside the report content, not to hide other evidence.
+  const visibleTabs = REPORT_TABS
 
   // Poll report status
   useEffect(() => {
@@ -1018,6 +1019,7 @@ export default function ReportStep({ data, onChange, isDone, formState, onSendCh
             <p>
               <strong>Thời gian:</strong> {currentAnalysis.dataContract.timeframe?.start || 'N/A'} → {currentAnalysis.dataContract.timeframe?.end || 'N/A'}
               {' · '}<strong>Contract:</strong> {currentAnalysis.dataContract.contractVersion}
+              {' · '}<strong>Nguồn:</strong> {currentAnalysis.dataContract.source}
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               {Object.entries(currentAnalysis.dataContract.metricDefinitions || {}).map(([metricId, metric]) => (

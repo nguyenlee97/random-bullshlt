@@ -138,6 +138,34 @@ async def test_tool_agent_runs_function_call_round_trip(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_new_campaign_mode_must_come_from_current_message_not_old_history(monkeypatch):
+    import zalo_campaign_agent
+    from zalo_tools import ToolExecutionContext, execute_zalo_tool
+
+    async def update(thread, changes):
+        return {**thread, **changes}
+    monkeypatch.setattr(zalo_campaign_agent, "_update_thread", update)
+
+    context = ToolExecutionContext(
+        thread={"thread_id": "zth-new-intake", "session_id": "sess-new-intake"},
+        current_message="Tạo campaign mới",
+        history=[{"role": "assistant", "content": "Mode trước là tự động hoàn toàn"}],
+    )
+    result = await execute_zalo_tool(context, "begin_autopilot", {"mode": "fully_automatic"})
+    assert result["error"] == "autopilot_mode_required"
+    assert context.thread["pending_action"]["kind"] == "choose_autopilot_mode"
+
+    context.current_message = "Tôi chọn bán tự động cho campaign mới"
+    result = await execute_zalo_tool(context, "begin_autopilot", {"mode": "fully_automatic"})
+    assert result["ok"] is True
+    assert result["mode"] == "semi_automatic"
+    assert context.thread["pending_action"] == {
+        "kind": "collect_autopilot_brief", "mode": "semi_automatic",
+        "expires_at": context.thread["pending_action"]["expires_at"],
+    }
+
+
+@pytest.mark.asyncio
 async def test_list_campaigns_exposes_owned_comparison_fields(monkeypatch):
     import zalo_campaign_agent
     from zalo_tools import ToolExecutionContext, execute_zalo_tool

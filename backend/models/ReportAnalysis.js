@@ -18,6 +18,10 @@ const reportAnalysisSchema = new mongoose.Schema(
     dataContract: { type: mongoose.Schema.Types.Mixed, default: null },
     provenance: { type: mongoose.Schema.Types.Mixed, default: null },
     inputHash:  { type: String, default: '', index: true },
+    // The most recent complete campaign snapshot received while a report run is
+    // active. It is consumed after the current run finishes so newer campaign
+    // context is never silently dropped.
+    pendingInput: { type: mongoose.Schema.Types.Mixed, default: null },
     schemaVersion: { type: String, default: 'report-evidence-v1' },
     performanceStatus: { type: mongoose.Schema.Types.Mixed, default: null },
     actions: { type: mongoose.Schema.Types.Mixed, default: [] },

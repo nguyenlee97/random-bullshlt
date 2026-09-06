@@ -208,6 +208,7 @@ async def zalo_webhook(request: Request):
     except ZaloChannelError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     link = outcome.get("link") or {}
+    reply_context = event.get("reply_context") or {}
     print(json.dumps({
         "event": "zalo_webhook",
         "event_name": event.get("event_name"),
@@ -215,6 +216,12 @@ async def zalo_webhook(request: Request):
         "duplicate": outcome["duplicate"],
         "has_external_uid": bool(event.get("external_uid")),
         "has_user_id_by_app": bool(event.get("app_scoped_uid")),
+        "reply_context_present": bool(reply_context.get("present")),
+        "reply_reference_found": bool(event.get("reply_to_message_id")),
+        "reply_reference_source": reply_context.get("source"),
+        "reply_candidate_keys": reply_context.get("candidate_keys") or [],
+        "message_shape_keys": reply_context.get("message_keys") or [],
+        "webhook_shape_keys": reply_context.get("body_keys") or [],
         "link_status": link.get("status"),
         "link_reason": link.get("reason"),
     }, separators=(",", ":")), flush=True)

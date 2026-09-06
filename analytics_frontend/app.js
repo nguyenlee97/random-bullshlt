@@ -12,6 +12,7 @@ import {
   fetchOrders,
   fetchReportData
 } from './api.js?v=1.1.4';
+import { installScenarioLab } from './scenario-lab.js';
 import {
   campaignOptions,
   filterRecords,
@@ -77,6 +78,11 @@ const els = {
   btnRetry: $('btnRetry'),
   tabs: $('tabs')
 };
+const updateScenarioControl = installScenarioLab({ select: els.fBrand, onApplied: async campaignId => {
+  // Refresh aggregate data too; returning to "all campaigns" must not show stale rows.
+  State.allData = normalizeArray(await fetchData());
+  await loadCampaignData(campaignId);
+} });
 
 export function fmt(n, decimals = 0) {
   if (n === null || n === undefined || isNaN(n)) return '—';
@@ -237,6 +243,7 @@ async function loadCampaignData(campaignId, {
   const request = ++State.dataRequest;
   State.filters.brand = campaignId;
   els.fBrand.value = campaignId;
+  updateScenarioControl();
 
   if (updateUrl) updateUrlCampaign(campaignId);
 

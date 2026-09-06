@@ -98,13 +98,14 @@ _DEFAULT_MAX_OUTPUT_TOKENS = 70_000
 
 
 def _rerank_model() -> str:
-    # The legacy AUDIENCE_NANO_RERANK_MODEL deployment variable intentionally
-    # does not win here: several environments still pin it to nano. A new,
-    # explicit stability override remains available if the model changes later.
+    # This is a bounded, catalog-only specialist. Keep the explicit stability
+    # override for a controlled rollback, otherwise honor its own configured
+    # model instead of inheriting the more capable campaign conversation model.
     return (
         os.getenv("AUDIENCE_RERANK_STABILITY_MODEL")
-        or config.OPENAI_CAMPAIGN_MODEL
-        or "gpt-5.4-mini"
+        or os.getenv("AUDIENCE_RERANK_MODEL")
+        or config.AUDIENCE_NANO_RERANK_MODEL
+        or "gpt-5.6-luna"
     )
 
 
