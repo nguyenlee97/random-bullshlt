@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from copy import deepcopy
 from datetime import date, datetime, timezone
 from typing import Any
@@ -77,6 +79,42 @@ def _snapshot(order: dict) -> dict:
     }
 
 
+def _editable_snapshot(value: dict) -> dict:
+    return {key: deepcopy(value.get(key)) for key in sorted(EDITABLE_FIELDS)}
+
+
+def config_hash(value: dict) -> str:
+    """Stable identity for the fields the config service may mutate."""
+    payload = json.dumps(_editable_snapshot(value), sort_keys=True, default=str,
+                         separators=(",", ":"))
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _snapshot_at_revision(history: list[dict], revision: int) -> dict | None:
+    """Resolve an immutable snapshot from the existing append-only history.
+
+    Revision zero is the ``before`` image captured by the first config edit;
+    every later revision is the matching record's ``after`` image.  A campaign
+    with no config edits has no recovery target yet and therefore cannot enter
+    the L3 restore flow.
+    """
+    exact = next((item for item in history if int(item.get("revision") or -1) == revision), None)
+    if exact and exact.get("after"):
+        return deepcopy(exact["after"])
+    if revision == 0 and history:
+        oldest = min(history, key=lambda item: int(item.get("revision") or 0))
+        return deepcopy(oldest.get("before") or {}) or None
+    return None
+
+
+def config_changes(before: dict, after: dict) -> list[dict]:
+    changes = []
+    for key in sorted(EDITABLE_FIELDS):
+        if before.get(key) != after.get(key):
+            changes.append({"field": key, "before": before.get(key), "after": after.get(key)})
+    return changes
+
+
 def _parse_date(value: object, field: str) -> str:
     raw = str(value or "").strip()[:10]
     try:
@@ -136,12 +174,87 @@ async def get_campaign_config(campaign_id: str) -> dict:
     from tools.order_api import fetch_order
     order = await fetch_order(campaign_id)
     history = await _history(campaign_id)
+    revision = history[0]["revision"] if history else 0
+    baseline = _snapshot_at_revision(history, 0)
+    baseline_record = next((item for item in history if int(item.get("revision") or -1) == 0), None)
     return {
         "campaign_id": campaign_id,
-        "revision": history[0]["revision"] if history else 0,
+        "revision": revision,
         "config": _snapshot(order),
         "editable_fields": sorted(EDITABLE_FIELDS),
         "history": history,
+        "recovery_baseline": ({
+            "revision": 0,
+            "config": baseline,
+            "config_hash": config_hash(baseline),
+            "provenance": (baseline_record or {}).get("provenance") or "first_config_revision_before_snapshot",
+        } if baseline else None),
+    }
+
+
+async def initialize_campaign_config(campaign_id: str, *, actor: dict, order: dict) -> dict:
+    """Capture revision zero immediately after a guarded order launch."""
+    async with _lock(campaign_id):
+        history = await _history(campaign_id)
+        if history:
+            return history[-1]
+        if any(order.get(key) in (None, "") for key in ("objective", "budget", "startDate", "endDate")):
+            from tools.order_api import fetch_order
+            order = await fetch_order(campaign_id)
+        snapshot = _snapshot(order)
+        request_id = "config-init-" + hashlib.sha256(campaign_id.encode()).hexdigest()[:24]
+        now = _now()
+        record = await _insert({
+            "campaign_id": campaign_id, "revision": 0,
+            "request_id": request_id, "status": "completed", "patch": {},
+            "before": snapshot, "after": snapshot, "changes": {},
+            "note": "Guarded order launch baseline",
+            "actor": {
+                "user_id": actor.get("user_id"),
+                "anonymous_id": None if actor.get("user_id") else actor.get("anonymous_id"),
+            },
+            "provenance": "guarded_order_launch",
+            "created_at": now, "completed_at": now,
+        })
+        return _public(record)
+
+
+async def get_campaign_config_revision(campaign_id: str, revision: int) -> dict | None:
+    history = await _history(campaign_id)
+    snapshot = _snapshot_at_revision(history, int(revision))
+    if snapshot is None:
+        return None
+    return {
+        "campaign_id": campaign_id,
+        "revision": int(revision),
+        "config": snapshot,
+        "config_hash": config_hash(snapshot),
+        "provenance": (
+            str(next((item.get("provenance") for item in history
+                      if int(item.get("revision") or -1) == int(revision)), "")
+                or ("first_config_revision_before_snapshot" if int(revision) == 0
+                    else "completed_config_revision"))
+        ),
+    }
+
+
+async def detect_config_drift(campaign_id: str) -> dict | None:
+    """Compare live mutable config with revision zero for deterministic L1."""
+    state = await get_campaign_config(campaign_id)
+    baseline = state.get("recovery_baseline")
+    if not baseline:
+        return None
+    current = state["config"]
+    changes = config_changes(baseline["config"], current)
+    if not changes:
+        return None
+    return {
+        "baseline_revision": 0,
+        "baseline_hash": baseline["config_hash"],
+        "current_revision": int(state["revision"]),
+        "current_hash": config_hash(current),
+        "changes": changes,
+        "source": "campaign_config_revision",
     }
 
 

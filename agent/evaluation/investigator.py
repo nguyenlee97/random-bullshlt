@@ -61,6 +61,7 @@ async def build_context(campaign_id: str, incident: dict, *, policy: dict | None
         order=order,
         zone_map=zone_map,
         policy=policy or {},
+        incident_evidence=incident.get("evidence") or {},
         evaluation_dates=(incident.get('evidence') or {}).get('dates') or [
             window['date'] for window in (incident.get('evidence') or {}).get('windows', []) if 'date' in window],
     )
@@ -84,7 +85,7 @@ def build_bundle(incident: dict, ctx: InvestigationContext, *, trigger: str,
     source_hash = hashlib.sha256(json.dumps({
         'baseline': ctx.baseline_records, 'active': ctx.active_records,
         'input': ctx.baseline_input, 'order': ctx.order, 'catalog': ctx.zone_map,
-        'evaluation_dates': ctx.evaluation_dates,
+        'evaluation_dates': ctx.evaluation_dates, 'incident_evidence': ctx.incident_evidence,
     }, sort_keys=True, default=str).encode()).hexdigest()
     identity = f"{BUNDLE_VERSION}|{incident.get('incident_id')}|{dataset_revision}|{policy_version}|{source_hash}"
     return {

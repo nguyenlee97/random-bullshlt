@@ -224,6 +224,41 @@ export function IncidentQuestions({ campaignId, incident, enabled }) {
   </section>
 }
 
+function RecoveryControl({ campaignId, incident, l3, enabled, onChanged }) {
+  const latest = (l3?.proposals || []).find(item => item.incident_id === incident.incident_id)
+  const [proposal, setProposal] = useState(latest || null), [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  useEffect(() => {
+    setProposal(latest || null); setCode(''); setError('')
+    if (latest?.proposal_id) AgentAPI.getRecoveryProposal(campaignId, latest.proposal_id)
+      .then(setProposal).catch(reason => setError(reason.message))
+  }, [campaignId, latest?.proposal_id, latest?.version])
+  if (!l3?.proposals_enabled || !enabled) return null
+  const run = async action => {
+    setBusy(true); setError('')
+    try { const result = await action(); setProposal(result); setCode(''); await onChanged() }
+    catch (reason) { setError(reason.message) } finally { setBusy(false) }
+  }
+  return <section aria-label={`L3 recovery ${incident.incident_id}`} className="space-y-3 rounded-xl border border-amber-300 bg-amber-50/40 p-4">
+    <div><h4 className="text-sm font-bold">L3 · Recovery có phê duyệt</h4><p className="mt-1 text-xs text-slate-600">Chỉ hỗ trợ phục hồi config revision. Scenario Lab không cấp quyền mutation.</p></div>
+    {!proposal && <button className={buttonClass} disabled={busy} onClick={() => run(() => AgentAPI.createRecoveryProposal(campaignId, incident.incident_id))}>Tạo recovery proposal</button>}
+    {proposal && <div className="space-y-3 text-sm">
+      <p><strong>{proposal.proposal_id}</strong> · {proposal.action_id} · {proposal.status} · risk {proposal.risk}</p>
+      <p className="text-xs">Revision {proposal.source_config_revision} → {proposal.target_config_revision}. {proposal.verification?.note}</p>
+      <div className="overflow-auto rounded-lg border bg-white"><table className="w-full text-left text-xs"><thead><tr><th className="p-2">Field</th><th>Hiện tại</th><th>Khôi phục</th></tr></thead><tbody>{proposal.changes?.map(item => <tr className="border-t" key={item.field}><td className="p-2 font-semibold">{item.field}</td><td>{String(item.before ?? '—')}</td><td>{String(item.after ?? '—')}</td></tr>)}</tbody></table></div>
+      {proposal.status === 'awaiting_approval' && <div className="space-y-2">
+        <p className="text-xs">Proposal hết hạn: {proposal.expires_at}. Nhập chính xác mã <strong>{proposal.approval_code}</strong> để duyệt.</p>
+        <input className={inputClass} aria-label={`Mã duyệt ${proposal.proposal_id}`} value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="Mã duyệt" />
+        <div className="flex flex-wrap gap-2"><button className={buttonClass + ' bg-amber-700 text-white'} disabled={busy || code !== proposal.approval_code || !l3.execution_enabled} onClick={() => run(() => AgentAPI.approveRecoveryProposal(campaignId, proposal.proposal_id, code, proposal.version))}>Duyệt & thực thi</button>
+          <button className={buttonClass} disabled={busy} onClick={() => run(() => AgentAPI.rejectRecoveryProposal(campaignId, proposal.proposal_id, proposal.version))}>Từ chối</button></div>
+        {!l3.execution_enabled && <p className="text-xs text-amber-900">Executor đang tắt ở runtime; có thể review proposal nhưng chưa mutate.</p>}
+      </div>}
+      {!!proposal.events?.length && <details><summary className="cursor-pointer text-xs font-semibold">Audit events ({proposal.events.length})</summary><ul className="mt-2 space-y-1 text-xs">{proposal.events.map(event => <li key={event.event_id}>{event.kind} · {event.created_at}</li>)}</ul></details>}
+    </div>}
+    {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+  </section>
+}
+
 export default function LiveEvaluationPanel({ campaignId }) {
   const [data, setData] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
@@ -254,13 +289,13 @@ export default function LiveEvaluationPanel({ campaignId }) {
       {data && <fieldset disabled={busy} className="flex flex-wrap items-end gap-4">
         <label className="text-sm"><input type="checkbox" checked={data.policy.enabled} onChange={e => execute(() => AgentAPI.updateCampaignEvaluationPolicy(campaignId, { enabled: e.target.checked }))} /> Bật evaluation</label>
         <label className="text-sm">Mức quyền<select className={inputClass} value={data.policy.level} onChange={e => execute(() => AgentAPI.updateCampaignEvaluationPolicy(campaignId, { level: e.target.value }))}>
-          <option value="L1">L1 — phát hiện</option><option value="L2">L2 — phát hiện + điều tra</option>{data.policy.level === 'L3' && <option value="L3">L3 cũ — executor bị khóa</option>}</select></label>
+          <option value="L1">L1 — phát hiện</option><option value="L2">L2 — phát hiện + điều tra</option>{data.l3?.proposals_enabled && <option value="L3">L3 — đề xuất + phê duyệt recovery</option>}{data.policy.level === 'L3' && !data.l3?.proposals_enabled && <option value="L3">L3 cũ — executor bị khóa</option>}</select></label>
         <label className="text-sm">Chu kỳ (phút)<select className={inputClass} value={data.policy.schedule_minutes} onChange={e => execute(() => AgentAPI.updateCampaignEvaluationPolicy(campaignId, { schedule_minutes: Number(e.target.value) }))}>
           {[...new Set([5, 15, 30, 60, 360, 1440, data.policy.schedule_minutes])].sort((a, b) => a - b).map(minutes => <option key={minutes} value={minutes}>{minutes}</option>)}
         </select></label>
         <button className={buttonClass + ' bg-blue-700 text-white'} disabled={busy || !data.policy.enabled} onClick={() => execute(() => AgentAPI.runCampaignEvaluation(campaignId))}>Chạy đánh giá ngay</button>
       </fieldset>}
-      <p className="text-xs text-slate-500">Lịch kiểm tra: {data?.policy?.schedule_minutes || 60} phút · worker {data?.worker_enabled ? 'được bật trong cấu hình' : 'chưa bật trong cấu hình'}. L3 chưa có executor an toàn.</p>
+      <p className="text-xs text-slate-500">Lịch kiểm tra: {data?.policy?.schedule_minutes || 60} phút · worker {data?.worker_enabled ? 'được bật trong cấu hình' : 'chưa bật trong cấu hình'}. L3 proposal {data?.l3?.proposals_enabled ? 'đã bật' : 'đang tắt'} · executor {data?.l3?.execution_enabled ? 'đã bật' : 'đang tắt'}.</p>
       <p className="text-xs text-slate-500">L2: {data?.investigation_mode === 'multi_agent' ? 'Multi-agent chạy nền' : 'Playbook deterministic — multi-agent chưa bật trong cấu hình'}.</p>
       {data?.investigation_error && <p role="alert" className="text-sm text-rose-700">{data.investigation_error}</p>}
       {loadError && <p role="alert" className="text-sm text-amber-800">Chưa cập nhật được tiến độ: {loadError}. Đang thử kết nối lại.</p>}
@@ -273,6 +308,7 @@ export default function LiveEvaluationPanel({ campaignId }) {
       {(data.investigation_jobs || []).filter(job => job.incident_id === i.incident_id).slice(0, 3).map(job => <InvestigationProgress key={job.job_id} job={job} />)}
       <Investigation bundle={i.investigation} />
       <IncidentQuestions campaignId={campaignId} incident={i} enabled={data.investigation_mode === 'multi_agent' && data.policy.enabled && data.policy.level !== 'L1' && i.investigation?.mode === 'multi_agent'} />
+      <RecoveryControl campaignId={campaignId} incident={i} l3={data.l3} enabled={data.policy.enabled && data.policy.level === 'L3'} onChanged={load} />
       <details><summary className="cursor-pointer text-sm">Evidence L1 và timeline</summary><pre className="mt-2 max-h-56 overflow-auto text-xs">{JSON.stringify({ evidence: i.evidence, timeline: i.timeline }, null, 2)}</pre></details>
       <div className="flex flex-wrap gap-2">
         <button className={buttonClass} disabled={busy || control.disabled || !data.policy.enabled || data.policy.level === 'L1' || ['resolved', 'dismissed', 'false_positive'].includes(i.state)} onClick={() => execute(() => AgentAPI.actOnEvaluationIncident(campaignId, i.incident_id, 'investigate'))}>{control.label}</button>

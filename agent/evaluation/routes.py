@@ -86,6 +86,19 @@ class IncidentQuestionRequest(BaseModel):
     expectedBundleId: str = Field(min_length=1, max_length=120)
 
 
+class RecoveryProposalRequest(BaseModel):
+    requestId: str = Field(pattern=r'^[A-Za-z0-9_-]{8,100}$')
+
+
+class RecoveryApprovalRequest(BaseModel):
+    approvalCode: str = Field(min_length=6, max_length=32)
+    expectedVersion: int = Field(ge=1)
+
+
+class RecoveryRejectRequest(BaseModel):
+    expectedVersion: int = Field(ge=1)
+
+
 def _tokens(request: Request) -> tuple[str | None, str | None]:
     return (
         request.cookies.get("aa_account"),
@@ -118,6 +131,7 @@ async def evaluation_detail(request: Request, campaign_id: str):
             jobs = await list_jobs(campaign_id)
         except RuntimeError:
             job_error = 'Investigation storage unavailable'
+    from evaluation.recovery_store import list_proposals
     return {
         "campaign_id": campaign_id, "policy": policy, "incidents": incidents, 'last_run': run,
         'worker_enabled': config.EVALUATION_WORKER_ENABLED,
@@ -125,6 +139,11 @@ async def evaluation_detail(request: Request, campaign_id: str):
         'investigation_mode': 'multi_agent' if config.EVALUATION_MULTI_AGENT_ENABLED else 'deterministic_playbook',
         'investigation_jobs': jobs, 'investigation_error': job_error,
         'investigation_engine_version': INVESTIGATION_VERSION,
+        'l3': {
+            'proposals_enabled': config.EVALUATION_L3_PROPOSALS_ENABLED,
+            'execution_enabled': config.EVALUATION_L3_EXECUTION_ENABLED,
+            'proposals': await list_proposals(campaign_id),
+        },
     }
 
 
@@ -134,6 +153,8 @@ async def update_policy(request: Request, campaign_id: str, body: PolicyUpdate):
     updates = body.model_dump(exclude_none=True)
     if updates.get("level") not in {None, "L1", "L2", "L3"}:
         raise HTTPException(status_code=400, detail="level must be L1, L2, or L3")
+    if updates.get("level") == "L3" and not config.EVALUATION_L3_PROPOSALS_ENABLED:
+        raise HTTPException(status_code=409, detail="L3 proposals are disabled")
     return await save_policy(campaign_id, updates)
 
 
@@ -243,6 +264,64 @@ async def incident_action(request: Request, campaign_id: str, incident_id: str,
         return await transition_incident(campaign_id, incident_id, state, body.note)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@evaluation_router.post("/evaluation/campaigns/{campaign_id}/incidents/{incident_id}/recovery-proposals")
+async def create_recovery_proposal(request: Request, campaign_id: str, incident_id: str,
+                                   body: RecoveryProposalRequest):
+    actor = await _assert_campaign_access(request, campaign_id)
+    from evaluation.recovery_service import RecoveryError, create_restore_proposal
+    try:
+        return await create_restore_proposal(
+            campaign_id, incident_id, actor=actor, request_id=body.requestId, channel="web",
+        )
+    except RecoveryError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
+@evaluation_router.get("/evaluation/campaigns/{campaign_id}/recovery-proposals/{proposal_id}")
+async def recovery_proposal_detail(request: Request, campaign_id: str, proposal_id: str):
+    await _assert_campaign_access(request, campaign_id)
+    from evaluation.recovery_service import RecoveryError, get_recovery_proposal
+    try:
+        value = await get_recovery_proposal(proposal_id)
+        if value.get("campaign_id") != campaign_id:
+            raise RecoveryError("Proposal not found", 404)
+        return value
+    except RecoveryError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
+@evaluation_router.post("/evaluation/campaigns/{campaign_id}/recovery-proposals/{proposal_id}/approve")
+async def approve_recovery_proposal(request: Request, campaign_id: str, proposal_id: str,
+                                    body: RecoveryApprovalRequest):
+    actor = await _assert_campaign_access(request, campaign_id)
+    from evaluation.recovery_service import RecoveryError, approve_and_execute, get_recovery_proposal
+    try:
+        current = await get_recovery_proposal(proposal_id)
+        if current.get("campaign_id") != campaign_id:
+            raise RecoveryError("Proposal not found", 404)
+        value = await approve_and_execute(
+            proposal_id, actor=actor, code=body.approvalCode,
+            expected_version=body.expectedVersion, channel="web",
+        )
+        return value
+    except RecoveryError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
+@evaluation_router.post("/evaluation/campaigns/{campaign_id}/recovery-proposals/{proposal_id}/reject")
+async def reject_recovery_proposal_route(request: Request, campaign_id: str, proposal_id: str,
+                                         body: RecoveryRejectRequest):
+    actor = await _assert_campaign_access(request, campaign_id)
+    from evaluation.recovery_service import RecoveryError, get_recovery_proposal, reject_proposal
+    try:
+        current = await get_recovery_proposal(proposal_id)
+        if current.get("campaign_id") != campaign_id:
+            raise RecoveryError("Proposal not found", 404)
+        return await reject_proposal(proposal_id, actor=actor, expected_version=body.expectedVersion)
+    except RecoveryError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
 @evaluation_router.post('/evaluation/campaigns/{campaign_id}/incidents/{incident_id}/questions')

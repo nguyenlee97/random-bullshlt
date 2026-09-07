@@ -516,6 +516,18 @@ async def _order_create(setup: SetupData, session_id: str) -> AgentResponse:
     await update_order_ids(session_id, [order_id])
     from campaign_ownership import register_campaign_for_session
     await register_campaign_for_session(session_id, order_id)
+    if config.EVALUATION_L3_PROPOSALS_ENABLED:
+        try:
+            from campaign_config import initialize_campaign_config
+            await initialize_campaign_config(
+                order_id,
+                actor={"user_id": session.get("user_id"), "anonymous_id": session.get("anonymous_id")},
+                order=result,
+            )
+        except Exception as exc:
+            # Launch truth remains committed; L3 simply stays unavailable until a
+            # durable baseline can be captured instead of failing the whole order.
+            await log_event(session_id, "config_baseline_unavailable", {"order_id": order_id, "error": str(exc)[:200]})
 
     api_warnings = result.get("warnings", [])
     budget_display = brief.get("budget", 0)

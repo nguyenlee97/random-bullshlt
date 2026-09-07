@@ -1466,6 +1466,40 @@ export const AgentAPI = {
     return response.json()
   },
 
+  async createRecoveryProposal(campaignId, incidentId, requestId = '') {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}/recovery-proposals`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId: requestId || generateId('recovery-proposal') }),
+      signal: AbortSignal.timeout(30000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể tạo recovery proposal.')
+    return response.json()
+  },
+
+  async getRecoveryProposal(campaignId, proposalId) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/recovery-proposals/${encodeURIComponent(proposalId)}`, { signal: AbortSignal.timeout(15000) })
+    if (!response.ok) throw await responseError(response, 'Không thể tải recovery proposal.')
+    return response.json()
+  },
+
+  async approveRecoveryProposal(campaignId, proposalId, approvalCode, expectedVersion) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/recovery-proposals/${encodeURIComponent(proposalId)}/approve`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approvalCode, expectedVersion }), signal: AbortSignal.timeout(60000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể duyệt recovery proposal.')
+    return response.json()
+  },
+
+  async rejectRecoveryProposal(campaignId, proposalId, expectedVersion) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/recovery-proposals/${encodeURIComponent(proposalId)}/reject`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expectedVersion }), signal: AbortSignal.timeout(30000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể từ chối recovery proposal.')
+    return response.json()
+  },
+
   async listCampaigns(includeArchived = true) {
     await bootstrapIdentity()
     const response = await agentFetch(

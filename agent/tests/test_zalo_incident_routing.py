@@ -130,6 +130,54 @@ async def test_zalo_l3_does_not_replace_pending_campaign_action(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_zalo_l3_uses_separate_recovery_refs_and_exact_confirmation(monkeypatch):
+    import zalo_incidents as incidents
+    import zalo_campaign_agent as channel
+    import evaluation.store as store
+    import evaluation.recovery_service as recovery
+    from config import config
+
+    monkeypatch.setattr(config, 'EVALUATION_L3_PROPOSALS_ENABLED', True)
+    monkeypatch.setattr(channel, 'owned_campaigns', AsyncMock(return_value=[{'campaign_id': 'ORD-1'}]))
+    monkeypatch.setattr(store, 'list_incidents', AsyncMock(return_value=[{
+        'incident_id': 'INC-A12F90', 'campaign_id': 'ORD-1', 'issue_type': 'config_drift',
+    }]))
+    proposal = {
+        'proposal_id': 'RP-ABCDEF1234', 'incident_id': 'INC-A12F90',
+        'action_id': 'restore_config_revision', 'risk': 'medium',
+        'changes': [{'field': 'budget', 'before': 150, 'after': 100}],
+        'verification': {'note': 'config only'}, 'expires_at': '2026-09-07T12:00:00+00:00',
+        'approval_code': 'A1B2C3D4', 'version': 1,
+    }
+    monkeypatch.setattr(recovery, 'create_restore_proposal', AsyncMock(return_value=proposal))
+
+    async def update_thread(thread, patch):
+        return {**thread, **patch}
+
+    monkeypatch.setattr(channel, '_update_thread', AsyncMock(side_effect=update_thread))
+    thread = {'thread_id': 'thread-1', 'user_id': 'owner',
+              'pending_action': {'kind': 'autopilot_approval'}, 'active_campaign_id': 'ORD-OTHER'}
+    text, after = await incidents.handle_incident_reply(thread, '3 INC-A12F90', external_event_id='evt-123')
+    assert 'Xác nhận RP-ABCDEF1234 A1B2C3D4' in text
+    assert after['pending_action'] == thread['pending_action']
+    assert after['active_campaign_id'] == 'ORD-OTHER'
+    assert after['recent_recovery_refs'][0]['proposal_id'] == 'RP-ABCDEF1234'
+    generic, same = await incidents.handle_incident_reply(after, 'Xác nhận')
+    assert generic is None and same == after
+
+    monkeypatch.setattr(recovery, 'get_recovery_proposal', AsyncMock(return_value=proposal))
+    monkeypatch.setattr(recovery, 'approve_and_execute', AsyncMock(return_value={
+        **proposal, 'status': 'resolved', 'result_config_revision': 2,
+    }))
+    result, unchanged = await incidents.handle_incident_reply(
+        after, 'Xác nhận RP-ABCDEF1234 A1B2C3D4', external_event_id='evt-124',
+    )
+    assert 'đã hoàn tất' in result
+    assert unchanged == after
+    recovery.approve_and_execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_old_recovery_confirmation_cancels_without_report_mutation(monkeypatch):
     import zalo_incidents as incidents
     import zalo_campaign_agent as channel

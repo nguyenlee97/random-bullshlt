@@ -64,6 +64,27 @@ async def run_evaluation(campaign_id: str, trigger: str = 'manual', force: bool 
         baseline = (dataset.get('baseline') or {}).get('records') or []
         active = (dataset.get('active') or {}).get('records') or []
         issues = evaluate_records(baseline, active, policy)
+        # Report scenarios are useful test inputs, but L3 eligibility must be
+        # grounded in the live order and immutable config-revision history.
+        if config.EVALUATION_L3_PROPOSALS_ENABLED:
+            try:
+                from campaign_config import detect_config_drift
+                drift = await detect_config_drift(campaign_id)
+                if drift:
+                    issues = [item for item in issues if item.get('issue_type') != 'config_drift']
+                    issues.append({
+                        'issue_type': 'config_drift', 'scope': 'campaign',
+                        'severity': 'high', 'title': 'Cấu hình campaign khác revision gốc',
+                        'evidence': drift,
+                        'recommended_action': 'Điều tra diff và chuẩn bị phục hồi revision gốc có phê duyệt.',
+                    })
+            except Exception as exc:
+                issues.append({
+                    'issue_type': 'data_quality', 'scope': 'campaign_config',
+                    'severity': 'high', 'title': 'Không đọc được lịch sử cấu hình',
+                    'evidence': {'source': 'campaign_config_revision', 'error': str(exc)[:160]},
+                    'recommended_action': 'Khôi phục config service trước khi kết luận recovery.',
+                })
         async def checkpoint():
             if not await renew_campaign_lease(campaign_id, token):
                 raise ReportServiceError('Evaluation lease expired; retry.', 409)

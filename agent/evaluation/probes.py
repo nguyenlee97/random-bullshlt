@@ -52,6 +52,7 @@ class InvestigationContext:
     zone_map: dict[str, dict] = field(default_factory=dict)
     policy: dict = field(default_factory=dict)
     evaluation_dates: list[str] = field(default_factory=list)
+    incident_evidence: dict = field(default_factory=dict)
 
     def scoped(self, records: list[dict]) -> list[dict]:
         if self.scope in ("", "campaign"):
@@ -319,6 +320,20 @@ def probe_config_drift(ctx: InvestigationContext) -> dict:
     ``ReportDataset.input`` is the only immutable point-in-time copy of the
     campaign, so it is the honest reference for drift.
     """
+    revision_evidence = ctx.incident_evidence or {}
+    if (revision_evidence.get("source") == "campaign_config_revision"
+            and revision_evidence.get("changes")):
+        return _result(
+            "config_drift", ANOMALY, "field_changed",
+            "Cấu hình hiện tại khác config revision gốc.", SOURCE_DERIVED,
+            [f"{item.get('field')} đã thay đổi." for item in revision_evidence["changes"]],
+            {
+                "changes": revision_evidence["changes"],
+                "baseline_reference": f"campaign_config_revision:{revision_evidence.get('baseline_revision')}",
+                "baseline_hash": revision_evidence.get("baseline_hash"),
+                "current_hash": revision_evidence.get("current_hash"),
+            },
+        )
     if "configDrift" in ctx.signals():
         return _result(
             "config_drift", ANOMALY, "drift_signal",

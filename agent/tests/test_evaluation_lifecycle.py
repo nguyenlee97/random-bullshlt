@@ -218,6 +218,25 @@ async def test_directory_summary_is_batch_read_only_and_does_not_enable_monitori
     assert summary['status'] == 'bad'
 
 
+@pytest.mark.asyncio
+async def test_l1_adds_live_config_revision_drift_only_when_l3_proposals_are_enabled(env, monkeypatch):
+    import campaign_config
+    from config import config
+
+    dataset, _ = env
+    scenario(dataset, 'healthy_baseline', 2)
+    monkeypatch.setattr(config, 'EVALUATION_L3_PROPOSALS_ENABLED', True)
+    monkeypatch.setattr(campaign_config, 'detect_config_drift', AsyncMock(return_value={
+        'source': 'campaign_config_revision', 'baseline_revision': 0,
+        'current_revision': 1, 'baseline_hash': 'base', 'current_hash': 'changed',
+        'changes': [{'field': 'budget', 'before': 80_000_000, 'after': 96_000_000}],
+    }))
+    result = await service.run_evaluation(CAMPAIGN)
+    drift = next(item for item in result['incidents'] if item['issue_type'] == 'config_drift')
+    assert drift['evidence']['source'] == 'campaign_config_revision'
+    assert drift['scope'] == 'campaign'
+
+
 def test_owned_api_and_disabled_l3_actions(env, monkeypatch):
     async def actor(account, anonymous, require_any=True):
         if not account:

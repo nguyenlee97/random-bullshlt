@@ -14,6 +14,9 @@ from config import config
 
 _INCIDENT_RE = re.compile(r"\b(INC-[A-Z0-9]{4,12})\b", re.IGNORECASE)
 _CHOICE_RE = re.compile(r"^\s*([1-4])(?:\s*(?:[-:]\s*)?INC-[A-Z0-9]{4,12})?\s*$", re.IGNORECASE)
+_RECOVERY_CONFIRM_RE = re.compile(
+    r"^\s*(.+?)\s+(RP-[A-Z0-9]{8,16})\s+([A-F0-9]{8})\s*$", re.IGNORECASE,
+)
 
 
 def _now() -> datetime:
@@ -153,7 +156,8 @@ def _alert_text(campaign_id: str, incident: dict) -> str:
         "Trả lời kèm mã incident:\n"
         f"1 {incident['incident_id']} — xem evidence\n"
         f"2 {incident['incident_id']} — điều tra\n"
-        f"3 {incident['incident_id']} — trạng thái recovery (chưa mở)\n"
+        f"3 {incident['incident_id']} — "
+        f"{'chuẩn bị recovery proposal' if config.EVALUATION_L3_PROPOSALS_ENABLED else 'trạng thái recovery (chưa mở)'}\n"
         f"4 {incident['incident_id']} — dismiss"
     )
 
@@ -202,6 +206,32 @@ async def handle_incident_reply(
     thread: dict, message: str, *, reply_to_message_id: str | None = None,
     external_event_id: str | None = None,
 ) -> tuple[str | None, dict]:
+    recovery_match = _RECOVERY_CONFIRM_RE.match(str(message or ""))
+    if recovery_match and _fold(recovery_match.group(1)) == "xac nhan":
+        proposal_id, code = recovery_match.group(2).upper(), recovery_match.group(3).upper()
+        from evaluation.recovery_service import RecoveryError, approve_and_execute, get_recovery_proposal
+        try:
+            proposal = await get_recovery_proposal(proposal_id)
+            actor = {"user_id": thread.get("user_id"), "anonymous_id": thread.get("anonymous_id")}
+            result = await approve_and_execute(
+                proposal_id, actor=actor, code=code,
+                expected_version=int(proposal["version"]), channel="zalo",
+            )
+            return (
+                f"✅ {proposal_id} đã hoàn tất: {result.get('action_id')}. "
+                f"Config revision mới {result.get('result_config_revision')}; "
+                "verification khớp target hash. Kết quả này chỉ xác minh config, không khẳng định KPI đã phục hồi.",
+                thread,
+            )
+        except RecoveryError as exc:
+            return f"{proposal_id}: {exc}. Không có thao tác khác được thực hiện.", thread
+    if (_fold(message) == "xac nhan" and thread.get("recent_recovery_refs")
+            and not thread.get("pending_action")):
+        latest = thread["recent_recovery_refs"][-1]
+        return (
+            "Xác nhận chung không đủ cho L3. Hãy gửi đúng cú pháp “Xác nhận "
+            f"{latest.get('proposal_id')} <mã duyệt>”; chưa có dữ liệu nào bị thay đổi.", thread,
+        )
     incident_id, choice = parse_incident_reply(message)
     explicit_ids = {value.upper() for value in _INCIDENT_RE.findall(message)}
     if len(explicit_ids) > 1:
@@ -295,19 +325,52 @@ async def handle_incident_reply(
                 "Chưa chạy điều tra. Không có cấu hình campaign nào bị thay đổi.",
                 thread,
             )
+        l3_note = ("Có thể gửi lựa chọn 3 kèm mã incident để chuẩn bị recovery proposal. "
+                   if config.EVALUATION_L3_PROPOSALS_ENABLED
+                   else "L3 chưa mở; kết quả này không thực thi recovery. ")
         return (
             f"🔍 {incident_id} — kết quả điều tra (chỉ đọc)\n"
             f"{summarize_bundle(bundle)}\n\n"
-             "L3 chưa mở; kết quả này không thực thi recovery. "
-            "Không có cấu hình campaign nào bị thay đổi.", thread,
+            f"{l3_note}Không có cấu hình campaign nào bị thay đổi.", thread,
         )
     if choice == 4:
         await transition_incident(campaign_id, incident_id, "dismissed", "Dismissed from Zalo")
         return f"Đã dismiss {incident_id}. Không có cấu hình campaign nào bị thay đổi.", thread
     if choice == 3:
+        if not config.EVALUATION_L3_PROPOSALS_ENABLED:
+            return (
+                f"{incident_id}: L3 chưa được mở. Hãy xem kết quả L2; "
+                "khôi phục dữ liệu test được thực hiện riêng trong Scenario Lab. Không có dữ liệu nào bị thay đổi.",
+                thread,
+            )
+        from evaluation.recovery_service import RecoveryError, create_restore_proposal
+        from zalo_campaign_agent import _update_thread
+        import hashlib
+        actor = {"user_id": thread.get("user_id"), "anonymous_id": thread.get("anonymous_id")}
+        request_id = hashlib.sha256(str(external_event_id or f"{thread.get('thread_id', 'zalo')}:{incident_id}:3").encode()).hexdigest()[:32]
+        try:
+            proposal = await create_restore_proposal(
+                campaign_id, incident_id, actor=actor, request_id=request_id, channel="zalo",
+            )
+        except RecoveryError as exc:
+            return f"{incident_id}: chưa thể tạo recovery proposal — {exc}. Không có dữ liệu nào bị thay đổi.", thread
+        refs = [item for item in (thread.get("recent_recovery_refs") or [])
+                if item.get("proposal_id") != proposal["proposal_id"]]
+        refs.append({"proposal_id": proposal["proposal_id"], "incident_id": incident_id,
+                     "campaign_id": campaign_id, "seen_at": _now()})
+        thread = await _update_thread(thread, {"recent_recovery_refs": refs[-10:]})
+        diff = "; ".join(
+            f"{item['field']}: {item.get('before')} → {item.get('after')}"
+            for item in proposal.get("changes", [])
+        )
         return (
-            f"{incident_id}: L3 chưa được mở. Hãy xem kết quả L2; "
-            "khôi phục dữ liệu test được thực hiện riêng trong Scenario Lab. Không có dữ liệu nào bị thay đổi.",
+            f"🛡️ {proposal['proposal_id']} · {incident_id}\n"
+            f"Action: {proposal['action_id']} · risk {proposal['risk']}\n"
+            f"Diff: {diff}\n"
+            f"Verification: {proposal['verification']['note']}\n"
+            f"Hết hạn: {proposal['expires_at']}\n\n"
+            f"Để duyệt, gửi chính xác: Xác nhận {proposal['proposal_id']} {proposal['approval_code']}\n"
+            "Tin nhắn chung “Xác nhận” sẽ không thực thi.",
             thread,
         )
     return f"Lựa chọn cho {incident_id} chưa hợp lệ. Dùng 1, 2, 3 hoặc 4 kèm mã incident.", thread

@@ -49,6 +49,58 @@ async def test_config_update_is_revisioned_and_idempotent(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_config_revision_zero_supports_real_drift_detection_and_restore(monkeypatch):
+    import campaign_config
+    from tools import order_api
+
+    current = _order()
+    monkeypatch.setattr(campaign_config, "_collection", AsyncMock(return_value=None))
+    monkeypatch.setattr(order_api, "fetch_order", AsyncMock(side_effect=lambda _id: dict(current)))
+
+    async def update(_campaign_id, patch):
+        current.update(patch)
+        return dict(current)
+
+    monkeypatch.setattr(order_api, "update_order", AsyncMock(side_effect=update))
+    await campaign_config.update_campaign_config(
+        "ORD-CONFIG", actor={"user_id": "owner"}, expected_revision=0,
+        request_id="drift-request-0001", patch={"budget": 96_000_000},
+    )
+    drift = await campaign_config.detect_config_drift("ORD-CONFIG")
+    assert drift["source"] == "campaign_config_revision"
+    assert drift["baseline_revision"] == 0
+    assert drift["current_revision"] == 1
+    assert drift["changes"] == [
+        {"field": "budget", "before": 80_000_000, "after": 96_000_000},
+    ]
+    baseline = await campaign_config.get_campaign_config_revision("ORD-CONFIG", 0)
+    assert baseline["config"]["budget"] == 80_000_000
+
+    await campaign_config.update_campaign_config(
+        "ORD-CONFIG", actor={"user_id": "owner"}, expected_revision=1,
+        request_id="restore-request-0002", patch={"budget": 80_000_000},
+    )
+    assert await campaign_config.detect_config_drift("ORD-CONFIG") is None
+
+
+@pytest.mark.asyncio
+async def test_guarded_launch_captures_idempotent_revision_zero(monkeypatch):
+    import campaign_config
+
+    monkeypatch.setattr(campaign_config, "_collection", AsyncMock(return_value=None))
+    first = await campaign_config.initialize_campaign_config(
+        "ORD-CONFIG", actor={"user_id": "owner"}, order=_order(),
+    )
+    replay = await campaign_config.initialize_campaign_config(
+        "ORD-CONFIG", actor={"user_id": "owner"}, order=_order(budget=99),
+    )
+    assert first["revision"] == 0
+    assert first["provenance"] == "guarded_order_launch"
+    assert replay["after"]["budget"] == 80_000_000
+    assert len(campaign_config._mem_revisions["ORD-CONFIG"]) == 1
+
+
+@pytest.mark.asyncio
 async def test_config_update_rejects_stale_revision(monkeypatch):
     import campaign_config
     from tools import order_api

@@ -156,6 +156,14 @@ class Config:
     # and sending bounded investigation evidence to this provider.
     EVALUATION_MULTI_AGENT_ENABLED: bool = os.getenv("EVALUATION_MULTI_AGENT_ENABLED", "false").lower() == "true"
     EVALUATION_AGENT_MODEL: str = os.getenv("EVALUATION_AGENT_MODEL", OPENAI_CAMPAIGN_MODEL)
+    # L3 rolls out in two stages: proposal/read-only UX first, mutation second.
+    # Both stay fail-closed unless explicitly enabled in the target runtime.
+    EVALUATION_L3_PROPOSALS_ENABLED: bool = os.getenv(
+        "EVALUATION_L3_PROPOSALS_ENABLED", "false"
+    ).lower() == "true"
+    EVALUATION_L3_EXECUTION_ENABLED: bool = os.getenv(
+        "EVALUATION_L3_EXECUTION_ENABLED", "false"
+    ).lower() == "true"
     ADSPILOT_URL: str = os.getenv(
         "ADSPILOT_URL", "https://adspilot.pawgrammers.io.vn"
     )

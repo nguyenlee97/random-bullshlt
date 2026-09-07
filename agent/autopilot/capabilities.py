@@ -1437,6 +1437,18 @@ async def _create_order(run: dict, workspace: dict) -> CapabilityResult:
         await update_order_ids(run["session_id"], order_ids)
         from campaign_ownership import register_campaign_for_session
         await register_campaign_for_session(run["session_id"], str(order_id))
+        if config.EVALUATION_L3_PROPOSALS_ENABLED:
+            try:
+                from campaign_config import initialize_campaign_config
+                await initialize_campaign_config(
+                    str(order_id),
+                    actor={"user_id": session.get("user_id"), "anonymous_id": session.get("anonymous_id")},
+                    order=result,
+                )
+            except Exception:
+                # The order is already committed. Missing durable baseline keeps
+                # L3 fail-closed without turning a successful launch into a retry.
+                pass
     return CapabilityResult(
         value={"order": result, "idempotency_key": payload["idempotencyKey"]},
         evidence=[{"type": "order_api", "order_id": order_id,
