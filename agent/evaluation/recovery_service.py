@@ -62,8 +62,15 @@ def _event(proposal_id: str, kind: str, **details) -> dict:
 
 def _parse_time(value) -> datetime:
     if isinstance(value, datetime):
-        return value
-    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    # PyMongo returns naive UTC datetimes unless the client is configured with
+    # tz_aware=True. Normalize both persisted and serialized timestamps before
+    # comparing them with the service's timezone-aware clock.
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 async def create_restore_proposal(campaign_id: str, incident_id: str, *,

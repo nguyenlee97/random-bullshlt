@@ -226,6 +226,13 @@ async def test_expired_proposal_never_executes(monkeypatch):
     assert (await recovery_store.get_proposal(proposal_id))["status"] == "expired"
 
 
+def test_persisted_naive_mongo_timestamp_is_normalized_to_utc():
+    naive = datetime(2026, 9, 7, 10, 30, 0)
+    parsed = recovery_service._parse_time(naive)
+    assert parsed.tzinfo == timezone.utc
+    assert parsed.isoformat() == "2026-09-07T10:30:00+00:00"
+
+
 def test_owner_scoped_recovery_api_uses_shared_service(monkeypatch):
     from evaluation import routes
 
