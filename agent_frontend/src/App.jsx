@@ -53,6 +53,33 @@ import {
   workspacePatchTarget,
 } from '@/lib/nonLinearWorkflow'
 
+const DESKTOP_CHAT_WIDTH_STORAGE_KEY = 'advertising-agent:desktop-chat-width'
+const DESKTOP_CHAT_DEFAULT_WIDTH = 380
+const DESKTOP_CHAT_MIN_WIDTH = 320
+const DESKTOP_CHAT_MAX_WIDTH = 560
+const DESKTOP_WORKSPACE_MIN_WIDTH = 640
+
+const desktopChatWidthBounds = () => ({
+  min: DESKTOP_CHAT_MIN_WIDTH,
+  max: Math.max(
+    DESKTOP_CHAT_MIN_WIDTH,
+    Math.min(DESKTOP_CHAT_MAX_WIDTH, window.innerWidth - DESKTOP_WORKSPACE_MIN_WIDTH),
+  ),
+})
+
+const clampDesktopChatWidth = value => {
+  const { min, max } = desktopChatWidthBounds()
+  return Math.min(max, Math.max(min, Math.round(Number(value) || DESKTOP_CHAT_DEFAULT_WIDTH)))
+}
+
+const initialDesktopChatWidth = () => {
+  try {
+    return clampDesktopChatWidth(window.localStorage.getItem(DESKTOP_CHAT_WIDTH_STORAGE_KEY))
+  } catch {
+    return clampDesktopChatWidth(DESKTOP_CHAT_DEFAULT_WIDTH)
+  }
+}
+
 // ─── Steps meta — NEW ORDER: Brief → Audience → Creative → Setup → Result ─────
 export const STEPS = [
   { id: 'brief',    title: 'Brief',      tool: 'brief_parse',    heroLabel: null },
@@ -209,9 +236,74 @@ export default function App() {
 
   // ── V4 responsive workspace state ────────────────────────────────────────
   // Below 1024px the workspace uses Chat/Workspace tabs. At 1024–1439px Chat
-  // starts collapsed; at 1440px+ it opens as the fixed 320px V4 conversation rail.
+  // starts collapsed; at 1440px+ it opens as a user-resizable V4 conversation rail.
   const [activeTab, setActiveTab] = useState('chat')
   const [desktopChatOpen, setDesktopChatOpen] = useState(() => window.innerWidth >= 1440)
+  const [desktopChatWidth, setDesktopChatWidth] = useState(initialDesktopChatWidth)
+  const desktopChatWidthRef = useRef(desktopChatWidth)
+  const chatResizeRef = useRef(null)
+  const [chatResizing, setChatResizing] = useState(false)
+
+  const applyDesktopChatWidth = useCallback((width, persist = false) => {
+    const nextWidth = clampDesktopChatWidth(width)
+    desktopChatWidthRef.current = nextWidth
+    setDesktopChatWidth(nextWidth)
+    if (persist) {
+      try {
+        window.localStorage.setItem(DESKTOP_CHAT_WIDTH_STORAGE_KEY, String(nextWidth))
+      } catch {
+        // A blocked storage write should not disable the resize interaction.
+      }
+    }
+  }, [])
+
+  const finishChatResize = useCallback(event => {
+    const resize = chatResizeRef.current
+    if (!resize || (event?.pointerId != null && resize.pointerId !== event.pointerId)) return
+    if (event?.currentTarget?.hasPointerCapture?.(resize.pointerId)) {
+      event.currentTarget.releasePointerCapture(resize.pointerId)
+    }
+    chatResizeRef.current = null
+    setChatResizing(false)
+    applyDesktopChatWidth(desktopChatWidthRef.current, true)
+  }, [applyDesktopChatWidth])
+
+  const startChatResize = useCallback(event => {
+    if (window.innerWidth < 1024) return
+    event.preventDefault()
+    chatResizeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: desktopChatWidthRef.current,
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setChatResizing(true)
+  }, [])
+
+  const moveChatResize = useCallback(event => {
+    const resize = chatResizeRef.current
+    if (!resize || resize.pointerId !== event.pointerId) return
+    applyDesktopChatWidth(resize.startWidth + event.clientX - resize.startX)
+  }, [applyDesktopChatWidth])
+
+  const resizeChatWithKeyboard = useCallback(event => {
+    const { min, max } = desktopChatWidthBounds()
+    const changes = {
+      ArrowLeft: desktopChatWidthRef.current - 24,
+      ArrowRight: desktopChatWidthRef.current + 24,
+      Home: min,
+      End: max,
+    }
+    if (!(event.key in changes)) return
+    event.preventDefault()
+    applyDesktopChatWidth(changes[event.key], true)
+  }, [applyDesktopChatWidth])
+
+  useEffect(() => {
+    const keepChatWithinViewport = () => applyDesktopChatWidth(desktopChatWidthRef.current)
+    window.addEventListener('resize', keepChatWithinViewport)
+    return () => window.removeEventListener('resize', keepChatWithinViewport)
+  }, [applyDesktopChatWidth])
   // Refs allow callbacks to read current values without stale closures
   const activeTabRef = useRef('chat')
   useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
@@ -2448,10 +2540,15 @@ export default function App() {
           )}
         </div>
 
-        {/* V4 Chat rail: tabbed below 1024px, collapsible 320px dock above. */}
-        <div data-demo="chat-pane" className={`
+        {/* V4 Chat rail: tabbed below 1024px, resizable desktop dock above. */}
+        <div
+          id="chat-pane"
+          data-demo="chat-pane"
+          data-resizable-chat-pane
+          style={{ '--desktop-chat-width': `${desktopChatWidth}px` }}
+          className={`
           min-w-0 flex-col overflow-hidden border-border bg-white/80 backdrop-blur-sm
-          lg:order-1 lg:h-full lg:flex-[0_0_320px] lg:border-r lg:border-t-0
+          lg:order-1 lg:h-full lg:border-t-0
           ${activeTab === 'chat' ? 'flex flex-1' : 'hidden'}
           ${desktopChatOpen ? 'lg:flex' : 'lg:hidden'}
         `}>
@@ -2503,6 +2600,29 @@ export default function App() {
               },
             }}
           />
+        </div>
+
+        <div
+          data-demo="chat-resize-handle"
+          role="separator"
+          tabIndex={desktopChatOpen ? 0 : -1}
+          aria-label="Điều chỉnh độ rộng chat"
+          aria-orientation="vertical"
+          aria-controls="chat-pane"
+          aria-valuemin={desktopChatWidthBounds().min}
+          aria-valuemax={desktopChatWidthBounds().max}
+          aria-valuenow={desktopChatWidth}
+          aria-valuetext={`${desktopChatWidth} pixel`}
+          title="Kéo để điều chỉnh độ rộng chat"
+          onPointerDown={startChatResize}
+          onPointerMove={moveChatResize}
+          onPointerUp={finishChatResize}
+          onPointerCancel={finishChatResize}
+          onLostPointerCapture={finishChatResize}
+          onKeyDown={resizeChatWithKeyboard}
+          className={`group hidden w-2 shrink-0 touch-none cursor-col-resize items-center justify-center outline-none lg:order-1 ${desktopChatOpen ? 'lg:flex' : 'lg:hidden'} ${chatResizing ? 'bg-brand-100' : 'bg-slate-100 hover:bg-brand-50 focus-visible:bg-brand-50'}`}
+        >
+          <span className={`h-12 w-1 rounded-full transition-colors ${chatResizing ? 'bg-brand-500' : 'bg-slate-300 group-hover:bg-brand-400 group-focus-visible:bg-brand-500'}`} />
         </div>
 
       </main>

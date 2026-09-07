@@ -1414,6 +1414,12 @@ body:has(.public-landing-v3) {
   }
 }
 
+@media (min-width:1024px) {
+  [data-resizable-chat-pane] {
+    flex:0 0 var(--desktop-chat-width,380px);
+  }
+}
+
 @keyframes campaignPageFromRight {
   from { opacity:.88; transform:translateX(72px); }
   to { opacity:1; transform:translateX(0); }

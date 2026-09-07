@@ -238,7 +238,15 @@ test('read-only Autopilot histories retain scrolling while blocking mutation con
 
 test('V4 Copilot and Autopilot workspaces keep their responsive navigation shells', () => {
   assert.match(app, /const \[desktopChatOpen, setDesktopChatOpen\] = useState\(\(\) => window\.innerWidth >= 1440\)/)
-  assert.match(app, /lg:flex-\[0_0_320px\]/)
+  assert.match(app, /DESKTOP_CHAT_DEFAULT_WIDTH = 380/)
+  assert.match(app, /DESKTOP_CHAT_MIN_WIDTH = 320/)
+  assert.match(app, /DESKTOP_CHAT_MAX_WIDTH = 560/)
+  assert.match(app, /data-demo="chat-resize-handle"/)
+  assert.match(app, /role="separator"/)
+  assert.match(app, /onPointerMove=\{moveChatResize\}/)
+  assert.match(app, /onKeyDown=\{resizeChatWithKeyboard\}/)
+  assert.match(app, /localStorage\.setItem\(DESKTOP_CHAT_WIDTH_STORAGE_KEY/)
+  assert.match(styles, /\[data-resizable-chat-pane\][\s\S]*var\(--desktop-chat-width,380px\)/)
   assert.match(copilotStepper, /COPILOT · 7 BƯỚC/)
   assert.match(copilotStepper, /hidden xl:inline/)
   assert.match(copilotStepper, /id="copilot-step-sheet" role="dialog" aria-modal="true"/)
