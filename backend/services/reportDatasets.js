@@ -6,6 +6,7 @@ const ReportAnalysis = require('../models/ReportAnalysis');
 const ReportDataset = require('../models/ReportDataset');
 const CampaignReportState = require('../models/CampaignReportState');
 const { PRESETS, applyScenario, expectationFor } = require('../lib/reportScenarios');
+const { applyRecoveryIntervention } = require('../lib/reportRecoveryInterventions');
 
 function cleanRecords(records) {
   return (records || []).map(value => {
@@ -196,11 +197,77 @@ async function applyScenarioRevision(campaignId, config, createdBy = 'agent_ui')
   }
 }
 
+async function applyRecoveryRevision(campaignId, config, createdBy = 'l3_scenario_lab') {
+  const { requestId, expectedRevision } = config;
+  if (!/^[A-Za-z0-9_-]{8,100}$/.test(requestId || '') || !Number.isInteger(expectedRevision)) {
+    throw new Error('requestId and expectedRevision are required');
+  }
+  const baseline = await baselineFor(campaignId);
+  const currentState = await CampaignReportState.findOne({ campaignId }).lean();
+  const active = await ReportDataset.findOne({ campaignId, revision: expectedRevision }).lean();
+  if (!active || active.kind === 'baseline' || !active.scenario) throw conflict('Scenario Lab recovery requires an active synthetic scenario');
+  const transformed = applyRecoveryIntervention(
+    baseline.records, active.records, active.scenario,
+    { ...config, parentRevision: expectedRevision },
+  );
+  const requestHash = datasetHash(active.inputHash, expectedRevision, transformed.config);
+  let previousRequest = await ReportDataset.findOne({ campaignId, requestId }).lean();
+  if (previousRequest && previousRequest.requestHash !== requestHash) throw conflict('requestId reused with different parameters');
+  if (previousRequest?.status === 'published') return recoveryResult(previousRequest, true);
+  if (!currentState || currentState.activeRevision !== expectedRevision) throw conflict('Dataset revision changed; preview again');
+  const now = new Date(), leaseToken = crypto.randomUUID();
+  const state = await CampaignReportState.findOneAndUpdate({ campaignId,
+    $or: [{ leaseUntil: { $exists: false } }, { leaseUntil: { $lte: now } }],
+  }, { $set: { leaseToken, leaseUntil: new Date(Date.now() + 10 * 60_000) } }, { new: true }).lean();
+  if (!state) throw conflict('Another scenario is being applied; retry with the same requestId');
+  try {
+    previousRequest = await ReportDataset.findOne({ campaignId, requestId }).lean();
+    if (previousRequest && previousRequest.requestHash !== requestHash) throw conflict('requestId reused with different parameters');
+    if (previousRequest && (previousRequest.status === 'published' || state.appliedRequests?.[requestId] === previousRequest.revision)) {
+      return recoveryResult(previousRequest, true);
+    }
+    if (state.activeRevision !== expectedRevision) throw conflict('Dataset revision changed; preview again');
+    let dataset = previousRequest;
+    if (!dataset) {
+      const allocation = await CampaignReportState.findOneAndUpdate(
+        { campaignId, leaseToken }, { $inc: { nextRevision: 1 } }, { new: true },
+      ).lean();
+      const revision = allocation.nextRevision;
+      const inputHash = datasetHash(active.inputHash, revision, transformed.config);
+      dataset = await ReportDataset.create({
+        campaignId, revision, kind: 'recovery', input: { ...baseline.input, inputHash }, inputHash,
+        scenario: { ...active.scenario, recovery: transformed.config },
+        requestId, requestHash, status: 'building', createdBy,
+        runtimeFixture: transformed.runtimeFixture,
+        records: transformed.records.map(row => ({ ...row, campaignId, inputHash,
+          scenario: { ...row.scenario, revision } })),
+      });
+      dataset = dataset.toObject();
+    }
+    const analyses = dataset.analyses?.length === 6 ? dataset.analyses : await buildAnalyses(dataset.input, dataset.records);
+    await ReportDataset.updateOne({ campaignId, revision: dataset.revision }, { $set: { analyses, status: 'ready' } });
+    const published = await CampaignReportState.updateOne({ campaignId, leaseToken,
+      leaseUntil: { $gt: new Date() }, activeRevision: expectedRevision,
+    }, { $set: { activeRevision: dataset.revision, activeInputHash: dataset.inputHash,
+      activeScenario: dataset.scenario, [`appliedRequests.${requestId}`]: dataset.revision } });
+    if (published.modifiedCount !== 1) throw conflict('Scenario lease or dataset revision changed; retry');
+    await ReportDataset.updateOne({ campaignId, revision: dataset.revision }, { $set: { status: 'published' } });
+    return recoveryResult(dataset, false);
+  } finally {
+    await CampaignReportState.updateOne({ campaignId, leaseToken }, { $unset: { leaseToken: '', leaseUntil: '' } });
+  }
+}
+
 function conflict(message) { const error = new Error(message); error.status = 409; return error; }
 function scenarioResult(dataset, replayed) {
   return { campaignId: dataset.campaignId, revision: dataset.revision, inputHash: dataset.inputHash,
     scenario: dataset.scenario, expectation: expectationFor(dataset.scenario?.presetId),
     recordCount: dataset.records.length, replayed };
+}
+function recoveryResult(dataset, replayed) {
+  return { campaignId: dataset.campaignId, revision: dataset.revision, inputHash: dataset.inputHash,
+    parentRevision: dataset.scenario?.recovery?.parentRevision,
+    recovery: dataset.scenario?.recovery || null, recordCount: dataset.records.length, replayed };
 }
 
 // The pointer is read once and the referenced records + analyses never mutate
@@ -236,6 +303,6 @@ async function activeAnalyses(campaignId) {
 
 module.exports = {
   ensureBaselineDataset, getScenarioWorkspace, previewScenario,
-  applyScenarioRevision, cleanRecords, datasetHash,
+  applyScenarioRevision, applyRecoveryRevision, cleanRecords, datasetHash,
   activeSnapshot, activeRecords, activeAnalyses, baselineFor, buildAnalyses,
 };

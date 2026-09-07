@@ -71,13 +71,20 @@ test('campaign deep links resolve independently of the paginated homepage direct
   assert.match(appSource, /deepLinkedCampaign/)
 })
 
-test('L3 recovery renders exact diff and shares guarded proposal APIs', () => {
+test('L3 renders executable, workflow, escalation and isolated Lab controls', () => {
   assert.match(source, /function RecoveryControl/)
-  assert.match(source, /Scenario Lab không cấp quyền mutation/)
+  assert.match(source, /Scenario Lab chỉ tạo synthetic revision mới/)
+  assert.match(source, /operator_workflow/)
+  assert.match(source, /engineering_escalation/)
   assert.match(source, /proposal\.changes\?\.map/)
   assert.match(source, /code !== proposal\.approval_code/)
   assert.match(source, /executor đang tắt ở runtime/i)
+  assert.match(source, /applyRecoveryLabIntervention/)
+  assert.match(apiSource, /async getRecoveryCandidates/)
   assert.match(apiSource, /async createRecoveryProposal/)
   assert.match(apiSource, /async approveRecoveryProposal/)
+  assert.match(apiSource, /async acknowledgeRecoveryProposal/)
+  assert.match(apiSource, /async completeRecoveryStep/)
+  assert.match(apiSource, /async applyRecoveryLabIntervention/)
   assert.match(apiSource, /async rejectRecoveryProposal/)
 })

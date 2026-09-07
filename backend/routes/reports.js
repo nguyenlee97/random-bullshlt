@@ -5,7 +5,8 @@ const ReportAnalysis = require('../models/ReportAnalysis');
 const AnalyticsRecord = require('../models/AnalyticsRecord');
 const { launchReportGeneration } = require('../services/reportLauncher');
 const {
-  getScenarioWorkspace, previewScenario, applyScenarioRevision, activeSnapshot, activeRecords, activeAnalyses, baselineFor,
+  getScenarioWorkspace, previewScenario, applyScenarioRevision, applyRecoveryRevision,
+  activeSnapshot, activeRecords, activeAnalyses, baselineFor,
 } = require('../services/reportDatasets');
 
 function requireInternalReportAccess(req, res, next) {
@@ -58,6 +59,17 @@ router.post('/internal/scenarios/:campaignId/apply', requireInternalReportAccess
   try {
     const result = await applyScenarioRevision(
       req.params.campaignId, req.body || {}, req.body?.createdBy || 'agent_ui',
+    );
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || (err.code === 'REPORT_BASELINE_NOT_READY' ? 409 : 400)).json({ error: err.message });
+  }
+});
+
+router.post('/internal/scenarios/:campaignId/recovery/apply', requireInternalReportAccess, async (req, res) => {
+  try {
+    const result = await applyRecoveryRevision(
+      req.params.campaignId, req.body || {}, req.body?.createdBy || 'l3_scenario_lab',
     );
     res.json(result);
   } catch (err) {

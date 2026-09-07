@@ -88,6 +88,7 @@ class IncidentQuestionRequest(BaseModel):
 
 class RecoveryProposalRequest(BaseModel):
     requestId: str = Field(pattern=r'^[A-Za-z0-9_-]{8,100}$')
+    candidateId: str | None = Field(default=None, pattern=r'^[a-z0-9_]{3,80}$')
 
 
 class RecoveryApprovalRequest(BaseModel):
@@ -97,6 +98,17 @@ class RecoveryApprovalRequest(BaseModel):
 
 class RecoveryRejectRequest(BaseModel):
     expectedVersion: int = Field(ge=1)
+
+
+class RecoveryStepRequest(BaseModel):
+    expectedVersion: int = Field(ge=1)
+    note: str = Field(default="", max_length=500)
+
+
+class RecoveryLabRequest(BaseModel):
+    requestId: str = Field(pattern=r'^[A-Za-z0-9_-]{8,100}$')
+    expectedVersion: int = Field(ge=1)
+    outcome: str = Field(default="success", pattern=r'^(success|ineffective)$')
 
 
 def _tokens(request: Request) -> tuple[str | None, str | None]:
@@ -142,6 +154,9 @@ async def evaluation_detail(request: Request, campaign_id: str):
         'l3': {
             'proposals_enabled': config.EVALUATION_L3_PROPOSALS_ENABLED,
             'execution_enabled': config.EVALUATION_L3_EXECUTION_ENABLED,
+            'lab_enabled': config.EVALUATION_L3_LAB_ENABLED,
+            'workflows_enabled': config.EVALUATION_L3_WORKFLOWS_ENABLED,
+            'escalations_enabled': config.EVALUATION_L3_ESCALATIONS_ENABLED,
             'proposals': await list_proposals(campaign_id),
         },
     }
@@ -270,11 +285,24 @@ async def incident_action(request: Request, campaign_id: str, incident_id: str,
 async def create_recovery_proposal(request: Request, campaign_id: str, incident_id: str,
                                    body: RecoveryProposalRequest):
     actor = await _assert_campaign_access(request, campaign_id)
-    from evaluation.recovery_service import RecoveryError, create_restore_proposal
+    from evaluation.recovery_service import RecoveryError, create_recovery_proposal as create
     try:
-        return await create_restore_proposal(
-            campaign_id, incident_id, actor=actor, request_id=body.requestId, channel="web",
+        return await create(
+            campaign_id, incident_id, actor=actor, request_id=body.requestId,
+            candidate_id=body.candidateId, channel="web",
         )
+    except RecoveryError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
+@evaluation_router.get("/evaluation/campaigns/{campaign_id}/incidents/{incident_id}/recovery-candidates")
+async def recovery_candidate_list(request: Request, campaign_id: str, incident_id: str):
+    actor = await _assert_campaign_access(request, campaign_id)
+    from evaluation.recovery_service import RecoveryError, list_recovery_candidates
+    try:
+        return {"candidates": await list_recovery_candidates(
+            campaign_id, incident_id, actor=actor,
+        )}
     except RecoveryError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
@@ -320,6 +348,56 @@ async def reject_recovery_proposal_route(request: Request, campaign_id: str, pro
         if current.get("campaign_id") != campaign_id:
             raise RecoveryError("Proposal not found", 404)
         return await reject_proposal(proposal_id, actor=actor, expected_version=body.expectedVersion)
+    except RecoveryError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
+@evaluation_router.post("/evaluation/campaigns/{campaign_id}/recovery-proposals/{proposal_id}/acknowledge")
+async def acknowledge_recovery_proposal_route(request: Request, campaign_id: str, proposal_id: str,
+                                              body: RecoveryRejectRequest):
+    actor = await _assert_campaign_access(request, campaign_id)
+    from evaluation.recovery_service import RecoveryError, acknowledge_proposal, get_recovery_proposal
+    try:
+        current = await get_recovery_proposal(proposal_id)
+        if current.get("campaign_id") != campaign_id:
+            raise RecoveryError("Proposal not found", 404)
+        return await acknowledge_proposal(
+            proposal_id, actor=actor, expected_version=body.expectedVersion, channel="web",
+        )
+    except RecoveryError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
+@evaluation_router.post("/evaluation/campaigns/{campaign_id}/recovery-proposals/{proposal_id}/steps/{step_id}/complete")
+async def complete_recovery_step_route(request: Request, campaign_id: str, proposal_id: str,
+                                       step_id: str, body: RecoveryStepRequest):
+    actor = await _assert_campaign_access(request, campaign_id)
+    from evaluation.recovery_service import RecoveryError, complete_workflow_step, get_recovery_proposal
+    try:
+        current = await get_recovery_proposal(proposal_id)
+        if current.get("campaign_id") != campaign_id:
+            raise RecoveryError("Proposal not found", 404)
+        return await complete_workflow_step(
+            proposal_id, actor=actor, step_id=step_id,
+            expected_version=body.expectedVersion, note=body.note,
+        )
+    except RecoveryError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
+@evaluation_router.post("/evaluation/campaigns/{campaign_id}/recovery-proposals/{proposal_id}/lab/apply")
+async def apply_recovery_lab_route(request: Request, campaign_id: str, proposal_id: str,
+                                   body: RecoveryLabRequest):
+    actor = await _assert_campaign_access(request, campaign_id)
+    from evaluation.recovery_service import RecoveryError, apply_lab_intervention, get_recovery_proposal
+    try:
+        current = await get_recovery_proposal(proposal_id)
+        if current.get("campaign_id") != campaign_id:
+            raise RecoveryError("Proposal not found", 404)
+        return await apply_lab_intervention(
+            proposal_id, actor=actor, expected_version=body.expectedVersion,
+            request_id=body.requestId, outcome=body.outcome,
+        )
     except RecoveryError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 

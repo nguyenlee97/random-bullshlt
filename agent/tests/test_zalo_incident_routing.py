@@ -149,7 +149,7 @@ async def test_zalo_l3_uses_separate_recovery_refs_and_exact_confirmation(monkey
         'verification': {'note': 'config only'}, 'expires_at': '2026-09-07T12:00:00+00:00',
         'approval_code': 'A1B2C3D4', 'version': 1,
     }
-    monkeypatch.setattr(recovery, 'create_restore_proposal', AsyncMock(return_value=proposal))
+    monkeypatch.setattr(recovery, 'create_recovery_proposal', AsyncMock(return_value=proposal))
 
     async def update_thread(thread, patch):
         return {**thread, **patch}

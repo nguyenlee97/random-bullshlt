@@ -164,6 +164,18 @@ class Config:
     EVALUATION_L3_EXECUTION_ENABLED: bool = os.getenv(
         "EVALUATION_L3_EXECUTION_ENABLED", "false"
     ).lower() == "true"
+    EVALUATION_L3_LAB_ENABLED: bool = os.getenv(
+        "EVALUATION_L3_LAB_ENABLED", "false"
+    ).lower() == "true"
+    EVALUATION_L3_WORKFLOWS_ENABLED: bool = os.getenv(
+        "EVALUATION_L3_WORKFLOWS_ENABLED", "true"
+    ).lower() == "true"
+    EVALUATION_L3_ESCALATIONS_ENABLED: bool = os.getenv(
+        "EVALUATION_L3_ESCALATIONS_ENABLED", "true"
+    ).lower() == "true"
+    EVALUATION_L3_ACTION_ALLOWLIST: str = os.getenv(
+        "EVALUATION_L3_ACTION_ALLOWLIST", ""
+    )
     ADSPILOT_URL: str = os.getenv(
         "ADSPILOT_URL", "https://adspilot.pawgrammers.io.vn"
     )

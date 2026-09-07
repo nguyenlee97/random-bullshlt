@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from campaign_config import EDITABLE_FIELDS, config_changes, get_campaign_config, get_campaign_config_revision
+from evaluation.recovery_contracts import ACTION_DEFINITIONS, action_definition, canonical_cause
 
 
 ACTION_ID = "restore_config_revision"
@@ -31,6 +32,125 @@ def _supported_config_cause(bundle: dict) -> bool:
         and top.get("hypothesis_id") == "config_drift"
         and not bundle.get("ambiguous")
     )
+
+
+def _candidate(definition: dict, *, cause: str, incident: dict,
+               execution_environment: str, blockers: list[str] | None = None) -> dict:
+    value = {
+        **definition,
+        "candidate_id": definition["action_id"],
+        "cause_code": cause,
+        "issue_type": incident.get("issue_type"),
+        "scope": incident.get("scope"),
+        "execution_environment": execution_environment,
+        "evidence_blockers": list(blockers or []),
+        "available": not blockers,
+    }
+    if execution_environment != "production":
+        value["production_executor"] = None
+    return value
+
+
+async def recovery_candidates(campaign_id: str, incident: dict) -> list[dict]:
+    """Return only server-selected actions for the incident's current evidence.
+
+    Scenario labels are deliberately ignored. Synthetic eligibility is derived
+    from the incident evidence source, while cause selection comes from L2.
+    """
+    bundle = incident.get("investigation") or {}
+    current_evidence = (
+        bundle
+        and bundle.get("dataset_revision") == incident.get("dataset_revision")
+        and bundle.get("policy_version") == incident.get("policy_version")
+    )
+    cause = canonical_cause(bundle) if current_evidence else "none"
+    issue = str(incident.get("issue_type") or "")
+    scenario_only = (incident.get("evidence") or {}).get("source") == "scenario_fact"
+    if not scenario_only and issue != "config_drift":
+        dataset = None
+        try:
+            from evaluation.service import report_request
+            dataset = await report_request("GET", f"/api/reports/internal/datasets/{campaign_id}")
+            scenario_only = (dataset.get("active") or {}).get("kind") in {"scenario", "recovery"}
+        except Exception:
+            # Environment uncertainty removes the Lab executor; it never adds
+            # production mutation authority.
+            scenario_only = False
+        if dataset and int((dataset.get("state") or {}).get("activeRevision") or 0) != int(incident.get("dataset_revision") or 0):
+            raise RecoveryGuardError("Incident evidence is stale; run evaluation again")
+    environment = "scenario_lab" if scenario_only else "production"
+    candidates: list[dict] = []
+    lab_fallbacks = {
+        "config_drift": "restore_config_fixture",
+        "data_quality": "backfill_attribution_fixture",
+        "delivery_drop": "restore_delivery",
+        "pacing_error": "restore_delivery",
+        "ctr_regression": "restore_click_measurement",
+        "robust_trend_drop": "restore_click_measurement",
+        "creative_failure": "replace_creative_fixture",
+        "click_tracking_failure": "restore_click_measurement",
+    }
+
+    # The sole production mutation remains the previously guarded exact config
+    # restore. Scenario drift may use only its synthetic Lab intervention.
+    if issue == "config_drift" and not scenario_only:
+        try:
+            spec = await build_restore_spec(campaign_id, incident)
+            definition = action_definition(ACTION_ID)
+            candidates.append({**_candidate(
+                definition, cause="configuration_drift", incident=incident,
+                execution_environment="production",
+            ), "spec": spec})
+        except RecoveryGuardError:
+            pass
+
+    for definition in ACTION_DEFINITIONS.values():
+        if definition["action_id"] == ACTION_ID:
+            continue
+        issue_match = issue in definition["supported_issue_types"]
+        cause_match = cause in definition["supported_causes"]
+        # When L2 has no supported cause, only the fail-safe hold workflow is
+        # eligible. This prevents generic symptoms from authorizing a fix.
+        if not issue_match or not cause_match:
+            continue
+        selected_definition = action_definition(definition["action_id"])
+        if (scenario_only and definition["action_id"] == "hold_optimization_and_recheck"
+                and not selected_definition.get("lab_intervention")):
+            selected_definition["lab_intervention"] = lab_fallbacks.get(issue)
+        candidates.append(_candidate(
+            selected_definition, cause=cause, incident=incident,
+            execution_environment=environment,
+        ))
+
+    # Synthetic config drift gets a non-production workflow whose allowlisted
+    # Lab intervention restores the fixture. It can never reach config update.
+    if scenario_only and issue == "config_drift" and not candidates:
+        definition = action_definition("hold_optimization_and_recheck")
+        definition["lab_intervention"] = lab_fallbacks["config_drift"]
+        candidates.append(_candidate(
+            definition, cause=cause, incident=incident,
+            execution_environment="scenario_lab",
+        ))
+    return candidates
+
+
+async def build_proposal_spec(campaign_id: str, incident: dict, candidate_id: str | None = None) -> dict:
+    candidates = await recovery_candidates(campaign_id, incident)
+    if not candidates:
+        raise RecoveryGuardError("No recovery action is supported by the current L2 evidence")
+    selected = next((item for item in candidates if item["candidate_id"] == candidate_id), None)
+    if candidate_id and not selected:
+        raise RecoveryGuardError("Recovery candidate is not supported by the current L2 evidence")
+    selected = selected or candidates[0]
+    definition = action_definition(selected["action_id"])
+    spec = selected.pop("spec", None) or {}
+    return {
+        **definition,
+        **spec,
+        "cause_code": selected["cause_code"],
+        "execution_environment": selected["execution_environment"],
+        "evidence_blockers": selected["evidence_blockers"],
+    }
 
 
 async def build_restore_spec(campaign_id: str, incident: dict) -> dict:

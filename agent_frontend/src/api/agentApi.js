@@ -1466,10 +1466,16 @@ export const AgentAPI = {
     return response.json()
   },
 
-  async createRecoveryProposal(campaignId, incidentId, requestId = '') {
+  async getRecoveryCandidates(campaignId, incidentId) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}/recovery-candidates`, { signal: AbortSignal.timeout(30000) })
+    if (!response.ok) throw await responseError(response, 'Không thể tải recovery candidates.')
+    return response.json()
+  },
+
+  async createRecoveryProposal(campaignId, incidentId, requestId = '', candidateId = '') {
     const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}/recovery-proposals`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: requestId || generateId('recovery-proposal') }),
+      body: JSON.stringify({ requestId: requestId || generateId('recovery-proposal'), candidateId: candidateId || null }),
       signal: AbortSignal.timeout(30000),
     })
     if (!response.ok) throw await responseError(response, 'Không thể tạo recovery proposal.')
@@ -1497,6 +1503,33 @@ export const AgentAPI = {
       body: JSON.stringify({ expectedVersion }), signal: AbortSignal.timeout(30000),
     })
     if (!response.ok) throw await responseError(response, 'Không thể từ chối recovery proposal.')
+    return response.json()
+  },
+
+  async acknowledgeRecoveryProposal(campaignId, proposalId, expectedVersion) {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/recovery-proposals/${encodeURIComponent(proposalId)}/acknowledge`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expectedVersion }), signal: AbortSignal.timeout(30000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể xác nhận recovery workflow.')
+    return response.json()
+  },
+
+  async completeRecoveryStep(campaignId, proposalId, stepId, expectedVersion, note = '') {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/recovery-proposals/${encodeURIComponent(proposalId)}/steps/${encodeURIComponent(stepId)}/complete`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expectedVersion, note }), signal: AbortSignal.timeout(30000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể hoàn tất workflow step.')
+    return response.json()
+  },
+
+  async applyRecoveryLabIntervention(campaignId, proposalId, expectedVersion, outcome = 'success') {
+    const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/recovery-proposals/${encodeURIComponent(proposalId)}/lab/apply`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId: generateId('l3-lab'), expectedVersion, outcome }), signal: AbortSignal.timeout(180000),
+    })
+    if (!response.ok) throw await responseError(response, 'Không thể apply Scenario Lab intervention.')
     return response.json()
   },
 

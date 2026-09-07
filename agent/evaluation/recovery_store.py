@@ -45,6 +45,16 @@ def public(value: dict | None) -> dict | None:
     result = deepcopy(value)
     result.pop("_id", None)
     result.pop("approval_nonce_hash", None)
+    # Additive v2 read compatibility for proposals persisted by the original
+    # restore-config slice. Their approval/execution semantics stay unchanged.
+    if result.get("action_id") == "restore_config_revision" and not result.get("kind"):
+        result.update({
+            "schema_version": "l3-recovery-proposal-v1",
+            "kind": "executable_action",
+            "label": "Khôi phục campaign config về revision đã duyệt",
+            "execution_environment": "production",
+            "production_executor": "restore_config_revision",
+        })
     return _serialize(result)
 
 
@@ -100,7 +110,10 @@ async def create_proposal(value: dict) -> tuple[dict, bool]:
 
 
 async def supersede_active(campaign_id: str, incident_id: str, keep_request_key: str) -> int:
-    active = ["awaiting_approval", "approved"]
+    active = [
+        "awaiting_approval", "approved", "awaiting_acknowledgement",
+        "waiting_operator", "waiting_external", "ready_to_verify",
+    ]
     now = _now()
     cols = await _collections()
     if cols:

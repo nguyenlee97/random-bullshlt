@@ -225,33 +225,62 @@ export function IncidentQuestions({ campaignId, incident, enabled }) {
 }
 
 function RecoveryControl({ campaignId, incident, l3, enabled, onChanged }) {
-  const latest = (l3?.proposals || []).find(item => item.incident_id === incident.incident_id)
+  const latest = (l3?.proposals || []).find(item => item.incident_id === incident.incident_id && item.active)
   const [proposal, setProposal] = useState(latest || null), [code, setCode] = useState('')
+  const [candidates, setCandidates] = useState([]), [candidateId, setCandidateId] = useState('')
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   useEffect(() => {
-    setProposal(latest || null); setCode(''); setError('')
+    setProposal(latest || null); setCode(''); setError(''); setCandidates([]); setCandidateId('')
     if (latest?.proposal_id) AgentAPI.getRecoveryProposal(campaignId, latest.proposal_id)
       .then(setProposal).catch(reason => setError(reason.message))
-  }, [campaignId, latest?.proposal_id, latest?.version])
-  if (!l3?.proposals_enabled || !enabled) return null
+    else if (!['resolved', 'dismissed', 'false_positive', 'expired'].includes(incident.state)) AgentAPI.getRecoveryCandidates(campaignId, incident.incident_id)
+      .then(result => { const values = result.candidates || []; setCandidates(values); setCandidateId(values[0]?.candidate_id || '') })
+      .catch(reason => setError(reason.message))
+  }, [campaignId, incident.incident_id, incident.state, latest?.proposal_id, latest?.version])
+  if (!l3?.proposals_enabled || !enabled || ['resolved', 'dismissed', 'false_positive', 'expired'].includes(incident.state)) return null
   const run = async action => {
     setBusy(true); setError('')
     try { const result = await action(); setProposal(result); setCode(''); await onChanged() }
     catch (reason) { setError(reason.message) } finally { setBusy(false) }
   }
+  const kindLabel = {
+    executable_action: 'Executable action',
+    operator_workflow: 'Operator workflow',
+    engineering_escalation: 'Engineering escalation',
+  }
   return <section aria-label={`L3 recovery ${incident.incident_id}`} className="space-y-3 rounded-xl border border-amber-300 bg-amber-50/40 p-4">
-    <div><h4 className="text-sm font-bold">L3 · Recovery có phê duyệt</h4><p className="mt-1 text-xs text-slate-600">Chỉ hỗ trợ phục hồi config revision. Scenario Lab không cấp quyền mutation.</p></div>
-    {!proposal && <button className={buttonClass} disabled={busy} onClick={() => run(() => AgentAPI.createRecoveryProposal(campaignId, incident.incident_id))}>Tạo recovery proposal</button>}
+    <div><h4 className="text-sm font-bold">L3 · Recovery proposal</h4><p className="mt-1 text-xs text-slate-600">Action do server chọn từ L2 evidence. Workflow/escalation không tự sửa source code hay campaign; Scenario Lab chỉ tạo synthetic revision mới.</p></div>
+    {!proposal && <div className="space-y-2">
+      {candidates.length > 1 && <label className="block text-xs">Phương án<select className={inputClass} value={candidateId} onChange={e => setCandidateId(e.target.value)}>{candidates.map(item => <option key={item.candidate_id} value={item.candidate_id}>{item.label}</option>)}</select></label>}
+      {!!candidates.length && <p className="text-xs text-slate-600">{kindLabel[candidates.find(item => item.candidate_id === candidateId)?.kind]} · {candidates.find(item => item.candidate_id === candidateId)?.execution_environment}</p>}
+      <button className={buttonClass} disabled={busy || !candidateId} onClick={() => run(() => AgentAPI.createRecoveryProposal(campaignId, incident.incident_id, '', candidateId))}>Tạo recovery proposal</button>
+      {!candidates.length && !error && <p className="text-xs text-slate-500">Chưa có action đủ bằng chứng cho incident này.</p>}
+    </div>}
     {proposal && <div className="space-y-3 text-sm">
-      <p><strong>{proposal.proposal_id}</strong> · {proposal.action_id} · {proposal.status} · risk {proposal.risk}</p>
-      <p className="text-xs">Revision {proposal.source_config_revision} → {proposal.target_config_revision}. {proposal.verification?.note}</p>
-      <div className="overflow-auto rounded-lg border bg-white"><table className="w-full text-left text-xs"><thead><tr><th className="p-2">Field</th><th>Hiện tại</th><th>Khôi phục</th></tr></thead><tbody>{proposal.changes?.map(item => <tr className="border-t" key={item.field}><td className="p-2 font-semibold">{item.field}</td><td>{String(item.before ?? '—')}</td><td>{String(item.after ?? '—')}</td></tr>)}</tbody></table></div>
+      <p><strong>{proposal.proposal_id}</strong> · {proposal.label || proposal.action_id}</p>
+      <p className="text-xs">{kindLabel[proposal.kind] || proposal.kind} · {proposal.status} · risk {proposal.risk} · {proposal.execution_environment}</p>
+      {proposal.kind === 'executable_action' && <>
+        <p className="text-xs">Revision {proposal.source_config_revision} → {proposal.target_config_revision}. {proposal.verification?.note}</p>
+        <div className="overflow-auto rounded-lg border bg-white"><table className="w-full text-left text-xs"><thead><tr><th className="p-2">Field</th><th>Hiện tại</th><th>Khôi phục</th></tr></thead><tbody>{proposal.changes?.map(item => <tr className="border-t" key={item.field}><td className="p-2 font-semibold">{item.field}</td><td>{String(item.before ?? '—')}</td><td>{String(item.after ?? '—')}</td></tr>)}</tbody></table></div>
+      </>}
       {proposal.status === 'awaiting_approval' && <div className="space-y-2">
         <p className="text-xs">Proposal hết hạn: {proposal.expires_at}. Nhập chính xác mã <strong>{proposal.approval_code}</strong> để duyệt.</p>
         <input className={inputClass} aria-label={`Mã duyệt ${proposal.proposal_id}`} value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="Mã duyệt" />
         <div className="flex flex-wrap gap-2"><button className={buttonClass + ' bg-amber-700 text-white'} disabled={busy || code !== proposal.approval_code || !l3.execution_enabled} onClick={() => run(() => AgentAPI.approveRecoveryProposal(campaignId, proposal.proposal_id, code, proposal.version))}>Duyệt & thực thi</button>
           <button className={buttonClass} disabled={busy} onClick={() => run(() => AgentAPI.rejectRecoveryProposal(campaignId, proposal.proposal_id, proposal.version))}>Từ chối</button></div>
         {!l3.execution_enabled && <p className="text-xs text-amber-900">Executor đang tắt ở runtime; có thể review proposal nhưng chưa mutate.</p>}
+      </div>}
+      {proposal.status === 'awaiting_acknowledgement' && <div className="flex flex-wrap gap-2">
+        <button className={buttonClass + ' bg-amber-700 text-white'} disabled={busy} onClick={() => run(() => AgentAPI.acknowledgeRecoveryProposal(campaignId, proposal.proposal_id, proposal.version))}>Xác nhận quy trình</button>
+        <button className={buttonClass} disabled={busy} onClick={() => run(() => AgentAPI.rejectRecoveryProposal(campaignId, proposal.proposal_id, proposal.version))}>Từ chối</button>
+      </div>}
+      {proposal.kind !== 'executable_action' && <ol className="space-y-2 text-xs">{proposal.steps?.map(step => <li key={step.step_id} className="rounded-lg border bg-white p-2">
+        <div className="flex items-center justify-between gap-2"><span>{step.label}</span><span>{step.status}</span></div>
+        {step.status === 'pending' && ['waiting_operator', 'waiting_external'].includes(proposal.status) && <button className={buttonClass + ' mt-2'} disabled={busy} onClick={() => run(() => AgentAPI.completeRecoveryStep(campaignId, proposal.proposal_id, step.step_id, proposal.version))}>Đánh dấu hoàn tất</button>}
+      </li>)}</ol>}
+      {proposal.status === 'ready_to_verify' && proposal.execution_environment === 'scenario_lab' && proposal.lab_intervention && <div className="space-y-2">
+        <button className={buttonClass + ' bg-blue-700 text-white'} disabled={busy || !l3.lab_enabled} onClick={() => run(() => AgentAPI.applyRecoveryLabIntervention(campaignId, proposal.proposal_id, proposal.version))}>Apply intervention & evaluate</button>
+        {!l3.lab_enabled && <p className="text-xs text-amber-900">Scenario Lab executor đang tắt ở runtime.</p>}
       </div>}
       {!!proposal.events?.length && <details><summary className="cursor-pointer text-xs font-semibold">Audit events ({proposal.events.length})</summary><ul className="mt-2 space-y-1 text-xs">{proposal.events.map(event => <li key={event.event_id}>{event.kind} · {event.created_at}</li>)}</ul></details>}
     </div>}

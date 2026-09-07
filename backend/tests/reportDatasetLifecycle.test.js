@@ -184,6 +184,26 @@ test('reset creates a new baseline-derived snapshot; older replay never moves ac
   assert.equal(h.states[0].activeRevision, 3);
 });
 
+test('Scenario Lab recovery publishes an immutable child revision and replays idempotently', async t => {
+  const h = harness(t);
+  const scenario = await h.service.applyScenarioRevision('ORD-TEST', h.config);
+  const request = {
+    requestId: 'recovery_0001', expectedRevision: scenario.revision,
+    proposalId: 'RP-ABCDEF12', actionId: 'request_measurement_reconciliation',
+    interventionType: 'restore_click_measurement', outcome: 'success',
+    targetPlacementId: 'zone-a',
+  };
+  const recovered = await h.service.applyRecoveryRevision('ORD-TEST', request);
+  const snapshot = await h.service.activeSnapshot('ORD-TEST');
+  assert.equal(recovered.parentRevision, 2);
+  assert.equal(snapshot.kind, 'recovery');
+  assert.equal(snapshot.revision, 3);
+  assert.deepEqual(snapshot.records.map(r => r.clicks), h.rows.map(r => r.clicks));
+  const replay = await h.service.applyRecoveryRevision('ORD-TEST', request);
+  assert.equal(replay.replayed, true);
+  assert.equal(h.datasets.length, 3);
+});
+
 test('Analytics aggregate and campaign reads overlay the active snapshot exactly once', async t => {
   const h = harness(t);
   await h.service.applyScenarioRevision('ORD-TEST', h.config);

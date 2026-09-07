@@ -343,13 +343,13 @@ async def handle_incident_reply(
                 "khôi phục dữ liệu test được thực hiện riêng trong Scenario Lab. Không có dữ liệu nào bị thay đổi.",
                 thread,
             )
-        from evaluation.recovery_service import RecoveryError, create_restore_proposal
+        from evaluation.recovery_service import RecoveryError, create_recovery_proposal
         from zalo_campaign_agent import _update_thread
         import hashlib
         actor = {"user_id": thread.get("user_id"), "anonymous_id": thread.get("anonymous_id")}
         request_id = hashlib.sha256(str(external_event_id or f"{thread.get('thread_id', 'zalo')}:{incident_id}:3").encode()).hexdigest()[:32]
         try:
-            proposal = await create_restore_proposal(
+            proposal = await create_recovery_proposal(
                 campaign_id, incident_id, actor=actor, request_id=request_id, channel="zalo",
             )
         except RecoveryError as exc:
@@ -359,18 +359,30 @@ async def handle_incident_reply(
         refs.append({"proposal_id": proposal["proposal_id"], "incident_id": incident_id,
                      "campaign_id": campaign_id, "seen_at": _now()})
         thread = await _update_thread(thread, {"recent_recovery_refs": refs[-10:]})
-        diff = "; ".join(
-            f"{item['field']}: {item.get('before')} → {item.get('after')}"
-            for item in proposal.get("changes", [])
+        if proposal.get("kind", "executable_action") == "executable_action":
+            diff = "; ".join(
+                f"{item['field']}: {item.get('before')} → {item.get('after')}"
+                for item in proposal.get("changes", [])
+            )
+            return (
+                f"🛡️ {proposal['proposal_id']} · {incident_id}\n"
+                f"Action: {proposal['action_id']} · risk {proposal['risk']}\n"
+                f"Diff: {diff}\n"
+                f"Verification: {(proposal.get('verification') or {}).get('note', 'Theo contract của action')}\n"
+                f"Hết hạn: {proposal['expires_at']}\n\n"
+                f"Để duyệt, gửi chính xác: Xác nhận {proposal['proposal_id']} {proposal['approval_code']}\n"
+                "Tin nhắn chung “Xác nhận” sẽ không thực thi.",
+                thread,
+            )
+        steps = "\n".join(
+            f"• {item.get('label')}" for item in proposal.get("steps", [])
         )
         return (
-            f"🛡️ {proposal['proposal_id']} · {incident_id}\n"
-            f"Action: {proposal['action_id']} · risk {proposal['risk']}\n"
-            f"Diff: {diff}\n"
-            f"Verification: {proposal['verification']['note']}\n"
-            f"Hết hạn: {proposal['expires_at']}\n\n"
-            f"Để duyệt, gửi chính xác: Xác nhận {proposal['proposal_id']} {proposal['approval_code']}\n"
-            "Tin nhắn chung “Xác nhận” sẽ không thực thi.",
+            f"📋 {proposal['proposal_id']} · {incident_id}\n"
+            f"{proposal.get('label') or proposal['action_id']} · {proposal.get('kind')} · risk {proposal['risk']}\n"
+            f"{steps}\n\n"
+            f"Proposal này không tự sửa campaign/source code. Mở {config.ADSPILOT_URL} để xác nhận và theo dõi từng bước. "
+            "Cú pháp duyệt bằng mã chỉ áp dụng cho executable action.",
             thread,
         )
     return f"Lựa chọn cho {incident_id} chưa hợp lệ. Dùng 1, 2, 3 hoặc 4 kèm mã incident.", thread

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from config import config
-from evaluation import recovery_registry, recovery_service, recovery_store
+from evaluation import recovery_registry, recovery_service, recovery_store, service as evaluation_service
 from evaluation.probes import InvestigationContext, probe_config_drift
 
 
@@ -57,6 +57,10 @@ def reset_recovery(monkeypatch):
     monkeypatch.setattr(recovery_store, "_collections", AsyncMock(return_value=None))
     monkeypatch.setattr(config, "EVALUATION_L3_PROPOSALS_ENABLED", True)
     monkeypatch.setattr(config, "EVALUATION_L3_EXECUTION_ENABLED", True)
+    monkeypatch.setattr(config, "EVALUATION_L3_LAB_ENABLED", True)
+    monkeypatch.setattr(config, "EVALUATION_L3_WORKFLOWS_ENABLED", True)
+    monkeypatch.setattr(config, "EVALUATION_L3_ESCALATIONS_ENABLED", True)
+    monkeypatch.setattr(config, "EVALUATION_L3_ACTION_ALLOWLIST", "")
     monkeypatch.setattr(config, "REPORT_INTERNAL_API_KEY", "test-l3-secret")
 
 
@@ -95,6 +99,30 @@ async def test_registry_requires_real_drift_and_builds_exact_restore_patch(monke
     assert value["action_id"] == "restore_config_revision"
 
 
+@pytest.mark.asyncio
+async def test_registry_maps_supported_l2_causes_to_server_owned_actions(monkeypatch):
+    monkeypatch.setattr(evaluation_service, "report_request", AsyncMock(return_value={
+        "active": {"kind": "scenario"}, "state": {"activeRevision": 4},
+    }))
+    value = incident("metrics_window")
+    value.update({"issue_type": "ctr_regression", "scope": "zone-a"})
+    value["investigation"]["top_hypothesis"] = {"hypothesis_id": "creative_format_mismatch"}
+    candidates = await recovery_registry.recovery_candidates(CAMPAIGN, value)
+    assert [item["candidate_id"] for item in candidates] == ["prepare_creative_replacement"]
+    assert candidates[0]["execution_environment"] == "scenario_lab"
+    assert candidates[0]["production_executor"] is None
+
+    value["investigation"].update({"assessment": "ambiguous", "ambiguous": True})
+    candidates = await recovery_registry.recovery_candidates(CAMPAIGN, value)
+    assert [item["candidate_id"] for item in candidates] == ["hold_optimization_and_recheck"]
+
+    monkeypatch.setattr(evaluation_service, "report_request", AsyncMock(return_value={
+        "active": {"kind": "scenario"}, "state": {"activeRevision": 5},
+    }))
+    with pytest.raises(recovery_registry.RecoveryGuardError, match="stale"):
+        await recovery_registry.recovery_candidates(CAMPAIGN, value)
+
+
 def spec():
     return {
         "action_id": "restore_config_revision", "source_config_revision": 1,
@@ -106,6 +134,22 @@ def spec():
         "verification": {"kind": "config_equals_target_revision", "target_hash": "target-hash",
                          "resolve_issue_types": ["config_drift"], "note": "config only"},
         "reversible": True,
+    }
+
+
+def workflow_spec():
+    return {
+        "action_id": "request_measurement_reconciliation", "action_version": 1,
+        "label": "Đối soát measurement", "kind": "operator_workflow",
+        "supported_issue_types": ["click_tracking_failure"],
+        "supported_causes": ["click_measurement_gap"], "risk": "low",
+        "instructions": [
+            {"step_id": "step-1", "label": "Đối chiếu serving và click", "required": True},
+            {"step_id": "step-2", "label": "Chạy Evaluation lại", "required": True},
+        ],
+        "lab_intervention": "restore_click_measurement", "production_executor": None,
+        "cause_code": "click_measurement_gap", "execution_environment": "scenario_lab",
+        "evidence_blockers": [],
     }
 
 
@@ -233,6 +277,71 @@ def test_persisted_naive_mongo_timestamp_is_normalized_to_utc():
     assert parsed.isoformat() == "2026-09-07T10:30:00+00:00"
 
 
+def test_persisted_v1_restore_proposal_reads_as_executable_v2_shape():
+    value = recovery_store.public({
+        "proposal_id": "RP-LEGACY001", "action_id": "restore_config_revision",
+        "status": "awaiting_approval", "approval_nonce_hash": "secret",
+    })
+    assert value["kind"] == "executable_action"
+    assert value["execution_environment"] == "production"
+    assert "approval_nonce_hash" not in value
+
+
+@pytest.mark.asyncio
+async def test_workflow_acknowledgement_steps_and_lab_revision_are_separate_from_production(monkeypatch):
+    workflow_incident = incident("scenario_fact")
+    workflow_incident.update({"issue_type": "click_tracking_failure", "scope": "zone-a"})
+    monkeypatch.setattr(recovery_service, "_assert_owner", AsyncMock())
+    monkeypatch.setattr(recovery_service, "get_policy", AsyncMock(return_value={
+        "enabled": True, "level": "L3", "version": "policy-1",
+    }))
+    monkeypatch.setattr(recovery_service, "get_incident", AsyncMock(return_value=workflow_incident))
+    monkeypatch.setattr(recovery_service, "build_proposal_spec", AsyncMock(return_value=workflow_spec()))
+    monkeypatch.setattr(recovery_service, "transition_incident", AsyncMock())
+    proposal = await recovery_service.create_recovery_proposal(
+        CAMPAIGN, INCIDENT, actor=ACTOR, request_id="workflow-request-1",
+    )
+    assert proposal["status"] == "awaiting_acknowledgement"
+    assert "approval_code" not in proposal
+    with pytest.raises(recovery_service.RecoveryError, match="not an executable"):
+        await recovery_service.approve_and_execute(
+            proposal["proposal_id"], actor=ACTOR, code="IGNORED1",
+            expected_version=proposal["version"], require_durable=False,
+        )
+    acknowledged = await recovery_service.acknowledge_proposal(
+        proposal["proposal_id"], actor=ACTOR, expected_version=proposal["version"],
+    )
+    assert acknowledged["status"] == "waiting_operator"
+    first = await recovery_service.complete_workflow_step(
+        proposal["proposal_id"], actor=ACTOR, step_id="step-1",
+        expected_version=acknowledged["version"],
+    )
+    ready = await recovery_service.complete_workflow_step(
+        proposal["proposal_id"], actor=ACTOR, step_id="step-2",
+        expected_version=first["version"],
+    )
+    assert ready["status"] == "ready_to_verify"
+
+    monkeypatch.setattr(recovery_store, "durable_available", AsyncMock(return_value=True))
+    report = AsyncMock(side_effect=[
+        {"state": {"activeRevision": 4}, "active": {"kind": "scenario"}},
+        {"revision": 5, "parentRevision": 4, "recovery": {"outcome": "success"}},
+    ])
+    monkeypatch.setattr(evaluation_service, "report_request", report)
+    monkeypatch.setattr(evaluation_service, "run_evaluation", AsyncMock(return_value={
+        "status": "completed", "incidents": [], "dataset_revision": 5,
+    }))
+    result = await recovery_service.apply_lab_intervention(
+        proposal["proposal_id"], actor=ACTOR, expected_version=ready["version"],
+        request_id="lab-request-0001",
+    )
+    assert result["status"] == "resolved"
+    assert result["lab_result"]["parentRevision"] == 4
+    body = report.await_args_list[1].args[2]
+    assert body["interventionType"] == "restore_click_measurement"
+    assert body["actionId"] == "request_measurement_reconciliation"
+
+
 def test_owner_scoped_recovery_api_uses_shared_service(monkeypatch):
     from evaluation import routes
 
@@ -245,10 +354,16 @@ def test_owner_scoped_recovery_api_uses_shared_service(monkeypatch):
     detail = AsyncMock(return_value=value)
     approve = AsyncMock(return_value={**value, "status": "resolved"})
     reject = AsyncMock(return_value={**value, "status": "rejected"})
-    monkeypatch.setattr(recovery_service, "create_restore_proposal", create)
+    candidates = AsyncMock(return_value=[])
+    acknowledge = AsyncMock(return_value={**value, "status": "waiting_operator"})
+    complete = AsyncMock(return_value={**value, "status": "ready_to_verify"})
+    monkeypatch.setattr(recovery_service, "create_recovery_proposal", create)
+    monkeypatch.setattr(recovery_service, "list_recovery_candidates", candidates)
     monkeypatch.setattr(recovery_service, "get_recovery_proposal", detail)
     monkeypatch.setattr(recovery_service, "approve_and_execute", approve)
     monkeypatch.setattr(recovery_service, "reject_proposal", reject)
+    monkeypatch.setattr(recovery_service, "acknowledge_proposal", acknowledge)
+    monkeypatch.setattr(recovery_service, "complete_workflow_step", complete)
     app = FastAPI()
     app.include_router(routes.evaluation_router)
     base = f"/evaluation/campaigns/{CAMPAIGN}"
@@ -257,6 +372,7 @@ def test_owner_scoped_recovery_api_uses_shared_service(monkeypatch):
             f"{base}/incidents/{INCIDENT}/recovery-proposals",
             json={"requestId": "route-request-0001"},
         ).status_code == 200
+        assert client.get(f"{base}/incidents/{INCIDENT}/recovery-candidates").status_code == 200
         assert client.get(f"{base}/recovery-proposals/{value['proposal_id']}").status_code == 200
         assert client.post(
             f"{base}/recovery-proposals/{value['proposal_id']}/approve",
@@ -266,8 +382,17 @@ def test_owner_scoped_recovery_api_uses_shared_service(monkeypatch):
             f"{base}/recovery-proposals/{value['proposal_id']}/reject",
             json={"expectedVersion": 1},
         ).json()["status"] == "rejected"
+        assert client.post(
+            f"{base}/recovery-proposals/{value['proposal_id']}/acknowledge",
+            json={"expectedVersion": 1},
+        ).json()["status"] == "waiting_operator"
+        assert client.post(
+            f"{base}/recovery-proposals/{value['proposal_id']}/steps/step-1/complete",
+            json={"expectedVersion": 1, "note": "done"},
+        ).json()["status"] == "ready_to_verify"
     create.assert_awaited_once_with(
-        CAMPAIGN, INCIDENT, actor=ACTOR, request_id="route-request-0001", channel="web",
+        CAMPAIGN, INCIDENT, actor=ACTOR, request_id="route-request-0001",
+        candidate_id=None, channel="web",
     )
     approve.assert_awaited_once_with(
         value["proposal_id"], actor=ACTOR, code="A1B2C3D4", expected_version=1, channel="web",

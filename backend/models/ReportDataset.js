@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const reportDatasetSchema = new mongoose.Schema({
   campaignId: { type: String, required: true, index: true },
   revision: { type: Number, required: true },
-  kind: { type: String, enum: ['baseline', 'scenario'], required: true },
+  kind: { type: String, enum: ['baseline', 'scenario', 'recovery'], required: true },
   input: { type: mongoose.Schema.Types.Mixed, required: true },
   inputHash: { type: String, required: true, index: true },
   scenario: { type: mongoose.Schema.Types.Mixed, default: null },
