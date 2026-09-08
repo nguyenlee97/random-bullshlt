@@ -128,3 +128,22 @@ async def test_campaign_assistant_fallback_understands_english_budget():
     assert result["target_tab"] == "setup"
     assert "80,000,000" in result["answer"]
     assert result["degraded"] is True
+
+
+@pytest.mark.asyncio
+async def test_campaign_assistant_strips_markdown_from_plain_text_bubble():
+    import campaign_assistant
+
+    plan = campaign_assistant.CampaignAssistantPlan(
+        intent="read", sources=["campaign_overview"], target_tab="setup",
+    )
+    answer = campaign_assistant.CampaignAssistantAnswer(
+        answer="Ngân sách là **80 triệu** và trạng thái `active`.",
+        source_ids=["campaign_overview"], suggestions=["**Thời gian** chạy là bao lâu?"],
+    )
+    result = await campaign_assistant.answer_campaign_question(
+        _entry(), "Budget?", generator=AsyncMock(side_effect=[(plan, {}), (answer, {})]),
+    )
+
+    assert result["answer"] == "Ngân sách là 80 triệu và trạng thái active."
+    assert result["suggestions"] == ["Thời gian chạy là bao lâu?"]

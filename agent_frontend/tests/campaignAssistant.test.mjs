@@ -10,6 +10,7 @@ test('Campaign Agent sends recent context and renders semantic read-only follow-
   assert.match(source, /askCampaignAssistant\(campaignId, clean, history\)/)
   assert.match(source, /suggestions: result\.suggestions \|\| \[\]/)
   assert.match(source, /message\.suggestions\?\.length > 0/)
+  assert.match(source, /whitespace-pre-wrap/)
   assert.doesNotMatch(source, /dangerouslySetInnerHTML/)
   assert.match(apiSource, /JSON\.stringify\(\{ question, history \}\)/)
   assert.match(apiSource, /AbortSignal\.timeout\(120000\)/)
