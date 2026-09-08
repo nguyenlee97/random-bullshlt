@@ -1595,12 +1595,12 @@ export const AgentAPI = {
     return response.json()
   },
 
-  async askCampaignAssistant(campaignId, question) {
+  async askCampaignAssistant(campaignId, question, history = []) {
     const response = await agentFetch(
       `${AGENT_URL}/api/agent/campaigns/${encodeURIComponent(campaignId)}/assistant`,
       {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }), signal: AbortSignal.timeout(30000),
+        body: JSON.stringify({ question, history }), signal: AbortSignal.timeout(120000),
       },
     )
     if (!response.ok) throw await responseError(response, 'Campaign Agent chưa trả lời được.')

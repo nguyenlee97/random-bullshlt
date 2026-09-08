@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from models import ChatRequest, AgentResponse, ResponseMeta
 from quality.models import FeedbackRequest, FeedbackResponse
 from ratelimit import limiter, CHAT_LIMIT, RECOMMEND_LIMIT
@@ -110,7 +110,8 @@ class _CampaignConfigUpdateRequest(BaseModel):
 
 
 class _CampaignAssistantRequest(BaseModel):
-    question: str
+    question: str = Field(min_length=1, max_length=1200)
+    history: list[dict] = Field(default_factory=list, max_length=8)
 
 
 def _set_account_cookie(response: Response, token: str) -> None:
@@ -395,6 +396,7 @@ async def campaign_config_update(
 
 
 @agent_router.post("/campaigns/{campaign_id}/assistant")
+@limiter.limit(CHAT_LIMIT)
 async def campaign_assistant_answer(
     campaign_id: str, body: _CampaignAssistantRequest, request: Request,
 ):
@@ -406,7 +408,7 @@ async def campaign_assistant_answer(
     if not entry:
         raise HTTPException(status_code=404, detail="campaign not found")
     try:
-        return await answer_campaign_question(entry, body.question)
+        return await answer_campaign_question(entry, body.question, body.history)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
