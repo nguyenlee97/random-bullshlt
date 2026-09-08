@@ -91,3 +91,12 @@ test('L3 renders executable, workflow, escalation and isolated Lab controls', ()
   assert.match(apiSource, /async applyRecoveryLabIntervention/)
   assert.match(apiSource, /async rejectRecoveryProposal/)
 })
+
+test('L3 mutations use contract-valid request ids and render structured API errors', () => {
+  assert.match(apiSource, /const apiRequestId = prefix => `\$\{prefix\}-\$\{crypto\.randomUUID\(\)\}`/)
+  assert.match(apiSource, /apiRequestId\('recovery-proposal'\)/)
+  assert.match(apiSource, /apiRequestId\('l3-lab'\)/)
+  assert.doesNotMatch(apiSource, /generateId\('(?:recovery-proposal|l3-lab)'\)/)
+  assert.match(apiSource, /Array\.isArray\(detail\)/)
+  assert.match(apiSource, /item\?\.msg \|\| item\?\.message/)
+})

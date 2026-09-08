@@ -76,11 +76,25 @@ const agentFetch = async (url, opts = {}) => {
 async function responseError(response, fallback) {
   const data = await response.json().catch(() => ({}))
   const detail = data?.detail
-  const error = new Error(detail?.message || detail || fallback)
+  const message = typeof detail === 'string'
+    ? detail
+    : Array.isArray(detail)
+      ? detail.map(item => {
+        if (typeof item === 'string') return item
+        const field = Array.isArray(item?.loc)
+          ? item.loc.filter(value => value !== 'body').join('.')
+          : ''
+        const text = item?.msg || item?.message || item?.type || ''
+        return field && text ? `${field}: ${text}` : text
+      }).filter(Boolean).join('; ')
+      : detail?.message || detail?.error || fallback
+  const error = new Error(message || fallback)
   error.status = response.status
   error.data = data
   return error
 }
+
+const apiRequestId = prefix => `${prefix}-${crypto.randomUUID()}`
 
 const withRequestId = (data, response) => ({
   ...data,
@@ -1475,7 +1489,7 @@ export const AgentAPI = {
   async createRecoveryProposal(campaignId, incidentId, requestId = '', candidateId = '') {
     const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/incidents/${encodeURIComponent(incidentId)}/recovery-proposals`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: requestId || generateId('recovery-proposal'), candidateId: candidateId || null }),
+      body: JSON.stringify({ requestId: requestId || apiRequestId('recovery-proposal'), candidateId: candidateId || null }),
       signal: AbortSignal.timeout(30000),
     })
     if (!response.ok) throw await responseError(response, 'Không thể tạo recovery proposal.')
@@ -1527,7 +1541,7 @@ export const AgentAPI = {
   async applyRecoveryLabIntervention(campaignId, proposalId, expectedVersion, outcome = 'success') {
     const response = await agentFetch(`${AGENT_URL}/api/agent/evaluation/campaigns/${encodeURIComponent(campaignId)}/recovery-proposals/${encodeURIComponent(proposalId)}/lab/apply`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: generateId('l3-lab'), expectedVersion, outcome }), signal: AbortSignal.timeout(180000),
+      body: JSON.stringify({ requestId: apiRequestId('l3-lab'), expectedVersion, outcome }), signal: AbortSignal.timeout(180000),
     })
     if (!response.ok) throw await responseError(response, 'Không thể apply Scenario Lab intervention.')
     return response.json()
