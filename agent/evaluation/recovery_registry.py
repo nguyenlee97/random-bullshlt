@@ -150,6 +150,12 @@ async def build_proposal_spec(campaign_id: str, incident: dict, candidate_id: st
         "cause_code": selected["cause_code"],
         "execution_environment": selected["execution_environment"],
         "evidence_blockers": selected["evidence_blockers"],
+        # Candidate selection may narrow a static action for the active
+        # environment (for example, attach a symptom-specific Scenario Lab
+        # intervention to the fail-safe hold workflow). Preserve those
+        # server-owned constraints when materializing the proposal.
+        "lab_intervention": selected.get("lab_intervention"),
+        "production_executor": selected.get("production_executor"),
     }
 
 

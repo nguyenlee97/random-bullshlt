@@ -115,6 +115,11 @@ async def test_registry_maps_supported_l2_causes_to_server_owned_actions(monkeyp
     value["investigation"].update({"assessment": "ambiguous", "ambiguous": True})
     candidates = await recovery_registry.recovery_candidates(CAMPAIGN, value)
     assert [item["candidate_id"] for item in candidates] == ["hold_optimization_and_recheck"]
+    proposal = await recovery_registry.build_proposal_spec(
+        CAMPAIGN, value, "hold_optimization_and_recheck",
+    )
+    assert proposal["lab_intervention"] == "restore_click_measurement"
+    assert proposal["production_executor"] is None
 
     monkeypatch.setattr(evaluation_service, "report_request", AsyncMock(return_value={
         "active": {"kind": "scenario"}, "state": {"activeRevision": 5},
