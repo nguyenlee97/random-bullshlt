@@ -3,9 +3,11 @@ touching main.py (kills the main→router→boot→main circular import)."""
 # ── Build version ─────────────────────────────────────────────────────────────
 # Bump this manually (or via deploy script) whenever code changes are deployed.
 # Format: YYYY-MM-DD.N  (N = deploy count for that day, starting at 1)
-BUILD_VERSION = "2026-09-07.2"
+BUILD_VERSION = "2026-09-08.1"
 
 BUILD_FEATURES = [
+    "l3-evidence-grounded-remediation-framework",
+    "l3-scenario-lab-workflows-and-escalations",
     "l3-restore-config-revision",
     "l3-shared-web-zalo-approval",
     "l3-config-hash-verification-rollback",
