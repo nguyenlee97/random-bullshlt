@@ -210,6 +210,7 @@ async def test_worker_completes_and_notification_retry_reuses_bundle(queue, work
     await worker.process_once()
     assert stored['status'] == 'completed' and stored['model_calls'] == calls
     assert attach.await_count == 2 and notify.await_count == 2
+    assert all(call.kwargs['trigger'] == 'l2_completed' for call in notify.await_args_list)
     assert attach.call_args_list[0].args[2]['bundle_id'] == attach.call_args_list[1].args[2]['bundle_id']
 
 

@@ -3,7 +3,10 @@ import { ScenarioLab } from './CampaignEvaluationWorkspace'
 export default function ScenarioLabPage() {
   const params = new URLSearchParams(location.search)
   const campaignId = params.get('campaignId') || ''
-  const allowed = new Set([location.origin, new URL(import.meta.env.VITE_ANALYTICS_URL || 'https://analytics.pawgrammers.io.vn').origin])
+  const allowed = new Set([location.origin])
+  if (import.meta.env.VITE_ANALYTICS_URL) {
+    allowed.add(new URL(import.meta.env.VITE_ANALYTICS_URL, location.href).origin)
+  }
   if (['localhost', '127.0.0.1'].includes(location.hostname)) {
     allowed.add('http://localhost:5174'); allowed.add('http://127.0.0.1:5174')
   }

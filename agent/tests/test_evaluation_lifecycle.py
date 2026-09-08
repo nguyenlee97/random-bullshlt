@@ -75,6 +75,7 @@ async def test_js_preset_to_actual_l1_l2_pipeline(env, preset, expected):
         assert bundle['recovery_context']['verification'] == 'not_verified'
     assert dataset == before
     notify.assert_awaited_once()
+    assert notify.await_args.kwargs['trigger'] == 'test'
     assert (await service.run_evaluation(CAMPAIGN))['no_op'] is True
     assert notify.await_count == 1
 

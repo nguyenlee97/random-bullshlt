@@ -61,7 +61,10 @@ async def process_once() -> bool:
         await attach_investigation(job['campaign_id'], job['incident_id'], bundle)
         await guard()
         from zalo_incidents import notify_incidents
-        count = await notify_incidents(job['campaign_id'], [{**incident, 'investigation': bundle}], job['dataset_revision'])
+        count = await notify_incidents(
+            job['campaign_id'], [{**incident, 'investigation': bundle}],
+            job['dataset_revision'], trigger='l2_completed',
+        )
         await progress({'status': 'partial' if bundle.get('partial') else 'completed',
                         'completed_at': jobs.now(), 'notification_enqueue_count': count, 'error': None})
     except asyncio.CancelledError:

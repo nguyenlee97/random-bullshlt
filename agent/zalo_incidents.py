@@ -101,7 +101,7 @@ async def _threads_for_campaign(campaign_id: str) -> list[dict]:
     )]
 
 
-def _alert_text(campaign_id: str, incident: dict) -> str:
+def _alert_text(campaign_id: str, incident: dict, trigger: str = "evaluation") -> str:
     evidence = incident.get("evidence") or {}
     metric = ""
     if "relative_drop" in evidence:
@@ -110,17 +110,17 @@ def _alert_text(campaign_id: str, incident: dict) -> str:
         ratio = evidence["windows"][-1].get("ratio")
         if ratio is not None:
             metric = f" Tỷ lệ gần nhất {round(float(ratio) * 100)}% so với baseline."
-    diagnosis = ""
+    diagnosis = "\nTrạng thái: mới phát hiện ở L1; chưa xác định nguyên nhân."
     investigation = incident.get("investigation") or {}
     top = investigation.get("top_hypothesis") or {}
     if investigation.get('mode') == 'multi_agent':
         label = 'chưa chốt nguyên nhân' if investigation.get('cause_status') != 'supported_hypothesis' else 'giả thuyết có evidence, chưa chứng minh nhân quả'
-        diagnosis = '\nL2 (' + label + '): ' + str(investigation.get('summary') or 'Chưa có kết luận.')[:500]
+        diagnosis = '\nKết quả L2 (' + label + '): ' + str(investigation.get('summary') or 'Chưa có kết luận.')[:500]
         completion = investigation.get('completion') or {}
         if completion:
-            diagnosis += (f"\nTiến độ evidence: {int(completion.get('completed_roles') or 0)}/"
+            diagnosis += (f"\nTiến độ điều tra: {int(completion.get('completed_roles') or 0)}/"
                           f"{int(completion.get('total_roles') or 0)} vai trò hoàn tất; "
-                          f"{int(completion.get('unavailable_probes') or 0)} probe không có dữ liệu.")
+                          f"{int(completion.get('unavailable_probes') or 0)} nguồn kiểm tra chưa có dữ liệu.")
         incomplete = [
             f"{task.get('role')}: {task.get('execution_status', task.get('status'))}"
             for task in (investigation.get('tasks') or {}).values()
@@ -135,34 +135,58 @@ def _alert_text(campaign_id: str, incident: dict) -> str:
             and task.get('evidence_status') in {'insufficient', 'unavailable'}
         ]
         if evidence_gaps:
-            diagnosis += '\nEvidence chưa đủ: ' + ', '.join(evidence_gaps[:4])
+            diagnosis += '\nDữ liệu còn thiếu: ' + ', '.join(evidence_gaps[:4])
         cited = list((investigation.get('review') or {}).get('evidence_ids') or [])
         if not cited:
             cited = [probe.get('evidence_id') for probe in investigation.get('probes') or []
                      if probe.get('evidence_id') and probe.get('status') != 'unavailable']
         if cited:
-            diagnosis += '\nEvidence: ' + ', '.join(str(value) for value in cited[:3])
+            diagnosis += '\nMã bằng chứng: ' + ', '.join(str(value) for value in cited[:3])
         if investigation.get('limitations'):
             diagnosis += '\nGiới hạn: ' + str(investigation['limitations'][0])[:220]
     elif investigation.get('assessment') == 'insufficient_evidence':
-        diagnosis = '\nL2: chưa đủ bằng chứng để chọn nguyên nhân.'
+        diagnosis = '\nKết quả L2: chưa đủ bằng chứng để chọn nguyên nhân.'
     elif top:
         diagnosis = f"\nGiả thuyết cần kiểm tra: {top['label']}."
         if investigation.get('ambiguous'):
             diagnosis += ' Còn nhiều khả năng; chưa kết luận nguyên nhân.'
+    signal = {
+        'ctr_regression': 'CTR giảm đáng kể so với dữ liệu baseline',
+        'delivery_drop': 'Lượng phân phối giảm đáng kể so với baseline',
+        'pacing_error': 'Tốc độ chi tiêu đang lệch khỏi kế hoạch',
+        'creative_failure': 'Creative có dấu hiệu lỗi hiển thị',
+        'click_tracking_failure': 'Luồng click hoặc tracking có dấu hiệu bất thường',
+        'config_drift': 'Cấu hình hiện tại khác revision được phê duyệt',
+        'data_quality': 'Dữ liệu chưa đủ tin cậy để đánh giá',
+    }.get(incident.get('issue_type'), incident['title'])
+    source = {
+        'scheduled': 'Kiểm tra định kỳ tự động. Bạn nhận được tin này dù không thao tác vì Evaluation đang bật cho campaign.',
+        'manual': 'Lần đánh giá được chạy từ Manage Hub.',
+        'scenario_apply': 'Scenario Lab vừa áp dụng dữ liệu test và chạy Evaluation.',
+        'l2_completed': 'Nhóm điều tra L2 vừa cập nhật kết quả.',
+        'recovery_verification': 'Evaluation vừa kiểm tra kết quả recovery.',
+    }.get(trigger, 'Evaluation vừa hoàn tất một lượt kiểm tra.')
+    heading = '🔎 Cập nhật điều tra campaign' if trigger == 'l2_completed' else '⚠️ Campaign cần bạn xem xét'
     return (
-        f"⚠️ {incident['incident_id']} · {campaign_id}\n"
-        f"{incident['title']} tại {incident['scope']}.{metric}{diagnosis}\n\n"
-        "Trả lời kèm mã incident:\n"
-        f"1 {incident['incident_id']} — xem evidence\n"
-        f"2 {incident['incident_id']} — điều tra\n"
+        f"{heading}\n"
+        f"Campaign: {campaign_id}\n"
+        f"Vị trí: {incident['scope']}\n"
+        f"Tín hiệu: {signal}.{metric}\n"
+        f"Nguồn: {source}{diagnosis}\n\n"
+        "Bạn muốn mình làm gì?\n"
+        f"1 {incident['incident_id']} — Xem dấu hiệu và số liệu\n"
+        f"2 {incident['incident_id']} — Điều tra nguyên nhân (chỉ đọc)\n"
         f"3 {incident['incident_id']} — "
-        f"{'chuẩn bị recovery proposal' if config.EVALUATION_L3_PROPOSALS_ENABLED else 'trạng thái recovery (chưa mở)'}\n"
-        f"4 {incident['incident_id']} — dismiss"
+        f"{'Xem phương án xử lý an toàn' if config.EVALUATION_L3_PROPOSALS_ENABLED else 'Kiểm tra trạng thái Recovery'}\n"
+        f"4 {incident['incident_id']} — Bỏ qua cảnh báo này\n\n"
+        "Các lựa chọn trên không tự thay đổi campaign. Hành động có thay đổi cấu hình luôn cần một bước duyệt riêng."
     )
 
 
-async def notify_incidents(campaign_id: str, incidents: list[dict], dataset_revision: int) -> int:
+async def notify_incidents(
+    campaign_id: str, incidents: list[dict], dataset_revision: int,
+    *, trigger: str = "evaluation",
+) -> int:
     from zalo_campaign_agent import _update_thread
     from zalo_worker import enqueue_text
     threads = await _threads_for_campaign(campaign_id)
@@ -177,7 +201,7 @@ async def notify_incidents(campaign_id: str, incidents: list[dict], dataset_revi
             refs = [item for item in refs if item.get("incident_id") != incident["incident_id"]]
             refs.append(ref)
             await enqueue_text(
-                thread=thread, text=_alert_text(campaign_id, incident),
+                thread=thread, text=_alert_text(campaign_id, incident, trigger),
                 idempotency_key=f"evaluation-alert:{incident['incident_id']}:{dataset_revision}:{(incident.get('investigation') or {}).get('bundle_id', 'l1')}",
                 category="evaluation_alert", incident_id=incident["incident_id"],
             )

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { scenarioFrameUrl, isScenarioEvent } from '../scenario-lab.js'
+import { scenarioFrameUrl, isScenarioEvent, defaultAgentBase } from '../scenario-lab.js'
 
 test('campaign URL is encoded and fixed to the Agent controller route', () => {
   const url = scenarioFrameUrl('https://agent.example/', 'ORD/x?evil=1')
@@ -15,6 +15,11 @@ test('only the configured frame, origin and campaign can refresh charts', () => 
   assert.equal(isScenarioEvent({ ...event, source: {} }, frame, event.origin, 'ORD-1'), false)
   assert.equal(isScenarioEvent({ ...event, origin: 'https://evil.example' }, frame, event.origin, 'ORD-1'), false)
   assert.equal(isScenarioEvent(event, frame, event.origin, 'ORD-2'), false)
+})
+
+test('non-production same-origin installs never fall back to the retired production Agent', () => {
+  assert.equal(defaultAgentBase({ hostname: 'zah-4.123c.vn', origin: 'https://zah-4.123c.vn' }), 'https://zah-4.123c.vn/')
+  assert.equal(defaultAgentBase({ hostname: 'analytics.pawgrammers.io.vn', origin: 'https://analytics.pawgrammers.io.vn' }), 'https://agent.pawgrammers.io.vn/')
 })
 
 test('mobile filters cannot expand the page behind Scenario Lab', async () => {

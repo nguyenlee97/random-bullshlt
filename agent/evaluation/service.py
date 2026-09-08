@@ -123,7 +123,7 @@ async def run_evaluation(campaign_id: str, trigger: str = 'manual', force: bool 
         try:
             from zalo_incidents import notify_incidents
             enriched = [{**i, 'investigation': investigations.get(i['incident_id'])} for i in actionable]
-            alerts = await notify_incidents(campaign_id, enriched, revision)
+            alerts = await notify_incidents(campaign_id, enriched, revision, trigger=trigger)
         except Exception as exc:
             errors.append({'stage': 'notification', 'error': str(exc)[:240]})
         run = await finish_run(run['run_id'], 'retryable' if errors else 'completed',

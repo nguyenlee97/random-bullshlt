@@ -2378,7 +2378,7 @@ export const AgentAPI = {
     try {
       const res = await fetch(
         `${BACKEND_URL}/api/reports/status/${campaignId}`,
-        { signal: AbortSignal.timeout(5000) }
+        { signal: AbortSignal.timeout(15000) }
       )
       if (!res.ok) return null
       return await res.json()

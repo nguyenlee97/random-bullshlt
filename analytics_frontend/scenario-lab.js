@@ -11,14 +11,20 @@ export function isScenarioEvent(event, frame, origin, campaignId) {
     (event.data.type === 'scenario-applied' || event.data.type === 'scenario-busy')
 }
 
+export function defaultAgentBase(currentLocation = location) {
+  const local = ['localhost', '127.0.0.1'].includes(currentLocation.hostname)
+  if (local) return 'http://localhost:5175/'
+  if (currentLocation.hostname.endsWith('.pawgrammers.io.vn')) return 'https://agent.pawgrammers.io.vn/'
+  return new URL('/', currentLocation.origin).href
+}
+
 export function installScenarioLab({ select, onApplied }) {
   const trigger = document.getElementById('btnScenarioLab')
   const dialog = document.getElementById('scenarioDialog')
   const frame = document.getElementById('scenarioFrame')
   const close = document.getElementById('scenarioClose')
   const status = document.getElementById('scenarioStatus')
-  const local = ['localhost', '127.0.0.1'].includes(location.hostname)
-  const agentBase = window.__ADSTACK_CONFIG__?.agentUiBase || (local ? 'http://localhost:5175/' : 'https://agent.pawgrammers.io.vn/')
+  const agentBase = window.__ADSTACK_CONFIG__?.agentUiBase || defaultAgentBase()
   let campaignId = '', frameOrigin = '', busy = false
   const update = () => { trigger.disabled = !select.value; trigger.title = select.value ? 'Giả lập dữ liệu cho campaign đã chọn' : 'Chọn một campaign cụ thể trước' }
   select.addEventListener('change', update)

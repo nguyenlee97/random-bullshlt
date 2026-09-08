@@ -62,6 +62,9 @@ test('Scenario Lab exposes expected L1, L2 and evidence then compares the observ
   assert.match(source, /expectation\.requiredEvidence/)
   assert.match(source, /receipt\.acceptance\.observed_issue_types/)
   assert.match(source, /receipt\.acceptance\.missing_issue_types/)
+  assert.match(source, /new URL\('\/analytics\/', location\.origin\)/)
+  assert.match(source, /Bật Evaluation định kỳ/)
+  assert.match(source, /dù bạn không mở trang/)
 })
 
 test('campaign deep links resolve independently of the paginated homepage directory', () => {

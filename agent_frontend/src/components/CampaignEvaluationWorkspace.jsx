@@ -16,9 +16,16 @@ const assessmentLabel = {
 const healthLabel = { healthy: 'Ổn định', bad: 'Cần xử lý', watch: 'Cần theo dõi', not_evaluated: 'Chưa đánh giá' }
 const causeLabel = { supported_hypothesis: 'Có bằng chứng hỗ trợ giả thuyết nguyên nhân', unresolved: 'Chưa chốt nguyên nhân', insufficient_evidence: 'Thiếu bằng chứng về nguyên nhân' }
 const scopeLabel = { isolated_document: 'Tài liệu thử nghiệm cô lập', creative_metadata: 'Metadata creative/catalog', baseline_order_comparison: 'Order so với report baseline', catalog_benchmark: 'Benchmark catalog và creative metadata', report_measurement: 'Độ đầy đủ report', measured_click_gap: 'Khoảng trống click đo được', unknown: 'Chưa xác định' }
+const runTriggerLabel = {
+  scheduled: 'Tự động theo lịch', manual: 'Chạy từ Manage Hub', scenario_apply: 'Scenario Lab',
+  recovery_verification: 'Xác minh recovery', test: 'Kiểm thử',
+}
 export const analyticsUrl = campaignId => {
-  const base = import.meta.env.VITE_ANALYTICS_URL || (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-    ? 'http://localhost:5174/' : 'https://analytics.pawgrammers.io.vn/')
+  const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  const legacyProduction = location.hostname.endsWith('.pawgrammers.io.vn')
+  const base = import.meta.env.VITE_ANALYTICS_URL || (local
+    ? 'http://localhost:5174/'
+    : legacyProduction ? 'https://analytics.pawgrammers.io.vn/' : new URL('/analytics/', location.origin).href)
   const url = new URL(base, location.href)
   url.searchParams.set('campaignId', campaignId)
   return url.href
@@ -316,7 +323,7 @@ export default function LiveEvaluationPanel({ campaignId }) {
       <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-bold">Live Evaluation</h2><a className="text-sm text-blue-700 underline" href={analyticsUrl(campaignId)} target="_blank" rel="noreferrer">Mở Scenario Lab trong Analytics</a></div>
       <p className="text-sm">Trạng thái: {healthLabel[data?.summary?.status] || data?.summary?.status || 'Đang tải…'} · {data?.summary?.open_count || 0} incident đang mở</p>
       {data && <fieldset disabled={busy} className="flex flex-wrap items-end gap-4">
-        <label className="text-sm"><input type="checkbox" checked={data.policy.enabled} onChange={e => execute(() => AgentAPI.updateCampaignEvaluationPolicy(campaignId, { enabled: e.target.checked }))} /> Bật evaluation</label>
+        <label className="text-sm"><input type="checkbox" checked={data.policy.enabled} onChange={e => execute(() => AgentAPI.updateCampaignEvaluationPolicy(campaignId, { enabled: e.target.checked }))} /> Bật Evaluation định kỳ</label>
         <label className="text-sm">Mức quyền<select className={inputClass} value={data.policy.level} onChange={e => execute(() => AgentAPI.updateCampaignEvaluationPolicy(campaignId, { level: e.target.value }))}>
           <option value="L1">L1 — phát hiện</option><option value="L2">L2 — phát hiện + điều tra</option>{data.l3?.proposals_enabled && <option value="L3">L3 — đề xuất + phê duyệt recovery</option>}{data.policy.level === 'L3' && !data.l3?.proposals_enabled && <option value="L3">L3 cũ — executor bị khóa</option>}</select></label>
         <label className="text-sm">Chu kỳ (phút)<select className={inputClass} value={data.policy.schedule_minutes} onChange={e => execute(() => AgentAPI.updateCampaignEvaluationPolicy(campaignId, { schedule_minutes: Number(e.target.value) }))}>
@@ -324,11 +331,12 @@ export default function LiveEvaluationPanel({ campaignId }) {
         </select></label>
         <button className={buttonClass + ' bg-blue-700 text-white'} disabled={busy || !data.policy.enabled} onClick={() => execute(() => AgentAPI.runCampaignEvaluation(campaignId))}>Chạy đánh giá ngay</button>
       </fieldset>}
+      <p className="text-xs text-slate-600">Khi bật, worker vẫn đánh giá theo chu kỳ dù bạn không mở trang. Incident mới hoặc kết quả điều tra mới có thể được gửi tới Zalo OA đã liên kết; tắt công tắc này để dừng các lượt chạy định kỳ.</p>
       <p className="text-xs text-slate-500">Lịch kiểm tra: {data?.policy?.schedule_minutes || 60} phút · worker {data?.worker_enabled ? 'được bật trong cấu hình' : 'chưa bật trong cấu hình'}. L3 proposal {data?.l3?.proposals_enabled ? 'đã bật' : 'đang tắt'} · executor {data?.l3?.execution_enabled ? 'đã bật' : 'đang tắt'}.</p>
       <p className="text-xs text-slate-500">L2: {data?.investigation_mode === 'multi_agent' ? 'Multi-agent chạy nền' : 'Playbook deterministic — multi-agent chưa bật trong cấu hình'}.</p>
       {data?.investigation_error && <p role="alert" className="text-sm text-rose-700">{data.investigation_error}</p>}
       {loadError && <p role="alert" className="text-sm text-amber-800">Chưa cập nhật được tiến độ: {loadError}. Đang thử kết nối lại.</p>}
-      {data?.last_run && <p className="text-xs">Lần chạy gần nhất: {data.last_run.status} · {data.last_run.completed_at || data.last_run.created_at} · {data.last_run.zalo_alerts || 0} yêu cầu enqueue Zalo (có chống trùng; chưa xác nhận đã nhận).</p>}
+      {data?.last_run && <p className="text-xs">Lần chạy gần nhất: {runTriggerLabel[data.last_run.trigger] || data.last_run.trigger || 'Không rõ nguồn'} · {data.last_run.status} · {data.last_run.completed_at || data.last_run.created_at} · {data.last_run.zalo_alerts || 0} cảnh báo đã đưa vào hàng đợi Zalo (có chống trùng; chưa xác nhận đã nhận).</p>}
       {!!data?.last_run?.errors?.length && <div role="alert" className="rounded-lg bg-amber-50 p-3 text-xs">{data.last_run.errors.map((e, i) => <p key={i}>{e.stage}: {e.error}</p>)}</div>}
       {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
     </section>

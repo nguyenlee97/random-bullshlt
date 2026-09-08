@@ -90,6 +90,7 @@ async def test_alert_only_updates_incident_namespace_and_uses_stable_outbox_key(
     assert send.call_args_list[0].kwargs['idempotency_key'] == send.call_args_list[1].kwargs['idempotency_key']
     assert '80%' not in send.call_args.kwargs['text']
     assert 'chưa kết luận' in send.call_args.kwargs['text']
+    assert 'Các lựa chọn trên không tự thay đổi campaign' in send.call_args.kwargs['text']
 
 
 def test_l2_alert_exposes_completion_partial_roles_and_evidence_ids():
@@ -106,10 +107,24 @@ def test_l2_alert_exposes_completion_partial_roles_and_evidence_ids():
                                   'limitations': ['Thiếu publisher probe.']}}
     text = _alert_text('ORD-1', incident)
     assert '2/4 vai trò hoàn tất' in text
-    assert '1 probe không có dữ liệu' in text
+    assert '1 nguồn kiểm tra chưa có dữ liệu' in text
     assert 'Chưa hoàn tất' not in text
-    assert 'Evidence chưa đủ: placement: unavailable' in text
+    assert 'Dữ liệu còn thiếu: placement: unavailable' in text
     assert 'EVD-001, EVD-002' in text
+
+
+def test_scheduled_alert_explains_why_it_arrived_without_user_action():
+    from zalo_incidents import _alert_text
+    text = _alert_text('ORD-2026-018', {
+        'incident_id': 'INC-0FBD16', 'issue_type': 'ctr_regression',
+        'title': 'Xu hướng CTR có outlier âm', 'scope': 'BaoMoi_FashionBeauty_SideRight',
+        'evidence': {},
+    }, trigger='scheduled')
+    assert text.startswith('⚠️ Campaign cần bạn xem xét')
+    assert 'CTR giảm đáng kể so với dữ liệu baseline' in text
+    assert 'Bạn nhận được tin này dù không thao tác' in text
+    assert 'Điều tra nguyên nhân (chỉ đọc)' in text
+    assert 'Bỏ qua cảnh báo này' in text
 
 
 @pytest.mark.asyncio
